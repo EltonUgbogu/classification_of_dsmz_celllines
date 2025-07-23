@@ -1,0 +1,19 @@
+=== TCGA R job started ===
+Start time: Mon Jul  7 15:55:27 CEST 2025
+Running in: /home/chu25/TCGA/sample_types
+
+
+processing file: sample_types.Rmd
+1/7                  
+2/7 [setup]          
+3/7                  
+4/7 [unnamed-chunk-1]
+5/7                  
+6/7 [unnamed-chunk-2]
+7/7                  
+output file: sample_types.knit.md
+
+/home/chu25/miniconda3/envs/tcga-r-env/bin/pandoc +RTS -K512m -RTS sample_types.knit.md --to latex --from markdown+autolink_bare_uris+tex_math_single_backslash --output sample_types.tex --lua-filter /mnt/beegfs/mnt/work/bioinfo/home/chu25/miniconda3/envs/tcga-r-env/lib/R/library/rmarkdown/rmarkdown/lua/pagebreak.lua --lua-filter /mnt/beegfs/mnt/work/bioinfo/home/chu25/miniconda3/envs/tcga-r-env/lib/R/library/rmarkdown/rmarkdown/lua/latex-div.lua --embed-resources --standalone --highlight-style tango --pdf-engine pdflatex --variable graphics --variable 'geometry:margin=1in' 
+
+Output created: sample_types.pdf
+=== Job finished at Mon Jul  7 15:58:55 CEST 2025 ===
