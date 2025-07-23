@@ -1,0 +1,23 @@
+=== TCGA R job started ===
+Start time: Mon Jul  7 15:23:21 CEST 2025
+Running in: /home/chu25/TCGA/sample_types
+
+
+processing file: sample_types.Rmd
+1/7                  
+2/7 [setup]          
+3/7                  
+4/7 [unnamed-chunk-1]
+5/7                  
+6/7 [unnamed-chunk-2]
+Error in `h()`:
+! error in evaluating the argument 'x' in selecting a method for function 'unique': object 'meta' not found
+Backtrace:
+    x
+ 1. +-BiocGenerics::unique(meta$sample_type)
+ 2. \-base::.handleSimpleError(...)
+ 3.   \-base (local) h(simpleError(msg, call))
+
+Quitting from sample_types.Rmd:51-64 [unnamed-chunk-2]
+Execution halted
+=== Job finished at Mon Jul  7 15:26:41 CEST 2025 ===
