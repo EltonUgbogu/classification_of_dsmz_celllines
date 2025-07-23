@@ -1,0 +1,65 @@
+---
+title: "tcga_sample_type"
+output: html_document
+date: "2025-07-02"
+---
+
+```{r setup, include=FALSE}
+# Set CRAN mirror explicitly
+options(repos = c(CRAN = 'https://cloud.r-project.org'))
+
+# Load libraries
+suppressWarnings(suppressMessages(library(dplyr)))
+suppressWarnings(suppressMessages(library(SummarizedExperiment)))
+
+# Load saved data (make sure the path is correct)
+tcga_se <- readRDS("/home/chu25/data/tcga/all_TCGA_SummarizedExperiment.rds")
+
+# Define TCGA projects
+projects <- c(
+  "TCGA-ACC", "TCGA-BLCA", "TCGA-BRCA", "TCGA-CESC", "TCGA-CHOL", "TCGA-COAD",
+  "TCGA-DLBC", "TCGA-ESCA", "TCGA-GBM", "TCGA-HNSC", "TCGA-KICH", "TCGA-KIRC",
+  "TCGA-KIRP", "TCGA-LAML", "TCGA-LGG", "TCGA-LIHC", "TCGA-LUAD", "TCGA-LUSC",
+  "TCGA-MESO", "TCGA-OV", "TCGA-PAAD", "TCGA-PCPG", "TCGA-PRAD", "TCGA-READ",
+  "TCGA-SARC", "TCGA-SKCM", "TCGA-STAD", "TCGA-TGCT", "TCGA-THCA", "TCGA-THYM",
+  "TCGA-UCEC", "TCGA-UCS", "TCGA-UVM"
+)
+```
+
+```{r}
+# Initialize an empty list to store combined colData
+combined_coldata <- list()
+
+# Loop through the projects and extract colData
+for (project in projects) {
+  # Extract the SummarizedExperiment for the current project
+  single_se <- tcga_se[[project]]
+  
+  # Convert colData to a data frame and add project name
+  coldata_df <- as.data.frame(colData(single_se))
+  coldata_df$project <- project
+  
+   # Ensure column types are consistent across all projects
+  # Convert all columns to character type, you can adjust this for specific columns if needed
+  coldata_df[] <- lapply(coldata_df, as.character)
+  # Append to the list
+  combined_coldata[[project]] <- coldata_df
+}
+```
+
+
+```{r}
+# Combine all project data frames into one
+combined_coldata <- bind_rows(combined_coldata)
+
+# Check the result
+head(combined_coldata)
+
+
+# Check unique sample types
+unique(combined_coldata$sample_type)
+
+# Count how many samples per type
+table(combined_coldata$sample_type)
+```
+
