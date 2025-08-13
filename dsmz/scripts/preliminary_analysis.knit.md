@@ -1,0 +1,620 @@
+---
+title: "DSMZ–TCGA Cohort Mapping by Organ and Spearman Similarity"
+date: "2025-08-08"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+
+
+
+``` r
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(SummarizedExperiment)
+  library(pheatmap)
+  library(matrixStats)  # ok to keep; not used for reduction here
+  library(dplyr)
+})
+```
+
+```
+## Warning: package 'tidyverse' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'ggplot2' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'tibble' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'tidyr' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'readr' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'purrr' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'dplyr' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'stringr' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'forcats' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'lubridate' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'MatrixGenerics' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'matrixStats' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'GenomicRanges' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'S4Vectors' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'IRanges' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'Biobase' was built under R version 4.3.3
+```
+
+```
+## Warning: package 'pheatmap' was built under R version 4.3.3
+```
+
+``` r
+logmsg <- function(fmt, ...) message(sprintf(fmt, ...))
+# Lightweight %||% (avoid rlang dependency)
+`%||%` <- function(x, y) if (is.null(x)) y else x
+```
+
+
+# TCGA SummarizedExperiment (genes x samples)
+# Load DSMZ and TCGA SummarizedExperiment 
+
+``` r
+# TCGA SummarizedExperiment (genes x samples)
+tcga_se     <- readRDS("/home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment.rds")
+tcga_counts <- assay(tcga_se)  # numeric/integer matrix expected
+
+# DSMZ counts table: Ensembl_ID, gene_name, then sample columns
+dsmz_raw  <- readRDS("/home/chu25/data/dsmz/DSMZ_count_gene.rds")
+dsmz_meta <- read.csv("/home/chu25/data/dsmz/DSMZ_metadata_with_sample_name.csv")
+
+stopifnot(all(c("Ensembl_ID","gene_name") %in% colnames(dsmz_raw)))
+logmsg("Loaded: TCGA (%d genes x %d samples) | DSMZ raw table: %d rows x %d cols",
+       nrow(tcga_counts), ncol(tcga_counts), nrow(dsmz_raw), ncol(dsmz_raw))
+```
+
+```
+## Loaded: TCGA (60660 genes x 11499 samples) | DSMZ raw table: 60660 rows x 192 cols
+```
+
+
+
+# Align DSMZ metadata sample_name to columns in counts
+# Keep only exact matches; report non-matching rows
+
+
+``` r
+# sample columns = everything except annotations
+sample_cols <- setdiff(colnames(dsmz_raw),
+                       c("Ensembl_ID","gene_name","Ensembl_ID_with_version"))
+
+# force numeric (robust to misc formats)
+dsmz_raw[sample_cols] <- lapply(dsmz_raw[sample_cols], function(x) as.numeric(as.character(x)))
+
+# drop DSMZ columns that are all NA (after coercion)
+keep <- vapply(as.data.frame(dsmz_raw[sample_cols]), function(v) any(!is.na(v)), logical(1))
+if (!all(keep)) {
+  logmsg("Dropping %d DSMZ sample columns that are all NA after coercion.", sum(!keep))
+  sample_cols <- sample_cols[keep]
+}
+
+# matrix (genes x samples); rownames = Ensembl_ID (no version)
+dsmz_counts <- as.matrix(dsmz_raw[, sample_cols, drop = FALSE])
+rownames(dsmz_counts) <- dsmz_raw$Ensembl_ID
+
+# if duplicated Ensembl_ID exist (multiple rows per gene), aggregate by sum
+if (any(duplicated(rownames(dsmz_counts)))) {
+  dsmz_counts <- rowsum(dsmz_counts, group = rownames(dsmz_counts), reorder = TRUE)
+  logmsg("Collapsed duplicated Ensembl_ID rows by sum; now %d genes.", nrow(dsmz_counts))
+}
+
+logmsg("DSMZ counts dims: %d genes x %d samples", nrow(dsmz_counts), ncol(dsmz_counts))
+```
+
+```
+## DSMZ counts dims: 60660 genes x 189 samples
+```
+
+
+``` r
+stopifnot("sample_name" %in% names(dsmz_meta))
+dsmz_meta <- dsmz_meta %>% mutate(sample_id = sample_name)
+
+matched_ids   <- intersect(dsmz_meta$sample_id, colnames(dsmz_counts))
+unmatched_md  <- setdiff(dsmz_meta$sample_id, colnames(dsmz_counts))
+unmatched_cnt <- setdiff(colnames(dsmz_counts), dsmz_meta$sample_id)
+
+logmsg("Matched DSMZ samples: %d | Unmatched (metadata): %d | Unmatched (counts): %d",
+       length(matched_ids), length(unmatched_md), length(unmatched_cnt))
+```
+
+```
+## Matched DSMZ samples: 189 | Unmatched (metadata): 1 | Unmatched (counts): 0
+```
+
+``` r
+# save unmatched lists for audit
+qc_dir <- "/home/chu25/dsmz/results/preliminary_analysis/matching_checks"
+dir.create(qc_dir, showWarnings = FALSE, recursive = TRUE)
+if (length(unmatched_md))
+  write.csv(tibble(sample_name = unmatched_md),
+            file.path(qc_dir, "unmatched_md.csv"), row.names = FALSE)
+if (length(unmatched_cnt))
+  write.csv(tibble(sample_name = unmatched_cnt),
+            file.path(qc_dir, "unmatched_cnt.csv"), row.names = FALSE)
+
+# keep only matched & reorder counts to metadata order
+dsmz_meta   <- dsmz_meta %>% filter(sample_id %in% matched_ids)
+dsmz_counts <- dsmz_counts[, dsmz_meta$sample_id, drop = FALSE]
+stopifnot(identical(colnames(dsmz_counts), dsmz_meta$sample_id))
+```
+
+# Create organ labels from the DSMZ "Origin" field
+
+``` r
+dsmz_meta <- dsmz_meta %>%
+  mutate(
+    organ = case_when(
+      str_detect(Origin, regex("breast",  TRUE)) ~ "Breast",
+      str_detect(Origin, regex("lung",    TRUE)) ~ "Lung",
+      str_detect(Origin, regex("liver|hepato|bile", TRUE)) ~ "Liver/Biliary",
+      str_detect(Origin, regex("adrenal", TRUE)) ~ "Adrenal",
+      str_detect(Origin, regex("brain|gli", TRUE)) ~ "Brain/CNS",
+      str_detect(Origin, regex("lymph|mantle|hodgkin|effusion|b[- ]?cell|t[- ]?cell|nk|natural\\s*killer", TRUE)) ~ "Lymphoid",
+      str_detect(Origin, regex("leukemia", TRUE)) ~ "Leukemia",
+      str_detect(Origin, regex("myeloid|megakaryocytic|erythroid|monocytic", TRUE)) ~ "Myeloid",
+      str_detect(Origin, regex("bone\\s*marrow", TRUE)) ~ "Bone Marrow",
+      str_detect(Origin, regex("abdomen|pleural", TRUE)) ~ "Body Cavity",
+      is.na(Origin) | Origin == "NONE" ~ "Unknown",
+      TRUE ~ "Other"
+    )
+  )
+```
+
+# Barplot to PDF
+
+``` r
+organ_counts <- dsmz_meta %>% dplyr::count(organ, name = "n_lines") %>% dplyr::arrange(desc(n_lines))
+pdf("/home/chu25/dsmz/results/preliminary_analysis/DSMZ_organ_distribution.pdf", width = 6, height = 4)
+ggplot(organ_counts, aes(x = reorder(organ, n_lines), y = n_lines, fill = organ)) +
+  geom_col(width = 0.8) +
+  geom_text(aes(label = n_lines), vjust = -0.2, size = 3) +
+  scale_fill_brewer(palette = "Set3") +
+  labs(x = NULL, y = "Number of DSMZ cell lines",
+       title = "Organ distribution of DSMZ collection") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 40, hjust = 1))
+dev.off()
+```
+
+```
+## pdf 
+##   2
+```
+
+
+# Harmonize genes (keep only shared Ensembl IDs)
+
+``` r
+# numeric safety for correlations
+storage.mode(dsmz_counts) <- "double"
+storage.mode(tcga_counts) <- "double"
+
+strip_ver <- function(x) sub("\\.\\d+$", "", x)
+
+# TCGA: strip version and collapse duplicates (sum); keep ordered for reproducibility
+tcga_base <- strip_ver(rownames(tcga_counts))
+logmsg("TCGA before harmonize: %d genes", nrow(tcga_counts))
+```
+
+```
+## TCGA before harmonize: 60660 genes
+```
+
+``` r
+tcga_counts <- rowsum(tcga_counts, group = tcga_base, reorder = TRUE)
+logmsg("TCGA after strip+collapse: %d unique base Ensembl genes", nrow(tcga_counts))
+```
+
+```
+## TCGA after strip+collapse: 60660 unique base Ensembl genes
+```
+
+``` r
+common_genes <- intersect(rownames(tcga_counts), rownames(dsmz_counts))
+
+logmsg("head(rownames(tcga_counts)): %s",
+       paste(head(rownames(tcga_counts)), collapse = ", "))
+```
+
+```
+## head(rownames(tcga_counts)): ENSG00000000003, ENSG00000000005, ENSG00000000419, ENSG00000000457, ENSG00000000460, ENSG00000000938
+```
+
+``` r
+logmsg("head(rownames(dsmz_counts)): %s",
+       paste(head(rownames(dsmz_counts)), collapse = ", "))
+```
+
+```
+## head(rownames(dsmz_counts)): ENSG00000223972, ENSG00000227232, ENSG00000278267, ENSG00000243485, ENSG00000284332, ENSG00000237613
+```
+
+``` r
+logmsg("Common genes (DSMZ ∩ TCGA): %d", length(common_genes))
+```
+
+```
+## Common genes (DSMZ ∩ TCGA): 60660
+```
+
+``` r
+# RELAXED: warn if small, but do NOT stop
+if (length(common_genes) < 1000)
+  logmsg("WARNING: Only %d shared genes. Correlations may be less stable.", length(common_genes))
+
+tcga_counts <- tcga_counts[common_genes, , drop = FALSE]
+dsmz_counts <- dsmz_counts[common_genes, , drop = FALSE]
+stopifnot(identical(rownames(tcga_counts), rownames(dsmz_counts)))
+```
+
+
+``` r
+# choose label column with fallback
+tcga_labels <- NULL
+cand <- c("project_id","study","disease_type")
+for (nm in cand)
+  if (nm %in% colnames(colData(tcga_se))) { tcga_labels <- colData(tcga_se)[[nm]]; break }
+stopifnot(!is.null(tcga_labels))
+
+if (is.factor(tcga_labels)) tcga_labels <- as.character(tcga_labels)
+tcga_labels <- sub("^TCGA-", "", tcga_labels)
+names(tcga_labels) <- colnames(tcga_counts)
+stopifnot(length(tcga_labels) == ncol(tcga_counts))
+
+tcga_levels <- sort(unique(tcga_labels))
+tcga_means <- sapply(tcga_levels, function(ct) {
+  rowMeans(tcga_counts[, tcga_labels == ct, drop = FALSE])
+})
+colnames(tcga_means) <- tcga_levels
+stopifnot(identical(rownames(tcga_means), rownames(tcga_counts)))
+logmsg("TCGA cohorts available: %d", length(tcga_levels))
+```
+
+```
+## TCGA cohorts available: 33
+```
+
+
+#Organ → TCGA cohorts (broad)
+
+``` r
+organ2tcga <- list(
+  "Adrenal"       = c("ACC","PCPG"),
+  "Bladder"       = "BLCA",
+  "Brain/CNS"     = c("GBM","LGG"),
+  "Breast"        = "BRCA",
+  "Cervix"        = "CESC",
+  "Liver/Biliary" = c("LIHC","CHOL"),
+  "Colon/Rectum"  = c("COAD","READ"),
+  "Esophagus"     = "ESCA",
+  "Head/Neck"     = "HNSC",
+  "Kidney"        = c("KICH","KIRC","KIRP"),
+  "Lung"          = c("LUAD","LUSC"),
+  "Mesothelium"   = "MESO",
+  "Ovary"         = "OV",
+  "Pancreas"      = "PAAD",
+  "Prostate"      = "PRAD",
+  "Sarcoma"       = "SARC",
+  "Skin"          = "SKCM",
+  "Stomach"       = "STAD",
+  "Testis"        = "TGCT",
+  "Thyroid"       = "THCA",
+  "Thymus"        = "THYM",
+  "Uterus"        = c("UCEC","UCS"),
+  "Uveal/Eye"     = "UVM",
+  "Lymphoid"      = "DLBC",
+  "Leukemia"      = "LAML",
+  "Myeloid"       = "LAML",
+  "Bone Marrow"   = "LAML",
+  "Body Cavity"   = "MESO",
+  "Other"         = character(0),
+  "Unknown"       = character(0)
+)
+```
+
+# Spearman similarity (DSMZ sample x TCGA cohort), using shared genes
+
+``` r
+g <- rownames(tcga_means)  # all shared genes
+logmsg("Spearman will use %d genes across %d TCGA cohorts and %d DSMZ samples.",
+       length(g), ncol(tcga_means), ncol(dsmz_counts))
+```
+
+```
+## Spearman will use 60660 genes across 33 TCGA cohorts and 189 DSMZ samples.
+```
+
+``` r
+spearman_scores <- outer(
+  dsmz_meta$sample_id, colnames(tcga_means),
+  Vectorize(function(cell, cohort) {
+    cor(dsmz_counts[g, cell], tcga_means[g, cohort],
+        method = "spearman", use = "pairwise.complete.obs")
+  })
+)
+dimnames(spearman_scores) <- list(dsmz_meta$sample_id, colnames(tcga_means))
+```
+
+
+
+``` r
+# Make sure every organ label is one of the keys in organ2tcga
+# Ensure every organ string is a key in organ2tcga (else "Unknown")
+dsmz_meta <- dsmz_meta %>%
+  mutate(organ = ifelse(organ %in% names(organ2tcga), organ, "Unknown"))
+
+# 1) Build a list-column of allowed cohorts per row
+dsmz_meta <- dsmz_meta %>%
+  mutate(
+    allowed = lapply(organ, function(org) {
+      a <- organ2tcga[[org]]
+      if (is.null(a)) a <- character(0)
+      # keep only cohorts that actually exist in tcga_means
+      intersect(a, colnames(tcga_means))
+    })
+  )
+
+# 2) Pick the best cohort among the allowed list using Spearman
+dsmz_meta <- dsmz_meta %>%
+  mutate(
+    tcga_code = mapply(function(sid, cand) {
+      if (is.na(sid) || length(cand) == 0 || !(sid %in% rownames(spearman_scores))) {
+        return(NA_character_)
+      }
+      v <- spearman_scores[sid, cand, drop = TRUE]
+      if (length(v) == 0 || all(is.na(v))) NA_character_ else cand[which.max(v)]
+    }, sample_id, allowed, USE.NAMES = FALSE)
+  )
+
+# quick diagnostics (optional)
+message("Rows with no allowed cohorts: ", sum(lengths(dsmz_meta$allowed) == 0))
+```
+
+```
+## Rows with no allowed cohorts: 58
+```
+
+``` r
+# sanity table
+tab <- as.data.frame(
+  table(Organ = dsmz_meta$organ, TCGA = dsmz_meta$tcga_code, useNA = "ifany")
+) %>%
+  arrange(Organ, TCGA)
+utils::head(tab, 20)
+```
+
+```
+##          Organ TCGA Freq
+## 1      Adrenal BRCA    0
+## 2      Adrenal DLBC    0
+## 3      Adrenal LAML    0
+## 4      Adrenal  LGG    0
+## 5      Adrenal LUSC    0
+## 6      Adrenal MESO    0
+## 7      Adrenal PCPG    4
+## 8      Adrenal <NA>    0
+## 9  Body Cavity BRCA    0
+## 10 Body Cavity DLBC    0
+## 11 Body Cavity LAML    0
+## 12 Body Cavity  LGG    0
+## 13 Body Cavity LUSC    0
+## 14 Body Cavity MESO    4
+## 15 Body Cavity PCPG    0
+## 16 Body Cavity <NA>    0
+## 17 Bone Marrow BRCA    0
+## 18 Bone Marrow DLBC    0
+## 19 Bone Marrow LAML    6
+## 20 Bone Marrow  LGG    0
+```
+
+
+``` r
+counts_long <- dsmz_meta %>%
+  mutate(TCGA = ifelse(is.na(tcga_code), "Unassigned", tcga_code)) %>%
+  dplyr::count(Organ = organ, TCGA, name = "Freq")
+
+heat_mat <- counts_long %>%
+  tidyr::pivot_wider(names_from = TCGA, values_from = Freq, values_fill = 0) %>%
+  tibble::column_to_rownames("Organ") %>%
+  as.matrix()
+
+pdf("/home/chu25/dsmz/results/preliminary_analysis/organ_tcga_counts_heatmap.pdf", width = 8, height = 6)
+pheatmap::pheatmap(
+  heat_mat,
+  cluster_rows = FALSE, cluster_cols = FALSE,
+  display_numbers = TRUE, number_color = "black",
+  main = "DSMZ organ → TCGA cohort assignments"
+)
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <e2>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <86>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <92>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <e2>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <86>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <92>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <e2>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <86>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <92>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <e2>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <86>
+```
+
+```
+## Warning in grid.Call(C_textBounds, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <92>
+```
+
+```
+## Warning in grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <e2>
+```
+
+```
+## Warning in grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <86>
+```
+
+```
+## Warning in grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y, :
+## conversion failure on 'DSMZ organ → TCGA cohort assignments' in 'mbcsToSbcs':
+## dot substituted for <92>
+```
+
+![](/mnt/beegfs/mnt/work/bioinfo/home/chu25/dsmz/results/preliminary_analysis/heatmap_organ_tcga_dsmz-1.pdf)<!-- --> 
+
+``` r
+dev.off()
+```
+
+```
+## pdf 
+##   3
+```
+
+
+``` r
+out_dir <- "/home/chu25/dsmz/results/preliminary_analysis/spearman"
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+# all Spearman (wide & long) + RDS
+all_wide <- spearman_scores %>%
+  as.data.frame() %>% tibble::rownames_to_column("sample_id")
+write.csv(all_wide, file.path(out_dir, "spearman_scores_all_wide.csv"), row.names = FALSE)
+
+all_long <- tidyr::pivot_longer(all_wide, -sample_id,
+                                names_to = "tcga_cohort", values_to = "rho")
+write.csv(all_long, file.path(out_dir, "spearman_scores_all_long.csv"), row.names = FALSE)
+saveRDS(spearman_scores, file.path(out_dir, "spearman_scores_all.rds"))
+
+# max overall per DSMZ sample (ignoring organ)
+best_idx <- max.col(spearman_scores, ties.method = "first")
+best_overall_df <- tibble::tibble(
+  sample_id         = rownames(spearman_scores),
+  best_tcga_overall = colnames(spearman_scores)[best_idx],
+  best_rho_overall  = spearman_scores[cbind(seq_len(nrow(spearman_scores)), best_idx)]
+)
+
+# rho for organ-constrained assignment (if any)
+rho_allowed <- rep(NA_real_, nrow(dsmz_meta))
+ok <- !is.na(dsmz_meta$tcga_code) & dsmz_meta$sample_id %in% rownames(spearman_scores)
+rho_allowed[ok] <- spearman_scores[cbind(dsmz_meta$sample_id[ok], dsmz_meta$tcga_code[ok])]
+
+max_summary <- dsmz_meta %>%
+  dplyr::select(sample_id, Origin, organ, tcga_code) %>%
+  dplyr::left_join(best_overall_df, by = "sample_id") %>%
+  dplyr::mutate(rho_allowed = rho_allowed)
+
+write.csv(max_summary, file.path(out_dir, "spearman_max_by_sample.csv"), row.names = FALSE)
+
+# keep the mapping as a simple table too
+write.csv(dsmz_meta %>% dplyr::select(sample_id, Origin, organ, tcga_code),
+          file.path(out_dir, "dsmz_tcga_organ_mapping.csv"), row.names = FALSE)
+```
+
+

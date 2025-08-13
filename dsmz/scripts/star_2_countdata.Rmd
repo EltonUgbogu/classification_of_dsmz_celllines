@@ -1,0 +1,108 @@
+---
+title: "Get count data from STAR output"
+output: pdf_document
+date: "2025-06-30"
+---
+
+```{r}
+# Set CRAN mirror explicitly
+options(repos = c(CRAN = "https://clod.r-project.org"))
+```
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(purrr)
+library(DESeq2)
+library(readr)
+library(stringr)
+library(purrr)
+library(tibble)
+library(rtracklayer)
+library(tibble)
+library(readr)
+```
+
+
+```{r merge-all-data}
+# Path with STAR outputs
+in_dir <- "/home/chu25/data/star/count_data"
+out_dir <- "/home/chu25/data/dsmz"
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+# Find files
+count_files <- list.files(in_dir, pattern = "ReadsPerGene\\.out\\.tab$", full.names = TRUE)
+
+
+# Sample names from file names (remove the suffix, anchored)
+sample_names <- basename(count_files) %>%
+  str_remove("\\.ReadsPerGene\\.out\\.tab$")
+
+# Read each file and name count column by its sample
+# Keep col1 (Ensembl with version) and col2 (unstranded counts)
+count_list <- purrr::map2(count_files, sample_names, ~{
+  df <- readr::read_tsv(.x, col_names = FALSE, show_col_types = FALSE)[, c(1, 2)]
+  df <- dplyr::filter(df, !grepl("^N_", .data$X1))        # drop STAR summary rows
+  colnames(df) <- c("gene_id_ver", .y)                    # name columns: gene_id + sample_name
+  df
+})
+
+
+# Merge by Ensembl_id 
+counts <- purrr::reduce(count_list, dplyr::full_join, by = "gene_id_ver")
+
+# Replace any NAs (if gene missing in some file) with 0
+counts[is.na(counts)] <- 0
+
+# Save raw merged counts (gene_id with version as first column)
+saveRDS(counts, file = file.path(out_dir, "DSMZ_star2count.rds"))
+```
+
+
+# Extract gene_id → gene_name from GENCODE GTF
+# Load GTF and extract mapping
+```{r gene_map}
+# Import GTF and extract (gene_id, gene_name)
+gtf_path <- "/home/chu25/data/GTF/Homo_sapiens.GRCh38.107.gtf"
+gtf <- rtracklayer::import(gtf_path)
+genes_gtf <- gtf[gtf$type == "gene"]
+
+gene_map <- as.data.frame(mcols(genes_gtf)) %>%
+  dplyr::select(gene_id, gene_name) %>%
+  dplyr::distinct(gene_id, .keep_all = TRUE)   # ensure unique mapping per gene_id
+
+```
+
+
+```{r}
+# Add version-less Ensembl ID
+counts_ensembl <- counts %>%
+  dplyr::mutate(Ensembl_ID = sub("\\.\\d+$", "", .data$gene_id_ver))
+
+# Join gene symbols
+counts_gene <- counts_ensembl %>%
+  dplyr::left_join(gene_map, by = c("Ensembl_ID" = "gene_id"))
+
+# Reorder columns for clarity: Ensembl_ID_with_version, Ensembl_ID, gene_name, <samples…>
+counts_final <- counts_gene %>%
+  dplyr::relocate(gene_id_ver, Ensembl_ID, gene_name) %>%
+  dplyr::rename(Ensembl_ID_with_version = gene_id_ver)
+
+# (Optional) set rownames to Ensembl_ID_with_version and keep a pure numeric matrix after metadata
+counts_final_rownames <- counts_final %>%
+  tibble::column_to_rownames("Ensembl_ID_with_version")
+
+# Save
+saveRDS(counts_final, file = file.path(out_dir, "DSMZ_count_gene.rds"))
+
+# Quick sanity prints
+cat("Rows (genes):", nrow(counts_final), "\n")
+cat("Columns (including 2 Ensembl cols + gene_name):", ncol(counts_final), "\n")
+cat("Example sample columns:\n")
+print(head(colnames(counts_final)[4:min(10, ncol(counts_final))]))
+
+```
