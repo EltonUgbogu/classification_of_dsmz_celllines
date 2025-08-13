@@ -1,0 +1,45 @@
+Assuming unrestricted shared filesystem usage.
+None
+host: gtw-node07
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 1 (use --cores to define parallelism)
+Rules claiming more threads will be scaled down.
+Job stats:
+job                       count
+----------------------  -------
+all                           1
+multiqc_picard_summary        1
+total                         2
+
+Select jobs to execute...
+Execute 1 jobs...
+[Tue Aug  5 18:28:14 2025]
+localrule multiqc_picard_summary:
+    input: /home/chu25/dsmz/results/picard
+    output: /home/chu25/dsmz/results/multiqc/picard/multiqc_picard_report.html
+    jobid: 1
+    reason: Missing output files: /home/chu25/dsmz/results/multiqc/picard/multiqc_picard_report.html
+    resources: tmpdir=/tmp
+Waiting at most 5 seconds for missing files:
+/home/chu25/dsmz/results/multiqc/picard/multiqc_picard_report.html (missing locally)
+MissingOutputException in rule multiqc_picard_summary in file "/home/chu25/dsmz/scripts/multiqc/picard/Snakefile", line 9:
+Job 1  completed successfully, but some output files are missing. Missing files after 5 seconds. This might be due to filesystem latency. If that is the case, consider to increase the wait time with --latency-wait:
+/home/chu25/dsmz/results/multiqc/picard/multiqc_picard_report.html (missing locally, parent dir contents: multiqc_data, multiqc_report.html)
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look below for error messages
+[Tue Aug  5 18:29:26 2025]
+Error in rule multiqc_picard_summary:
+    message: None
+    jobid: 1
+    input: /home/chu25/dsmz/results/picard
+    output: /home/chu25/dsmz/results/multiqc/picard/multiqc_picard_report.html
+    shell:
+        
+        echo "[INFO] Running MultiQC summary on Picard outputs..."
+        multiqc /home/chu25/dsmz/results/picard --outdir /home/chu25/dsmz/results/multiqc/picard
+        
+        (command exited with non-zero exit code)
+Complete log(s): /mnt/beegfs/mnt/work/bioinfo/home/chu25/dsmz/scripts/multiqc/picard/.snakemake/log/2025-08-05T182814.381858.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.
