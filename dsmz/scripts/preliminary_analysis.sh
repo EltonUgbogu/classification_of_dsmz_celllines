@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=preliminary_analysis
-#SBATCH --output=/home/chu25/dsmz/logs/preliminary_analysis/%x_%j.out
-#SBATCH --error=/home/chu25/dsmz/logs/preliminary_analysis/%x_%j.err
+#SBATCH --job-name=dsmz_tcga_correlation
+#SBATCH --output=/home/chu25/dsmz/logs/dsmz_tcga_correlation/%x_%j.out
+#SBATCH --error=/home/chu25/dsmz/logs/dsmz_tcga_correlation/%x_%j.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -15,8 +15,8 @@ echo "Node: $(hostname)"
 echo "CWD:  $(pwd)"
 
 # Ensure output dirs exist
-mkdir -p /home/chu25/dsmz/logs/preliminary_analysis
-mkdir -p /home/chu25/dsmz/results/preliminary_analysis
+mkdir -p /home/chu25/dsmz/logs/dsmz_tcga_correlation
+mkdir -p /home/chu25/dsmz/results/dsmz_tcga_correlation
 
 # Conda env
 source ~/miniconda3/etc/profile.d/conda.sh
@@ -37,9 +37,9 @@ echo "Using rmarkdown output_format: ${FMT}"
 
 # Render
 Rscript -e "rmarkdown::render(
-  'preliminary_analysis.Rmd',
+  'dsmz_tcga_correlation.R',
   output_format = 'pdf_document',
-  output_dir    = '/home/chu25/dsmz/results/preliminary_analysis',
+  output_dir    = '/home/chu25/dsmz/results/dsmz_tcga_correlation',
   clean         = FALSE,
   quiet         = FALSE
 )"
