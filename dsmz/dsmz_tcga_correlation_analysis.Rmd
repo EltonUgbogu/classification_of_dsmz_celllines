@@ -1,0 +1,1582 @@
+---
+title: "TCGA–DSMZ Correlation Analysis"
+author: "chu25"
+date: "`r format(Sys.Date())`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+set.seed(42)
+```
+
+```{r}
+# =============================================================================
+# SETUP AND CONFIGURATION
+# =============================================================================
+options(stringsAsFactors = FALSE)
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(SummarizedExperiment)
+  library(matrixStats)
+  library(limma)
+  library(edgeR)
+  library(pheatmap)
+  library(uwot)
+  library(ggrepel)
+  library(sva)         # ComBat / ComBat_seq
+  library(patchwork)   # for combining plots
+  library(viridis)     # for color palettes
+  library(ggpubr)      # for statistical tests
+  library(rstatix)     # for statistical tests
+  library(grid)        # for pheatmap drawing
+  library(RColorBrewer)
+})
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+set.seed(42)
+
+```
+
+```{r tcga_project}
+# Human-readable TCGA project names for labeling 
+tcga_proj_map <- tibble::tribble(
+  ~tcga_code, ~tcga_name,
+  "LAML","Acute Myeloid Leukemia","ACC","Adrenocortical carcinoma",
+  "BLCA","Bladder Urothelial Carcinoma","LGG","Brain Lower Grade Glioma",
+  "BRCA","Breast invasive carcinoma","CESC","Cervical squamous cell carcinoma and endocervical adenocarcinoma",
+  "CHOL","Cholangiocarcinoma","LCML","Chronic Myelogenous Leukemia",
+  "COAD","Colon adenocarcinoma","CNTL","Controls","ESCA","Esophageal carcinoma",
+  "FPPP","FFPE Pilot Phase II","GBM","Glioblastoma multiforme","HNSC","Head and Neck squamous cell carcinoma",
+  "KICH","Kidney Chromophobe","KIRC","Kidney renal clear cell carcinoma","KIRP","Kidney renal papillary cell carcinoma",
+  "LIHC","Liver hepatocellular carcinoma","LUAD","Lung adenocarcinoma","LUSC","Lung squamous cell carcinoma",
+  "DLBC","Lymphoid Neoplasm Diffuse Large B-cell Lymphoma","MESO","Mesothelioma","MISC","Miscellaneous",
+  "OV","Ovarian serous cystadenocarcinoma","PAAD","Pancreatic adenocarcinoma","PCPG","Pheochromocytoma and Paraganglioma",
+  "PRAD","Prostate adenocarcinoma","READ","Rectum adenocarcinoma","SARC","Sarcoma",
+  "SKCM","Skin Cutaneous Melanoma","STAD","Stomach adenocarcinoma","TGCT","Testicular Germ Cell Tumors",
+  "THYM","Thymoma","THCA","Thyroid carcinoma","UCS","Uterine Carcinosarcoma",
+  "UCEC","Uterine Corpus Endometrial Carcinoma","UVM","Uveal Melanoma"
+)
+
+config <- list(
+  # Inputs
+  tcga_se_rds   = "/home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered.rds",
+  dsmz_rds      = "/home/chu25/data/dsmz/DSMZ_count_gene.rds",
+  dsmz_meta_csv = "/home/chu25/data/dsmz/DSMZ_metadata.csv",
+  purity_tsv    = NULL,  # set TSV with columns: sample, purity if SE lacks purity
+
+  # Outputs
+  outdir       = "/home/chu25/dsmz/results/correlation1",
+
+  # Analysis
+  var_gene_set = "tcga_5k",        # "tcga_5k", "tcga_10k", "all"
+  min_shared   = 1000,
+  batch_adjust_method = "combat_seq",  # "combat_seq" or "combat"
+  overlay_tcga_centroids = TRUE
+)
+
+dir.create(config$outdir, showWarnings = FALSE, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(config$outdir, "/figs-"))
+
+
+```
+
+```{r io_functions}
+# =============================================================================
+# IO HELPERS
+# =============================================================================
+load_tcga_data <- function(file_path) {
+  cat("[INFO] Loading TCGA data...\n")
+  if (!file.exists(file_path)) stop(sprintf("[ERROR] TCGA RDS not found: %s", file_path))
+  se <- readRDS(file_path)
+  counts <- assay(se)
+  cat(sprintf("[INFO] TCGA dims: %d genes x %d samples\n", nrow(counts), ncol(counts)))
+  list(se = se, counts = counts)
+}
+
+load_dsmz_data <- function(counts_path, meta_path) {
+  cat("[INFO] Loading DSMZ data...\n")
+  if (!file.exists(counts_path)) stop(sprintf("[ERROR] DSMZ RDS not found: %s", counts_path))
+  if (!file.exists(meta_path))    stop(sprintf("[ERROR] DSMZ metadata CSV not found: %s", meta_path))
+  raw  <- readRDS(counts_path)
+  meta <- read.csv(meta_path)
+  stopifnot(all(c("Ensembl_ID","gene_name") %in% colnames(raw)))
+  stopifnot("sample_name" %in% names(meta))
+  cat(sprintf("[INFO] DSMZ table: %d rows x %d cols\n", nrow(raw), ncol(raw)))
+  list(raw = raw, meta = meta)
+}
+
+
+# =============================================================================
+# PROCESS: counts + metadata
+# =============================================================================
+harmonize_gene_ids <- function(tcga_counts){
+  cat("[INFO] Harmonizing TCGA gene IDs...\n")
+  g <- sub("\\..*$","", rownames(tcga_counts))
+  if (any(duplicated(g))) {
+    tcga_counts <- rowsum(tcga_counts, g, reorder = TRUE)
+    rownames(tcga_counts) <- sort(unique(g))
+  } else {
+    rownames(tcga_counts) <- g
+  }
+  tcga_counts
+}
+
+
+# Function to build a clean DSMZ count matrix from the raw input table
+build_dsmz_matrix <- function(dsmz_raw){
+  
+  # Print progress message
+  cat("[INFO] Building DSMZ count matrix...\n")
+  
+  # Columns used for annotation (not sample counts)
+  annot <- c("Ensembl_ID","gene_name","Ensembl_ID_with_version")
+  
+  # All other columns are assumed to be sample counts
+  sample_cols <- setdiff(colnames(dsmz_raw), annot)
+  
+  # Ensure sample columns are numeric (sometimes read as characters/factors)
+  dsmz_raw[sample_cols] <- lapply(
+    dsmz_raw[sample_cols],
+    function(x) as.numeric(as.character(x))
+  )
+  
+  # Extract only the sample columns into a numeric matrix
+  M <- as.matrix(dsmz_raw[, sample_cols, drop=FALSE])
+  
+  # Set row names of the matrix to Ensembl IDs
+  rownames(M) <- dsmz_raw$Ensembl_ID
+  
+  # If any duplicate Ensembl IDs exist, aggregate their counts by summing
+  if (any(duplicated(rownames(M))))
+    M <- rowsum(M, rownames(M), reorder = TRUE)
+  
+  # Check for sample columns that are completely NA (no usable values)
+  keep <- vapply(
+    as.data.frame(M),
+    function(v) any(!is.na(v)),  # TRUE if the column has at least one non-NA
+    logical(1)
+  )
+  
+  # Drop columns that are all NA, with a warning message
+  if (!all(keep)) {
+    cat(sprintf(
+      "[WARN] Dropping %d DSMZ columns that are all NA\n",
+      sum(!keep)
+    ))
+    M <- M[, keep, drop=FALSE]
+  }
+  
+  # Return the cleaned DSMZ matrix
+  M
+}
+
+# Function to align DSMZ metadata table with DSMZ counts matrix
+# Ensures that sample order and IDs match between the two inputs
+align_metadata <- function(dsmz_meta, dsmz_counts, outdir){
+  
+  # Print progress message
+  cat("[INFO] Aligning metadata to counts...\n")
+  
+  # Create a 'sample_id' column (duplicate of sample_name for clarity)
+  dsmz_meta <- dsmz_meta %>% mutate(sample_id = sample_name)
+  
+  # Identify overlapping sample IDs between metadata and counts
+  matched <- intersect(dsmz_meta$sample_id, colnames(dsmz_counts))
+  
+  # Samples present in metadata but missing from counts
+  md_only <- setdiff(dsmz_meta$sample_id, colnames(dsmz_counts))
+  
+  # Samples present in counts but missing from metadata
+  ct_only <- setdiff(colnames(dsmz_counts), dsmz_meta$sample_id)
+  
+  # Save list of metadata-only samples (not in counts) to CSV
+  if (length(md_only))
+    write.csv(
+      tibble(sample_name = md_only),
+      file.path(outdir, "unmatched_metadata_samples.csv"),
+      row.names = FALSE
+    )
+  
+  # Save list of count-only samples (not in metadata) to CSV
+  if (length(ct_only))
+    write.csv(
+      tibble(sample_name = ct_only),
+      file.path(outdir, "unmatched_count_columns.csv"),
+      row.names = FALSE
+    )
+  
+  # Filter metadata to keep only samples that are matched
+  dsmz_meta <- dsmz_meta %>% filter(sample_id %in% matched)
+  
+  # Subset counts matrix to matched samples, keeping column order consistent with metadata
+  dsmz_counts <- dsmz_counts[, dsmz_meta$sample_id, drop=FALSE]
+  
+  # Sanity check: confirm that counts columns and metadata sample_ids are identical in order
+  stopifnot(identical(colnames(dsmz_counts), dsmz_meta$sample_id))
+  
+  # Print summary of matched vs unmatched samples
+  cat(sprintf(
+    "[INFO] Matched: %d | Unmatched(meta): %d | Unmatched(counts): %d\n",
+    length(matched), length(md_only), length(ct_only)
+  ))
+  
+  # Return a list with aligned metadata and counts matrix
+  list(meta = dsmz_meta, counts = dsmz_counts)
+}
+```
+
+```{r purity}
+# =============================================================================
+# PURITY 
+# ============================================================================
+# Function: load_purity_data
+# Purpose:
+#   - Extract tumor purity information for TCGA samples
+#   - Either from the SummarizedExperiment object (if available)
+#   - Or from an external file
+#   - Returns a named numeric vector of purity values (names = sample IDs)
+
+load_purity_data <- function(tcga_se, purity_file=NULL){
+  
+  # Initialize purity vector as NULL
+  p <- NULL
+  
+  # Case 1: Purity column already exists in SummarizedExperiment
+  if ("purity" %in% colnames(colData(tcga_se))) {
+    
+    # Extract and convert purity values to numeric
+    p <- as.numeric(colData(tcga_se)$purity)
+    
+    # Assign sample IDs (column names of the assay) as names of the purity vector
+    names(p) <- colnames(assay(tcga_se))
+    
+    cat("[INFO] Using purity from SummarizedExperiment\n")
+  
+  # Case 2: Otherwise, if an external purity file is provided and exists
+  } else if (!is.null(purity_file) && file.exists(purity_file)) {
+    
+    # Read purity table (expects tab-delimited with header)
+    tab <- read.delim(purity_file, stringsAsFactors=FALSE)
+    
+    # Sanity check: table must have 'sample' and 'purity' columns
+    stopifnot(all(c("sample","purity") %in% colnames(tab)))
+    
+    # Build named numeric vector (purity values named by sample ID)
+    p <- setNames(tab$purity, tab$sample)
+    
+    cat("[INFO] Using external purity file\n")
+  
+  # Case 3: No purity data available at all
+  } else {
+    cat("[INFO] No purity data available\n")
+  }
+  
+  # Return purity vector (or NULL if not available)
+  p
+}
+```
+
+```{r apply_purity_adjustment}
+# Function: apply_purity_adjustment
+# Purpose:
+#   - Adjust TCGA expression counts for tumor purity
+#   - Removes genes strongly correlated with purity
+#   - Applies a linear model to correct expression for infiltration effects
+
+apply_purity_adjustment <- function(tcga_counts, purity){
+  
+  # If no purity vector is provided, just return the raw counts
+  if (is.null(purity)) return(tcga_counts)
+  
+  cat("[INFO] Applying purity adjustment...\n")
+  
+  # Keep only samples that have non-missing purity values
+  keep <- colnames(tcga_counts)[!is.na(purity)]
+  purity <- purity[keep]
+  M <- tcga_counts[, keep, drop=FALSE]
+  
+  # Step 1: Identify genes significantly associated with purity
+  # For each gene, test correlation (Spearman) between expression and purity
+  ct <- apply(M, 1, function(v) suppressWarnings(
+    cor.test(as.numeric(v), purity, method="spearman")
+  ))
+  
+  # Extract p-values and correlation coefficients (rho) from tests
+  pv <- vapply(ct, `[[`, numeric(1), "p.value")
+  rh <- vapply(ct, function(x) unname(x$estimate), numeric(1))
+  
+  # Multiple-testing correction (Benjamini–Hochberg FDR)
+  padj <- p.adjust(pv, "BH")
+  
+  # Drop genes significantly *negatively* correlated with purity
+  # (padj < 0.01 and rho < -0.4)
+  drop <- names(which(padj < 0.01 & rh < -0.4))
+  
+  if (length(drop)) {
+    cat(sprintf("[INFO] Removing %d purity-associated genes\n", length(drop)))
+    M <- M[setdiff(rownames(M), drop), , drop=FALSE]
+  }
+  
+  # Step 2: Linear model correction for infiltration
+  # Define infiltration as (1 - purity)
+  infilt <- 1 - purity
+  
+  # Build design matrix with intercept + infiltration term
+  design <- model.matrix(~ infilt)
+  
+  # Fit linear model per gene (using limma::lmFit)
+  fit <- lmFit(M, design)
+  
+  # Extract infiltration effect (beta coefficient for infilt)
+  beta <- fit$coefficients[,2, drop=FALSE]
+  
+  # Subtract estimated infiltration effect from expression matrix
+  Madj <- as.matrix(M) - beta %*% t(infilt)
+  
+  # Step 3: Merge adjusted counts back into full matrix
+  out <- tcga_counts
+  common <- intersect(rownames(Madj), rownames(out))
+  out[common, colnames(Madj)] <- Madj[common, ]
+  
+  # Return adjusted counts
+  out
+}
+```
+
+```{r compute_tcga_means}
+# =============================================================================
+# TCGA labels & means (for correlation step)
+# =============================================================================
+ # Function: compute_tcga_means
+# Purpose:
+#   - Compute mean expression values for each TCGA cancer type (or study label)
+#   - Based on adjusted expression matrix (tcga_adj)
+#   - Returns both the group-level means and per-sample labels
+
+compute_tcga_means <- function(tcga_se, tcga_adj){
+  
+  # Initialize labels vector
+  labs <- NULL
+  
+  # Try to extract cancer type / project label from colData in tcga_se
+  # Priority order: "Project_id" → "study" → "disease_type"
+  for (nm in c("Project_id","study","disease_type")) 
+    if (nm %in% colnames(colData(tcga_se))) { 
+      labs <- colData(tcga_se)[[nm]] 
+      break 
+    }
+  
+  # Stop if no labels found
+  stopifnot(!is.null(labs))
+  
+  # Clean up labels:
+  # Remove "TCGA-" prefix and ensure character type
+  labs <- sub("^TCGA-","", as.character(labs))
+  
+  # Assign sample names as names of the labels vector
+  names(labs) <- colnames(tcga_adj)
+  
+  # Get sorted list of unique cancer types / studies
+  lev <- sort(unique(labs))
+  
+  # Compute mean expression per group (cancer type)
+  # For each group, subset samples and take rowMeans across samples
+  means <- sapply(
+    lev, 
+    function(ct) rowMeans(tcga_adj[, labs==ct, drop=FALSE])
+  )
+  
+  # Set column names of means matrix to cancer type labels
+  colnames(means) <- lev
+  
+  # Return list:
+  #   means  = gene-by-cancer-type mean expression matrix
+  #   labels = vector mapping each sample → its cancer type
+  list(means=means, labels=labs)
+}
+```
+
+```{r select_variable_genes}
+# Function: select_variable_genes
+# Purpose:
+#   - Select a subset of the most variable genes from an expression matrix
+#   - Based on a predefined variable-gene setting (e.g. "tcga_5k" or "tcga_10k")
+#   - Default: if no recognized setting, return all genes
+
+select_variable_genes <- function(mat, var_gene_set){
+  
+  # By default, select all genes
+  sel <- rownames(mat)
+  
+  # Check if user requested a TCGA-style variable gene set
+  if (tolower(var_gene_set) %in% c("tcga_5k","tcga_10k")){
+    
+    # Set number of top variable genes (5k or 10k)
+    n <- if (tolower(var_gene_set)=="tcga_5k") 5000 else 10000
+    
+    # Compute interquartile range (IQR) for each gene across samples
+    # IQR is a robust measure of variability
+    iq <- matrixStats::rowIQRs(mat)
+    
+    # If fewer genes exist than requested, cap n to the maximum available
+    n <- min(n, length(iq))
+    
+    # Rank genes by IQR (descending), then select top n gene names
+    sel <- names(
+      sort(setNames(iq, rownames(mat)), decreasing=TRUE)
+    )[seq_len(n)]
+  }
+  
+  # Print summary of the selection
+  cat(sprintf(
+    "[INFO] Variable-gene setting: %s (%d genes used)\n",
+    var_gene_set, length(sel)
+  ))
+  
+  # Return vector of selected gene IDs
+  sel
+}
+```
+
+```{r compute_correlations}
+# Function: compute_correlations
+# Purpose:
+#   - Compute sample-to-cohort correlations between DSMZ cell lines and TCGA cohorts
+#   - Uses Spearman correlation across a selected set of genes
+#   - Returns a matrix of correlation values (DSMZ samples × TCGA cancer types)
+
+compute_correlations <- function(dsmz_counts, tcga_means, dsmz_meta, sel_genes){
+  
+  # Print progress message
+  cat("[INFO] Computing Spearman correlations...\n")
+  
+  # Compute correlations between each DSMZ sample and each TCGA cohort mean
+  # outer() iterates over (DSMZ sample × TCGA cohort) combinations
+  spearman <- outer(
+    dsmz_meta$sample_id,                 # DSMZ samples
+    colnames(tcga_means),                # TCGA cohorts (columns in mean matrix)
+    
+    # Vectorized function: compute Spearman correlation
+    Vectorize(function(cell, cohort) {
+      suppressWarnings(
+        cor(
+          dsmz_counts[sel_genes, cell],       # expression vector for DSMZ sample (subset genes)
+          tcga_means[sel_genes, cohort],      # mean expression for TCGA cohort (subset genes)
+          method = "spearman",                # rank-based correlation
+          use = "pairwise.complete.obs"       # handle any missing values
+        )
+      )
+    })
+  )
+  
+  # Assign row/column names to the correlation matrix
+  dimnames(spearman) <- list(dsmz_meta$sample_id, colnames(tcga_means))
+  
+  # Return DSMZ × TCGA correlation matrix
+  spearman
+}
+```
+
+```{r get_organ_mapping}
+# =============================================================================
+# ORGAN ↔ TCGA mapping (uses your 'organ' column)
+# =============================================================================
+get_organ_tcga_mapping <- function(){
+  list(
+    "Adrenal"       = c("ACC","PCPG"),
+    "Bladder"       = "BLCA",
+    "Brain/CNS"     = c("GBM","LGG"),
+    "Breast"        = "BRCA",
+    "Cervix"        = "CESC",
+    "Liver/Biliary" = c("LIHC","CHOL"),
+    "Colon/Rectum"  = c("COAD","READ"),
+    "Esophagus"     = "ESCA",
+    "Head/Neck"     = "HNSC",
+    "Kidney"        = c("KICH","KIRC","KIRP"),
+    "Lung"          = c("LUAD","LUSC"),
+    "Mesothelium"   = "MESO",
+    "Ovary"         = "OV",
+    "Pancreas"      = "PAAD",
+    "Prostate"      = "PRAD",
+    "Sarcoma"       = "SARC",
+    "Skin"          = "SKCM",
+    "Stomach"       = "STAD",
+    "Testis"        = "TGCT",
+    "Thyroid"       = "THCA",
+    "Thymus"        = "THYM",
+    "Uterus"        = c("UCEC","UCS"),
+    "Uveal/Eye"     = "UVM",
+    "Lymphoid"      = "DLBC",
+    "Leukemia"      = "LAML",
+    "Myeloid"       = "LAML",
+    "Bone Marrow"   = "LAML",
+    "Body Cavity"   = "MESO",
+    "Hematologic"   = c("DLBC","LAML"),
+    "Adrenal/SNS"   = c("ACC","PCPG"),
+    "Unknown"       = character(0),
+    "Other"         = character(0)
+  )
+}
+```
+
+```{r perform_organ_mapping}
+# Function: perform_organ_mapping
+# Purpose:
+#   - Constrain DSMZ-to-TCGA mapping by Organ/Tissue Type of origin
+#   - For each DSMZ sample, restrict candidate TCGA cancer types
+#     to those matching the sample's annotated organ
+#   - Select the best-matching TCGA cancer type based on Spearman correlation
+
+perform_organ_mapping <- function(dsmz_meta, spearman_scores, tcga_means) {
+  cat("[INFO] Performing organ-constrained mapping...\n")
+  
+  # Load predefined mapping of organ → TCGA codes
+  organ2tcga <- get_organ_tcga_mapping()
+  
+  # All available TCGA cohort codes (columns of mean expression matrix)
+  tcga_codes <- colnames(tcga_means)
+  
+  # DSMZ sample IDs available in the Spearman correlation matrix
+  smp_names  <- rownames(spearman_scores)
+
+  # --- Step 1: sanitize organ values in metadata ---
+  dsmz_meta <- dsmz_meta %>%
+    mutate(
+      # Replace missing or empty organ values with "Other"
+      # Ensure organ values are trimmed character strings
+      organ = ifelse(is.na(organ) | organ == "", "Other",
+                     trimws(as.character(organ)))
+    )
+
+  # --- Step 2: map each DSMZ sample to candidate TCGA cancer types ---
+  dsmz_meta %>%
+    rowwise() %>%
+    mutate(
+      # (a) Candidate TCGA codes for this sample's organ
+      #     Stored as a list-column (safe even if no candidates)
+      tcga_candidates = list({
+        tmp <- organ2tcga[[organ]]              # lookup TCGA codes for organ
+        if (is.null(tmp)) character(0)          # fallback if organ not in mapping
+        else intersect(tmp, tcga_codes)         # keep only those present in tcga_means
+      }),
+      
+      # (b) Assign final best-matching TCGA cancer type
+      tcga_code = {
+        tmp <- organ2tcga[[organ]]              # lookup organ mapping
+        cand <- if (is.null(tmp)) character(0) 
+                else intersect(tmp, tcga_codes) # candidate codes
+        
+        # If no candidates, or sample not in Spearman scores → NA
+        if (length(cand) == 0L || !(sample_id %in% smp_names)) {
+          NA_character_
+        } else {
+          # Otherwise, pick candidate with maximum Spearman correlation
+          sc <- spearman_scores[sample_id, cand, drop = TRUE]
+          cand[which.max(sc)]
+        }
+      }
+    ) %>%
+    ungroup()
+}
+```
+
+```{r tcga_project_to_organ_map}
+# Function: tcga_project_to_organ_map
+# Purpose:
+#   - Build a simple two-column lookup table that maps each TCGA project
+#     (e.g., "LUAD", "BRCA") to its corresponding organ of origin.
+#   - If a TCGA project is listed under multiple organs in the mapping,
+#     only the first match is kept.
+
+tcga_project_to_organ_map <- function(){
+  get_organ_tcga_mapping() %>%               # Load predefined organ → TCGA mapping (list)
+    
+    enframe(name = "organ", value = "codes") %>%
+    # Convert list into a tibble with two columns:
+    #   organ | codes (list of TCGA project codes)
+    
+    unnest_longer(codes, values_to = "tcga_project") %>%
+    # Expand each list of codes into multiple rows
+    # so that each row is (organ, tcga_project)
+    
+    filter(!is.na(tcga_project)) %>%
+    # Drop any rows with missing TCGA codes
+    
+    distinct(tcga_project, .keep_all = TRUE) %>%
+    # If a TCGA project appears under multiple organs, keep the first occurrence only
+    
+    select(tcga_project, organ)
+    # Return a clean 2-column tibble: TCGA project → organ
+}
+```
+
+```{r plots}
+# =============================================================================
+# - COLOR PALETTES AND PLOTTING
+# =============================================================================
+
+# Return a list of named palettes used across plots.
+# Each entry is a character vector of hex colors.
+get_palettes <- function() {
+  list(
+    # Widely used categorical palette (8 colors)
+    okabe_ito = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", 
+                  "#0072B2", "#D55E00", "#CC79A7", "#000000"),
+    
+    # Paul Tol's bright palette (7 colors)
+    tol_bright = c("#4477AA", "#EE6677", "#228833", "#CCBB44", 
+                   "#66CCEE", "#AA3377", "#BBBBBB"),
+    
+    # Paul Tol's vibrant palette (7 colors)
+    tol_vibrant = c("#EE7733", "#0077BB", "#33BBEE", "#EE3377", 
+                    "#CC3311", "#009988", "#BBBBBB"),
+    
+    # Two-color high-contrast pair
+    two_group = c("#E69F00", "#0072B2"),
+    
+    # Sequential gradient for continuous scales
+    sequential = c("#FFFFFF", "#FFF2CC", "#FFE699", "#FFD966", 
+                   "#FFCC33", "#FFB300", "#E69F00", "#CC8800")
+  )
+}
+
+# Create three figures from correlation results:
+#  (1) violin plot of best per-sample correlations by organ
+#  (2) heatmap of top-N samples by overall best correlation
+#  (3) stacked bar chart of organ vs TCGA assignment counts
+# Expects:
+#   - summary_tbl: data.frame with at least sample_id, best_rho_overall
+#   - spearman_scores: matrix (rows = DSMZ samples, cols = TCGA projects)
+#   - dsmz_map: data.frame with sample_id, organ, tcga_code
+#   - outdir: output directory
+create_plots<- function(summary_tbl, spearman_scores, dsmz_map, outdir) {
+  cat("[INFO] Creating correlation\n")
+  
+  # Shared palettes for consistent styling across plots
+  palettes <- get_palettes()
+  
+  # Helper used by stat_summary() to overlay mean and approximate 95% CI
+  mean_ci95 <- function(x) {
+    x <- x[is.finite(x)]
+    n <- length(x)
+    m <- mean(x)
+    se <- stats::sd(x) / sqrt(n)
+    data.frame(y = m, ymin = m - 1.96*se, ymax = m + 1.96*se)
+  }
+
+  # Where figures are written
+  fig_dir <- file.path(outdir, "figs")
+  dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+
+  # --- Step 1: Prepare long format (one row per sample × tcga_project) -------
+  spearman_long <- spearman_scores %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("sample_id") %>%
+    tidyr::pivot_longer(-sample_id, names_to = "tcga_project", values_to = "rho") %>%
+    dplyr::left_join(dsmz_map %>% dplyr::select(sample_id, organ), by = "sample_id") %>%
+    dplyr::mutate(organ = dplyr::coalesce(organ, "Other"))
+
+  # For each DSMZ sample keep only the TCGA project with the highest rho
+  best_corr_data <- spearman_long %>%
+    dplyr::group_by(sample_id) %>%
+    dplyr::slice_max(order_by = rho, n = 1, with_ties = FALSE) %>%
+    dplyr::ungroup()
+
+  # Per-organ summary statistics used for reporting (and optional inspection)
+  organ_summary <- best_corr_data %>%
+    dplyr::group_by(organ) %>%
+    dplyr::summarise(
+      n = dplyr::n(),
+      mean = mean(rho, na.rm = TRUE),
+      sd = sd(rho, na.rm = TRUE),
+      se = sd/sqrt(n),
+      ci95_low = mean - 1.96*se,
+      ci95_high = mean + 1.96*se,
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(dplyr::desc(mean))
+  
+  # Persist summary table alongside plots
+  readr::write_csv(organ_summary, file.path(fig_dir, "violin_rho_by_organ_summary.csv"))
+
+  # Non-parametric omnibus test across organs; followed by pairwise post hoc
+  kw <- rstatix::kruskal_test(best_corr_data, rho ~ organ)
+  dunn <- rstatix::dunn_test(best_corr_data, rho ~ organ, p.adjust.method = "BH") %>%
+    rstatix::add_significance("p.adj")
+  dunn_sig <- dunn %>% dplyr::filter(p.adj < 0.05)
+  
+  # Compute bracket locations only if there are significant pairs
+  if (nrow(dunn_sig) > 0) {
+    dunn_sig <- rstatix::add_xy_position(dunn_sig, x = "organ", data = best_corr_data, step.increase = 0.06)
+  }
+
+  # Build an organ → color mapping with enough distinct hues for all levels
+  organs <- sort(unique(best_corr_data$organ))
+  n_organs <- length(organs)
+  
+  # Use Okabe–Ito first; extend with Tol palettes if more levels are present
+  if (n_organs <= 8) {
+    organ_colors <- palettes$okabe_ito[1:n_organs]
+  } else {
+    organ_colors <- c(palettes$okabe_ito, palettes$tol_bright, palettes$tol_vibrant)[1:n_organs]
+  }
+  names(organ_colors) <- organs
+
+  # --- VIOLIN PLOT -----------------------------------------------------------
+  # Shows per-organ distribution of the best correlation per DSMZ sample
+  subtitle_txt <- paste0("Kruskal–Wallis p = ", formatC(kw$p, format = "e", digits = 2))
+  
+  p1 <- ggplot(best_corr_data, aes(x = organ, y = rho)) +
+    # Distribution envelope
+    geom_violin(aes(fill = organ), trim = FALSE, alpha = 0.6, color = "black", size = 0.5) +
+    # Jittered sample-level points
+    geom_jitter(aes(color = organ, shape = organ), width = 0.15, alpha = 0.7, size = 1.5) +
+    # Mean ± CI overlay
+    stat_summary(fun.data = mean_ci95, geom = "pointrange", 
+                 color = "black", size = 0.8, fatten = 3) +
+    # Manual scales to keep colors consistent across figures
+    scale_fill_manual(values = organ_colors, guide = "none") +
+    scale_color_manual(values = organ_colors, guide = "none") +
+    # Recycle a small set of point shapes if many organs are present
+    scale_shape_manual(values = rep(c(16, 17, 15, 18, 8, 4, 3, 7), 
+                                   length.out = n_organs), guide = "none") +
+    theme_bw(base_size = 12) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
+      axis.text.y = element_text(size = 11),
+      axis.title = element_text(size = 12, face = "bold"),
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 11),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank()
+    ) +
+    labs(
+      x = "Organ/Tissue Type", 
+      y = "Best Spearman ρ",
+      title = "Distribution of Best DSMZ→TCGA Correlations by Organ/Tissue",
+      subtitle = subtitle_txt
+    )
+
+  # Add pairwise significance brackets (if any significant comparisons)
+  if (nrow(dunn_sig) > 0) {
+    p1 <- p1 + ggpubr::stat_pvalue_manual(
+      dunn_sig,
+      label = "p.adj.signif",
+      hide.ns = TRUE,
+      tip.length = 0.01,
+      size = 3.5
+    )
+  }
+
+  print(p1)
+  ggsave(file.path(fig_dir, "violin_rho_by_organ.pdf"), p1, width = 12, height = 7)
+
+  # --- HEATMAP ---------------------------------------------------------------
+  # Select top 25 samples by overall best correlation for compact display
+  topN <- head(dplyr::arrange(summary_tbl, dplyr::desc(best_rho_overall))$sample_id, 25)
+  hm <- spearman_scores[topN, , drop = FALSE]
+
+  # Diverging palette (reversed so higher correlations appear warm)
+  colors_div <- RColorBrewer::brewer.pal(11, "RdYlBu")
+  colors_div <- rev(colors_div)
+  
+  hp <- pheatmap::pheatmap(
+    hm, 
+    cluster_rows = TRUE, 
+    cluster_cols = TRUE,
+    color = colorRampPalette(colors_div)(100),
+    main = "Top 25 DSMZ Samples: Spearman Correlation with TCGA Cohorts",
+    fontsize = 9, 
+    fontsize_row = 7, 
+    fontsize_col = 8,
+    border_color = "grey60",
+    silent = TRUE
+  )
+
+  # Explicit draw to screen and to disk to ensure consistent output
+  grid::grid.newpage()
+  grid::grid.draw(hp$gtable)
+  
+  pdf(file.path(fig_dir, "heatmap_top25.pdf"), width = 12, height = 10)
+  grid::grid.newpage()
+  grid::grid.draw(hp$gtable)
+  dev.off()
+
+  # --- STACKED BAR: organ × TCGA assignment ---------------------------------
+  # Count per organ and assigned TCGA label; "Unassigned" for missing tcga_code
+  assignment_data <- dsmz_map %>%
+    dplyr::mutate(tcga_assignment = ifelse(is.na(tcga_code), "Unassigned", tcga_code)) %>%
+    dplyr::count(organ, tcga_assignment, name = "count")
+
+  # Order organs by total stack height (improves readability)
+  totals <- assignment_data %>%
+    dplyr::group_by(organ) %>%
+    dplyr::summarise(total = sum(count), .groups = "drop") %>%
+    dplyr::arrange(dplyr::desc(total))
+  
+  organ_order <- totals$organ
+  assignment_data$organ <- factor(assignment_data$organ, levels = organ_order)
+  totals$organ <- factor(totals$organ, levels = organ_order)
+
+  # Pre-compute label positions at the center of each segment
+  assignment_labels <- assignment_data %>%
+    dplyr::group_by(organ) %>%
+    dplyr::arrange(organ, tcga_assignment, .by_group = TRUE) %>%
+    dplyr::mutate(pos = cumsum(count) - count/2) %>%
+    dplyr::ungroup()
+
+  # Build a categorical palette that spans all TCGA assignment levels present
+  tcga_assignments <- sort(unique(assignment_data$tcga_assignment))
+  n_tcga <- length(tcga_assignments)
+  
+  tcga_colors <- c(palettes$okabe_ito, palettes$tol_bright, palettes$tol_vibrant)[1:n_tcga]
+  names(tcga_colors) <- tcga_assignments
+
+  # Avoid clutter: only annotate reasonably large segments
+  label_df <- dplyr::filter(assignment_labels, count >= 2)
+
+  p3 <- ggplot(assignment_data, aes(x = organ, y = count, fill = tcga_assignment)) +
+    geom_bar(stat = "identity", position = "stack", color = "black", size = 0.3) +
+    # Segment labels (subset for readability)
+    geom_text(data = label_df, aes(y = pos, label = count),
+              size = 3.2, color = "black", fontface = "bold") +
+    # Total per organ above the stack
+    geom_text(data = totals, aes(y = total, label = total),
+              vjust = -0.5, fontface = "bold", size = 4, color = "black") +
+    scale_fill_manual(values = tcga_colors, name = "TCGA Project") +
+    scale_y_continuous(expand = expansion(mult = c(0.02, 0.15))) +
+    theme_bw(base_size = 12) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
+      axis.text.y = element_text(size = 11),
+      axis.title = element_text(size = 12, face = "bold"),
+      plot.title = element_text(size = 14, face = "bold"),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold"),
+      legend.text = element_text(size = 10),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank()
+    ) +
+    labs(
+      x = "Organ/Tissue Type", 
+      y = "Number of Cell Lines",
+      title = "DSMZ Cell Line Assignments to TCGA Projects by Organ/Tissue"
+    ) +
+    guides(fill = guide_legend(nrow = 3, byrow = TRUE, 
+                               override.aes = list(color = "black", size = 0.5)))
+
+  print(p3)
+  ggsave(file.path(fig_dir, "organ_tcga_assignment.pdf"), p3, width = 14, height = 9)
+
+  # Persist the statistical test outputs used in the violin figure
+  readr::write_csv(kw, file.path(fig_dir, "violin_kw_results.csv"))
+  readr::write_csv(dunn, file.path(fig_dir, "violin_dunn_results.csv"))
+  
+  cat("[INFO] Plots saved to:", fig_dir, "\n")
+}
+
+# =============================================================================
+#  PCA 
+# =============================================================================
+
+# Run PCA, quantify how much each PC associates with a categorical dataset label,
+# and produce a two-panel figure (R^2 bars + PC1/PC2 scatter).
+# Inputs:
+#   M_log: genes × samples matrix (already transformed to log-space)
+#   dataset_factor: factor/character of length ncol(M_log) (e.g., "TCGA"/"DSMZ")
+#   top_n: number of leading PCs to evaluate (auto to reach ~90% if NULL/large)
+# Outputs:
+#   list(r2_table, pc, plot, summary)
+pc_dataset_s_ <- function(M_log, dataset_factor, top_n = 10, outdir = NULL, title_tag = "dataset") {
+  # Basic shape checks to prevent silent misalignment
+  if (!is.matrix(M_log) && !is.data.frame(M_log)) stop("M_log must be a matrix or data frame")
+  if (ncol(M_log) != length(dataset_factor)) stop("Length mismatch between M_log columns and dataset_factor")
+  
+  palettes <- get_palettes()
+  
+  # PCA on samples (transpose so samples are rows)
+  pc <- prcomp(t(M_log), scale. = TRUE)
+  var_explained <- (pc$sdev^2) / sum(pc$sdev^2)
+  
+  # If top_n is too large/NULL, shrink to the smallest number reaching ≥90% cum. variance
+  if (is.null(top_n) || top_n > ncol(pc$x)) {
+    cum_var <- cumsum(var_explained)
+    top_n <- which.max(cum_var >= 0.9)
+    top_n <- min(top_n, ncol(pc$x))
+  }
+  
+  # For each PC, regress scores on dataset_factor and extract R^2
+  get_r2 <- function(y) unname(summary(lm(y ~ dataset_factor))$r.squared)
+  pcs_to_check <- seq_len(min(top_n, ncol(pc$x)))
+  r2_values <- sapply(pcs_to_check, function(i) get_r2(pc$x[, i]))
+  
+  df_r2 <- data.frame(
+    PC = paste0("PC", pcs_to_check),
+    R2 = r2_values,
+    VariancePct = var_explained[pcs_to_check] * 100
+  )
+  df_r2$PC <- factor(df_r2$PC, levels = df_r2$PC)
+  
+  # (A) Bar plot of R^2 with fill mapped to variance explained
+  p1 <- ggplot(df_r2, aes(x = PC, y = R2, fill = VariancePct)) +
+    geom_col(color = "black", size = 0.3) +
+    scale_fill_viridis_c(option = "plasma", name = "Variance\nexplained (%)",
+                         limits = c(0, max(var_explained) * 100)) +
+    coord_cartesian(ylim = c(0, 1)) +
+    theme_bw(base_size = 12) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.title = element_text(face = "bold"),
+      plot.title = element_text(face = "bold"),
+      legend.position = "right"
+    ) +
+    labs(
+      title = "Variance in PCs Explained by Dataset Factor",
+      subtitle = sprintf("Top %d PCs (%.1f%% cumulative variance)", 
+                        top_n, sum(var_explained[pcs_to_check]) * 100),
+      x = "Principal Component",
+      y = expression(R^2 ~ "(dataset factor)")
+    )
+
+  # (B) PC1 vs PC2 scatter, colored and shaped by dataset membership
+  pc_df <- as.data.frame(pc$x[, 1:2])
+  pc_df$Group <- dataset_factor
+  pc1_var <- round(var_explained[1] * 100, 1)
+  pc2_var <- round(var_explained[2] * 100, 1)
+  
+  group_colors <- palettes$two_group[1:length(unique(dataset_factor))]
+  names(group_colors) <- unique(dataset_factor)
+  
+  p2 <- ggplot(pc_df, aes(x = PC1, y = PC2, color = Group, shape = Group)) +
+    geom_point(size = 2.5, alpha = 0.8, stroke = 0.5) +
+    stat_ellipse(aes(fill = Group), geom = "polygon", alpha = 0.15, 
+                 linetype = "dashed", size = 0.8) +
+    scale_color_manual(values = group_colors, name = title_tag) +
+    scale_fill_manual(values = group_colors, guide = "none") +
+    scale_shape_manual(values = c(16, 17)[1:length(unique(dataset_factor))], 
+                       name = title_tag) +
+    theme_bw(base_size = 12) +
+    theme(
+      legend.position = "right",
+      axis.title = element_text(face = "bold"),
+      plot.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    ) +
+    labs(
+      title = paste("PCA: PC1 vs PC2 –", title_tag, "Comparison"),
+      x = paste0("PC1 (", pc1_var, "% variance)"),
+      y = paste0("PC2 (", pc2_var, "% variance)")
+    ) +
+    coord_fixed(ratio = 1)
+
+  # Assemble the two panels vertically
+  combined_plot <- p1 / p2 + plot_layout(heights = c(1, 1.2))
+  print(combined_plot)
+
+  # Optional export: PDF + CSV of R^2 table
+  if (!is.null(outdir)) {
+    fig_dir <- file.path(outdir, "figs")
+    dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+    ggsave(file.path(fig_dir, paste0("PCA_s_", title_tag, ".pdf")),
+           combined_plot, width = 10, height = 12, device = "pdf")
+    write.csv(df_r2, file.path(fig_dir, paste0("PCA_s_", title_tag, "_R2_table.csv")),
+              row.names = FALSE)
+  }
+
+  return(list(r2_table = df_r2, pc = pc, plot = combined_plot,
+              summary = list(total_variance = sum(var_explained[pcs_to_check]),
+                           significant_pcs = sum(r2_values > 0.1))))
+}
+
+# =============================================================================
+#  SCREE PLOT
+# =============================================================================
+
+# Standard scree plot with cumulative variance overlay.
+# Inputs:
+#   pc: object returned by prcomp()
+#   k: number of leading PCs to display (capped at available PCs)
+make_scree_plot_ <- function(pc, outdir, title_tag, k = 20) {
+  palettes <- get_palettes()
+  
+  var_expl <- (pc$sdev^2) / sum(pc$sdev^2)
+  k <- min(k, length(var_expl))
+  
+  df <- data.frame(
+    PC = factor(paste0("PC", seq_len(k)), levels = paste0("PC", seq_len(k))),
+    Var = var_expl[seq_len(k)] * 100,
+    Cum = cumsum(var_expl[seq_len(k)]) * 100
+  )
+  
+  p <- ggplot(df, aes(PC, Var)) +
+    geom_col(fill = palettes$okabe_ito[5], color = "black", size = 0.4, alpha = 0.85) +
+    geom_line(aes(y = Cum, group = 1), color = palettes$okabe_ito[6], size = 1.5) +
+    geom_point(aes(y = Cum), color = palettes$okabe_ito[6], fill = "white", 
+               shape = 21, size = 3, stroke = 1.5) +
+    theme_bw(base_size = 12) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.title = element_text(face = "bold"),
+      plot.title = element_text(face = "bold"),
+      plot.caption = element_text(hjust = 0, face = "italic"),
+      panel.grid.minor = element_blank()
+    ) +
+    labs(
+      title = paste("Scree Plot –", title_tag),
+      x = "Principal Component",
+      y = "Variance Explained (%)",
+      caption = "Blue bars: per-PC variance; Orange line/points: cumulative variance"
+    )
+  
+  if (!is.null(outdir)) {
+    dir.create(file.path(outdir, "figs"), showWarnings = FALSE, recursive = TRUE)
+    ggsave(file.path(outdir, "figs", paste0("scree_", title_tag, ".pdf")), 
+           p, width = 10, height = 6)
+  }
+  
+  return(p)
+}
+
+# =============================================================================
+#  UMAP PLOTS 
+# =============================================================================
+
+# Build three UMAP-based views:
+#  (A) dataset vs dataset
+#  (B) DSMZ organ-level structure against TCGA backdrop
+#  (C) optional TCGA cohort centroids overlay
+# Inputs:
+#   M_log: genes × samples matrix (log-transformed)
+#   sample_df: data.frame with columns [dataset, organ, tcga_project] per sample
+#   overlay_centroids: if TRUE, label TCGA cohort centroids on panel C
+umap_joint_plots_ <- function(M_log, sample_df, title_tag, outdir, overlay_centroids = FALSE) {
+  palettes <- get_palettes()
+  fig_dir <- file.path(outdir, "figs")
+  dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  # Compute 2D embedding of samples; set.seed() for reproducible layout
+  set.seed(42)
+  emb <- uwot::umap(t(M_log), n_neighbors = 15, min_dist = 0.2, metric = "cosine", verbose = FALSE)
+  U <- as.data.frame(emb)
+  colnames(U) <- c("UMAP1", "UMAP2")
+  U <- bind_cols(sample_df, U)
+  write.csv(U, file.path(outdir, paste0("umap_", title_tag, "_coords.csv")), row.names = FALSE)
+
+  # (A) Dataset contrast
+  pA <- ggplot(U, aes(UMAP1, UMAP2, color = dataset, shape = dataset)) +
+    geom_point(size = 2.2, alpha = 0.8, stroke = 0.8) +
+    scale_color_manual(values = c("DSMZ" = palettes$okabe_ito[6], "TCGA" = palettes$okabe_ito[5]), 
+                       name = "Dataset") +
+    scale_shape_manual(values = c("DSMZ" = 16, "TCGA" = 17), name = "Dataset") +
+    theme_bw(base_size = 12) +
+    theme(
+      panel.grid.major = element_line(color = "grey92", size = 0.3),
+      panel.grid.minor = element_blank(),
+      legend.position = "top",
+      legend.title = element_text(face = "bold", size = 12),
+      legend.text = element_text(size = 11),
+      axis.title = element_text(face = "bold", size = 12),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "grey30"),
+      legend.key.size = unit(1.2, "lines")
+    ) +
+    labs(
+      title = paste("UMAP", title_tag, "– Dataset Comparison"),
+      subtitle = "Samples differentiated by color and shape for ",
+      x = "UMAP Dimension 1", 
+      y = "UMAP Dimension 2"
+    ) +
+    coord_fixed(ratio = 1) +
+    guides(
+      color = guide_legend(override.aes = list(size = 4)),
+      shape = guide_legend(override.aes = list(size = 4))
+    )
+
+  print(pA)
+  ggsave(file.path(fig_dir, paste0("umap_", title_tag, "_by_dataset.pdf")), 
+         pA, width = 9, height = 7, dpi = 300)
+
+  # (B) DSMZ organ structure laid over TCGA distribution
+  organs_dsmz <- unique(subset(U, dataset == "DSMZ")$organ)
+  organs_dsmz <- organs_dsmz[!is.na(organs_dsmz)]
+  n_organs <- length(organs_dsmz)
+  
+  # Allocate distinct colors to organs present among DSMZ samples
+  if (n_organs <= 8) {
+    organ_colors <- palettes$okabe_ito[1:n_organs]
+  } else {
+    organ_colors <- c(palettes$okabe_ito, palettes$tol_bright)[1:n_organs]
+  }
+  names(organ_colors) <- organs_dsmz
+
+  pB <- ggplot(U, aes(UMAP1, UMAP2)) +
+    # TCGA backdrop
+    geom_density_2d(data = subset(U, dataset == "TCGA"), 
+                    color = "grey70", alpha = 0.6, bins = 5, size = 0.4) +
+    geom_point(data = subset(U, dataset == "TCGA"), 
+               color = "grey85", size = 1.2, alpha = 0.6, shape = 17) +
+    # DSMZ organ ellipses and points
+    stat_ellipse(data = subset(U, dataset == "DSMZ"), aes(color = organ), 
+                 type = "norm", level = 0.95, linetype = "dashed", 
+                 alpha = 0.8, size = 0.7) +
+    geom_point(data = subset(U, dataset == "DSMZ"), 
+               aes(color = organ, shape = organ), 
+               size = 2.8, alpha = 0.9, stroke = 0.3) +
+    scale_color_manual(values = organ_colors, name = "DSMZ Organ") +
+    scale_shape_manual(values = rep(c(16, 17, 15, 18, 8, 4, 3, 7, 6, 10), 
+                                   length.out = n_organs), name = "DSMZ Organ") +
+    theme_bw(base_size = 12) +
+    theme(
+      panel.grid.major = element_line(color = "grey94", size = 0.3),
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold", size = 12),
+      legend.text = element_text(size = 10),
+      axis.title = element_text(face = "bold", size = 12),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "grey30"),
+      legend.key.size = unit(1.1, "lines")
+    ) +
+    labs(
+      title = paste("UMAP", title_tag, "– Organ-Specific Clustering"),
+      subtitle = "DSMZ samples with 95% confidence ellipses; distinct colors and shapes per organ",
+      x = "UMAP Dimension 1", 
+      y = "UMAP Dimension 2"
+    ) +
+    coord_fixed(ratio = 1) +
+    guides(
+      color = guide_legend(override.aes = list(size = 4, alpha = 1), 
+                          nrow = 2, title.position = "top"),
+      shape = guide_legend(override.aes = list(size = 4, alpha = 1), 
+                          nrow = 2, title.position = "top")
+    )
+
+  print(pB)
+  ggsave(file.path(fig_dir, paste0("umap_", title_tag, "_dsmz_by_organ.pdf")), 
+         pB, width = 11, height = 8, dpi = 300)
+
+  # (C) Optional: add TCGA centroids and labels when requested
+  if (overlay_centroids) {
+    tcga_cent <- U %>% 
+      filter(dataset == "TCGA") %>% 
+      group_by(tcga_project) %>%
+      summarise(UMAP1 = mean(UMAP1), UMAP2 = mean(UMAP2), .groups = "drop")
+    
+    pC <- ggplot(U, aes(UMAP1, UMAP2)) +
+      geom_point(aes(color = dataset, shape = dataset), size = 1.2, alpha = 0.6) +
+      scale_color_manual(values = c("DSMZ" = palettes$okabe_ito[6], 
+                                   "TCGA" = palettes$okabe_ito[5]), 
+                        name = "Dataset") +
+      scale_shape_manual(values = c("DSMZ" = 16, "TCGA" = 17), name = "Dataset") +
+      # Emphasized diamond markers at centroids
+      geom_point(data = tcga_cent, aes(UMAP1, UMAP2), 
+                 shape = 23, size = 5.5, color = "black", fill = "white", stroke = 1.2) +
+      geom_point(data = tcga_cent, aes(UMAP1, UMAP2), 
+                 shape = 23, size = 4.2, color = "black", fill = palettes$okabe_ito[1]) +
+      # Deconflicted text labels
+      ggrepel::geom_text_repel(
+        data = tcga_cent, aes(UMAP1, UMAP2, label = tcga_project),
+        size = 3.5, max.overlaps = 50, fontface = "bold", color = "black",
+        bg.color = "white", bg.r = 0.1,
+        box.padding = 0.6, point.padding = 0.4,
+        segment.color = "grey40", segment.size = 0.4
+      ) +
+      theme_bw(base_size = 12) +
+      theme(
+        panel.grid.major = element_line(color = "grey92", size = 0.3),
+        panel.grid.minor = element_blank(),
+        legend.position = "top",
+        legend.title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold"),
+        plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 11, hjust = 0.5, color = "grey30")
+      ) +
+      labs(
+        title = paste("UMAP", title_tag, "– TCGA Cohort Distribution"),
+        subtitle = "Diamond markers indicate TCGA project centroids with high-contrast design",
+        x = "UMAP Dimension 1", 
+        y = "UMAP Dimension 2"
+      ) +
+      coord_fixed(ratio = 1) +
+      guides(
+        color = guide_legend(override.aes = list(size = 3)),
+        shape = guide_legend(override.aes = list(size = 3))
+      )
+
+    print(pC)
+    ggsave(file.path(fig_dir, paste0("umap_", title_tag, "_with_centroids.pdf")), 
+           pC, width = 11, height = 9, dpi = 300)
+  }
+
+  invisible(U)
+}
+
+# =============================================================================
+#  PROJECTED UMAP 
+# =============================================================================
+
+# Train a UMAP model on TCGA samples only, then project DSMZ samples
+# into that fixed embedding. This preserves the TCGA structure.
+# Inputs:
+#   M_log: genes × samples (log scale)
+#   sample_df: metadata per sample with "dataset" and "organ"
+umap_projected_plots_ <- function(M_log, sample_df, outdir) {
+  palettes <- get_palettes()
+  fig_dir <- file.path(outdir, "figs")
+  dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  # Split matrix into TCGA training set and DSMZ projection set
+  X_tcga <- t(M_log[, sample_df$dataset == "TCGA", drop = FALSE])
+  X_dsmz <- t(M_log[, sample_df$dataset == "DSMZ", drop = FALSE])
+  
+  # Fit UMAP model on TCGA; keep the model to project DSMZ
+  set.seed(42)
+  mdl <- uwot::umap(X_tcga, n_neighbors = 15, min_dist = 0.2, metric = "cosine", 
+                    verbose = FALSE, ret_model = TRUE)
+  Z_tcga <- as.data.frame(predict(mdl, X_tcga))
+  colnames(Z_tcga) <- c("UMAP1", "UMAP2")
+  Z_dsmz <- as.data.frame(uwot::umap_transform(X_dsmz, mdl))
+  colnames(Z_dsmz) <- c("UMAP1", "UMAP2")
+  
+  # Reattach metadata for plotting
+  U <- bind_rows(
+    bind_cols(sample_df %>% filter(dataset == "TCGA"), Z_tcga),
+    bind_cols(sample_df %>% filter(dataset == "DSMZ"), Z_dsmz)
+  )
+  
+  # Assign colors to DSMZ organs that appear after projection
+  organs_dsmz <- unique(subset(U, dataset == "DSMZ")$organ)
+  organs_dsmz <- organs_dsmz[!is.na(organs_dsmz)]
+  n_organs <- length(organs_dsmz)
+  
+  organ_colors <- if (n_organs <= 8) {
+    palettes$okabe_ito[1:n_organs]
+  } else {
+    c(palettes$okabe_ito, palettes$tol_bright)[1:n_organs]
+  }
+  names(organ_colors) <- organs_dsmz
+
+  p <- ggplot(U, aes(UMAP1, UMAP2)) +
+    # TCGA reference points
+    geom_point(data = subset(U, dataset == "TCGA"), 
+               color = "grey78", size = 1.6, alpha = 0.7, shape = 17) +
+    # DSMZ projection points with organ mapping
+    geom_point(data = subset(U, dataset == "DSMZ"), 
+               aes(color = organ, shape = organ), 
+               size = 2.5, alpha = 0.95, stroke = 0.3) +
+    scale_color_manual(values = organ_colors, name = "DSMZ Organ") +
+    scale_shape_manual(values = rep(c(16, 15, 18, 8, 4, 3, 7, 6, 10, 12), 
+                                   length.out = n_organs), name = "DSMZ Organ") +
+    theme_bw(base_size = 12) +
+    theme(
+      panel.grid.major = element_line(color = "grey94", size = 0.3),
+      panel.grid.minor = element_blank(),
+      legend.position = "right",
+      legend.title = element_text(face = "bold", size = 11),
+      legend.text = element_text(size = 10),
+      axis.title = element_text(face = "bold"),
+      plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "grey30")
+    ) +
+    labs(
+      title = "UMAP Projection: Fit on TCGA, Project DSMZ",
+      subtitle = "DSMZ samples projected into TCGA-defined expression space with  design",
+      x = "UMAP Dimension 1", 
+      y = "UMAP Dimension 2"
+    ) +
+    coord_fixed(ratio = 1) +
+    guides(
+      color = guide_legend(override.aes = list(size = 3.5, alpha = 1)),
+      shape = guide_legend(override.aes = list(size = 3.5, alpha = 1))
+    )
+
+  print(p)
+  ggsave(file.path(fig_dir, "umap_projection.pdf"), p, width = 9, height = 7, dpi = 300)
+  invisible(U)
+}
+
+# =============================================================================
+# TMM-normalized log2 CPM
+# =============================================================================
+
+# Compute TMM-scaled log2 CPM from raw counts using edgeR.
+# Adds a small prior count to stabilize log transform for low counts.
+logCPM <- function(counts) {
+  dge <- edgeR::DGEList(counts = counts)
+  dge <- edgeR::calcNormFactors(dge)  # TMM scaling factors
+  edgeR::cpm(dge, log = TRUE, prior.count = 1)
+}
+
+# =============================================================================
+# PC ← covariate R² (, -safe heatmap)
+# =============================================================================
+
+# For the first n_pcs principal components, regress each PC score on each
+# provided covariate (from sample_df) and collect the R^2 into a matrix.
+# Inputs:
+#   pc: object returned by prcomp(); pc$x must have rownames = sample IDs
+#   sample_df: metadata with a "sample" column matching pc$x rownames
+#   covariates: character vector naming columns in sample_df to test
+# Output:
+#   list(r2 = matrix, plot = ggplot object); optionally saves CSV and PDF
+pc_covariate_r2_matrix_ <- function(pc, sample_df, covariates, n_pcs = 10, 
+                                           outdir = NULL, tag = "before", show_plot = TRUE) {
+  stopifnot(is.list(pc), !is.null(pc$x)); stopifnot("sample" %in% colnames(sample_df))
+  rn <- rownames(pc$x); if (is.null(rn)) stop("pc$x must have rownames (sample IDs).")
+  # Align metadata rows to PC scores by sample ID
+  md <- sample_df[match(rn, sample_df$sample), , drop = FALSE]
+  k <- min(n_pcs, ncol(pc$x)); pcs <- paste0("PC", seq_len(k))
+  Y <- pc$x[, seq_len(k), drop = FALSE]
+  # Keep only covariates present in metadata
+  covariates <- covariates[covariates %in% colnames(md)]
+  if (!length(covariates)) stop("No valid covariates found in metadata.")
+  # R^2 matrix: rows = PCs, cols = covariates
+  r2_mat <- matrix(NA_real_, nrow = k, ncol = length(covariates), dimnames = list(pcs, covariates))
+  for (j in seq_along(covariates)) {
+    v <- md[[covariates[j]]]; if (is.character(v) || is.logical(v)) v <- factor(v)
+    for (i in seq_len(k)) {
+      y <- Y[, i]; ok <- is.finite(y) & !is.na(v)
+      if (!any(ok)) next
+      # Skip factors with a single level among valid rows to avoid singular fits
+      if (is.factor(v) && nlevels(droplevels(v[ok])) < 2) next
+      fit <- try(lm(y[ok] ~ v[ok]), silent = TRUE)
+      if (!inherits(fit, "try-error")) r2_mat[i, j] <- summary(fit)$r.squared
+    }
+  }
+  # Optional CSV for downstream inspection
+  if (!is.null(outdir)) {
+    dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
+    write.csv(as.data.frame(r2_mat), file.path(outdir, paste0("PC_covariate_R2_matrix_", tag, ".csv")))
+  }
+  # Heatmap of R^2; NA cells rendered in light grey
+  r2_df <- as.data.frame(r2_mat) %>%
+    tibble::rownames_to_column("PC") %>%
+    tidyr::pivot_longer(-PC, names_to = "Covariate", values_to = "R2")
+  p <- ggplot(r2_df, aes(Covariate, PC, fill = R2)) +
+    geom_tile(color = "white", size = 0.5) +
+    scale_fill_viridis_c(option = "plasma", na.value = "grey95", limits = c(0, 1), name = "R\u00B2") +
+    theme_bw(base_size = 11) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title = element_text(face = "bold", size = 11),
+          plot.title = element_text(face = "bold", size = 12),
+          panel.grid = element_blank(),
+          legend.position = "right") +
+    labs(title = paste0("PC \u2190 covariate R\u00B2 (", tag, ")"), x = "Covariate", y = "Principal Component")
+  if (isTRUE(show_plot)) print(p)
+  if (!is.null(outdir)) ggsave(file.path(outdir, paste0("PC_covariate_R2_matrix_", tag, ".pdf")), p, width = 9, height = 7)
+  invisible(list(r2 = r2_mat, plot = p))
+}
+
+```
+
+```{r save_results}
+# =============================================================================
+# OUTPUT HELPERS
+# =============================================================================
+save_results <- function(spearman_scores, summary_tbl, dsmz_map, outdir){
+  cat("[INFO] Saving correlation tables...\n")
+  all_wide <- as.data.frame(spearman_scores) %>% rownames_to_column("sample_id")
+  all_long <- all_wide %>% pivot_longer(-sample_id, names_to = "tcga_cohort", values_to = "rho")
+  write.csv(all_wide, file.path(outdir, "spearman_all_wide.csv"), row.names = FALSE)
+  write.csv(all_long, file.path(outdir, "spearman_all_long.csv"), row.names = FALSE)
+  saveRDS(spearman_scores, file.path(outdir, "spearman_all.rds"))
+  write.csv(summary_tbl, file.path(outdir, "spearman_best_by_sample.csv"), row.names = FALSE)
+  write.csv(dsmz_map %>% select(sample_id, organ, tcga_code),
+            file.path(outdir, "dsmz_tcga_mapping.csv"), row.names = FALSE)
+}
+
+save_debug_info <- function(tcga_counts, dsmz_raw, common_genes, outdir){
+  writeLines(utils::capture.output(head(rownames(tcga_counts))), file.path(outdir, "head_tcga_genes.txt"))
+  writeLines(utils::capture.output(head(dsmz_raw$Ensembl_ID)),     file.path(outdir, "head_dsmz_genes.txt"))
+  writeLines(common_genes[1:min(100, length(common_genes))],       file.path(outdir, "common_genes_head.txt"))
+  sink(file.path(outdir, "sessionInfo.txt")); print(sessionInfo()); sink()
+}
+```
+
+```{r main_function}
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+main <- function(){
+  cat("[INFO] Starting pipeline...\n")
+
+  # -------------------------- Load input datasets ----------------------------
+  tcga <- load_tcga_data(config$tcga_se_rds)
+  dsmz <- load_dsmz_data(config$dsmz_rds, config$dsmz_meta_csv)
+
+  # -------------------------- Preprocess gene expression ---------------------
+  tcga_counts <- harmonize_gene_ids(tcga$counts); storage.mode(tcga_counts) <- "double"
+  dsmz_counts <- build_dsmz_matrix(dsmz$raw);     storage.mode(dsmz_counts) <- "double"
+
+  al <- align_metadata(dsmz$meta, dsmz_counts, config$outdir)
+  dsmz_meta <- al$meta; stopifnot("organ" %in% colnames(dsmz_meta))
+  dsmz_counts <- al$counts
+
+  # -------------------------- Find common genes ------------------------------
+  common <- intersect(rownames(tcga_counts), rownames(dsmz_counts))
+  cat(sprintf("[INFO] Shared genes: %d\n", length(common)))
+  if (length(common) < config$min_shared) cat("[WARN] Few shared genes; check Ensembl IDs\n")
+  tcga_counts <- tcga_counts[common, , drop=FALSE]
+  dsmz_counts <- dsmz_counts[common, , drop=FALSE]
+
+  # -------------------------- Purity adjustment -------------------
+  purity   <- load_purity_data(tcga$se, config$purity_tsv)
+  tcga_adj <- apply_purity_adjustment(tcga_counts, purity)
+
+  # -------------------------- Compute correlations ---------------------------
+  tcga_res   <- compute_tcga_means(tcga$se, tcga_adj)
+  tcga_means <- tcga_res$means
+  stopifnot(identical(rownames(tcga_means), rownames(dsmz_counts)))
+
+  sel_genes_corr <- select_variable_genes(tcga_means, config$var_gene_set)
+  spearman <- compute_correlations(dsmz_counts, tcga_means, dsmz_meta, sel_genes_corr)
+  dsmz_map <- perform_organ_mapping(dsmz_meta, spearman, tcga_means)
+
+  # -------------------------- Summary statistics -----------------------------
+  best_idx <- max.col(spearman, ties.method="first")
+  best_overall <- tibble(
+    sample_id = rownames(spearman),
+    best_tcga_overall = colnames(spearman)[best_idx],
+    best_rho_overall  = spearman[cbind(seq_len(nrow(spearman)), best_idx)]
+  )
+  rho_allowed <- rep(NA_real_, nrow(dsmz_map))
+  ok <- !is.na(dsmz_map$tcga_code)
+  if (any(ok)) {
+    for (i in which(ok)) {
+      sample_id <- dsmz_map$sample_id[i]; tcga_code <- dsmz_map$tcga_code[i]
+      rho_allowed[i] <- spearman[sample_id, tcga_code]
+    }
+  }
+  summary_tbl <- dsmz_map %>% select(sample_id, organ, tcga_code) %>%
+    left_join(best_overall, by="sample_id") %>% mutate(rho_allowed = rho_allowed)
+
+  # -------------------------- s + save results ---------------------
+  create_plots(summary_tbl, spearman, dsmz_map, config$outdir)
+  save_results(spearman, summary_tbl, dsmz_map, config$outdir)
+  save_debug_info(tcga_counts, dsmz$raw, common, config$outdir)
+
+  # ========================= UMAP + PCA ANALYSIS =============================
+  tcga_sample_counts <- tcga_counts
+  dsmz_sample_counts <- dsmz_counts
+
+  # TCGA metadata
+  tcga_lab <- sub("^TCGA-","", as.character(tcga_res$labels))
+  tcga_lab <- tcga_lab[colnames(tcga_sample_counts)]
+  tcga_df  <- tibble(sample = colnames(tcga_sample_counts),
+                     dataset = "TCGA",
+                     tcga_project = tcga_lab)
+
+  proj_map <- tcga_project_to_organ_map()
+  tcga_df <- tcga_df %>% left_join(proj_map, by = "tcga_project") %>% mutate(organ = coalesce(organ, "Other"))
+
+  # DSMZ metadata
+  dsmz_df <- tibble(sample = colnames(dsmz_sample_counts),
+                    dataset = "DSMZ",
+                    tcga_project = NA_character_) %>%
+             left_join(dsmz_meta %>% select(sample_id, organ, Project_id),
+                       by = c("sample"="sample_id")) %>%
+             mutate(organ = coalesce(organ, "Other"))
+
+  # Combine metadata
+  sample_df <- bind_rows(tcga_df, dsmz_df)
+
+  # Feature selection for PCA/UMAP
+  M0_log <- logCPM(cbind(tcga_sample_counts, dsmz_sample_counts))
+  sel_genes_umap <- select_variable_genes(M0_log, config$var_gene_set)
+  M0_log <- M0_log[sel_genes_umap, , drop=FALSE]
+
+  # -------------------------- BEFORE batch adjustment ------------------------
+  cat("[INFO] UMAP/PCA BEFORE batch adjustment...\n")
+  r2_before <- pc_dataset_s_(M0_log, factor(sample_df$dataset),
+                                               top_n = 10, outdir = config$outdir,
+                                               title_tag = "before")
+  scree_before <- make_scree_plot_(r2_before$pc, config$outdir, "before")
+  r2_cov_before <- pc_covariate_r2_matrix_(
+    pc         = r2_before$pc,
+    sample_df  = sample_df,
+    covariates = c("dataset", "organ", "Project_id", "tcga_project"),
+    n_pcs      = 10,
+    outdir     = config$outdir,
+    tag        = "before"
+  )
+  U_before <- umap_joint_plots_(M0_log, sample_df, "before", config$outdir,
+                                        overlay_centroids = config$overlay_tcga_centroids)
+
+  # -------------------------- Batch adjustment -------------------------------
+  cat("[INFO] Batch adjustment...\n")
+  batch <- ifelse(sample_df$dataset == "DSMZ", sample_df$Project_id, "TCGA")
+  batch[is.na(batch) & sample_df$dataset == "DSMZ"] <- "DSMZ"  # ensure no NA in batch
+  batch <- factor(batch)
+  method <- tolower(config$batch_adjust_method)
+
+  if (method == "combat_seq") {
+    Xc <- cbind(tcga_sample_counts, dsmz_sample_counts)
+    Xc[is.na(Xc)] <- 0; Xc <- round(Xc)
+    group <- factor(dplyr::coalesce(sample_df$organ, "Other")) # preserve organ biology
+    Xc_adj <- sva::ComBat_seq(as.matrix(Xc), batch = batch, group = group)
+    M1_log <- logCPM(Xc_adj)[sel_genes_umap, , drop=FALSE]
+  } else if (method == "combat") {
+    mod   <- model.matrix(~ factor(dplyr::coalesce(sample_df$organ, "Other")))
+    M1_log_all <- sva::ComBat(dat = as.matrix(M0_log), batch = batch, mod = mod,
+                              par.prior = TRUE, prior.plots = FALSE)
+    M1_log <- M1_log_all[sel_genes_umap, , drop=FALSE]
+  } else {
+    stop("[ERROR] Unknown batch_adjust_method. Use 'combat_seq' or 'combat'.")
+  }
+
+  # -------------------------- AFTER batch adjustment -------------------------
+  cat("[INFO] UMAP/PCA AFTER batch adjustment...\n")
+  r2_after <- pc_dataset_s_(M1_log, factor(sample_df$dataset),
+                                              top_n = 10, outdir = config$outdir,
+                                              title_tag = "after")
+  scree_after <- make_scree_plot_(r2_after$pc, config$outdir, "after")
+  r2_cov_after <- pc_covariate_r2_matrix_(
+    pc         = r2_after$pc,
+    sample_df  = sample_df,
+    covariates = c("dataset", "organ", "Project_id", "tcga_project"),
+    n_pcs      = 10,
+    outdir     = config$outdir,
+    tag        = "after"
+  )
+  U_after <- umap_joint_plots_(M1_log, sample_df, "after", config$outdir,
+                                       overlay_centroids = config$overlay_tcga_centroids)
+
+  # Projection mode
+  cat("[INFO] UMAP projection (fit on TCGA, project DSMZ)...\n")
+  umap_projected_plots_(M1_log, sample_df, config$outdir)
+
+  # -------------------------- Summarize R² comparison ------------------------
+  cat("\n**PC variance explained by dataset (R²):**\n\n")
+  r2_comparison <- tibble(
+    Stage = c("Before Batch Correction", "After Batch Correction"),
+    PC1_R2 = c(r2_before$r2_table$R2[r2_before$r2_table$PC == "PC1"],
+               r2_after$r2_table$R2[r2_after$r2_table$PC == "PC1"]),
+    PC2_R2 = c(r2_before$r2_table$R2[r2_before$r2_table$PC == "PC2"],
+               r2_after$r2_table$R2[r2_after$r2_table$PC == "PC2"])
+  )
+  print(r2_comparison)
+
+  cat(sprintf("[INFO] Pipeline completed successfully. Results saved to: %s\n", config$outdir))
+  list(spearman_scores = spearman,
+       summary_table   = summary_tbl,
+       dsmz_mapping    = dsmz_map,
+       r2_comparison   = r2_comparison)
+}
+
+# =============================================================================
+# EXECUTION
+# =============================================================================
+if (!interactive()) {
+  results <- main()
+} else {
+  cat("[INFO] Running in interactive mode. Call main() to execute pipeline.\n")
+}
+```
