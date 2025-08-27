@@ -1,0 +1,64 @@
+name: HPC Job Events Listener
+
+on:
+  repository_dispatch: {}   # listen to ALL repository_dispatch event types
+
+jobs:
+  handle-hpc-event:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read          # to upload artifacts
+      actions: read
+      id-token: write
+    steps:
+      - name: Echo basic context
+        run: |
+          echo "Repo:    ${{ github.repository }}"
+          echo "Run ID:  ${{ github.run_id }}"
+          echo "Actor:   ${{ github.actor }}"
+          echo "Event:   repository_dispatch"
+          echo "Type:    ${{ github.event.action }}"  # = event_type from sender
+
+      - name: Save event + payload JSON
+        run: |
+          printf '%s' '${{ toJson(github.event) }}' > repository_dispatch_event.json
+          printf '%s' '${{ toJson(github.event.client_payload) }}' > payload.json
+          ls -lh
+
+      - name: Summarize to Job Summary
+        run: |
+          {
+            echo "## HPC Job Event"
+            echo ""
+            echo "- **event_type:** \`${{ github.event.action || 'n/a' }}\`"
+            echo "- **status:** \`${{ github.event.client_payload.status || 'unknown' }}\`"
+            echo "- **job_id:** \`${{ github.event.client_payload.job_id || 'n/a' }}\`"
+            echo "- **scheduler:** \`${{ github.event.client_payload.scheduler || 'n/a' }}\`"
+            echo "- **host:** \`${{ github.event.client_payload.host || 'n/a' }}\`"
+            echo "- **user:** \`${{ github.event.client_payload.user || 'n/a' }}\`"
+            echo "- **duration_s:** \`${{ github.event.client_payload.duration_s || 'n/a' }}\`"
+            echo "- **log_path:** \`${{ github.event.client_payload.log_path || 'n/a' }}\`"
+            echo "- **extra:** \`${{ github.event.client_payload.note || '—' }}\`"
+            echo ""
+            echo "<details><summary>Raw payload.json</summary>"
+            echo ""
+            echo '```json'
+            echo '${{ toJson(github.event.client_payload) }}'
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload event artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hpc-event-${{ github.run_id }}
+          path: |
+            repository_dispatch_event.json
+            payload.json
+
+      # Optional: fail the workflow if the HPC job reported failure
+      - name: Mark run failed on HPC failure
+        if: ${{ github.event.client_payload.status == 'failure' }}
+        run: |
+          echo "::error ::HPC job reported failure"
+          exit 1
