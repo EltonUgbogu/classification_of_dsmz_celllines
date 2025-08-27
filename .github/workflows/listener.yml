@@ -2,7 +2,7 @@ name: HPC Job Events Listener
 
 on:
   repository_dispatch: {}   # listen to ALL repository_dispatch event types
-
+  workflow_dispatch:
 jobs:
   handle-hpc-event:
     runs-on: ubuntu-latest
