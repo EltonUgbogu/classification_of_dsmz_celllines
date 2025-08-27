@@ -1,0 +1,31 @@
+name: HPC Job Events Listener
+on:
+  repository_dispatch: {}   # listens to ALL repo_dispatch events
+
+jobs:
+  handle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print event info
+        run: |
+          echo "event_type: ${{ github.event.action }}"
+          echo "status:     ${{ github.event.client_payload.status }}"
+          echo "job_id:     ${{ github.event.client_payload.job_id }}"
+          echo "scheduler:  ${{ github.event.client_payload.scheduler }}"
+          echo "host:       ${{ github.event.client_payload.host }}"
+          echo "user:       ${{ github.event.client_payload.user }}"
+          echo "duration_s: ${{ github.event.client_payload.duration_s }}"
+          echo "note:       ${{ github.event.client_payload.note }}"
+      - name: Save raw payload
+        run: |
+          printf '%s' '${{ toJson(github.event) }}' > repository_dispatch_event.json
+          printf '%s' '${{ toJson(github.event.client_payload) }}' > payload.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hpc-event-${{ github.run_id }}
+          path: |
+            repository_dispatch_event.json
+            payload.json
+      - name: Fail if HPC reported failure
+        if: ${{ github.event.client_payload.status == 'failure' }}
+        run: exit 1
