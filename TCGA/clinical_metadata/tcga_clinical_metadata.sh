@@ -1,12 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=sample_types
-#SBATCH --output=logs/sample_types_%j.log
+#SBATCH --job-name=tcga_clinical_metadata
+#SBATCH --output=/home/chu25/TCGA/logs/tcga_clinical_metadata_%j.log
+#SBATCH --error=/home/chu25/TCGA/logs/tcga_clinical_metadata_%j.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --mem=64G
 #SBATCH --time=12:00:00
 
-echo "=== Sample Types R job started ==="
+echo "=== TCGA Metadata R job started ==="
 echo "Start time: $(date)"
 echo "Running in: $(pwd)"
 
@@ -21,7 +22,7 @@ conda activate tcga-r-env
 export PATH="$HOME/bin:$PATH"
 
 # Render the R Markdown document
-Rscript -e "rmarkdown::render('sample_types.Rmd', output_format = 'pdf_document')"
+Rscript -e "rmarkdown::render('tcga_metadata.Rmd', output_format = 'pdf_document')"
 
 echo "=== Job finished at $(date) ==="
 
