@@ -1,17 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=sample_types
-#SBATCH --output=logs/sample_types_%j.log
+#SBATCH --job-name=TCGA_data_analysis
+#SBATCH --output=logs/TCGA_data_analysis_%j.log
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=12:00:00
 
-echo "=== Sample Types R job started ==="
+echo "=== TCGA R job started ==="
 echo "Start time: $(date)"
 echo "Running in: $(pwd)"
-
-mkdir -p logs
-
 # Setup Conda
 source ~/miniconda3/etc/profile.d/conda.sh
 
@@ -21,7 +18,7 @@ conda activate tcga-r-env
 export PATH="$HOME/bin:$PATH"
 
 # Render the R Markdown document
-Rscript -e "rmarkdown::render('sample_types.Rmd', output_format = 'pdf_document')"
+Rscript -e "rmarkdown::render('TCGA_bulk_RNAseq_data.Rmd', output_format = 'pdf_document')"
 
 echo "=== Job finished at $(date) ==="
 
