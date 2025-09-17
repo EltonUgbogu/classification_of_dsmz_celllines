@@ -1,148 +1,216 @@
 #!/usr/bin/env Rscript
+# Shebang line to run script with Rscript interpreter
 
-# Load required packages silently
 suppressPackageStartupMessages({
-  library(tidyverse)  # brings in readr, dplyr, purrr, tidyr, stringr
+# Suppress startup messages for cleaner output
+  library(tidyverse)  # Load tidyverse: readr, dplyr, tidyr, stringr, purrr
 })
 
-# -----------------------------------------------------------------------------#
-# CLI args                                      # Command line argument parsing
-# -----------------------------------------------------------------------------#
-args <- commandArgs(trailingOnly = TRUE)       # Get command line arguments
-# Set input CSV path from first arg or default
-in_csv  <- if (length(args) >= 1) args[[1]] else "/home/chu25/data/dsmz/DSMZ_metadata.csv"
-# Set output CSV path from second arg or modify input filename  
-out_csv <- if (length(args) >= 2) args[[2]] else sub("\\.csv$", "_with_organs.csv", in_csv)
+# ----------------------------- CLI -------------------------------------------
+args <- commandArgs(trailingOnly = TRUE)
+# Get command-line arguments, excluding Rscript internals
+in_csv <- if (length(args) >= 1) args[[1]] else "/home/chu25/data/dsmz/DSMZ_metadata.csv"
+# Set input CSV path from args or use default
+out_csv <- if (length(args) >= 2) args[[2]] else sub("\\.csv$", "_with_organs_tcga.csv", in_csv)
+# Set output CSV path from args or derive from input
+message("[INFO] Input:  ", in_csv)
+# Print input file path for logging
+message("[INFO] Output: ", out_csv)
+# Print output file path for logging
+stopifnot(file.exists(in_csv))
+# Stop if input CSV file does not exist
+meta <- readr::read_csv(in_csv, show_col_types = FALSE)
+# Read input CSV into meta dataframe, hide column type messages
 
-message("[INFO] Input:  ", in_csv)             # Print input file path
-message("[INFO] Output: ", out_csv)            # Print output file path
-
-stopifnot(file.exists(in_csv))                 # Ensure input file exists
-meta <- readr::read_csv(in_csv, show_col_types = FALSE)  # Read input CSV
-
-# -----------------------------------------------------------------------------#
-# Helpers                                       # Helper functions for processing
-# -----------------------------------------------------------------------------#
-
-# Safe lower-case + trim; convert NA to ""     # Handle missing values safely
+# ---------------------------- Helpers ----------------------------------------
 safe_lc <- function(x) {
-  x <- tidyr::replace_na(x, "")                # Replace NA with empty string
-  x <- as.character(x)                         # Convert to character
-  stringr::str_trim(stringr::str_to_lower(x)) # Trim whitespace and lowercase
+# Define function to safely lowercase and trim strings
+  x <- tidyr::replace_na(x, "")
+# Replace NA with empty string
+  stringr::str_trim(stringr::str_to_lower(as.character(x)))
+# Trim and convert to lowercase
 }
+is_missing_val <- function(x) x %in% c("", "na", "n/a", "none", "unknown", "unspecified", "not reported", "nan")
+# Check if value indicates missing data
 
-# Treat these strings as "missing"             # Define what counts as missing
-is_missing_val <- function(x) {
-  # Check if value is in list of missing value indicators
-  x %in% c("", "na", "n/a", "none", "unknown", "unspecified", "not reported", "nan")
-}
+# Disease pattern helpers
+is_aml <- function(x) str_detect(x, regex("^acute myeloid leukemia|\\baml\\b|myelocytic|monocytic|megakaryocytic|erythroid", TRUE))
+# Detect AML patterns in strings
+is_cml <- function(x) str_detect(x, regex("^chronic myeloid leukemia", TRUE))
+# Detect CML patterns in strings
+is_all <- function(x) str_detect(x, regex("acute lymphoblastic|lymphoblastic|\\ball\\b", TRUE))
+# Detect ALL patterns in strings
+is_dlbcl <- function(x) str_detect(x, regex("diffuse large b-?cell lymphoma|\\bdlbcl\\b|primary mediastinal b-?cell", TRUE))
+# Detect DLBCL patterns in strings
+is_hodg <- function(x) str_detect(x, regex("hodgkin", TRUE))
+# Detect Hodgkin lymphoma patterns
+is_mcl <- function(x) str_detect(x, regex("mantle cell lymphoma", TRUE))
+# Detect mantle cell lymphoma patterns
+is_mm <- function(x) str_detect(x, regex("myeloma|plasma cell leukemia", TRUE))
+# Detect multiple myeloma patterns
+is_nk <- function(x) str_detect(x, regex("natural\\s*killer|\\bnk\\b", TRUE))
+# Detect NK cell malignancy patterns
+is_pel <- function(x) str_detect(x, regex("primary effusion", TRUE))
+# Detect primary effusion lymphoma patterns
+is_hairy <- function(x) str_detect(x, regex("^hairy cell", TRUE))
+# Detect hairy cell leukemia patterns
+is_neuro <- function(x) str_detect(x, regex("^neuroblastoma", TRUE))
+# Detect neuroblastoma patterns
+is_rb <- function(x) str_detect(x, regex("^retinoblastoma", TRUE))
+# Detect retinoblastoma patterns
 
-# Derive high-level organ label from Description + Disease
-# Returns one of: Breast, Adrenal/SNS, Uveal/Eye, Lymphoid, Myeloid, 
-# Hematologic, Brain/CNS, Lung, Colon/Rectum, ... (or Other/Unknown)
+# Valid TCGA project IDs (RNA-seq cohorts)
+valid_tcga <- c(
+# Define vector of valid TCGA project codes
+  "ACC","BLCA","BRCA","CESC","CHOL","COAD","DLBC","ESCA","GBM","HNSC",
+# First set of TCGA codes
+  "KICH","KIRC","KIRP","LGG","LIHC","LUAD","LUSC","MESO","OV","PAAD",
+# Second set of TCGA codes
+  "PCPG","PRAD","READ","SARC","SKCM","STAD","TGCT","THCA","THYM",
+# Third set of TCGA codes
+  "UCEC","UCS","UVM","LAML"
+# Final set of TCGA codes
+)
+
+# Diseases with no matching TCGA cohort -> force NONE
+no_tcga_exact <- c(
+# Define diseases with no TCGA match
+  "Hairy cell leukemia",
+# Hairy cell leukemia
+  "Chronic myeloid leukemia, myeloid blast crisis",
+# CML myeloid blast crisis
+  "Chronic myeloid leukemia, lymphoid blast crisis",
+# CML lymphoid blast crisis
+  "B-cell precursor / pre-B-acute lymphoblastic leukemia",
+# B-cell ALL
+  "T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma",
+# T-cell ALL/lymphoma
+  "Hodgkin lymphoma",
+# Hodgkin lymphoma
+  "Mantle cell lymphoma",
+# Mantle cell lymphoma
+  "Multiple myeloma, plasma cell leukemia",
+# Multiple myeloma
+  "Natural killer malignancy",
+# NK cell malignancy
+  "Primary effusion lymphoma",
+# Primary effusion lymphoma
+  "Retinoblastoma",
+# Retinoblastoma
+  "Neuroblastoma",
+# Neuroblastoma
+  "NONE"
+# Default NONE value
+)
+
+# ---------------------- Organ: derive normalized label ------------------------
 organ_from_fields <- function(desc, disease) {
-  d <- safe_lc(desc)                           # Clean description field
-  z <- safe_lc(disease)                        # Clean disease field
-
-  # --- Solid tumor heuristics by description or disease --------------------
-  # Check for breast cancer patterns
-  if (stringr::str_detect(d, "\\bbreast\\b") || stringr::str_detect(z, "\\bbreast\\b"))
-    return("Breast")
-  # Check for neuroblastoma (adrenal/sympathetic nervous system)
-  if (stringr::str_detect(d, "neuroblastoma") || stringr::str_detect(z, "neuroblastoma"))
-    return("Adrenal/SNS")
-  # Check for retinoblastoma (eye cancer)
-  if (stringr::str_detect(d, "retinoblastoma") || stringr::str_detect(z, "retinoblastoma"))
-    return("Uveal/Eye")
-
-  # --- Hematologic: disease-driven (overrides panels) ----------------------
-  # Lymphoid patterns (including ALCL)
-  # Primary effusion lymphoma
-  if (stringr::str_detect(z, "primary effusion lymphoma")) return("Lymphoid")
-  # Hairy cell leukemia
-  if (stringr::str_detect(z, "hairy cell leukemia"))       return("Lymphoid")
-  # T-cell acute lymphoblastic leukemia/lymphoma
-  if (stringr::str_detect(z, "t-?acute lymphoblastic|t-?lymphoblastic|\\bt[- ]?all\\b|\\bt-?ll\\b"))
-    return("Lymphoid")
-  # B-cell precursor acute lymphoblastic leukemia
-  if (stringr::str_detect(z, "b-?cell precursor|pre-?b-?acute lymphoblastic|\\bpre-?b-?all\\b"))
-    return("Lymphoid")
-  # Diffuse large B-cell lymphoma
-  if (stringr::str_detect(z, "diffuse large b-?cell lymphoma|\\bdlbcl\\b|primary mediastinal b-?cell"))
-    return("Lymphoid")
-  # Mantle cell lymphoma
-  if (stringr::str_detect(z, "mantle cell lymphoma"))      return("Lymphoid")
-  # Hodgkin lymphoma
-  if (stringr::str_detect(z, "hodgkin lymphoma"))          return("Lymphoid")
-  # Multiple myeloma and plasma cell leukemia
-  if (stringr::str_detect(z, "multiple myeloma|plasma cell leukemia"))
-    return("Lymphoid")
-  # Natural killer cell malignancies
-  if (stringr::str_detect(z, "\\bnatural\\s*killer\\b|\\bnk\\b"))
-    return("Lymphoid")
-  # Chronic myeloid leukemia in lymphoid blast phase
-  if (stringr::str_detect(z, "chronic myeloid leukemia.*lymphoid blast"))
-    return("Lymphoid")
-  # Anaplastic large cell lymphoma
-  if (stringr::str_detect(z, "anaplastic large cell lymphoma|\\balcl\\b"))
-    return("Lymphoid")
-
-  # Myeloid patterns
-  # Acute myeloid leukemia and related subtypes
-  if (stringr::str_detect(z, "^acute myeloid leukemia|\\baml\\b|myelocytic|monocytic|megakaryocytic|erythroid"))
-    return("Myeloid")
-  # Chronic myeloid leukemia in myeloid blast phase
-  if (stringr::str_detect(z, "chronic myeloid leukemia.*myeloid blast"))
-    return("Myeloid")
-
-  # --- Broad heme panel with no disease detail -----------------------------
-  # Generic leukemia/lymphoma panel without specific disease
-  if (stringr::str_detect(d, "^leukemia and lymphoma panel$") && is_missing_val(z))
-    return("Hematologic")
-
-  # --- Explicit organ/site hints (optional expansions) ---------------------
-  # Lung cancer patterns
-  if (stringr::str_detect(d, "\\blung\\b") || stringr::str_detect(z, "\\blung\\b"))
-    return("Lung")
-  # Colorectal cancer patterns
-  if (stringr::str_detect(d, "\\bcolon|rectum\\b") || stringr::str_detect(z, "\\bcolon|rectum\\b"))
-    return("Colon/Rectum")
-  # Brain/central nervous system patterns
-  if (stringr::str_detect(d, "\\bbrain|cns\\b") || stringr::str_detect(z, "\\bbrain|cns\\b"))
-    return("Brain/CNS")
-
-  # --- Missing/unknown -----------------------------------------------------
-  # Both description and disease are missing/unknown
+# Define function to derive organ labels
+  d <- safe_lc(desc); z <- safe_lc(disease)
+# Lowercase and trim description and disease
+  if (str_detect(d, "\\bbreast\\b") || str_detect(z, "\\bbreast\\b")) return("Breast")
+# Assign Breast for breast-related terms
+  if (is_neuro(z) || is_neuro(d)) return("Adrenal/SNS")
+# Assign Adrenal/SNS for neuroblastoma
+  if (is_rb(z) || is_rb(d)) return("Uveal/Eye")
+# Assign Uveal/Eye for retinoblastoma
+  if (is_dlbcl(z) || is_all(z) || is_hodg(z) || is_mcl(z) || is_mm(z) ||
+# Check hematologic-lymphoid conditions
+      is_nk(z) || is_pel(z) || is_hairy(z) ||
+# Include NK, PEL, hairy cell
+      str_detect(z, "primary effusion lymphoma") ||
+# Include primary effusion lymphoma
+      str_detect(d, "^leukemia and lymphoma panel$")) return("Hematologic-Lymphoid")
+# Assign Hematologic-Lymphoid
+  if (is_aml(z) || str_detect(z, "chronic myeloid leukemia.*myeloid blast") ||
+# Check AML or CML myeloid blast
+      is_cml(z)) return("Hematologic-Myeloid")
+# Assign Hematologic-Myeloid
+  if (str_detect(d, "\\blung\\b") || str_detect(z, "\\blung\\b")) return("Lung")
+# Assign Lung for lung-related terms
+  if (str_detect(d, "colon|rectum") || str_detect(z, "colon|rectum")) return("Colon/Rectum")
+# Assign Colon/Rectum for related terms
+  if (str_detect(d, "brain|cns") || str_detect(z, "brain|cns")) return("Brain/CNS")
+# Assign Brain/CNS for related terms
   if (is_missing_val(d) && is_missing_val(z)) return("Unknown")
-
-  # --- Fallback ------------------------------------------------------------
-  "Other"                                      # Default category
+# Assign Unknown if both fields missing
+  "Other"
+# Default to Other
 }
 
-# -----------------------------------------------------------------------------#
-# Validate required columns and compute labels # Main processing section
-# -----------------------------------------------------------------------------#
-need_cols <- c("Description", "Disease")       # Required column names
-missing_cols <- setdiff(need_cols, names(meta)) # Find missing columns
-if (length(missing_cols)) {                    # Check if any columns missing
-  # Stop execution with error message listing missing columns
-  stop("Metadata is missing required columns: ", paste(missing_cols, collapse = ", "))
+# -------------------- TCGA codes: derive/clean per row ------------------------
+clean_codes_vec <- function(x) {
+# Define function to clean TCGA codes
+  if (length(x) == 0) return(character(0))
+# Return empty vector if input is empty
+  codes <- str_split(x, ";", simplify = FALSE)[[1]]
+# Split codes by semicolon
+  codes <- str_trim(codes)
+# Trim whitespace from codes
+  codes <- codes[codes != "" & codes %in% valid_tcga]
+# Keep only valid TCGA codes
+  unique(codes)
+# Return unique codes
 }
 
-# Add organ classification column to the metadata
+derive_tcga <- function(desc, disease, existing_codes = "") {
+# Define function to derive TCGA codes
+  d <- safe_lc(desc); z <- safe_lc(disease)
+# Lowercase and trim description and disease
+  if (disease %in% no_tcga_exact || is_cml(z) || is_all(z) || is_hodg(z) ||
+# Check diseases with no TCGA match
+      is_mcl(z) || is_mm(z) || is_nk(z) || is_pel(z) || is_hairy(z) ||
+# Include MCL, MM, NK, PEL, hairy cell
+      is_neuro(z) || is_rb(z)) {
+# Include neuroblastoma, retinoblastoma
+    return("NONE")
+# Return NONE for no-match diseases
+  }
+  if (is_aml(z)) return("LAML")
+# Assign LAML for AML
+  if (is_dlbcl(z)) return("DLBC")
+# Assign DLBC for DLBCL
+  if (str_detect(d, "\\bbreast\\b") || str_detect(z, "\\bbreast\\b")) return("BRCA")
+# Assign BRCA for breast-related terms
+  kept <- clean_codes_vec(existing_codes)
+# Clean existing TCGA codes
+  if (length(kept) > 0) return(paste(kept, collapse = ";"))
+# Return cleaned existing codes if present
+  "NONE"
+# Default to NONE
+}
+
+# -------------------------- Validate columns ----------------------------------
+need_cols <- c("Description", "Disease")
+# Define required column names
+missing_cols <- setdiff(need_cols, names(meta))
+# Find missing required columns
+if (length(missing_cols)) stop("Metadata missing required columns: ", paste(missing_cols, collapse = ", "))
+# Stop if required columns are missing
+if (!"tcga_codes" %in% names(meta)) meta$tcga_codes <- ""
+# Add empty tcga_codes column if missing
+
+# ---------------------------- Process rows ------------------------------------
 meta2 <- meta %>%
+# Start dplyr pipeline with input dataframe
   mutate(
-    # Apply organ classification function to each row
-    organ = purrr::pmap_chr(list(Description, Disease), organ_from_fields)
+# Add new columns
+    organ = pmap_chr(list(Description, Disease), organ_from_fields),
+# Derive organ labels
+    tcga_codes = pmap_chr(list(Description, Disease, tcga_codes), derive_tcga)
+# Derive TCGA codes
   )
 
-# -----------------------------------------------------------------------------#
-# Write output & print a small summary         # Output generation and summary
-# -----------------------------------------------------------------------------#
-readr::write_csv(meta2, out_csv)               # Write results to CSV file
-message("[OK] Wrote: ", out_csv)               # Confirm file written
-
-# Create summary table of organ classifications
-summary_tbl <- meta2 %>% count(organ, sort = TRUE)
-message("[INFO] Organ label counts:")          # Print summary header
-print(summary_tbl, n = nrow(summary_tbl))      # Print all rows of summary
+# ----------------------------- Write out --------------------------------------
+readr::write_csv(meta2, out_csv)
+# Write processed dataframe to output CSV
+message("[OK] Wrote: ", out_csv)
+# Log successful write to output file
+message("[INFO] Organ counts:")
+# Log header for organ counts
+print(count(meta2, organ, sort = TRUE), n = 50)
+# Print sorted organ counts, up to 50
+message("[INFO] TCGA code counts (including NONE):")
+# Log header for TCGA code counts
+print(count(meta2, tcga_codes, sort = TRUE), n = 50)
+# Print sorted TCGA code counts, up to 50
