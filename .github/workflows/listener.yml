@@ -1,12 +1,17 @@
 name: HPC Job Events Listener
+# This workflow listens for repository_dispatch events triggered by HPC/SLURM jobs.
+# It logs event details, saves payloads for debugging, uploads artifacts, and fails the workflow if the job reported failure.
+
 on:
-  repository_dispatch: {}   # listens to ALL repo_dispatch events
+  repository_dispatch: {}   # Listens to ALL repository_dispatch events (e.g., slurm-job-complete, slurm-job-failed).
 
 jobs:
   handle:
+    # Single job to process the incoming event; runs on Ubuntu for lightweight logging and artifact upload.
     runs-on: ubuntu-latest
     steps:
       - name: Print event info
+        # Logs key event details to the Actions console for immediate visibility during troubleshooting.
         run: |
           echo "event_type: ${{ github.event.action }}"
           echo "status:     ${{ github.event.client_payload.status }}"
@@ -16,16 +21,22 @@ jobs:
           echo "user:       ${{ github.event.client_payload.user }}"
           echo "duration_s: ${{ github.event.client_payload.duration_s }}"
           echo "note:       ${{ github.event.client_payload.note }}"
+
       - name: Save raw payload
+        # Persists the full GitHub event and client payload as JSON files for offline analysis.
         run: |
           printf '%s' '${{ toJson(github.event) }}' > repository_dispatch_event.json
           printf '%s' '${{ toJson(github.event.client_payload) }}' > payload.json
+
       - uses: actions/upload-artifact@v4
+        # Uploads the JSON payloads as artifacts, retained for 90 days by default, for download and review.
         with:
-          name: hpc-event-${{ github.run_id }}
+          name: hpc-event-${{ github.run_id }}  # Unique name per workflow run for easy identification.
           path: |
             repository_dispatch_event.json
             payload.json
+
       - name: Fail if HPC reported failure
+        # Conditionally fails the workflow if the HPC job status indicates an error, triggering notifications.
         if: ${{ github.event.client_payload.status == 'failure' }}
-        run: exit 1
+        run: exit 1  # Exits with non-zero code to mark the step (and workflow) as failed.
