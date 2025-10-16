@@ -1,0 +1,390 @@
+(deseq2-r-env) chu25@bilogin1:~/TCGA/nbl/logs$ ls
+nbl_gdc_22828481.err  nbl_gdc_22828481.out
+(deseq2-r-env) chu25@bilogin1:~/TCGA/nbl/logs$ cat nbl_gdc_22828481.err
+Assuming unrestricted shared filesystem usage.
+host: frodo.hpc.dsmz.de
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 8
+Rules claiming more threads will be scaled down.
+Job stats:
+job                                 count
+--------------------------------  -------
+all                                     1
+multiqc                                 4
+picard_alignment_summary_metrics      121
+picard_insert_size_metrics            121
+picard_quality_yield_metrics          121
+picard_validate_samfile               121
+star_2pass                            121
+total                                 610
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Tue Oct 14 23:35:24 2025]
+localrule star_2pass:
+    input: /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36, /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz, /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz
+    output: /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam.bai, /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out
+    log: /home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log
+    jobid: 39
+    benchmark: /home/chu25/data/nbl/GSE189367/logs/benchmarks/star_2pass/SRR17011001.tsv
+    reason: Missing output files: /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam.bai, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam, /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out; Code has changed since last execution; Params have changed since last execution: Union of exclusive params before and now across all output: before: <nothing exclusive> now: '/home/chu25/data/nbl/GSE189367/results/star/tmp_SRR17011001_$$'
+    wildcards: project=GSE189367, sample=SRR17011001
+    threads: 8
+    resources: tmpdir=/tmp
+Shell command:
+        set -euo pipefail
+
+        # --- ENSURE ALL DIRECTORIES EXIST BEFORE STAR RUNS ---
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log)"
+
+        # Define TMPDIR
+        TMPDIR="/home/chu25/data/nbl/GSE189367/results/star/tmp_SRR17011001_$$"
+
+        # Clean up existing tmp dir and set trap for auto-cleanup on exit
+        rm -rf "$TMPDIR" 2>/dev/null || true
+        mkdir -p "$(dirname "$TMPDIR")"
+        trap 'rm -rf "$TMPDIR"' EXIT
+
+        # Build read command safely from joined params
+        if [ -z "/home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz" ]; then
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz"
+        else
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz"
+        fi
+
+        # Run STAR
+        STAR --genomeDir /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36 \
+             --readFilesCommand zcat \
+             $READS \
+             --outFileNamePrefix "/home/chu25/data/nbl/GSE189367/results/star/SRR17011001." \
+             --outSAMtype BAM SortedByCoordinate \
+             --quantMode GeneCounts \
+             --outSAMstrandField intronMotif \
+             --twopassMode Basic \
+             --runThreadN 8 \
+             --outTmpDir "$TMPDIR" \
+             --limitBAMsortRAM 8000000000 \
+             1> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" 2>&1 || {
+             echo "[ERROR] STAR failed for GSE189367/SRR17011001. Tail of log:" >&2
+             tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" >&2
+             exit 1
+        }
+
+        # --- POST-STAR FILE HANDLING ---
+
+        # Variables for STAR's *actual* output names
+        STAR_BAM_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam"
+        STAR_COUNTS_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.ReadsPerGene.out.tab"
+        STAR_LOG_FINAL_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out"
+
+        # 1. Sanity Check on BAM existence and size (CRITICAL)
+        if [ ! -s "$STAR_BAM_OUT" ]; then
+            echo "[ERROR] Missing or empty BAM: $STAR_BAM_OUT" >&2
+            tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" >&2 || true
+            exit 1
+        fi
+
+        # 2. Relocate BAM is SKIPPED because STAR output the file directly to /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam
+        # The previous attempt to mv it onto itself caused the fatal crash.
+
+        # 3. Flush file system buffer (crucial for HPC/NFS stability)
+        sync
+
+        # 4. QUICK CHECK BAM INTEGRITY (NEW CRITICAL STEP)
+        samtools quickcheck "$STAR_BAM_OUT" || {
+            echo "[ERROR] BAM INTEGRITY FAILED. File is corrupted or truncated on disk." >&2
+            exit 1
+        }
+
+        # 5. Relocate counts
+        mv -f "$STAR_COUNTS_OUT" "/home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab"
+
+        # 6. Copy final log
+        if [ -s "$STAR_LOG_FINAL_OUT" ]; then
+          cp -f "$STAR_LOG_FINAL_OUT" "/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out"
+        fi
+
+        # 7. Index BAM
+        samtools index -b "$STAR_BAM_OUT" 2>> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" || {
+            echo "[ERROR] samtools index FAILED. Check BAM integrity." >&2
+            exit 1
+        }
+
+Activating conda environment: .snakemake/conda/9b9f11500ce874a2665d59e0970a8284_
+Select jobs to execute...
+cp: '/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out' and '/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out' are the same file
+RuleException:
+CalledProcessError in file "/home/chu25/TCGA/nbl/nbl_gdc_rnaseq_pipeline.smk", line 304:
+Command 'source /home/chu25/miniconda3/bin/activate '/home/chu25/TCGA/nbl/.snakemake/conda/9b9f11500ce874a2665d59e0970a8284_'; set -euo pipefail;
+        set -euo pipefail
+
+        # --- ENSURE ALL DIRECTORIES EXIST BEFORE STAR RUNS ---
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log)"
+
+        # Define TMPDIR
+        TMPDIR="/home/chu25/data/nbl/GSE189367/results/star/tmp_SRR17011001_$$"
+
+        # Clean up existing tmp dir and set trap for auto-cleanup on exit
+        rm -rf "$TMPDIR" 2>/dev/null || true
+        mkdir -p "$(dirname "$TMPDIR")"
+        trap 'rm -rf "$TMPDIR"' EXIT
+
+        # Build read command safely from joined params
+        if [ -z "/home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz" ]; then
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz"
+        else
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz"
+        fi
+
+        # Run STAR
+        STAR --genomeDir /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36 \
+             --readFilesCommand zcat \
+             $READS \
+             --outFileNamePrefix "/home/chu25/data/nbl/GSE189367/results/star/SRR17011001." \
+             --outSAMtype BAM SortedByCoordinate \
+             --quantMode GeneCounts \
+             --outSAMstrandField intronMotif \
+             --twopassMode Basic \
+             --runThreadN 8 \
+             --outTmpDir "$TMPDIR" \
+             --limitBAMsortRAM 8000000000 \
+             1> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" 2>&1 || {
+             echo "[ERROR] STAR failed for GSE189367/SRR17011001. Tail of log:" >&2
+             tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" >&2
+             exit 1
+        }
+
+        # --- POST-STAR FILE HANDLING ---
+
+        # Variables for STAR's *actual* output names
+        STAR_BAM_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam"
+        STAR_COUNTS_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.ReadsPerGene.out.tab"
+        STAR_LOG_FINAL_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out"
+
+        # 1. Sanity Check on BAM existence and size (CRITICAL)
+        if [ ! -s "$STAR_BAM_OUT" ]; then
+            echo "[ERROR] Missing or empty BAM: $STAR_BAM_OUT" >&2
+            tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" >&2 || true
+            exit 1
+        fi
+
+        # 2. Relocate BAM is SKIPPED because STAR output the file directly to /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam
+        # The previous attempt to mv it onto itself caused the fatal crash.
+
+        # 3. Flush file system buffer (crucial for HPC/NFS stability)
+        sync
+
+        # 4. QUICK CHECK BAM INTEGRITY (NEW CRITICAL STEP)
+        samtools quickcheck "$STAR_BAM_OUT" || {
+            echo "[ERROR] BAM INTEGRITY FAILED. File is corrupted or truncated on disk." >&2
+            exit 1
+        }
+
+        # 5. Relocate counts
+        mv -f "$STAR_COUNTS_OUT" "/home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab"
+
+        # 6. Copy final log
+        if [ -s "$STAR_LOG_FINAL_OUT" ]; then
+          cp -f "$STAR_LOG_FINAL_OUT" "/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out"
+        fi
+
+        # 7. Index BAM
+        samtools index -b "$STAR_BAM_OUT" 2>> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" || {
+            echo "[ERROR] samtools index FAILED. Check BAM integrity." >&2
+            exit 1
+        }' returned non-zero exit status 1.
+[Wed Oct 15 00:24:12 2025]
+Error in rule star_2pass:
+    message: None
+    jobid: 39
+    input: /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36, /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz, /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz
+    output: /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam.bai, /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out
+    log: /home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log (check log file(s) for error details)
+    conda-env: /home/chu25/TCGA/nbl/.snakemake/conda/9b9f11500ce874a2665d59e0970a8284_
+    shell:
+
+        set -euo pipefail
+
+        # --- ENSURE ALL DIRECTORIES EXIST BEFORE STAR RUNS ---
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log)"
+
+        # Define TMPDIR
+        TMPDIR="/home/chu25/data/nbl/GSE189367/results/star/tmp_SRR17011001_$$"
+
+        # Clean up existing tmp dir and set trap for auto-cleanup on exit
+        rm -rf "$TMPDIR" 2>/dev/null || true
+        mkdir -p "$(dirname "$TMPDIR")"
+        trap 'rm -rf "$TMPDIR"' EXIT
+
+        # Build read command safely from joined params
+        if [ -z "/home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz" ]; then
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz"
+        else
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_1.fastq.gz /home/chu25/data/nbl/GSE189367/fastq/SRR17011001_2.fastq.gz"
+        fi
+
+        # Run STAR
+        STAR --genomeDir /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36 \
+             --readFilesCommand zcat \
+             $READS \
+             --outFileNamePrefix "/home/chu25/data/nbl/GSE189367/results/star/SRR17011001." \
+             --outSAMtype BAM SortedByCoordinate \
+             --quantMode GeneCounts \
+             --outSAMstrandField intronMotif \
+             --twopassMode Basic \
+             --runThreadN 8 \
+             --outTmpDir "$TMPDIR" \
+             --limitBAMsortRAM 8000000000 \
+             1> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" 2>&1 || {
+             echo "[ERROR] STAR failed for GSE189367/SRR17011001. Tail of log:" >&2
+             tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" >&2
+             exit 1
+        }
+
+        # --- POST-STAR FILE HANDLING ---
+
+        # Variables for STAR's *actual* output names
+        STAR_BAM_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam"
+        STAR_COUNTS_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.ReadsPerGene.out.tab"
+        STAR_LOG_FINAL_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out"
+
+        # 1. Sanity Check on BAM existence and size (CRITICAL)
+        if [ ! -s "$STAR_BAM_OUT" ]; then
+            echo "[ERROR] Missing or empty BAM: $STAR_BAM_OUT" >&2
+            tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" >&2 || true
+            exit 1
+        fi
+
+        # 2. Relocate BAM is SKIPPED because STAR output the file directly to /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam
+        # The previous attempt to mv it onto itself caused the fatal crash.
+
+        # 3. Flush file system buffer (crucial for HPC/NFS stability)
+        sync
+
+        # 4. QUICK CHECK BAM INTEGRITY (NEW CRITICAL STEP)
+        samtools quickcheck "$STAR_BAM_OUT" || {
+            echo "[ERROR] BAM INTEGRITY FAILED. File is corrupted or truncated on disk." >&2
+            exit 1
+        }
+
+        # 5. Relocate counts
+        mv -f "$STAR_COUNTS_OUT" "/home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab"
+
+        # 6. Copy final log
+        if [ -s "$STAR_LOG_FINAL_OUT" ]; then
+          cp -f "$STAR_LOG_FINAL_OUT" "/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out"
+        fi
+
+        # 7. Index BAM
+        samtools index -b "$STAR_BAM_OUT" 2>> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011001.log" || {
+            echo "[ERROR] samtools index FAILED. Check BAM integrity." >&2
+            exit 1
+        }
+
+        (command exited with non-zero exit code)
+Removing output files of failed job star_2pass since they might be corrupted:
+/home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Aligned.sortedByCoord.out.bam, /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011001.ReadsPerGene.out.tab, /home/chu25/data/nbl/GSE189367/results/star/SRR17011001.Log.final.out
+Execute 1 jobs...
+
+[Wed Oct 15 00:24:15 2025]
+localrule star_2pass:
+    input: /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36, /home/chu25/data/nbl/GSE189367/fastq/SRR17011030_1.fastq.gz, /home/chu25/data/nbl/GSE189367/fastq/SRR17011030_2.fastq.gz
+    output: /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam, /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam.bai, /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011030.ReadsPerGene.out.tab, /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Log.final.out
+    log: /home/chu25/data/nbl/GSE189367/logs/star/SRR17011030.log
+    jobid: 68
+    benchmark: /home/chu25/data/nbl/GSE189367/logs/benchmarks/star_2pass/SRR17011030.tsv
+    reason: Missing output files: /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam.bai, /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011030.ReadsPerGene.out.tab, /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Log.final.out, /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam; Code has changed since last execution; Params have changed since last execution: Union of exclusive params before and now across all output: before: <nothing exclusive> now: '/home/chu25/data/nbl/GSE189367/results/star/tmp_SRR17011030_$$'
+    wildcards: project=GSE189367, sample=SRR17011030
+    threads: 8
+    resources: tmpdir=/tmp
+Shell command:
+        set -euo pipefail
+
+        # --- ENSURE ALL DIRECTORIES EXIST BEFORE STAR RUNS ---
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011030.ReadsPerGene.out.tab)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam)"
+        mkdir -p "$(dirname /home/chu25/data/nbl/GSE189367/logs/star/SRR17011030.log)"
+
+        # Define TMPDIR
+        TMPDIR="/home/chu25/data/nbl/GSE189367/results/star/tmp_SRR17011030_$$"
+
+        # Clean up existing tmp dir and set trap for auto-cleanup on exit
+        rm -rf "$TMPDIR" 2>/dev/null || true
+        mkdir -p "$(dirname "$TMPDIR")"
+        trap 'rm -rf "$TMPDIR"' EXIT
+
+        # Build read command safely from joined params
+        if [ -z "/home/chu25/data/nbl/GSE189367/fastq/SRR17011030_2.fastq.gz" ]; then
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011030_1.fastq.gz"
+        else
+            READS="--readFilesIn /home/chu25/data/nbl/GSE189367/fastq/SRR17011030_1.fastq.gz /home/chu25/data/nbl/GSE189367/fastq/SRR17011030_2.fastq.gz"
+        fi
+
+        # Run STAR
+        STAR --genomeDir /home/chu25/data/star_index/star-2.7.5c_GRCh38.d1.vd1_gencode.v36 \
+             --readFilesCommand zcat \
+             $READS \
+             --outFileNamePrefix "/home/chu25/data/nbl/GSE189367/results/star/SRR17011030." \
+             --outSAMtype BAM SortedByCoordinate \
+             --quantMode GeneCounts \
+             --outSAMstrandField intronMotif \
+             --twopassMode Basic \
+             --runThreadN 8 \
+             --outTmpDir "$TMPDIR" \
+             --limitBAMsortRAM 8000000000 \
+             1> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011030.log" 2>&1 || {
+             echo "[ERROR] STAR failed for GSE189367/SRR17011030. Tail of log:" >&2
+             tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011030.log" >&2
+             exit 1
+        }
+
+        # --- POST-STAR FILE HANDLING ---
+
+        # Variables for STAR's *actual* output names
+        STAR_BAM_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam"
+        STAR_COUNTS_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011030.ReadsPerGene.out.tab"
+        STAR_LOG_FINAL_OUT="/home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Log.final.out"
+
+        # 1. Sanity Check on BAM existence and size (CRITICAL)
+        if [ ! -s "$STAR_BAM_OUT" ]; then
+            echo "[ERROR] Missing or empty BAM: $STAR_BAM_OUT" >&2
+            tail -n 200 "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011030.log" >&2 || true
+            exit 1
+        fi
+
+        # 2. Relocate BAM is SKIPPED because STAR output the file directly to /home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Aligned.sortedByCoord.out.bam
+        # The previous attempt to mv it onto itself caused the fatal crash.
+
+        # 3. Flush file system buffer (crucial for HPC/NFS stability)
+        sync
+
+        # 4. QUICK CHECK BAM INTEGRITY (NEW CRITICAL STEP)
+        samtools quickcheck "$STAR_BAM_OUT" || {
+            echo "[ERROR] BAM INTEGRITY FAILED. File is corrupted or truncated on disk." >&2
+            exit 1
+        }
+
+        # 5. Relocate counts
+        mv -f "$STAR_COUNTS_OUT" "/home/chu25/data/nbl/GSE189367/results/star/valid_count/SRR17011030.ReadsPerGene.out.tab"
+
+        # 6. Copy final log
+        if [ -s "$STAR_LOG_FINAL_OUT" ]; then
+          cp -f "$STAR_LOG_FINAL_OUT" "/home/chu25/data/nbl/GSE189367/results/star/SRR17011030.Log.final.out"
+        fi
+
+        # 7. Index BAM
+        samtools index -b "$STAR_BAM_OUT" 2>> "/home/chu25/data/nbl/GSE189367/logs/star/SRR17011030.log" || {
+            echo "[ERROR] samtools index FAILED. Check BAM integrity." >&2
+            exit 1
+        }
+
+Activating conda environment: .snakemake/conda/9b9f11500ce874a2665d59e0970a8284_
+Select jobs to execute...
