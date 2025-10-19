@@ -1,3 +1,6 @@
+# Replace the path with the one you copied in the previous step
+.libPaths(c("/home/chu25/miniconda3/envs/r_sva_fix/lib/R/library", .libPaths()))
+
 # nolint start
 suppressPackageStartupMessages({
   library(tidyverse)
@@ -153,18 +156,27 @@ purity_adjust_log <- function(tcga_log, purity) {
 subset_to_pam50 <- function(mat, ens2sym, pam_symbols, collapse_fun = c("sum","mean","max")) {
   cf <- match.arg(collapse_fun)
   ensembl_ids <- strip_ensver(rownames(mat))
-  has_map <- ensembl_ids %in% rownames(ens2sym)
-  if (!any(has_map)) stop("No Ensembl IDs mapped to symbols. Check inputs.")
-  sym <- ens2sym[ensembl_ids[has_map], "symbol"]
-  keep_idx <- which(has_map & tolower(sym) %in% tolower(pam_symbols))
-  if (length(keep_idx) == 0) stop("No PAM50 symbols matched after mapping.")
+
+  # which rows are mapped?
+  idx_map <- which(ensembl_ids %in% rownames(ens2sym))
+  if (!length(idx_map)) stop("No Ensembl IDs mapped to symbols. Check inputs.")
+
+  # symbols corresponding to mapped rows
+  sym <- ens2sym[ensembl_ids[idx_map], "symbol"]
+  hit <- tolower(sym) %in% tolower(pam_symbols)
+
+  keep_idx <- idx_map[hit]
+  if (!length(keep_idx)) stop("No PAM50 symbols matched after mapping.")
+
   sub <- mat[keep_idx, , drop = FALSE]
   sym_keep <- ens2sym[strip_ensver(rownames(sub)), "symbol"]
+
+  # collapse multiple Ensembl rows per symbol
   split_idx <- split(seq_len(nrow(sub)), tolower(sym_keep))
   collapsed <- lapply(split_idx, function(ix) {
-    if (cf == "sum") colSums(sub[ix, , drop = FALSE], na.rm = TRUE)
-    else if (cf == "mean") colMeans(sub[ix, , drop = FALSE], na.rm = TRUE)
-    else apply(sub[ix, , drop = FALSE], 2, max, na.rm = TRUE)
+    if (cf == "sum")      colSums(sub[ix, , drop = FALSE], na.rm = TRUE)
+    else if (cf == "mean")  colMeans(sub[ix, , drop = FALSE], na.rm = TRUE)
+    else                    apply(sub[ix, , drop = FALSE], 2, max, na.rm = TRUE)
   })
   M <- do.call(rbind, collapsed)
   rownames(M) <- toupper(names(split_idx))
@@ -298,6 +310,19 @@ V <- assay(vsd)
 V_tcga <- V[, colnames(tcga_counts), drop = FALSE]
 V_dsmz <- V[, colnames(dsmz_counts), drop = FALSE]
 
+# ---- VST individually per dataset (in addition to joint VST) ----
+cat("[INFO] VST per-dataset (TCGA only)...\n")
+dds_tcga_ind <- DESeqDataSetFromMatrix(round(tcga_counts), data.frame(row.names = colnames(tcga_counts)), design = ~ 1)
+vsd_tcga_ind <- vst(dds_tcga_ind, blind = TRUE)
+V_tcga_ind   <- assay(vsd_tcga_ind)
+saveRDS(V_tcga_ind, file.path(outdir, "VST_tcga_only.rds"))
+
+cat("[INFO] VST per-dataset (DSMZ only)...\n")
+dds_dsmz_ind <- DESeqDataSetFromMatrix(round(dsmz_counts), data.frame(row.names = colnames(dsmz_counts)), design = ~ 1)
+vsd_dsmz_ind <- vst(dds_dsmz_ind, blind = TRUE)
+V_dsmz_ind   <- assay(vsd_dsmz_ind)
+saveRDS(V_dsmz_ind, file.path(outdir, "VST_dsmz_only.rds"))
+
 purity <- load_purity_data(tcga_se, NULL)
 if (!is.null(purity)) {
   cat("[INFO] Applying purity adjustment to TCGA VST data...\n")
@@ -324,6 +349,38 @@ V_dsmz <- V_adj[, colnames(dsmz_counts), drop = FALSE]
 
 stopifnot(!is.null(colnames(V_tcga)), !is.null(colnames(V_dsmz)))
 
+# PCA before vs after batch correction
+cat("[INFO] PCA before and after batch correction...\n")
+make_pca_plot <- function(M, lab_batch, title, path_pdf, n_top = 5000) {
+  # use top variable genes to stabilize PCA
+  sel <- top_var_genes(M, n = min(n_top, nrow(M)))
+  X   <- t(scale(M[sel, , drop = FALSE]))
+  pr  <- prcomp(X, center = FALSE, scale. = FALSE)
+
+  # percent variance
+  var_expl <- (pr$sdev^2) / sum(pr$sdev^2) * 100
+  df <- data.frame(PC1 = pr$x[,1], PC2 = pr$x[,2],
+                   batch = lab_batch,
+                   sample = rownames(pr$x),
+                   stringsAsFactors = FALSE)
+  safe_pdf(path_pdf, {
+    layout(matrix(c(1,2), nrow = 1))
+    plot(df$PC1, df$PC2, pch = 19, cex = 0.7, col = as.factor(df$batch),
+         xlab = sprintf("PC1 (%.1f%%)", var_expl[1]),
+         ylab = sprintf("PC2 (%.1f%%)", var_expl[2]),
+         main = title)
+    legend("topright", legend = levels(as.factor(df$batch)),
+           col = seq_along(levels(as.factor(df$batch))), pch = 19, cex = 0.8)
+    barplot(var_expl[1:20], las = 2, main = "Explained variance (top 20 PCs)",
+            ylab = "% variance", xlab = "PC")
+    layout(1)
+  })
+  invisible(list(scores = df, var_expl = var_expl))
+}
+
+pca_pre  <- make_pca_plot(V,      batch, "PCA (pre-batch correction)",  file.path(outdir, "pca_pre_batch.pdf"))
+pca_post <- make_pca_plot(V_adj,  batch, "PCA (post-batch correction)", file.path(outdir, "pca_post_batch.pdf"))
+
 saveRDS(V_tcga, file.path(outdir, "VST_tcga_brca.rds"))
 saveRDS(V_dsmz, file.path(outdir, "VST_dsmz_brca.rds"))
 
@@ -335,6 +392,7 @@ ens2sym_union <- bind_rows(
     result <- AnnotationDbi::select(org.Hs.eg.db, keys = unique(strip_ensver(rownames(V_adj))),
                          keytype = "ENSEMBL", columns = c("SYMBOL")) %>%
       filter(!is.na(SYMBOL) & nzchar(SYMBOL)) %>%
+      distinct(ENSEMBL, .keep_all = TRUE) %>%
       transmute(ensembl = ENSEMBL, symbol = SYMBOL)
     cat(sprintf("[INFO] org.Hs.eg.db mapping successful: %d mappings\n", nrow(result)))
     result
@@ -612,19 +670,36 @@ write.csv(emb_hc_pam50, file.path(outdir, "umap_hierarchical_PAM50_coords.csv"),
 
 # ---------- (4) DIFFERENTIAL EXPRESSION ANALYSIS ----------
 cat("[INFO] Performing differential expression analysis...\n")
-coldata$subtype <- clusters_hc
+
+# Make sure the factor has 'Basal' as the reference level and includes ONLY present levels
+subtype_levels <- c("Basal","HER2-high","HER2-low","LumA","LumB")
+cl_here <- factor(clusters_hc, levels = subtype_levels)
+cl_here <- droplevels(cl_here)   # drop absent levels to avoid empty comparisons
+coldata$subtype <- cl_here
+
+# Sanitize factor levels for DESeq2 (optional hygiene)
+levels(coldata$subtype) <- gsub("[^A-Za-z0-9_.]", "_", levels(coldata$subtype))
+
 dds_de <- DESeqDataSetFromMatrix(round(all_counts), coldata, design = ~ subtype)
 dds_de <- DESeq(dds_de)
+
+present_lvls <- levels(coldata$subtype)
+targets <- setdiff(present_lvls, "Basal")
+if (!length(targets)) {
+  stop("[DE] No non-Basal subtypes present to contrast against Basal.")
+}
+
 de_results <- list()
-for (sub in subtype_labels[-1]) {
+for (sub in targets) {
   res <- results(dds_de, contrast = c("subtype", sub, "Basal"), alpha = 0.05)
   res <- as.data.frame(res) %>%
-    mutate(ensembl = rownames(res), symbol = ens2sym_union$symbol[match(ensembl, ens2sym_union$ensembl)]) %>%
-    filter(!is.na(padj), padj < 0.05, abs(log2FoldChange) > 1) %>%
+    mutate(ensembl = rownames(res),
+           symbol  = ens2sym_union$symbol[match(ensembl, ens2sym_union$ensembl)]) %>%
+    filter(!is.na(padj), padj < 0.05, !is.na(log2FoldChange), abs(log2FoldChange) > 1) %>%
     arrange(padj)
   de_results[[sub]] <- res
 }
-dir.create(file.path(outdir, "de_results"), showWarnings = FALSE)
+dir.create(file.path(outdir, "de_results"), showWarnings = FALSE, recursive = TRUE)
 for (sub in names(de_results)) {
   write.csv(de_results[[sub]], file.path(outdir, "de_results", sprintf("de_%s_vs_Basal.csv", sub)), row.names = FALSE)
 }
@@ -922,20 +997,64 @@ for (method in c("kmeans", "hc", "hdb", "hdb_pam50")) {
       p_value = kw_test$p.value,
       statistic = kw_test$statistic
     )
-    if (kw_test$p.value < 0.05 && length(unique(clusters)) >= 2) {
-      dscf_test <- PMCMRplus::dscfAllPairsTest(expr, clusters, p.adjust.method = "BH")
-      if (!is.null(dscf_test$p.value)) {
-        p_mat <- dscf_test$p.value
-        pairs <- t(combn(levels(clusters), 2))
-        dscf_df <- data.frame(
-          test = sprintf("DSCF_%s_%s_%s_vs_%s", method, gene_sym, pairs[,1], pairs[,2]),
-          gene = gene,
-          symbol = gene_sym,
-          subtype1 = pairs[,1],
-          subtype2 = pairs[,2],
-          p_value = p_mat[lower.tri(p_mat)]
-        )
-        dscf_results[[paste(method, gene_sym, sep = "_")]] <- dscf_df
+    if (kw_test$p.value < 0.05) {
+      # work on samples with non-NA expression only
+      keep <- !is.na(expr)
+      expr_ok <- expr[keep]
+      grp_ok  <- droplevels(clusters[keep])
+
+      # need at least two non-empty groups
+      if (nlevels(grp_ok) >= 2 && length(unique(grp_ok)) >= 2) {
+        # run DSCF on present groups only
+        dscf_test <- try(PMCMRplus::dscfAllPairsTest(expr_ok, grp_ok, p.adjust.method = "BH"), silent = TRUE)
+
+        if (!inherits(dscf_test, "try-error") && !is.null(dscf_test$p.value)) {
+          p_mat <- as.matrix(dscf_test$p.value)
+
+          # ---- robust guards for degenerate outputs ----
+          if (is.null(dim(p_mat))) next  # not a matrix
+          if (min(dim(p_mat)) < 2) next  # need at least 2 groups
+
+          gr_levels <- colnames(p_mat)
+          if (is.null(gr_levels) || length(gr_levels) < 2) {
+            gr_levels <- rownames(p_mat)
+          }
+          if (is.null(gr_levels) || length(gr_levels) < 2) {
+            # fallback to actually present groups in the data
+            gr_levels <- levels(grp_ok)
+            if (length(gr_levels) < 2) next
+            if (is.null(rownames(p_mat))) rownames(p_mat) <- gr_levels
+            if (is.null(colnames(p_mat))) colnames(p_mat) <- gr_levels
+          }
+
+          # make sure names are unique, drop any NA labels
+          gr_levels <- unique(gr_levels[!is.na(gr_levels)])
+          if (length(gr_levels) < 2) next
+
+          comb <- utils::combn(gr_levels, 2)
+
+          get_p <- function(a, b) {
+            if (!(a %in% rownames(p_mat) && b %in% colnames(p_mat)) &&
+                !(b %in% rownames(p_mat) && a %in% colnames(p_mat))) return(NA_real_)
+            if (!is.na(p_mat[a, b])) return(p_mat[a, b])
+            if (!is.na(p_mat[b, a])) return(p_mat[b, a])
+            NA_real_
+          }
+          pvals <- vapply(seq_len(ncol(comb)), function(i) get_p(comb[1, i], comb[2, i]), numeric(1))
+
+          dscf_df <- data.frame(
+            test     = sprintf("DSCF_%s_%s_%s_vs_%s", method, gene_sym, comb[1, ], comb[2, ]),
+            gene     = gene,
+            symbol   = gene_sym,
+            subtype1 = comb[1, ],
+            subtype2 = comb[2, ],
+            p_value  = pvals,
+            stringsAsFactors = FALSE
+          )
+          dscf_df <- dscf_df[is.finite(dscf_df$p_value), , drop = FALSE]
+          if (nrow(dscf_df) > 0)
+            dscf_results[[paste(method, gene_sym, sep = "_")]] <- dscf_df
+        }
       }
     }
     if (kw_test$p.value < 0.05) {
@@ -1187,7 +1306,7 @@ if (!is.na(tcga_sub_col)) {  # If subtype column exists
 }
 
 # Aggregate DSMZ by discovery clusters
-DSM_med <- aggregate_median(V_dsmz_z, clusters[colnames(V_dsmz)])  # Calculate median per cluster
+DSM_med <- aggregate_median(V_dsmz_z, clusters_kmeans[colnames(V_dsmz)])  # Calculate median per cluster
 
 ## ---- safe median-z heatmap ----
 common_mark <- intersect(marker_ens, intersect(rownames(TC_med), rownames(DSM_med)))
@@ -1215,7 +1334,7 @@ emb <- as.data.frame(emb)  # Convert to data frame
 colnames(emb) <- c("UMAP1","UMAP2")  # Set column names
 emb$sample <- rownames(Xu)  # Add sample names
 emb$dataset <- ifelse(emb$sample %in% colnames(V_tcga), "TCGA", "DSMZ")  # Add dataset labels
-emb$discovery_cluster <- clusters[emb$sample]  # Add discovery clusters
+emb$discovery_cluster <- clusters_kmeans[emb$sample]  # Add discovery clusters
 
 # Add TCGA subtypes if available
 emb$TCGA_subtype <- NA  # Initialize with NA
@@ -1262,4 +1381,4 @@ if (requireNamespace("patchwork", quietly = TRUE)) {  # If patchwork is availabl
 write.csv(emb, file.path(outdir, "umap_embeddings.csv"), row.names = FALSE)  # Save coordinates
 
 cat("\n[OK] Done. Results in:", outdir, "\n")  # Print completion message
-# nolint enddebu
+
