@@ -10,7 +10,7 @@
 #   - Save results to CSV, update SummarizedExperiment colData,
 #     and generate diagnostic correlation plots.
 # =============================================================================
-
+1
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 # -- Ensure dependencies are installed ----------------------------------------
@@ -95,7 +95,7 @@ ensure_hgnc_symbols <- function(M, gtf_path) {
 }
 
 # -- Helper: Normalize ESTIMATE output ----------------------------------------
-normalize_estimate_columns <- function(x) {
+harmonize_estimate_columns <- function(x) {
   # Ensure data.frame with rownames as sample IDs
   if (is.data.frame(x) && "sample" %in% colnames(x)) {
     rn <- x$sample
@@ -237,7 +237,7 @@ run_tidyestimate_purity_analysis <- function(
   est_scores <- est_fn(expr_sig, is_affymetrix = FALSE)
 
   # Normalize columns, compute TumorPurity
-  est_scores <- normalize_estimate_columns(est_scores)
+  est_scores <- harmonize_estimate_columns(est_scores)
   cat(sprintf("[INFO] Scores: %d samples x %d metrics\n",
               nrow(est_scores), ncol(est_scores)))
 
