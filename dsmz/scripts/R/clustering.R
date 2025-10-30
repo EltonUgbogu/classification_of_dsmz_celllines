@@ -77,7 +77,7 @@ run_dynamic_tree_cut <- function(PC, deepSplit = 2, pamStage = TRUE) {
 
 
 # Iterative HDBSCAN clustering to assign samples to five clusters
-run_iterative_hdbscan <- function(PC, subtype_labels, seed = 42, 
+run_iterative_hdbscan <- function(PC, cluster_labels, seed = 42, 
                                  metric = "euclidean") {
   # Set random seed for reproducibility
   set.seed(seed)
@@ -159,7 +159,7 @@ run_iterative_hdbscan <- function(PC, subtype_labels, seed = 42,
   }
   
   # Convert cluster assignments to factor with specified levels
-  clusters_hdb <- factor(clusters_hdb, levels = subtype_labels)
+  clusters_hdb <- factor(clusters_hdb, levels = cluster_labels)
   # Return the final cluster assignments
   return(clusters_hdb)
 }
