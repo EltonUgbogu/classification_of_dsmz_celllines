@@ -46,7 +46,7 @@ safe_rds_save <- function(object, file) {
 
 run_pca_and_save <- function(V_adj, outdir, n_hvg = 3000, max_pc = 30) {
   ensure_dir(outdir)
-  pcs <- make_pcs(V_adj, n_hvg = n_hvg, max_pc = max_pc)
+  pcs <- make_pcs_matrix(V_adj, n_hvg = n_hvg, max_pc = max_pc)
   safe_rds_save(pcs, file.path(outdir, "pca_objects.rds"))
   pcs
 }
