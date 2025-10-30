@@ -8,11 +8,6 @@
 # Select top n_hvg features by variance, then run PCA and return PC matrix
  
 
-choose_minCluster <- function(n_obs) {
-  # Reasonable lower bound for dynamic tree cut; clamp to [10, max(10, n/20)]
-  max(10L, as.integer(round(n_obs / 20)))
-}
-
 
 run_kmeans_on_pcs <- function(PC, outdir, k_grid = 2:8, seed = 42) {
   set.seed(seed)
