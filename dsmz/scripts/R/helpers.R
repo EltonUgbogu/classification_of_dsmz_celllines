@@ -64,6 +64,20 @@ make_pcs <- function(M, n_hvg = 3000, max_pc = 30) {
        hvgs = hvgs)
 }
 
+# alias to allow wrappers in other files without naming collisions
+helpers_make_pcs <- function(M, n_hvg = 3000, max_pc = 30) make_pcs(M, n_hvg = n_hvg, max_pc = max_pc)
+
+# convenience: return only the PC matrix (used by I/O and clustering code)
+make_pcs_matrix <- function(V_adj, n_hvg = 3000, max_pc = 30, center = TRUE, scale. = TRUE) {
+  if (!is.matrix(V_adj) && !is.data.frame(V_adj)) {
+    stop("V_adj must be a matrix or data.frame")
+  }
+  mat <- as.matrix(V_adj)
+  if (ncol(mat) < 2 || nrow(mat) < 2) stop("V_adj must have at least 2 rows and 2 columns")
+  pcs_obj <- helpers_make_pcs(mat, n_hvg = n_hvg, max_pc = max_pc)
+  pcs_obj$PC
+}
+
 zscore_by_gene <- function(mat) {
   mu <- rowMeans(mat, na.rm = TRUE)
   sdv <- matrixStats::rowSds(mat, na.rm = TRUE); sdv[sdv == 0] <- 1
