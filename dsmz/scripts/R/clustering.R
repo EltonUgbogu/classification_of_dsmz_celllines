@@ -6,24 +6,7 @@
 
 # Heuristic: assume rows are observations (cells), columns are features (genes)
 # Select top n_hvg features by variance, then run PCA and return PC matrix
-make_pcs <- function(V_adj, n_hvg = 3000, max_pc = 30, center = TRUE, scale. = TRUE) {
-  if (!is.matrix(V_adj) && !is.data.frame(V_adj)) {
-    stop("V_adj must be a matrix or data.frame")
-  }
-  mat <- as.matrix(V_adj)
-  if (ncol(mat) < 2 || nrow(mat) < 2) stop("V_adj must have at least 2 rows and 2 columns")
-
-  # pick highly variable columns (features)
-  feature_sd <- apply(mat, 2, stats::sd, na.rm = TRUE)
-  feature_rank <- order(feature_sd, decreasing = TRUE, na.last = NA)
-  keep <- head(feature_rank, n = min(n_hvg, ncol(mat)))
-  mat_hvg <- mat[, keep, drop = FALSE]
-
-  pca <- stats::prcomp(mat_hvg, center = center, scale. = scale.)
-  pcs <- pca$x[, seq_len(min(max_pc, ncol(pca$x))), drop = FALSE]
-  rownames(pcs) <- rownames(mat)
-  pcs
-}
+ 
 
 choose_minCluster <- function(n_obs) {
   # Reasonable lower bound for dynamic tree cut; clamp to [10, max(10, n/20)]
