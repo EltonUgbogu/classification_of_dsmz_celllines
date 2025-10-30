@@ -5,11 +5,21 @@
 strip_ensver <- function(x) sub("\\..*$","", x)
 as_df <- function(x) as.data.frame(x, stringsAsFactors = FALSE)
 
+#' @brief Calculates minPts for clustering based on dataset size.
+#' @param n Integer, total samples.
+#' @param frac Numeric, fraction of samples for minPts (default: 0.02).
+#' @param min_floor Integer, minimum minPts (default: 5).
+#' @param max_cap Integer, maximum minPts (default: 50).
+#' @return Integer, calculated minPts.
+
 choose_minPts <- function(n, frac = 0.02, min_floor = 5, max_cap = 50) {
-  p <- max(min_floor, round(frac * n))
-  p <- min(p, max_cap, n - 1L)
-  return(as.integer(p))
+  p <- max(min_floor, round(frac * n)) #' @brief Sets minPts as max of min_floor and rounded fraction of n.
+  p <- min(p, max_cap, n - 1L) #' @brief Caps minPts at max_cap and ensures less than n.
+  return(as.integer(p)) #' @brief Returns minPts as integer.
 }
+
+
+
 choose_minCluster <- function(n, frac = 0.03, min_floor = 8, max_cap = 150) {
   p <- max(min_floor, round(frac * n))
   as.integer(min(p, max_cap))

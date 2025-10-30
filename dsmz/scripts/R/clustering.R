@@ -30,12 +30,6 @@ choose_minCluster <- function(n_obs) {
   max(10L, as.integer(round(n_obs / 20)))
 }
 
-choose_minPts <- function(n_obs) {
-  # Heuristic for HDBSCAN minPts; clamp to [5, 50]
-  val <- as.integer(round(log10(max(10, n_obs)) * 5))
-  min(50L, max(5L, val))
-}
-
 
 run_kmeans_on_pcs <- function(PC, outdir, k_grid = 2:8, seed = 42) {
   set.seed(seed)
