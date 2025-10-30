@@ -11,6 +11,14 @@ as_df <- function(x) as.data.frame(x, stringsAsFactors = FALSE)
 #' @param min_floor Integer, minimum minPts (default: 5).
 #' @param max_cap Integer, maximum minPts (default: 50).
 #' @return Integer, calculated minPts.
+# Determines the minPts parameter for HDBSCAN based on sample size
+choose_minPts <- function(n_obs) {
+  # Apply heuristic: minPts is 5 times the log10 of sample size (min 10)
+  val <- as.integer(round(log10(max(10, n_obs)) * 5))
+  # Clamp the value to ensure minPts is between 5 and 50 (inclusive)
+  min(50L, max(5L, val))
+}
+
 
 # Determines minCluster size for dynamic tree cut with flexible parameters
 choose_minCluster <- function(n, frac = 0.03, min_floor = 8, max_cap = 150) {
@@ -20,12 +28,6 @@ choose_minCluster <- function(n, frac = 0.03, min_floor = 8, max_cap = 150) {
   as.integer(min(p, max_cap))
 }
 
-
-
-choose_minCluster <- function(n, frac = 0.03, min_floor = 8, max_cap = 150) {
-  p <- max(min_floor, round(frac * n))
-  as.integer(min(p, max_cap))
-}
 
 make_ens2sym <- function(dsmz_raw) {
   df <- as_df(dsmz_raw)
