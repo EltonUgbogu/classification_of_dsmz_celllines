@@ -1,13 +1,21 @@
 # Clustering: PCA, k-means, hierarchical, dynamic tree cut, HDBSCAN flows
 # Place in R/clustering.R
+# Dependencies: helpers.R (ensure_dir, safe_pdf, choose_minCluster, choose_minPts, get_centroid, get_k_nearest, aggregate_median)
 
-# ---- helpers ---------------------------------------------------------------
+# ============================================================================
+# Helper / Utility Functions
+# ============================================================================
 
+# ----------------------------------------------------------------------
+# 1.1  Logging helpers (keeps the main code tidy)
+# ----------------------------------------------------------------------
+log_info  <- function(...) cat("[INFO] ", sprintf(...), "\n", sep = "")
+log_warn  <- function(...) cat("[WARN] ", sprintf(...), "\n", sep = "")
+log_error <- function(...) cat("[ERROR]", sprintf(...), "\n", sep = "")
 
-# Heuristic: assume rows are observations (cells), columns are features (genes)
-# Select top n_hvg features by variance, then run PCA and return PC matrix
- 
-
+# ============================================================================
+# K-means Clustering Functions
+# ============================================================================
 
 # Performs k-means clustering on principal components with quality control and visualization
 run_kmeans_on_pcs <- function(PC, outdir, k_grid = 2:8, seed = 42, 
@@ -146,24 +154,268 @@ run_kmeans_on_pcs <- function(PC, outdir, k_grid = 2:8, seed = 42,
   ))
 }
 
-run_hierarchical_on_pcs <- function(PC, k = 5, method = "average") {
-  d <- stats::dist(PC, method = "euclidean")
-  hc <- stats::hclust(d, method = method)
-  clusters <- cutree(hc, k = k)
-  list(hc = hc, clusters = clusters, d = d)
+# ============================================================================
+# Hierarchical Clustering Functions
+# ============================================================================
+
+# ----------------------------------------------------------------------
+# 2.1  Hierarchical clustering (fixed k)
+# ----------------------------------------------------------------------
+run_fixed_hc <- function(PC, k = 5, dist_method = "euclidean",
+                         linkage = "average", seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  stopifnot(nrow(PC) >= k, "Too few samples for the requested k.")
+  
+  log_info("Calculating distance matrix (%s) on %d PCs for %d samples",
+           dist_method, ncol(PC), nrow(PC))
+  d <- stats::dist(PC, method = dist_method)
+  
+  log_info("Building dendrogram with '%s' linkage", linkage)
+  hc <- stats::hclust(d, method = linkage)
+  
+  log_info("Cutting dendrogram into k = %d clusters", k)
+  clusters <- stats::cutree(hc, k = k)
+  
+  list(hc = hc, dist = d, clusters = clusters)
 }
 
+# ----------------------------------------------------------------------
+# 2.2  Dynamic tree cut (WGCNA::cutreeHybrid)
+# ----------------------------------------------------------------------
+run_dynamic_cut <- function(PC, min_cluster_size = NULL,
+                            deep_split = 2, pam_stage = TRUE,
+                            dist_method = "euclidean",
+                            linkage = "average") {
+  d  <- stats::dist(PC, method = dist_method)
+  hc <- stats::hclust(d, method = linkage)
+  distM <- as.matrix(d)
+  
+  # adaptive minClusterSize if not supplied
+  if (is.null(min_cluster_size)) {
+    min_cluster_size <- choose_minCluster(nrow(PC))
+  }
+  log_info("Running cutreeHybrid (deepSplit=%d, pamStage=%s, minClusterSize=%d)",
+           deep_split, pam_stage, min_cluster_size)
+  
+  dyn <- dynamicTreeCut::cutreeHybrid(dendro = hc, distM = distM,
+                      deepSplit = deep_split,
+                      pamStage = pam_stage,
+                      minClusterSize = min_cluster_size)
+  
+  clusters <- factor(dyn$labels)               # 0 = unassigned
+  list(hc = hc, dist = d, clusters = clusters, raw = dyn)
+}
+
+# Legacy alias for backward compatibility
 run_dynamic_tree_cut <- function(PC, deepSplit = 2, pamStage = TRUE) {
-  d_pc <- stats::dist(PC, method = "euclidean")
-  hc_pc <- stats::hclust(d_pc, method = "average")
-  distM_pc <- as.matrix(d_pc)
-  minCl_pc <- choose_minCluster(nrow(PC))
-  dyn_pc <- dynamicTreeCut::cutreeHybrid(dendro = hc_pc, distM = distM_pc,
-                         deepSplit = deepSplit, pamStage = pamStage,
-                         minClusterSize = minCl_pc)
-  list(dyn = dyn_pc, hc = hc_pc, d = d_pc)
+  run_dynamic_cut(PC, deep_split = deepSplit, pam_stage = pamStage)
 }
 
+# ----------------------------------------------------------------------
+# 2.3  Centroid calculation (common HVGs)
+# ----------------------------------------------------------------------
+calc_centroids <- function(expr_mat, hvgs, group_vec) {
+  # expr_mat: genes x samples, hvgs: character vector of gene names
+  # group_vec: factor or character with same length as ncol(expr_mat)
+  stopifnot(length(group_vec) == ncol(expr_mat))
+  
+  groups <- levels(factor(group_vec))
+  cents <- sapply(groups, function(g) {
+    rowMeans(expr_mat[hvgs, group_vec == g, drop = FALSE], na.rm = TRUE)
+  })
+  cents
+}
+
+# ----------------------------------------------------------------------
+# 2.4  Label clusters by TCGA PAM50 correlation
+# ----------------------------------------------------------------------
+label_by_tcga <- function(clusters, V_adj, hvgs,
+                          tcga_se, V_tcga,
+                          subtype_col_opts = c("PAM50","Subtype",
+                                              "BRCA_Subtype","molecular_subtype"),
+                          fallback_labels = c("HER2-high","HER2-low",
+                                             "LumA","LumB","Basal")) {
+  # 1) locate TCGA annotation column
+  tcga_col <- subtype_col_opts[subtype_col_opts %in% colnames(SummarizedExperiment::colData(tcga_se))][1]
+  if (is.na(tcga_col)) {
+    log_warn("No TCGA subtype column found – using fallback labels")
+    cl_levels <- levels(factor(clusters))
+    n_levels <- length(cl_levels)
+    if (n_levels <= length(fallback_labels)) {
+      return(factor(clusters, labels = fallback_labels[seq_len(n_levels)]))
+    } else {
+      return(factor(clusters))
+    }
+  }
+  log_info("Found TCGA annotation column: '%s'", tcga_col)
+  
+  # 2) TCGA centroids
+  tcga_lab   <- as.character(SummarizedExperiment::colData(tcga_se)[colnames(V_tcga), tcga_col])
+  tcga_lvls  <- sort(unique(na.omit(tcga_lab)))
+  tcga_means <- calc_centroids(V_tcga, hvgs, tcga_lab)
+  
+  # 3) discovered centroids
+  disc_means <- calc_centroids(V_adj, hvgs, clusters)
+  
+  # 4) common genes & correlation
+  common_g <- intersect(rownames(tcga_means), hvgs)
+  if (length(common_g) < 500) {
+    log_warn("Only %d common genes for correlation – results may be noisy", length(common_g))
+  }
+  corr_mat <- stats::cor(disc_means[common_g, , drop = FALSE],
+                  tcga_means[common_g, , drop = FALSE],
+                  method = "spearman")
+  log_info("Correlation matrix (rows=clusters, cols=TCGA):")
+  print(corr_mat)
+  
+  # 5) best-match mapping
+  best_tcga   <- apply(corr_mat, 1, function(v) tcga_lvls[which.max(v)])
+  final_labs  <- fallback_labels[match(best_tcga, tcga_lvls)]
+  final_labs[is.na(final_labs)] <- names(best_tcga)[is.na(final_labs)]
+  
+  # mapping table
+  cl_levels <- levels(factor(clusters))
+  map_df <- data.frame(Cluster_ID = cl_levels,
+                       Best_TCGA = best_tcga[cl_levels],
+                       Applied_Label = final_labs[cl_levels],
+                       stringsAsFactors = FALSE)
+  log_info("Final mapping:\n%s", paste(capture.output(print(map_df, row.names = FALSE)), collapse = "\n"))
+  
+  factor(clusters, labels = final_labs[cl_levels])
+}
+
+# ----------------------------------------------------------------------
+# 2.5  Plotting helpers
+# ----------------------------------------------------------------------
+plot_dendrogram_fixed <- function(hc, k, out_pdf) {
+  safe_pdf(out_pdf, {
+    plot(hc, main = sprintf("Hierarchical (k=%d, Euclidean, average)", k),
+         xlab = "", sub = "", cex = 0.5)
+    abline(h = hc$height[length(hc$height) - (k-1)], col = "red", lty = 2)
+    legend("topright", legend = "k-cut", col = "red", lty = 2, bty = "n")
+  })
+}
+
+plot_dendrogram_dynamic <- function(hc, clusters, out_pdf) {
+  cols <- WGCNA::labels2colors(as.numeric(factor(clusters)))
+  safe_pdf(out_pdf, {
+    WGCNA::plotDendroAndColors(hc, cols,
+                        groupLabels = "Dynamic cut",
+                        main = "HC + Dynamic Tree Cut (HVG PCs)",
+                        dendroLabels = FALSE, cex.dendroLabels = 0.3)
+  })
+}
+
+plot_silhouette <- function(sil_obj, out_pdf) {
+  safe_pdf(out_pdf, {
+    plot(sil_obj,
+         main = sprintf("Silhouette – mean = %.3f", mean(sil_obj[, "sil_width"])))
+  })
+}
+
+# ----------------------------------------------------------------------
+# 2.6  UMAP visualization
+# ----------------------------------------------------------------------
+make_umap <- function(PC, seed = 42, n_neighbors = 20, min_dist = 0.3,
+                      metric = "euclidean") {
+  set.seed(seed)
+  emb <- uwot::umap(PC, n_neighbors = n_neighbors, min_dist = min_dist,
+                    metric = metric, verbose = FALSE)
+  emb <- as.data.frame(emb)
+  colnames(emb) <- c("UMAP1", "UMAP2")
+  emb$sample   <- rownames(PC)
+  emb
+}
+
+# ============================================================================
+# Driver Function - Hierarchical Clustering Pipeline
+# ============================================================================
+
+# One-line call for the whole hierarchical clustering pipeline
+run_hierarchical_clustering <- function(PC,               # samples x PCs (HVG-derived)
+                                        V_adj,             # genes x samples (full adjusted)
+                                        hvgs,              # character vector of HVGs
+                                        tcga_se, V_tcga,   # reference TCGA objects
+                                        dataset_lab,       # "TCGA" / "DSMZ" vector
+                                        outdir,
+                                        k_fixed = 5,
+                                        seed = 42) {
+  ensure_dir(outdir)                     # create outdir if missing
+  
+  ## ---------- 1) Fixed-k hierarchical clustering ----------
+  hc_fixed <- run_fixed_hc(PC, k = k_fixed, seed = seed)
+  clusters_fixed <- hc_fixed$clusters
+  
+  ## ---------- 2) Label with TCGA PAM50 ----------
+  clusters_fixed_labeled <- label_by_tcga(clusters_fixed, V_adj, hvgs,
+                                          tcga_se, V_tcga)
+  
+  ## ---------- 3) Save fixed-k results ----------
+  df_fixed <- tibble::tibble(sample = rownames(PC),
+                     dataset = dataset_lab,
+                     cluster = as.character(clusters_fixed_labeled))
+  utils::write.csv(df_fixed,
+            file.path(outdir, "clusters_hierarchical_HVG.csv"),
+            row.names = FALSE)
+  plot_dendrogram_fixed(hc_fixed$hc, k_fixed,
+                        file.path(outdir, "dendrogram_hierarchical_HVG.pdf"))
+  
+  ## ---------- 4) Dynamic tree cut ----------
+  dyn_res <- run_dynamic_cut(PC)
+  clusters_dyn_raw <- dyn_res$clusters
+  clusters_dyn_labeled <- label_by_tcga(clusters_dyn_raw, V_adj, hvgs,
+                                        tcga_se, V_tcga,
+                                        fallback_labels = c(levels(clusters_dyn_raw),
+                                                          "Unassigned"))
+  
+  ## ---------- 5) Save dynamic results ----------
+  df_dyn <- tibble::tibble(sample = rownames(PC),
+                   dataset = dataset_lab,
+                   cluster = as.character(clusters_dyn_labeled))
+  utils::write.csv(df_dyn,
+            file.path(outdir, "clusters_hierarchical_dynamic_HVG.csv"),
+            row.names = FALSE)
+  plot_dendrogram_dynamic(dyn_res$hc, clusters_dyn_labeled,
+                          file.path(outdir, "dendrogram_hierarchical_dynamic_HVG.pdf"))
+  
+  ## ---------- 6) Silhouette QC (dynamic) ----------
+  sil_dyn <- cluster::silhouette(as.integer(factor(clusters_dyn_raw)),
+                                 dyn_res$dist)
+  plot_silhouette(sil_dyn,
+                  file.path(outdir, "silhouette_dynamic_HVG.pdf"))
+  
+  ## ---------- 7) UMAP on the same PC space ----------
+  umap_df <- make_umap(PC, seed = seed)
+  umap_df$dataset <- dataset_lab
+  umap_df$cluster <- clusters_fixed_labeled          # use fixed-k labels
+  p_umap <- ggplot2::ggplot(umap_df, ggplot2::aes(UMAP1, UMAP2, color = cluster, shape = dataset)) +
+    ggplot2::geom_point(alpha = 0.9, size = 1.8) + ggplot2::theme_bw() +
+    ggplot2::ggtitle(sprintf("UMAP on %d PCs (Hierarchical k=%d)", ncol(PC), k_fixed))
+  ggplot2::ggsave(file.path(outdir, "umap_hierarchical_PCs.pdf"), p_umap,
+         width = 7, height = 6)
+  utils::write.csv(umap_df, file.path(outdir, "umap_hierarchical_PCs_coords.csv"),
+            row.names = FALSE)
+  
+  ## ---------- Return everything ----------
+  list(
+    fixed   = list(hc = hc_fixed$hc, clusters = clusters_fixed_labeled,
+                   df = df_fixed),
+    dynamic = list(hc = dyn_res$hc, clusters = clusters_dyn_labeled,
+                   df = df_dyn),
+    silhouette = sil_dyn,
+    umap = umap_df
+  )
+}
+
+# Legacy alias for backward compatibility
+run_hierarchical_on_pcs <- function(PC, k = 5, method = "average") {
+  hc <- run_fixed_hc(PC, k = k, linkage = method)
+  list(hc = hc$hc, clusters = hc$clusters, d = hc$dist)
+}
+
+# ============================================================================
+# HDBSCAN Functions
+# ============================================================================
 
 # Iterative HDBSCAN clustering to assign samples to five clusters
 run_iterative_hdbscan <- function(PC, cluster_labels, seed = 42, 
@@ -180,7 +432,7 @@ run_iterative_hdbscan <- function(PC, cluster_labels, seed = 42,
   cat(sprintf("[HDBSCAN PCs] Using minPts = %d for n = %d samples\n", minPts1, 
               nrow(emb1)))
   # Run HDBSCAN clustering on first embedding
-  hdb1 <- hdbscan(emb1, minPts = minPts1)
+  hdb1 <- dbscan::hdbscan(emb1, minPts = minPts1)
   # Initialize cluster assignments as "Unassigned"
   clusters_hdb <- rep("Unassigned", nrow(PC))
   # Identify largest non-noise cluster (excluding cluster 0) as cluster "1"
@@ -202,7 +454,7 @@ run_iterative_hdbscan <- function(PC, cluster_labels, seed = 42,
     cat(sprintf("[HDBSCAN PCs] Using minPts = %d for n = %d non-cluster1 samples\n",
                 minPts2, nrow(emb2)))
     # Run HDBSCAN on second embedding
-    hdb2 <- hdbscan(emb2, minPts = minPts2)
+    hdb2 <- dbscan::hdbscan(emb2, minPts = minPts2)
     # Assign largest non-noise cluster as cluster "2"
     cluster2_idx <- non_cluster1_idx[which(hdb2$cluster == 
                                          which.max(table(hdb2$cluster[hdb2$cluster != 0])))]
@@ -223,7 +475,7 @@ run_iterative_hdbscan <- function(PC, cluster_labels, seed = 42,
     cat(sprintf("[HDBSCAN PCs] Using minPts = %d for n = %d non-cluster2 samples\n",
                 minPts3, nrow(emb3)))
     # Run HDBSCAN on third embedding
-    hdb3 <- hdbscan(emb3, minPts = minPts3)
+    hdb3 <- dbscan::hdbscan(emb3, minPts = minPts3)
     # Assign largest non-noise cluster as cluster "3"
     cluster3_idx <- non_cluster2_idx[which(hdb3$cluster == 
                                          which.max(table(hdb3$cluster[hdb3$cluster != 0])))]
@@ -242,7 +494,7 @@ run_iterative_hdbscan <- function(PC, cluster_labels, seed = 42,
     emb_lum <- uwot::umap(PC[non_cluster3_idx, , drop = FALSE], n_neighbors = 10, 
                           min_dist = 0.3, metric = "euclidean", verbose = TRUE)
     # Run k-means clustering to split into clusters "4" and "5"
-    km_lum <- kmeans(emb_lum, centers = 2, nstart = 50)
+    km_lum <- stats::kmeans(emb_lum, centers = 2, nstart = 50)
     lum_clusters <- ifelse(km_lum$cluster == 1, "4", "5")
     clusters_hdb[non_cluster3_idx] <- lum_clusters
   }
