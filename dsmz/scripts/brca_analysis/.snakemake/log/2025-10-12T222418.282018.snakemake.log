@@ -1,0 +1,8 @@
+Assuming unrestricted shared filesystem usage.
+None
+host: frodo.hpc.dsmz.de
+Building DAG of jobs...
+ChildIOException:
+File/directory is a child to another output:
+('/home/chu25/dsmz/results/brca_vst_dual', make_outdir)
+('/home/chu25/dsmz/results/brca_vst_dual/HVGs_used_for_discovery_3k.txt', breast_cancer_subtypes)
