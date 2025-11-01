@@ -42,3 +42,29 @@ save_heatmap <- function(mat, ann_col = NULL, out_pdf, main = "Heatmap", cluster
   pheatmap::pheatmap(mat, annotation_col = ann_col, main = main, cluster_cols = cluster_cols, cluster_rows = cluster_rows, show_rownames = TRUE, show_colnames = FALSE)
   dev.off()
 }
+
+plot_dendrogram_fixed <- function(hc, k, out_pdf) {
+  safe_pdf(out_pdf, {
+    plot(hc, main = sprintf("Hierarchical (k=%d, Euclidean, average)", k),
+         xlab = "", sub = "", cex = 0.5)
+    abline(h = hc$height[length(hc$height) - (k-1)], col = "red", lty = 2)
+    legend("topright", legend = "k-cut", col = "red", lty = 2, bty = "n")
+  })
+}
+
+plot_dendrogram_dynamic <- function(hc, clusters, out_pdf) {
+  cols <- WGCNA::labels2colors(as.numeric(factor(clusters)))
+  safe_pdf(out_pdf, {
+    WGCNA::plotDendroAndColors(hc, cols,
+                        groupLabels = "Dynamic cut",
+                        main = "HC + Dynamic Tree Cut (HVG PCs)",
+                        dendroLabels = FALSE, cex.dendroLabels = 0.3)
+  })
+}
+
+plot_silhouette <- function(sil_obj, out_pdf) {
+  safe_pdf(out_pdf, {
+    plot(sil_obj,
+         main = sprintf("Silhouette – mean = %.3f", mean(sil_obj[, "sil_width"])))
+  })
+}
