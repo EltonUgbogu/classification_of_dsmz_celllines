@@ -216,7 +216,7 @@ run_tidyestimate_purity_analysis <- function(
   tcga_se_path = "/home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment.rds",
   tcga_se_updated_path = "/home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_update.rds",
   tcga_se_filtered_path = "/home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered.rds",
-  output_dir = "/home/chu25/dsmz/results/tumor_purity_results",
+  output_dir = "/home/chu25/TCGA/results/tumour_purity_results",
   gtf_path = "/home/chu25/data/GTF/Homo_sapiens.GRCh38.107.gtf",
   assay_name = NULL,
   save_updated = TRUE,
