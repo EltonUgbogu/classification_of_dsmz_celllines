@@ -1,0 +1,27 @@
+converting counts to integer mode
+converting counts to integer mode
+converting counts to integer mode
+Found2batches
+Adjusting for0covariate(s) or covariate level(s)
+Standardizing Data across genes
+Fitting L/S model and finding priors
+Finding parametric adjustments
+Adjusting the Data
+
+'select()' returned 1:many mapping between keys and columns
+[kmeans] best k by silhouette→CH = 2
+converting counts to integer mode
+estimating size factors
+estimating dispersions
+gene-wise dispersion estimates
+mean-dispersion relationship
+final dispersion estimates
+fitting model and testing
+-- replacing outliers and refitting for 35995 genes
+-- DESeq argument 'minReplicatesForReplace' = 7 
+-- original counts are preserved in counts(dds)
+estimating dispersions
+fitting model and testing
+[DSCF] No pairwise DSCF results to write.
+Error: [FATAL] No overlap between marker and (TC_med ∩ DSM_med). Check ID harmonization (Ensembl, version stripping) and markers.
+Execution halted
