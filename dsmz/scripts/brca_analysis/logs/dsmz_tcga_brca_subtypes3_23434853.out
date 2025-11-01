@@ -1,0 +1,845 @@
+Starting DSMZ-TCGA breast cancer subtypes analysis via R script...
+[INFO] Starting pipeline...
+[INFO] Collapsing 44 duplicate TCGA genes: ENSG00000002586, ENSG00000124333, ENSG00000124334, ENSG00000167393, ENSG00000169084
+[INFO] Collapsing 44 duplicate DSMZ genes: ENSG00000228572, ENSG00000182378, ENSG00000178605, ENSG00000226179, ENSG00000167393
+[DIM] TCGA (raw)          :   60,616 genes x 10,272 samples
+[DIM] DSMZ (raw)          :   60,616 genes x    167 samples
+[DIM] DSMZ (after organ subset):   60,616 genes x     29 samples
+[DIM] TCGA (after project subset):   60,616 genes x  1,085 samples
+[INFO] Shared genes: 60616
+[DIM] TCGA (post-intersect):   60,616 genes x  1,085 samples
+[DIM] DSMZ (post-intersect):   60,616 genes x     29 samples
+[DIM] Merged (Xc_raw)     :   60,616 genes x  1,114 samples
+[INFO] VST per-dataset (TCGA only)...
+[INFO] VST per-dataset (DSMZ only)...
+[INFO] Using purity from SummarizedExperiment
+[INFO] Applying purity adjustment to TCGA VST data...
+[INFO] Merging independently normalized datasets...
+[DIM] Merged normalized   :   58,887 genes x  1,114 samples
+[INFO] Re-normalizing merged data for ComBat_seq...
+[INFO] Applying ComBat_seq to raw counts...
+Found 2 batches
+Using null model in ComBat-seq.
+Adjusting for 0 covariate(s) or covariate level(s)
+Estimating dispersions
+Fitting the GLM model
+Shrinkage off - using GLM estimates for parameters
+Adjusting the data
+[INFO] Converting ComBat_seq corrected counts to VST...
+[DIM] TCGA (ComBat_seq corrected):   58,887 genes x  1,085 samples
+[DIM] DSMZ (ComBat_seq corrected):   58,887 genes x     29 samples
+[INFO] PCA before and after batch correction...
+[INFO] Subsetting to PAM50 genes...
+[INFO] Attempting gene symbol mapping via org.Hs.eg.db...
+[INFO] org.Hs.eg.db mapping successful: 34712 mappings
+[INFO] Attempting gene symbol mapping via TCGA rowData...
+[INFO] TCGA rowData mapping successful: 59427 mappings using column 'gene_name'
+[INFO] Final gene symbol mapping summary: 59532 total mappings
+[DIM] PAM50 Matrix        :       48 genes x  1,114 samples
+[PAM50] Matched 48/50 genes
+[PAM50] Missing symbols: ORC6L, WHSC1L1 
+[INFO] Found 19/19 marker genes in VST matrix.
+V_adj dims: 58887 genes x 1114 samples
+Genes with non-zero variance: 56311 
+[INFO] Computing robust PCA on adjusted matrix...
+Optimal k (k-means): 3 with mean silhouette: 0.266 
+               dataset_lab
+clusters_kmeans DSMZ TCGA
+             C1    0  139
+             C2   10  189
+             C3   19  757
+[INFO] Performing hierarchical clustering on PCs...
+[INFO] Calculating distance matrix on 30 PCs for 1114 samples using 'euclidean' method.
+[INFO] Building dendrogram using 'average' linkage method.
+[INFO] Cutting dendrogram into k=5 clusters.
+[INFO] Attempting to label k=5 clusters by correlating with TCGA PAM50 centroids...
+[WARN] No TCGA subtype column found (looked for: PAM50, Subtype, BRCA_Subtype, molecular_subtype).
+[WARN] Using default fallback labels: HER2-high, HER2-low, LumA, LumB, Basal
+[WARN] Applying fallback mapping (Cluster=Label): 1=HER2-high, 2=HER2-low, 3=LumA, 4=LumB, 5=Basal
+[INFO] Saving hierarchical cluster assignments to: /home/chu25/dsmz/results/brca_vst_dual3/clusters_hierarchical_HVG.csv
+[INFO] Saving dendrogram plot to: /home/chu25/dsmz/results/brca_vst_dual3/dendrogram_hierarchical_HVG.pdf
+[INFO] Performing Dynamic Tree Cut on PCs (HVG)...
+[INFO] Using 30 PCs for 1114 samples.
+[INFO] Calculating Euclidean distance matrix...
+[INFO] Building dendrogram with 'average' linkage (matching static HC)...
+[INFO] Adaptive 'minClusterSize' set to: 33 (based on 1114 samples).
+[INFO] Running cutreeHybrid with deepSplit=2, pamStage=TRUE, minClusterSize=33...
+ ..cutHeight not given, setting it to 49.2  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+[INFO] Dynamic cut found 12 clusters (including '0' for unassigned).
+[INFO] Raw dynamic cluster counts: 1=184, 2=167, 3=119, 4=118, 5=100, 6=85, 7=77, 8=66, 9=63, 10=48, 11=45, 12=42
+[INFO] Mapping 12 dynamic clusters to TCGA PAM50 subtypes...
+[WARN] No TCGA subtype column found. Dynamic clusters will be named 1, 2, 3... (or 0 if unassigned).
+[INFO] Saving dynamic cluster assignments to: /home/chu25/dsmz/results/brca_vst_dual3/clusters_hierarchical_dynamic_HVG.csv
+[INFO] Saving dynamic dendrogram with cluster bars to: /home/chu25/dsmz/results/brca_vst_dual3/dendrogram_hierarchical_dynamic_HVG.pdf
+[INFO] Performing hierarchical clustering (PAM50)...
+[INFO] Calculating distance matrix on 48 PAM50 genes for 1114 samples using 'euclidean' method.
+[INFO] Using Euclidean distance for PAM50 hierarchical clustering (consistent with HVG analysis)
+[INFO] Building PAM50 dendrogram using 'average' linkage method.
+[INFO] Cutting PAM50 dendrogram into k=5 clusters.
+[INFO] Attempting to label PAM50 k=5 clusters by correlating with TCGA PAM50 centroids...
+[WARN] No TCGA subtype column found for PAM50 labeling (looked for: PAM50, Subtype, BRCA_Subtype, molecular_subtype).
+[WARN] Using default fallback labels for PAM50 clusters: HER2-high, HER2-low, LumA, LumB, Basal
+[WARN] Applying PAM50 fallback mapping (Cluster=Label): 1=HER2-high, 2=HER2-low, 3=LumA, 4=LumB, 5=Basal
+[INFO] Saving PAM50 hierarchical cluster assignments to: /home/chu25/dsmz/results/brca_vst_dual3/clusters_hierarchical_PAM50.csv
+[INFO] Saving PAM50 dendrogram plot to: /home/chu25/dsmz/results/brca_vst_dual3/dendrogram_hierarchical_PAM50.pdf
+[INFO] Performing Dynamic Tree Cut on PAM50 space...
+[INFO] Using 48 PAM50 genes for 1114 samples.
+[INFO] Calculating Euclidean distance matrix on PAM50 space...
+[INFO] Building PAM50 dendrogram with 'average' linkage...
+[INFO] Adaptive 'minClusterSize' for PAM50 set to: 33 (based on 1114 samples).
+[INFO] Running cutreeHybrid on PAM50 with deepSplit=2, pamStage=TRUE, minClusterSize=33...
+ ..cutHeight not given, setting it to 9.01  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+[INFO] PAM50 dynamic cut found 13 clusters (including '0' for unassigned).
+[INFO] Raw PAM50 dynamic cluster counts: 1=150, 2=133, 3=110, 4=105, 5=104, 6=84, 7=77, 8=65, 9=63, 10=63, 11=61, 12=60, 13=39
+[INFO] Mapping 13 PAM50 dynamic clusters to TCGA PAM50 subtypes...
+[WARN] No TCGA subtype column found. PAM50 dynamic clusters will be named 1, 2, 3... (or 0 if unassigned).
+[INFO] Saving PAM50 dynamic cluster assignments to: /home/chu25/dsmz/results/brca_vst_dual3/clusters_hierarchical_dynamic_PAM50.csv
+[INFO] Saving PAM50 dynamic dendrogram with cluster bars to: /home/chu25/dsmz/results/brca_vst_dual3/dendrogram_hierarchical_dynamic_PAM50.pdf
+[INFO] Computing biological signature-based labels...
+[WARN] No valid cluster information for 'hc_dynamic' - skipping biological labeling.
+[WARN] No valid cluster information for 'hc_pam50_dyn' - skipping biological labeling.
+[INFO] Performing gene pair trend analysis...
+[INFO] Performing differential expression analysis...
+[INFO] Performing iterative UMAP + HDBSCAN on PCs...
+[HDBSCAN PCs] Using minPts = 22 for n = 1114 samples
+[HDBSCAN PCs] Using minPts = 5 for n = 186 non-Basal samples
+[HDBSCAN PCs] Using minPts = 5 for n = 36 non-HER2-high samples
+[INFO] Performing iterative UMAP + HDBSCAN (PAM50)...
+[HDBSCAN PAM50] Using minPts = 22 for n = 1114 samples
+[HDBSCAN PAM50] Using minPts = 5 for n = 184 non-Basal samples
+[HDBSCAN PAM50] Using minPts = 5 for n = 15 non-HER2-high samples
+
+---------- (7) STATISTICAL ANALYSIS ----------
+[INFO] Statistical results will be saved to: /home/chu25/dsmz/results/brca_vst_dual3/stats_results
+
+[INFO] --- Fisher's Exact Tests: Cluster vs. Dataset --- 
+[INFO] Testing k-means vs. dataset. Contingency table (N=1114):
+                    dataset_lab
+     clusters_kmeans DSMZ TCGA
+                  C1    0  139
+                  C2   10  189
+                  C3   19  757 
+[INFO] ... p-value = 1.649e-02
+[INFO] Testing Hierarchical (static, HVG) vs. dataset. Contingency table (N=1114):
+                dataset_lab
+     clusters_hc DSMZ TCGA
+       HER2-high   15  789
+       HER2-low     0  114
+       LumA         8  165
+       LumB         0   12
+       Basal        6    5 
+[INFO] ... p-value = 4.998e-04
+[INFO] Testing Hierarchical (dynamic, HVG) vs. dataset. Contingency table (N=1114):
+                          dataset_lab
+     clusters_hc_dyn_named DSMZ TCGA
+                        1    14  170
+                        2     0  167
+                        3     2  117
+                        4    12  106
+                        5     0  100
+                        6     0   85
+                        7     1   76
+                        8     0   66
+                        9     0   63
+                        10    0   48
+                        11    0   45
+                        12    0   42 
+[INFO] ... p-value = 4.998e-04
+[INFO] Testing Hierarchical (dynamic, PAM50) vs. dataset. Contingency table (N=1114):
+                                dataset_lab
+     clusters_hc_pam50_dyn_named DSMZ TCGA
+                              1     0  150
+                              2     5  128
+                              3     5  105
+                              4     0  105
+                              5     4  100
+                              6     0   84
+                              7     2   75
+                              8     4   61
+                              9     3   60
+                              10    0   63
+                              11    3   58
+                              12    3   57
+                              13    0   39 
+[INFO] ... p-value = 5.497e-03
+[INFO] Testing HDBSCAN (HVG) vs. dataset. Contingency table (N=1114):
+                     dataset_lab
+     clusters_hdb_num DSMZ TCGA
+                    1   15  913
+                    2    2  148
+                    3    0    9
+                    4    6    6
+                    5    6    9 
+[INFO] ... p-value = 4.998e-04
+[INFO] Testing HDBSCAN (PAM50) vs. dataset. Contingency table (N=1114):
+                           dataset_lab
+     clusters_hdb_pam50_num DSMZ TCGA
+                          1   24  906
+                          2    3  166
+                          3    1    6
+                          4    1    7 
+[INFO] ... p-value = 7.996e-02
+
+[INFO] --- Fisher's Exact Tests: Cluster vs. TCGA PAM50 Subtype --- 
+[WARN] No TCGA subtype column found. Skipping all Cluster vs. PAM50 tests.
+
+[INFO] Saved 6 Fisher's Exact Test results to: /home/chu25/dsmz/results/brca_vst_dual3/stats_results/fisher_tests.csv
+
+[INFO] --- Kruskal-Wallis & DSCF Tests: Marker Expression vs. Clusters --- 
+[INFO] Testing methods: kmeans, hc, hdb, hdb_pam50
+
+[INFO] == Starting Method: kmeans ==
+[INFO] Testing Gene: FOXC1 (Method: kmeans)
+[INFO] ... KW Test: statistic = 623.484, p-value = 4.094e-136
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: PGR (Method: kmeans)
+[INFO] ... KW Test: statistic = 339.748, p-value = 1.677e-74
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BIRC5 (Method: kmeans)
+[INFO] ... KW Test: statistic = 460.143, p-value = 1.206e-100
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ESR1 (Method: kmeans)
+[INFO] ... KW Test: statistic = 524.423, p-value = 1.327e-114
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: XBP1 (Method: kmeans)
+[INFO] ... KW Test: statistic = 539.474, p-value = 7.157e-118
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MYBL2 (Method: kmeans)
+[INFO] ... KW Test: statistic = 451.475, p-value = 9.191e-99
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GATA3 (Method: kmeans)
+[INFO] ... KW Test: statistic = 604.182, p-value = 6.360e-132
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT18 (Method: kmeans)
+[INFO] ... KW Test: statistic = 409.699, p-value = 1.084e-89
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT17 (Method: kmeans)
+[INFO] ... KW Test: statistic = 334.048, p-value = 2.901e-73
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CCNB1 (Method: kmeans)
+[INFO] ... KW Test: statistic = 403.360, p-value = 2.579e-88
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ERBB2 (Method: kmeans)
+[INFO] ... KW Test: statistic = 200.726, p-value = 2.588e-44
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GRB7 (Method: kmeans)
+[INFO] ... KW Test: statistic = 5.306, p-value = 7.045e-02
+[INFO] Testing Gene: KIF2C (Method: kmeans)
+[INFO] ... KW Test: statistic = 550.867, p-value = 2.402e-120
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: EGFR (Method: kmeans)
+[INFO] ... KW Test: statistic = 557.803, p-value = 7.494e-122
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MKI67 (Method: kmeans)
+[INFO] ... KW Test: statistic = 428.043, p-value = 1.126e-93
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT8 (Method: kmeans)
+[INFO] ... KW Test: statistic = 265.574, p-value = 2.144e-58
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BCL2 (Method: kmeans)
+[INFO] ... KW Test: statistic = 262.035, p-value = 1.258e-57
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT5 (Method: kmeans)
+[INFO] ... KW Test: statistic = 364.819, p-value = 6.034e-80
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT14 (Method: kmeans)
+[INFO] ... KW Test: statistic = 273.032, p-value = 5.152e-60
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 3 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+
+[INFO] == Starting Method: hc ==
+[INFO] Testing Gene: FOXC1 (Method: hc)
+[INFO] ... KW Test: statistic = 635.750, p-value = 2.834e-136
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: PGR (Method: hc)
+[INFO] ... KW Test: statistic = 303.699, p-value = 1.725e-64
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BIRC5 (Method: hc)
+[INFO] ... KW Test: statistic = 411.315, p-value = 9.987e-88
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ESR1 (Method: hc)
+[INFO] ... KW Test: statistic = 480.770, p-value = 9.656e-103
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: XBP1 (Method: hc)
+[INFO] ... KW Test: statistic = 526.793, p-value = 1.073e-112
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MYBL2 (Method: hc)
+[INFO] ... KW Test: statistic = 392.770, p-value = 1.015e-83
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GATA3 (Method: hc)
+[INFO] ... KW Test: statistic = 561.126, p-value = 4.005e-120
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT18 (Method: hc)
+[INFO] ... KW Test: statistic = 438.090, p-value = 1.631e-93
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT17 (Method: hc)
+[INFO] ... KW Test: statistic = 327.773, p-value = 1.102e-69
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CCNB1 (Method: hc)
+[INFO] ... KW Test: statistic = 360.248, p-value = 1.074e-76
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ERBB2 (Method: hc)
+[INFO] ... KW Test: statistic = 249.511, p-value = 8.297e-53
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GRB7 (Method: hc)
+[INFO] ... KW Test: statistic = 46.036, p-value = 2.421e-09
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KIF2C (Method: hc)
+[INFO] ... KW Test: statistic = 487.433, p-value = 3.498e-104
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: EGFR (Method: hc)
+[INFO] ... KW Test: statistic = 496.023, p-value = 4.856e-106
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MKI67 (Method: hc)
+[INFO] ... KW Test: statistic = 374.049, p-value = 1.123e-79
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT8 (Method: hc)
+[INFO] ... KW Test: statistic = 308.042, p-value = 1.994e-65
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BCL2 (Method: hc)
+[INFO] ... KW Test: statistic = 242.581, p-value = 2.580e-51
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT5 (Method: hc)
+[INFO] ... KW Test: statistic = 343.445, p-value = 4.562e-73
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT14 (Method: hc)
+[INFO] ... KW Test: statistic = 263.965, p-value = 6.375e-56
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+
+[INFO] == Starting Method: hdb ==
+[INFO] Testing Gene: FOXC1 (Method: hdb)
+[INFO] ... KW Test: statistic = 427.182, p-value = 3.717e-91
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: PGR (Method: hdb)
+[INFO] ... KW Test: statistic = 303.622, p-value = 1.793e-64
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BIRC5 (Method: hdb)
+[INFO] ... KW Test: statistic = 221.601, p-value = 8.479e-47
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ESR1 (Method: hdb)
+[INFO] ... KW Test: statistic = 389.671, p-value = 4.742e-83
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: XBP1 (Method: hdb)
+[INFO] ... KW Test: statistic = 421.790, p-value = 5.441e-90
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MYBL2 (Method: hdb)
+[INFO] ... KW Test: statistic = 217.127, p-value = 7.781e-46
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GATA3 (Method: hdb)
+[INFO] ... KW Test: statistic = 384.756, p-value = 5.467e-82
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT18 (Method: hdb)
+[INFO] ... KW Test: statistic = 249.679, p-value = 7.633e-53
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT17 (Method: hdb)
+[INFO] ... KW Test: statistic = 145.419, p-value = 1.951e-30
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CCNB1 (Method: hdb)
+[INFO] ... KW Test: statistic = 140.260, p-value = 2.483e-29
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ERBB2 (Method: hdb)
+[INFO] ... KW Test: statistic = 172.945, p-value = 2.440e-36
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GRB7 (Method: hdb)
+[INFO] ... KW Test: statistic = 23.632, p-value = 9.466e-05
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KIF2C (Method: hdb)
+[INFO] ... KW Test: statistic = 307.759, p-value = 2.297e-65
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: EGFR (Method: hdb)
+[INFO] ... KW Test: statistic = 182.839, p-value = 1.832e-38
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MKI67 (Method: hdb)
+[INFO] ... KW Test: statistic = 184.650, p-value = 7.476e-39
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT8 (Method: hdb)
+[INFO] ... KW Test: statistic = 106.302, p-value = 4.472e-22
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BCL2 (Method: hdb)
+[INFO] ... KW Test: statistic = 216.428, p-value = 1.100e-45
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT5 (Method: hdb)
+[INFO] ... KW Test: statistic = 134.754, p-value = 3.745e-28
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT14 (Method: hdb)
+[INFO] ... KW Test: statistic = 53.872, p-value = 5.598e-11
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 5 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+
+[INFO] == Starting Method: hdb_pam50 ==
+[INFO] Testing Gene: ACTR3B (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 261.131, p-value = 2.560e-56
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ANLN (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 273.483, p-value = 5.443e-59
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BAG1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 37.359, p-value = 3.862e-08
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BCL2 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 216.078, p-value = 1.414e-46
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BIRC5 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 237.521, p-value = 3.270e-51
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: BLVRA (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 227.959, p-value = 3.820e-49
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CCNB1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 154.723, p-value = 2.522e-33
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CCNE1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 348.230, p-value = 3.605e-75
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CDC20 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 349.592, p-value = 1.828e-75
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CDC6 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 123.019, p-value = 1.726e-26
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CDH3 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 276.171, p-value = 1.427e-59
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CENPF (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 245.531, p-value = 6.059e-53
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CEP55 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 287.469, p-value = 5.124e-62
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: CXXC5 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 344.397, p-value = 2.437e-74
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: EGFR (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 180.238, p-value = 7.836e-39
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ERBB2 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 195.634, p-value = 3.702e-42
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: ESR1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 402.039, p-value = 8.009e-87
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: EXO1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 273.239, p-value = 6.148e-59
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: FGFR4 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 21.077, p-value = 1.015e-04
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: FOXA1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 451.137, p-value = 1.849e-97
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: FOXC1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 422.373, p-value = 3.153e-91
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GPR160 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 340.702, p-value = 1.537e-73
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: GRB7 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 41.503, p-value = 5.115e-09
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KIF2C (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 321.696, p-value = 2.003e-69
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT14 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 56.886, p-value = 2.717e-12
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT15 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 103.466, p-value = 2.793e-22
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT17 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 149.375, p-value = 3.595e-32
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT23 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 207.152, p-value = 1.201e-44
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT5 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 122.974, p-value = 1.765e-26
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: KRT7 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 138.260, p-value = 8.965e-30
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MDM2 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 73.657, p-value = 7.030e-16
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MELK (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 302.069, p-value = 3.549e-65
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MIA (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 213.861, p-value = 4.263e-46
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MKI67 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 205.621, p-value = 2.573e-44
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MLPH (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 445.902, p-value = 2.518e-96
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MMP11 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 37.715, p-value = 3.248e-08
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: MYBL2 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 234.835, p-value = 1.246e-50
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: NAT1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 392.613, p-value = 8.816e-85
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: PGR (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 289.796, p-value = 1.607e-62
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: PHGDH (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 318.311, p-value = 1.082e-68
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: PTTG1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 231.367, p-value = 7.002e-50
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: RRM2 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 151.264, p-value = 1.407e-32
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: SFRP1 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 213.333, p-value = 5.545e-46
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: SLC39A6 (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 356.424, p-value = 6.061e-77
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: TMEM45B (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 284.728, p-value = 2.008e-61
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: TYMS (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 157.674, p-value = 5.823e-34
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: UBE2C (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 248.714, p-value = 1.242e-53
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+[INFO] Testing Gene: UBE2T (Method: hdb_pam50)
+[INFO] ... KW Test: statistic = 172.899, p-value = 3.011e-37
+[INFO] ... p < 0.05, running post-hoc DSCF test...
+[INFO] ... DSCF: testing on 1114 samples across 4 groups.
+[INFO] ... DSCF test successful. Extracting pairs...
+
+[INFO] Saved 105 Kruskal-Wallis results to: /home/chu25/dsmz/results/brca_vst_dual3/stats_results/kruskal_wallis_tests.csv
+[INFO] No pairwise DSCF results to write.
+
+[INFO] Statistical analysis complete.
+
+---------- (8) MARKER HEATMAPS & CORRELATIONS ----------
+[INFO] Mapping gene symbols for marker lists...
+[INFO] DSMZ Ensembl duplicate rows: 44 | duplicate IDs: 44 (collapsed)
+[INFO] Found 19 marker genes present in the V_adj matrix.
+
+[INFO] --- Generating PAM50 Gene Heatmap (All Samples, ordered) --- 
+[INFO] Using PAM50 matrix with 48 genes and 1114 samples.
+[INFO] ... Building annotation table with all cluster assignments.
+[INFO] Saving PAM50 heatmap (ordered by HDBSCAN-PAM50 clusters) to: /home/chu25/dsmz/results/brca_vst_dual3/heatmap_pam50_all_clusters.pdf
+
+[INFO] --- Correlating Cluster Centroids vs. TCGA Subtype Centroids --- 
+[WARN] No TCGA subtype column found. Skipping all cluster vs. TCGA correlations.
+
+[INFO] --- Mapping DSMZ Samples to TCGA (Spearman's Rho) --- 
+[INFO] Correlating 29 DSMZ samples against the overall TCGA mean expression (all 1085 TCGA samples).
+[WARN] No TCGA subtype column. Skipping DSMZ-to-TCGA *subtype* correlation.
+[INFO] Compiling final DSMZ mapping table (clusters + TCGA correlation).
+[INFO] Saved DSMZ mapping table to: /home/chu25/dsmz/results/brca_vst_dual3/mapping_dsmz_to_tcga.csv
+[INFO] ... Preview of mapping table:
+     # A tibble: 6 × 6
+       sample     rho_overall kmeans_cluster hc_subtype hdb_subtype hdb_pam50_subtype
+       <chr>            <dbl> <fct>          <fct>      <fct>       <fct>            
+     1 NG-29643_…       0.840 C2             Basal      <NA>        <NA>             
+     2 NG-29643_…       0.864 C3             HER2-high  <NA>        <NA>             
+     3 NG-29643_…       0.843 C3             Basal      <NA>        <NA>             
+     4 NG-29643_…       0.839 C2             LumA       <NA>        <NA>             
+     5 NG-29643_…       0.842 C2             LumA       <NA>        <NA>             
+     6 NG-29643_…       0.820 C3             HER2-high  <NA>        <NA>              
+
+[INFO] --- Generating Joint PAM50 Heatmap (TCGA + DSMZ, clustered) --- 
+[INFO] Using PAM50 matrix with 48 genes and 1114 total samples (TCGA + DSMZ).
+[INFO] ... Built TCGA annotation table for 1085 samples.
+[INFO] ... Built DSMZ annotation table for 29 samples.
+[INFO] ... Final annotation table has 3 columns with data.
+[INFO] Saving joint heatmap (all samples, clustered columns) to: /home/chu25/dsmz/results/brca_vst_dual3/heatmap_pam50_vst.pdf
+null device 
+          1 
+[MARKER] Requested symbols: ESR1, PGR, ERBB2, MKI67, KRT5, KRT14, KRT17, FOXC1, GRB7, BCL2, EGFR, CCNB1, BIRC5, MYBL2, KIF2C, KRT8, KRT18, GATA3, XBP1 
+[INFO] Attempting TCGA gene symbol mapping via rowData...
+[INFO] TCGA rowData mapping successful: 59427 mappings using column 'gene_name'
+[INFO] Marker gene symbol mapping summary: 59417 total mappings
+[MARKER] Found 19 of 19 PAM50/PAM-like markers in V_adj
+[MARKER] Example matches: ENSG00000142945, ENSG00000134057, ENSG00000054598, ENSG00000091831, ENSG00000146648 ...
+null device 
+          1 
+
+---------- (5) TCGA REFERENCE BUILDING AND DSMZ ASSIGNMENT ----------
+
+## =====================================================================
+## (A) Build balanced TCGA reference (PAM50 gene space, k=20/subtype)
+## =====================================================================
+[A.1] Subsetting PAM50 matrix for 1085 TCGA samples.
+[A.1] Scaling TCGA data. Input: 48 genes x 1085 samples. Output: 1085 samples x 48 genes.
+[A.2] Performing hierarchical clustering (k=5, euclidean, average) on scaled TCGA samples...
+[A.3] Mapping k=5 HC clusters to PAM50 subtype names.
+[A.3] [WARN] No TCGA annotation column found. Using k-means heuristic to label clusters.
+[A.3] Fallback: Ran k-means (k=5) to get stable cluster order.
+[A.3] Fallback HC Cluster to Subtype Mapping (via k-means PCA order):
+      Cluster Mapped_Subtype
+            1           LumB
+            2      HER2-high
+            3       HER2-low
+            4           LumA
+            5          Basal 
+[A.4] Final TCGA sample subtype assignments (total counts):
+     subtype_tcga
+     HER2-high  HER2-low      LumA      LumB     Basal 
+           160        59       165       688        13  
+[A.5] Selecting up to 20 samples per subtype (nearest to centroid in scaled PAM50 space)...
+[A.5] (Applying guard-rail: ensuring n <= 20 per subtype).
+[A.5] Reference selection complete. Final counts per subtype:
+     
+         Basal HER2-high  HER2-low      LumA      LumB 
+            13        20        20        20        20  
+[A.6] Saving reference sample list (93 total samples) to: /home/chu25/dsmz/results/brca_vst_dual3/tcga_reference_selection/tcga_top20_per_subtype.csv
+[A.6] Saving PAM50 expression matrix for reference samples (48 genes x 93 samples) to: /home/chu25/dsmz/results/brca_vst_dual3/tcga_reference_selection/PAM50_tcga_top20_per_subtype.rds
+[A.7] Generating UMAP visualization of TCGA reference selection (using 'cosine' metric on PAM50 space).
+[A.7] Saved UMAP plot to: /home/chu25/dsmz/results/brca_vst_dual3/tcga_reference_selection/umap_tcga_reference_top20.pdf
+[A.7] Writing plain-text sample list to: /home/chu25/dsmz/results/brca_vst_dual3/tcga_reference_selection/tcga_top20_samples_by_subtype.txt
+
+## =====================================================================
+## (B) Assign DSMZ subtypes using TCGA reference centroids
+## =====================================================================
+[B.1] Loading TCGA reference matrix (48 genes x 93 samples).
+[B.2] Building 5 TCGA reference centroids from 48 PAM50 genes.
+[B.3] Subsetting PAM50 matrix for 29 DSMZ samples (48 genes x 29 samples).
+[B.4] Found 48 overlapping PAM50 genes for correlation.
+[B.5] Assigning subtypes to 29 DSMZ samples via Spearman correlation to centroids...
+[B.5] DSMZ predicted subtype counts:
+     
+     HER2-high  HER2-low      LumA      LumB     Basal 
+             6         2         3        14         4  
+[B.6] Saving DSMZ assignment table to: /home/chu25/dsmz/results/brca_vst_dual3/dsmz_from_tcga_reference/dsmz_pred_subtypes_from_tcga_top20.csv
+[B.7] Generating UMAP of DSMZ samples (PAM50 space, 'cosine' metric) colored by prediction.
+[B.7] Saved DSMZ UMAP plot to: /home/chu25/dsmz/results/brca_vst_dual3/dsmz_from_tcga_reference/umap_dsmz_predicted_labels.pdf
+[B.7] Saving 2-column DSMZ mapping to: /home/chu25/dsmz/results/brca_vst_dual3/dsmz_from_tcga_reference/dsmz_predicted_label_map.tsv
+[INFO] DSMZ assignment complete. Results in:  /home/chu25/dsmz/results/brca_vst_dual3/dsmz_from_tcga_reference 
+
+---------- (6) JOINT UMAP EMBEDDING (TCGA + DSMZ) ----------
+[INFO] Selecting top 3000 HVGs from joint data for UMAP.
+[INFO] Preparing joint matrix: 1114 samples x 3000 HVGs.
+[INFO] UMAP complete. Adding annotations...
+[INFO] Adding DSMZ predicted subtype annotations to UMAP data.
+[INFO] Generating UMAP plots (by dataset, TCGA subtype, DSMZ prediction).
+[INFO] Saved individual UMAP plots to: /home/chu25/dsmz/results/brca_vst_dual3
+[INFO] 'patchwork' package found. Creating combined UMAP PDF.
+[INFO] Saving full UMAP embedding coordinates to: /home/chu25/dsmz/results/brca_vst_dual3/umap_embeddings.csv
+
+---------- (7) DSMZ MARKER HEATMAP ----------
+[INFO] Generating heatmap for 6 markers: ESR1, PGR, ERBB2, KRT5, KRT14, MKI67
+[INFO] Mapping marker symbols to Ensembl IDs...
+[INFO] Found 6 markers present in DSMZ expression data.
+[INFO] Applying gene-wise z-score to marker matrix.
+[INFO] Saving DSMZ marker heatmap to: /home/chu25/dsmz/results/brca_vst_dual3/heatmap_dsmz_markers.pdf
+null device 
+          1 
+
+[OK] Pipeline complete. Results in: /home/chu25/dsmz/results/brca_vst_dual3 

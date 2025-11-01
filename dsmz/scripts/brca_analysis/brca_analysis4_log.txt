@@ -1,0 +1,50 @@
+(tcga-r-env) chu25@bilogin1:~/dsmz/scripts/brca_analysis$ Rscript brca_analysis4.R
+[INFO] Using 1 threads (SLURM_CPUS_PER_TASK)
+[INFO] Starting pipeline...
+[INFO] Collapsing 44 duplicate TCGA genes: ENSG00000002586, ENSG00000124333, ENSG00000124334, ENSG00000167393, ENSG00000169084
+[INFO] Collapsing 44 duplicate DSMZ genes: ENSG00000228572, ENSG00000182378, ENSG00000178605, ENSG00000226179, ENSG00000167393
+[DIM] TCGA (raw)          :   60,616 genes x 10,272 samples
+[DIM] DSMZ (raw)          :   60,616 genes x    167 samples
+[DIM] DSMZ (after organ subset):   60,616 genes x     29 samples
+[DIM] TCGA (after project subset):   60,616 genes x  1,085 samples
+[INFO] Shared genes: 60616
+[DIM] TCGA (post-intersect):   60,616 genes x  1,085 samples
+[DIM] DSMZ (post-intersect):   60,616 genes x     29 samples
+
+[INFO] Prefiltering low-count genes to prevent OOM...
+[INFO] Prefilter TCGA genes: 60616 -> 37275
+[INFO] Prefilter DSMZ genes: 60616 -> 22437
+[DIM] TCGA (after prefilter):   37,275 genes x  1,085 samples
+[DIM] DSMZ (after prefilter):   22,437 genes x     29 samples
+[DIM] TCGA (prefilter+intersect):   22,360 genes x  1,085 samples
+[DIM] DSMZ (prefilter+intersect):   22,360 genes x     29 samples
+[INFO] Using sequential processing
+[INFO] VST per-dataset (TCGA only)...
+converting counts to integer mode
+[INFO] VST per-dataset (DSMZ only)...
+converting counts to integer mode
+
+[INFO] Generating dispersion plots (subsampled to prevent OOM)...
+  Estimating dispersions on 10000 genes (subsampled from 22360)...
+gene-wise dispersion estimates
+mean-dispersion relationship
+final dispersion estimates
+[OUTPUT] /home/chu25/dsmz/results/brca_vst_dual4/TCGA_Dispersion_Plot.pdf
+  Estimating dispersions on 10000 genes (subsampled from 22360)...
+gene-wise dispersion estimates
+mean-dispersion relationship
+final dispersion estimates
+[OUTPUT] /home/chu25/dsmz/results/brca_vst_dual4/DSMZ_Dispersion_Plot.pdf
+             used    (Mb) gc trigger    (Mb)   max used    (Mb)
+Ncells    9867769   527.0   17154447   916.2   17154447   916.2
+Vcells 3622237343 27635.5 5446585172 41554.2 4531137623 34569.9
+
+[INFO] Generating VST effect confirmation plots...
+[OUTPUT] TCGA VST Effect Confirmation: /home/chu25/dsmz/results/brca_vst_dual4/TCGA_VST_Effect_Confirmation.pdf
+[OUTPUT] DSMZ VST Effect Confirmation: /home/chu25/dsmz/results/brca_vst_dual4/DSMZ_VST_Effect_Confirmation.pdf
+
+[INFO] Mean-Variance/Dispersion plots complete!
+
+[INFO] Saving session information...
+
+[INFO] Pipeline complete! Output directory:  /home/chu25/dsmz/results/brca_vst_dual4

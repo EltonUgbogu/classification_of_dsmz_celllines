@@ -1,0 +1,39 @@
+name: tcga-r-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: strict
+dependencies:
+  - r-base=4.2.3
+  - r-tidyverse
+  - r-matrixstats
+  - r-pheatmap
+  - r-uwot
+  - r-cluster
+  - r-fpc
+  - r-clustercrit
+  - r-patchwork
+  - r-rstatix
+  - r-ggpubr
+  - r-rcolorbrewer
+  - r-viridis
+  - r-gridextra
+  - r-lubridate
+  - r-data.table
+  - r-glue
+  - r-gtable
+  - r-mass
+  - r-nnet
+  - r-car
+  - r-cardata
+  - bioconductor-summarizedexperiment
+  - bioconductor-biobase
+  - bioconductor-genomicranges
+  - bioconductor-iranges
+  - bioconductor-s4vectors
+  - bioconductor-limma
+  - bioconductor-edger
+  - libxml2
+  - libpng
+  - zlib

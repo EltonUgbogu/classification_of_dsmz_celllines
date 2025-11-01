@@ -1,0 +1,32 @@
+[INFO] Starting pipeline...
+[DIM] TCGA (raw)          :   60,616 genes x 10,272 samples
+[DIM] DSMZ (raw)          :   60,616 genes x    167 samples
+[DIM] DSMZ (after organ subset):   60,616 genes x     29 samples
+[DIM] TCGA (after project subset):   60,616 genes x  1,085 samples
+[INFO] Shared genes: 60616
+[DIM] TCGA (post-intersect):   60,616 genes x  1,085 samples
+[DIM] DSMZ (post-intersect):   60,616 genes x     29 samples
+[DIM] Merged (Xc_raw)     :   60,616 genes x  1,114 samples
+Optimal k: 2 with mean silhouette: 0.139 
+clusters
+ C1  C2 
+785 329 
+[INFO] DSMZ Ensembl duplicate rows: 44 | duplicate IDs: 44 (collapsed)
+# A tibble: 6 × 3
+  sample                             rho_overall discovery_cluster
+  <chr>                                    <dbl> <fct>            
+1 NG-29643_CAL_120_lib581301_8005_3        0.817 C2               
+2 NG-29643_CAL_148_lib581302_7997_4        0.838 C1               
+3 NG-29643_CAL_51_lib581295_7997_4         0.822 C2               
+4 NG-29643_CAL_85_1_lib581300_7997_4       0.819 C2               
+5 NG-29643_COLO_824_lib581290_7997_4       0.816 C2               
+6 NG-29643_DU_4475_lib581298_7997_4        0.795 C1               
+null device 
+          1 
+[MARKER] Requested symbols: ESR1, PGR, ERBB2, MKI67, KRT5, KRT14, KRT17, FOXC1, GRB7, BCL2, EGFR, CCNB1, BIRC5, MYBL2, KIF2C, KRT8, KRT18, GATA3, XBP1 
+[MARKER] Found 19 of 19 PAM50/PAM-like markers in V
+[MARKER] Example matches: ENSG00000142945, ENSG00000134057, ENSG00000054598, ENSG00000091831, ENSG00000146648 ...
+[DEBUG] marker_ens length = 19 
+[DEBUG] nrow(TC_med) = 60616  nrow(DSM_med) = 60616 
+[DEBUG] Example TC_med genes: ENSG00000000003, ENSG00000000005, ENSG00000000419, ENSG00000000457, ENSG00000000460 
+[DEBUG] Example DSM_med genes:  
