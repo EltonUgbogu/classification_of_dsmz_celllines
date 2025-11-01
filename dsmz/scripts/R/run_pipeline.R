@@ -44,7 +44,7 @@ config <- list(batch_adjust_method = "combat_seq")
 # Purity adjustment control flag
 drop_purity_genes_permanently <- TRUE  # set TRUE to actually remove rows downstream
 
-# ---------- LOAD + FILTER ----------
+## ---------- 1. LOAD + FILTER ----------
 cat("[INFO] Starting pipeline...\n")
 
 tcga_se <- readRDS(tcga_se_rds)
@@ -78,44 +78,63 @@ dsmz_meta <- dsmz_meta %>% filter(sample_id %in% matched)
 dsmz_counts <- dsmz_counts[, dsmz_meta$sample_id, drop = FALSE]
 stopifnot("organ" %in% colnames(dsmz_meta))
 
+## ---------- 2. Subset DSMZ to Breast -------------------
 if (!is.null(dsmz_organ_filter)) {
   keep_ids <- dsmz_meta$sample_id[dsmz_meta$organ %in% dsmz_organ_filter]
   dsmz_meta <- dsmz_meta[dsmz_meta$sample_id %in% keep_ids, , drop = FALSE]
-  dsmz_counts <- dsmz_counts[, keep_ids, drop = FALSE]
+  dsmz_brca_counts <- dsmz_counts[, keep_ids, drop = FALSE]
 }
 
-log_dims("DSMZ (after organ subset)", dsmz_counts)
+log_dims("DSMZ (after organ subset)", dsmz_brca_counts)
 
-if (!is.null(dsmz_organ_filter) && ncol(dsmz_counts) == 0L) {
+if (!is.null(dsmz_organ_filter) && ncol(dsmz_brca_counts) == 0L) {
   stop(sprintf("[FATAL] DSMZ organ filter %s left 0 samples.", paste(dsmz_organ_filter, collapse=", ")))
 }
 
+# ------------------- 1. Harmonize samples & subset to TCGA-BRCA -------------------
+  stopifnot("project_id" %in% colnames(colData_tcga))
+  stopifnot(!is.null(colnames(V_tcga)), !is.null(rownames(colData_tcga)))
+  # Align colData and V_tcga by shared sample names
+  #sample_names <- intersect(colnames(V_tcga), rownames(colData_tcga))
+  #if (length(sample_names) == 0) stop("No overlap between V_tcga columns and colData_tcga rownames")
+  #V_tcga <- V_tcga[, sample_names, drop = FALSE]
+  #colData_tcga <- colData_tcga[sample_names, , drop = FALSE]
+  # BRCA-only filter
+  #tcga_is_brca <- as.character(colData_tcga[, "project_id"]) == "TCGA-BRCA"
+  #if (!all(tcga_is_brca, na.rm = TRUE)) {
+  #  keep_names <- rownames(colData_tcga)[tcga_is_brca]
+  #  cat(sprintf("[A.1] Filtering to BRCA-only: %d → %d samples\n", ncol(V_tcga), length(keep_names)))
+  #  V_tcga <- V_tcga[, keep_names, drop = FALSE]
+  #  colData_tcga <- colData_tcga[keep_names, , drop = FALSE]
+  #}
+
+## ---------- 3. Subset TCGA to BRCA -------------------
 if (!is.null(tcga_project_filter)) {
   keep_tcga <- colnames(tcga_counts) %in% colnames(assay(tcga_se)) &
                as.character(colData(tcga_se)[colnames(tcga_counts), "project_id"]) %in% tcga_project_filter
-  tcga_counts <- tcga_counts[, keep_tcga, drop = FALSE]
+  tcga_brca_counts <- tcga_counts[, keep_tcga, drop = FALSE]
 }
 
-log_dims("TCGA (after project subset)", tcga_counts)
+log_dims("TCGA (after project subset)", tcga_brca_counts)
 
-if (!is.null(tcga_project_filter) && ncol(tcga_counts) == 0L) {
+if (!is.null(tcga_project_filter) && ncol(tcga_brca_counts) == 0L) {
   stop(sprintf("[FATAL] TCGA project filter %s left 0 samples.", paste(tcga_project_filter, collapse=", ")))
 }
 
-if (ncol(tcga_counts) == 0L) stop("[FATAL] TCGA-BRCA filter left 0 samples.")
-if (ncol(dsmz_counts) == 0L) stop("[FATAL] DSMZ Breast filter left 0 samples.")
-
-common <- intersect(rownames(tcga_counts), rownames(dsmz_counts))
+## ---------- 4. Intersect genes -------------------
+common <- intersect(rownames(tcga_brca_counts), rownames(dsmz_brca_counts))
 cat(sprintf("[INFO] Shared genes: %d\n", length(common)))
 if (length(common) < 1000) cat("[WARN] Few shared genes; check Ensembl IDs\n")
 
-tcga_counts <- tcga_counts[common, , drop = FALSE]
-dsmz_counts <- dsmz_counts[common, , drop = FALSE]
+## ---------- 5. Subset to common genes -------------------
+tcga_brca_counts <- tcga_brca_counts[common, , drop = FALSE]
+dsmz_brca_counts <- dsmz_brca_counts[common, , drop = FALSE]
 
-log_dims("TCGA (post-intersect)", tcga_counts)
-log_dims("DSMZ (post-intersect)", dsmz_counts)
+log_dims("TCGA (post-intersect)", tcga_brca_counts)
+log_dims("DSMZ (post-intersect)", dsmz_brca_counts)
 
-Xc_raw <- cbind(tcga_counts, dsmz_counts)
+## ---------- 6. Merge Breast Cancer Counts from TCGA and DSMZ datasets -------------------
+Xc_raw <- cbind(tcga_brca_counts, dsmz_brca_counts)
 if (any(duplicated(rownames(Xc_raw)))) {
   dup_genes <- rownames(Xc_raw)[duplicated(rownames(Xc_raw))]
   cat(sprintf("[INFO] Collapsing %d duplicate genes in merged matrix: %s\n", 
@@ -125,22 +144,17 @@ if (any(duplicated(rownames(Xc_raw)))) {
 
 log_dims("Merged (Xc_raw)", Xc_raw)
 
-if (ncol(tcga_counts) == 0L) stop("[FATAL] TCGA subset has 0 samples.")
-if (ncol(dsmz_counts) == 0L) stop("[FATAL] DSMZ subset has 0 samples.")
-if (nrow(Xc_raw) == 0L) stop("[FATAL] No common genes after intersection.")
-if (ncol(Xc_raw) == 0L) stop("[FATAL] Merged matrix has 0 samples.")
-
 dim_report <- file.path(outdir, "dimension_report.txt")
 con <- file(dim_report, open = "wt")
 on.exit(close(con), add = TRUE)
 
 write_dims_line(con, "TCGA (raw)", tcga_counts_raw)
 write_dims_line(con, "DSMZ (raw)", dsmz_counts_raw)
-write_dims_line(con, "DSMZ (after organ subset)", dsmz_counts)
-write_dims_line(con, "TCGA (after project subset)", tcga_counts)
+write_dims_line(con, "DSMZ (after organ subset)", dsmz_brca_counts)
+write_dims_line(con, "TCGA (after project subset)", tcga_brca_counts)
 writeLines(sprintf("Shared genes\t%d", length(common)), con)
-write_dims_line(con, "TCGA (post-intersect)", tcga_counts)
-write_dims_line(con, "DSMZ (post-intersect)", dsmz_counts)
+write_dims_line(con, "TCGA (post-intersect)", tcga_brca_counts)
+write_dims_line(con, "DSMZ (post-intersect)", dsmz_brca_counts)
 write_dims_line(con, "Merged (Xc_raw)", Xc_raw)
 
 dir.create(file.path(outdir, "shared_genes"), showWarnings = FALSE, recursive = TRUE)

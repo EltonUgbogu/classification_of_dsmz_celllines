@@ -1,82 +1,338 @@
-# K-means clustering utilities
-# Dependencies: helpers.R (ensure_dir, safe_pdf)
-
-run_kmeans_on_pcs <- function(PC, outdir, k_grid = 2:8, seed = 42, 
-                              sample_is_tcga = NULL, V_adj = NULL) {
+run_kmeans_on_pcs <- function(
+  PC,
+  outdir,
+  k_grid = 2:8,
+  seed = 42,
+  sample_is_tcga = NULL,
+  V_adj = NULL
+) {
+  # ===========================================================================
+  # 1. INITIALIZATION & ENVIRONMENT SETUP
+  # ===========================================================================
+  
+  ## Set random seed for full reproducibility (kmeans, dist)
   set.seed(seed)
-  stopifnot(is.matrix(PC), all(is.finite(PC)), is.character(outdir))
+  
+  ## --- Fallback definitions for helper functions (if not in helpers.R) ---
+  if (!exists("ensure_dir", mode = "function")) {
+    ensure_dir <- function(p) {
+      if (!dir.exists(p)) dir.create(p, recursive = TRUE, showWarnings = FALSE)
+    }
+  }
+  
+  if (!exists("safe_pdf", mode = "function")) {
+    safe_pdf <- function(path, expr, width = 7, height = 5) {
+      oldpar <- par(no.readonly = TRUE); on.exit(par(oldpar), add = TRUE)
+      pdf(file = path, width = width, height = height)
+      on.exit(try(dev.off(), silent = TRUE), add = TRUE)
+      force(expr)
+    }
+  }
+  
+  # ===========================================================================
+  # 2. INPUT VALIDATION & SANITIZATION
+  # ===========================================================================
+  
+  ## --- Core matrix checks ---
+  if (!is.matrix(PC)) stop("PC must be a numeric matrix (samples x PCs).")
+  if (!is.numeric(PC)) storage.mode(PC) <- "double"
+  if (!all(is.finite(PC))) {
+    stop("PC contains non-finite values (NA/NaN/Inf). Clean or impute before clustering.")
+  }
+  if (ncol(PC) < 2) {
+    stop("At least 2 principal components required for meaningful clustering and silhouette.")
+  }
+  
+  ## --- Sample ID assignment (critical for output tracking) ---
+  if (is.null(rownames(PC))) {
+    rownames(PC) <- sprintf("S%05d", seq_len(nrow(PC)))
+    message("[INFO] Assigned synthetic sample IDs: S00001, S00002, ...")
+  }
+  
+  ## --- Optional: V_adj (expression matrix) diagnostics ---
   if (!is.null(V_adj)) {
-    stopifnot(is.matrix(V_adj), all(is.finite(V_adj)), ncol(V_adj) == nrow(PC))
-    cat("V_adj dims:", nrow(V_adj), "genes x", ncol(V_adj), "samples\n")
-    nzv <- sum(matrixStats::rowVars(V_adj) > 0)
-    cat("Genes with non-zero variance:", nzv, "\n")
+    if (!is.matrix(V_adj)) stop("V_adj must be a numeric matrix (genes x samples).")
+    if (!is.numeric(V_adj)) storage.mode(V_adj) <- "double"
+    if (!all(is.finite(V_adj))) stop("V_adj contains non-finite values.")
+    
+    ## Sample alignment check
+    if (!is.null(colnames(V_adj))) {
+      common <- intersect(colnames(V_adj), rownames(PC))
+      if (length(common) != nrow(PC)) {
+        warning(sprintf(
+          "[WARN] Only %d/%d samples in V_adj match PC rownames. Proceeding without reordering.",
+          length(common), nrow(PC)
+        ))
+      }
+    } else {
+      if (ncol(V_adj) != nrow(PC)) {
+        stop("When V_adj has no colnames, ncol(V_adj) must equal nrow(PC).")
+      }
+    }
+    
+    ## Variance diagnostic (optional, requires matrixStats)
+    if (requireNamespace("matrixStats", quietly = TRUE)) {
+      nzv <- sum(matrixStats::rowVars(V_adj) > 0)
+      message(sprintf("Genes with non-zero variance in V_adj: %d", nzv))
+    } else {
+      message("[INFO] matrixStats not available; skipping variance check.")
+    }
   }
+  
+  ## --- TCGA flag validation ---
+  if (!is.null(sample_is_tcga)) {
+    if (!is.logical(sample_is_tcga)) stop("sample_is_tcga must be logical.")
+    if (length(sample_is_tcga) != nrow(PC)) {
+      stop("sample_is_tcga length must equal nrow(PC).")
+    }
+  }
+  
+  ## --- Large dataset warning ---
   if (nrow(PC) > 5000) {
-    cat("[WARN] Large sample set (", nrow(PC), ") for k-means; consider subsampling.\n", sep = "")
+    message(sprintf("[PERF] Large dataset (n = %d). k-means may be slow; consider subsampling.", nrow(PC)))
   }
+  
+  ## --- Output directory setup ---
   ensure_dir(outdir)
-  res_list <- list()
-  metrics <- lapply(k_grid, function(k) {
-    km <- stats::kmeans(PC, centers = k, nstart = 50, iter.max = 100)
+  sil_dir <- file.path(outdir, "silhouettes_per_k")
+  ensure_dir(sil_dir)
+  
+  # ===========================================================================
+  # 3. PRECOMPUTE DISTANCE MATRIX (for silhouette across all k)
+  # ===========================================================================
+  
+  ## Attempt to compute Euclidean distance matrix once
+  ## For very large n, this may fail (memory) → fall back to NA silhouettes
+  D <- try(stats::dist(PC), silent = TRUE)
+  if (inherits(D, "try-error")) {
+    warning("[WARN] Failed to compute dist() matrix. Silhouette scores will be NA.")
+    D <- NULL
+  }
+  
+  # ===========================================================================
+  # 4. K-MEANS LOOP OVER k_grid
+  # ===========================================================================
+  
+  res_list <- list()        # Stores kmeans object + silhouette per k
+  metrics_rows <- list()    # Aggregated metrics table
+  
+  for (k in k_grid) {
+    ## Skip invalid k (e.g., k > n_samples)
+    if (k >= nrow(PC)) {
+      warning(sprintf("[SKIP] k = %d >= n_samples (%d). Skipping.", k, nrow(PC)))
+      next
+    }
+    
+    message(sprintf("[k-means] Running k = %d (nstart = 50)...", k))
+    
+    ## Run k-means with multiple restarts
+    km <- kmeans(PC, centers = k, nstart = 50, iter.max = 100)
     wcss <- sum(km$withinss)
-    sil <- cluster::silhouette(km$cluster, stats::dist(PC))
-    sil_mean <- mean(sil[, "sil_width"])
-    ch <- tryCatch(fpc::calinhara(PC, km$cluster), error = function(e) NA_real_)
+    
+    ## --- Silhouette (requires D) ---
+    sil_mean <- NA_real_
+    sil_obj <- NULL
+    if (!is.null(D)) {
+      sil_try <- try(cluster::silhouette(km$cluster, D), silent = TRUE)
+      if (!inherits(sil_try, "try-error")) {
+        sil_obj <- sil_try
+        sil_mean <- mean(sil_try[, "sil_width"])
+      }
+    }
+    
+    ## --- Calinski-Harabasz (fpc package) ---
+    ch <- tryCatch(
+      fpc::calinhara(PC, km$cluster),
+      error = function(e) NA_real_
+    )
+    
+    ## --- Davies-Bouldin (clusterCrit package) ---
     db <- tryCatch({
-      m <- clusterCrit::intCriteria(as.matrix(PC), as.integer(km$cluster), "davies_bouldin")
-      as.numeric(m$davies_bouldin)
+      if (!requireNamespace("clusterCrit", quietly = TRUE)) {
+        NA_real_
+      } else {
+        crit <- clusterCrit::intCriteria(as.matrix(PC), as.integer(km$cluster), "davies_bouldin")
+        as.numeric(crit$davies_bouldin)
+      }
     }, error = function(e) NA_real_)
-    res_list[[as.character(k)]] <<- list(km = km, sil = sil)
-    data.frame(k = k, WCSS = wcss, Silhouette = sil_mean, CH = ch, DB = db)
+    
+    ## Store results
+    res_list[[as.character(k)]] <- list(km = km, sil = sil_obj)
+    metrics_rows[[as.character(k)]] <- data.frame(
+      k = k,
+      WCSS = wcss,
+      Silhouette = sil_mean,
+      CH = ch,
+      DB = db,
+      stringsAsFactors = FALSE
+    )
+    
+    ## Per-k silhouette plot
+    if (!is.null(sil_obj)) {
+      safe_pdf(file.path(sil_dir, sprintf("silhouette_k=%d.pdf", k)), {
+        plot(sil_obj,
+             main = sprintf("Silhouette Plot (k = %d)", k),
+             cex.names = 0.7,
+             col = rainbow(k))
+      })
+    }
+  }
+  
+  # ===========================================================================
+  # 5. AGGREGATE METRICS & SAVE
+  # ===========================================================================
+  
+  if (length(metrics_rows) == 0) {
+    stop("No valid k values were processed. Check k_grid and input data.")
+  }
+  
+  metrics <- do.call(rbind, metrics_rows)
+  rownames(metrics) <- NULL
+  write.csv(metrics, file.path(outdir, "kmeans_metrics.csv"), row.names = FALSE)
+  message("[OUTPUT] Metrics table saved: kmeans_metrics.csv")
+  
+  # ===========================================================================
+  # 6. DIAGNOSTIC PLOTS
+  # ===========================================================================
+  
+  ## Elbow plot (WCSS)
+  safe_pdf(file.path(outdir, "kmeans_elbow.pdf"), {
+    plot(metrics$k, metrics$WCSS,
+         type = "b", pch = 19, col = "blue",
+         xlab = "Number of clusters (k)",
+         ylab = "Within-cluster sum of squares",
+         main = "Elbow Method (lower is better)")
+    grid()
   })
-  metrics <- do.call(rbind, metrics)
-  utils::write.csv(metrics, file.path(outdir, "kmeans_metrics_HVG.csv"), row.names = FALSE)
-
-  safe_pdf(file.path(outdir, "kmeans_elbow_HVG.pdf"), {
-    plot(metrics$k, metrics$WCSS, type = "b", xlab = "k", ylab = "Within-Cluster SS", main = "Elbow (HVG space)")
+  
+  ## Multi-panel metrics
+  safe_pdf(file.path(outdir, "kmeans_metrics_panel.pdf"), width = 10, height = 8, {
+    op <- par(mfrow = c(2, 2), mar = c(4, 4, 3, 1)); on.exit(par(op), add = TRUE)
+    
+    plot(metrics$k, metrics$Silhouette, type = "b", pch = 19, col = "darkgreen",
+         xlab = "k", ylab = "Avg Silhouette", main = "Silhouette (higher better)")
+    grid()
+    
+    plot(metrics$k, metrics$CH, type = "b", pch = 19, col = "purple",
+         xlab = "k", ylab = "Calinski-Harabasz", main = "CH Index (higher better)")
+    grid()
+    
+    plot(metrics$k, metrics$DB, type = "b", pch = 19, col = "red",
+         xlab = "k", ylab = "Davies-Bouldin", main = "DB Index (lower better)")
+    grid()
+    
+    plot(metrics$k, metrics$WCSS, type = "b", pch = 19, col = "orange",
+         xlab = "k", ylab = "WCSS", main = "Elbow (lower better)")
+    grid()
   })
-  safe_pdf(file.path(outdir, "kmeans_metrics_panel_HVG.pdf"), {
-    op <- par(mfrow = c(2, 2)); on.exit(par(op), add = TRUE)
-    plot(metrics$k, metrics$Silhouette, type = "b", xlab = "k", ylab = "Avg silhouette", main = "Silhouette (higher is better)")
-    plot(metrics$k, metrics$CH, type = "b", xlab = "k", ylab = "Calinski-Harabasz", main = "Calinski-Harabasz (higher)")
-    plot(metrics$k, metrics$DB, type = "b", xlab = "k", ylab = "Davies-Bouldin", main = "Davies-Bouldin (lower)")
-    plot(metrics$k, metrics$WCSS, type = "b", xlab = "k", ylab = "WCSS", main = "Elbow (lower)")
-  })
-
-  best_k <- with(metrics, {
-    cand <- k[Silhouette == max(Silhouette, na.rm = TRUE)]
-    if (length(cand) > 1) cand[which.max(metrics$CH[match(cand, k)])] else cand
-  })
-  message(sprintf("[kmeans] Best k by silhouette→CH = %d", best_k))
-
+  
+  # ===========================================================================
+  # 7. SELECT OPTIMAL k (ROBUST HIERARCHY)
+  # ===========================================================================
+  
+  best_k <- NA_integer_
+  
+  ## Primary: Maximize silhouette
+  if (any(is.finite(metrics$Silhouette))) {
+    max_sil <- max(metrics$Silhouette, na.rm = TRUE)
+    candidates <- metrics$k[metrics$Silhouette == max_sil]
+    
+    ## Tie-break: Maximize CH among silhouette winners
+    if (length(candidates) > 1 && any(is.finite(metrics$CH))) {
+      best_k <- candidates[which.max(metrics$CH[match(candidates, metrics$k)])]
+    } else {
+      best_k <- candidates[1]
+    }
+  }
+  ## Fallback 1: Maximize CH
+  else if (any(is.finite(metrics$CH))) {
+    best_k <- metrics$k[which.max(metrics$CH)]
+  }
+  ## Fallback 2: Largest k (conservative elbow)
+  else {
+    best_k <- max(metrics$k)
+    warning(sprintf(
+      "[FALLBACK] No valid silhouette or CH → using largest k = %d", best_k
+    ))
+  }
+  
+  message(sprintf(
+    "[RESULT] Optimal k = %d | Silhouette = %.3f | CH = %.1f | DB = %.3f",
+    best_k,
+    metrics$Silhouette[metrics$k == best_k],
+    metrics$CH[metrics$k == best_k],
+    metrics$DB[metrics$k == best_k]
+  ))
+  
+  # ===========================================================================
+  # 8. FINAL CLUSTER ASSIGNMENTS & OUTPUT
+  # ===========================================================================
+  
   km_final <- res_list[[as.character(best_k)]]$km
   sil_final <- res_list[[as.character(best_k)]]$sil
+  
+  ## Final cluster labels
   clusters_kmeans <- factor(km_final$cluster, labels = paste0("C", seq_len(best_k)))
-  dataset_lab <- if (!is.null(sample_is_tcga)) ifelse(sample_is_tcga, "TCGA", "DSMZ") else rep("Unknown", nrow(PC))
-
+  
+  ## Dataset label (TCGA vs DSMZ)
+  dataset_lab <- if (is.null(sample_is_tcga)) {
+    rep("Unknown", nrow(PC))
+  } else {
+    ifelse(sample_is_tcga, "TCGA", "DSMZ")
+  }
+  
+  ## Final assignment table
   cluster_df <- tibble::tibble(
     sample = rownames(PC),
     dataset = dataset_lab,
     cluster = as.character(clusters_kmeans)
   )
-  utils::write.csv(cluster_df, file.path(outdir, "clusters_kmeans.csv"), row.names = FALSE)
-
-  safe_pdf(file.path(outdir, sprintf("silhouette_k=%d_HVG.pdf", best_k)), {
-    plot(sil_final, main = sprintf("Silhouette (k = %d, HVG space)", best_k), cex.names = 0.8)
-  })
-  sil_dir <- file.path(outdir, "silhouettes_per_k")
-  dir.create(sil_dir, showWarnings = FALSE, recursive = TRUE)
-  for (k in k_grid) {
-    silk <- res_list[[as.character(k)]]$sil
-    if (!is.null(silk)) {
-      safe_pdf(file.path(sil_dir, sprintf("silhouette_k=%d.pdf", k)), {
-        plot(silk, main = sprintf("Silhouette (k = %d, HVG space)", k), cex.names = 0.7)
-      })
-    }
+  write.csv(cluster_df, file.path(outdir, "clusters_kmeans.csv"), row.names = FALSE)
+  message("[OUTPUT] Final clusters saved: clusters_kmeans.csv")
+  
+  ## Final silhouette plot
+  if (!is.null(sil_final)) {
+    safe_pdf(file.path(outdir, sprintf("silhouette_k=%d_final.pdf", best_k)), {
+      plot(sil_final,
+           main = sprintf("Final Silhouette (k = %d)", best_k),
+           cex.names = 0.8,
+           col = rainbow(best_k))
+    })
+    message(sprintf(
+      "[QUALITY] Mean silhouette width = %.3f", mean(sil_final[, "sil_width"])
+    ))
   }
-
-  cat("Optimal k (k-means):", best_k, "with mean silhouette:", round(mean(sil_final[, "sil_width"]), 3), "\n")
+  
+  ## Print contingency table
   print(table(clusters_kmeans, dataset_lab))
-
-  list(best_k = best_k, res_list = res_list, metrics = metrics, clusters = clusters_kmeans, cluster_df = cluster_df)
+  
+  # ===========================================================================
+  # 9. PER-K REPRODUCIBILITY 
+  # ===========================================================================
+  
+  assign_dir <- file.path(outdir, "cluster_assignments_per_k")
+  ensure_dir(assign_dir)
+  
+  for (k in names(res_list)) {
+    kmk <- res_list[[k]]$km
+    dfk <- data.frame(
+      sample = rownames(PC),
+      cluster = paste0("C", kmk$cluster),
+      stringsAsFactors = FALSE
+    )
+    write.csv(dfk, file.path(assign_dir, sprintf("clusters_k=%s.csv", k)), row.names = FALSE)
+  }
+  message("[OUTPUT] Per-k assignments saved in: ", assign_dir)
+  
+  # ===========================================================================
+  # 10. RETURN STRUCTURED RESULT
+  # ===========================================================================
+  
+  invisible(list(
+    best_k = best_k,
+    res_list = res_list,
+    metrics = metrics,
+    clusters = clusters_kmeans,
+    cluster_df = cluster_df
+  ))
 }

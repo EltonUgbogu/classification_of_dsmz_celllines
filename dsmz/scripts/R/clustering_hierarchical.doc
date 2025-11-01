@@ -1,0 +1,51 @@
+#' @title Hierarchical Clustering with Fixed-k and Dynamic Tree Cut
+#'
+#' @description
+#' Performs unsupervised hierarchical clustering on a low-dimensional embedding (e.g., PCA)
+#' using two strategies:
+#' \itemize{
+#'   \item \strong{Fixed-k}: Cuts the dendrogram at a user-specified number of clusters.
+#'   \item \strong{Dynamic tree cut}: Uses `dynamicTreeCut` to detect natural cluster boundaries.
+#' }
+#' Clusters are labeled using TCGA reference centroids via `label_by_tcga()`.
+#' Outputs include:
+#' - CSV tables of sample assignments
+#' - Dendrogram PDFs
+#' - Silhouette plot (dynamic cut only)
+#'
+#' @param PC Matrix of principal components or reduced features (samples x PCs).
+#'           Row names must be sample IDs.
+#' @param V_adj Normalized expression matrix (genes x samples). Used for TCGA centroid mapping.
+#'              Row names = gene symbols/IDs; column names = sample IDs.
+#' @param features Character vector of gene symbols (e.g., PAM50) used for centroid mapping.
+#' @param metadata_ann Path to TCGA metadata CSV or a `data.frame` with sample annotations.
+#' @param V_tcga Vector of TCGA sample IDs used as reference (must exist in `metadata_ann`).
+#' @param dataset_lab Character scalar or vector labeling the dataset (e.g., "DSMZ", "TCGA").
+#'                    Recycled if length 1.
+#' @param outdir Output directory. Created if it doesn't exist.
+#' @param k_fixed Integer >= 2. If `NULL`, fixed-k clustering is skipped.
+#' @param seed Random seed for reproducibility (used in `run_fixed_hc()`).
+#'
+#' @return A named list:
+#' \item{fixed}{List with `hc`, `clusters` (labeled), and `df` (tibble), or `NULL` if skipped.}
+#' \item{dynamic}{List with `hc`, `clusters` (labeled), `df`, and `silhouette` object.}
+#'
+#' @dependencies
+#' - `helpers.R`: `log_info()`, `log_warn()`, `safe_pdf()`, `choose_minCluster()`
+#' - `run_fixed_hc()`, `label_by_tcga()`, `plot_dendrogram_fixed()`,
+#'   `run_dynamic_cut()`, `plot_dendrogram_dynamic()`, `plot_silhouette()`
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' result <- run_hierarchical_clustering(
+#'   PC = pca_obj$x,
+#'   V_adj = vst_mat,
+#'   features = pam50_genes,
+#'   metadata_ann = "tcga_metadata.csv",
+#'   V_tcga = tcga_samples,
+#'   dataset_lab = "DSMZ",
+#'   outdir = "results/hc",
+#'   k_fixed = 5
+#' )
+#' }

@@ -1,0 +1,71 @@
+# =============================================================================
+#  Iterative HDBSCAN with quality control, stability, and diagnostics
+#
+#  PURPOSE
+#  -------
+#  Iteratively "peel" the largest non-noise HDBSCAN cluster from a dataset,
+#  repeating on the remainder until you reach the desired number of clusters
+#  (given by `cluster_labels`) or too few samples remain. Each pass uses UMAP
+#  to produce a low-dimensional embedding for density clustering.
+#
+#  QUALITY CONTROL & DIAGNOSTICS
+#  -----------------------------
+#  - Per-pass mean silhouette for the extracted cluster (computed against the
+#    full non-noise clustering in that pass).
+#  - Relative silhouette change to detect stabilization (early stopping).
+#  - Noise fraction reported per pass.
+#  - Optional per-pass UMAP scatter plots for visual inspection.
+#
+#  KEY BEHAVIORS
+#  -------------
+#  - First pass uses `umap_n_first` neighbors; subsequent passes use `umap_n_next`.
+#  - Remainders smaller than `min_unassigned_stop` stop the loop early.
+#  - Any leftover "Unassigned" samples are forced to the last discovered cluster,
+#    unless no cluster was ever found (then labeled as "Noise").
+#  - Final labels are mapped to user-provided `cluster_labels`.
+#
+#  INPUTS
+#  ------
+#  - PC: Matrix [samples x PCs], rows = samples (rownames required or added).
+#  - cluster_labels: Character vector of final label names (levels of the output).
+#
+#  OUTPUT
+#  ------
+#  - A list with:
+#      $labels       : factor (length nrow(PC)), levels = cluster_labels
+#      $assignments  : character vector of internal numeric passes ("1","2",...) or "Noise"
+#      $silhouette   : numeric vector of mean silhouettes per pass
+#      $stability    : numeric vector of relative silhouette changes per pass
+#      $n_clusters   : integer, number of discovered clusters before mapping
+#      $umap_plots_saved : logical, whether plots were written
+#
+#  DEPENDENCIES
+#  ------------
+#  - dbscan   : for HDBSCAN  (dbscan::hdbscan)
+#  - uwot     : for UMAP     (uwot::umap)
+#  - cluster  : for silhouette (cluster::silhouette)
+#  - ggplot2  : for diagnostic plots (optional)
+#  - stats    : for prcomp / scale / dist (base R)
+#  - helpers.R: expected to define `log_info()` and `log_warn()` (or rely on message/warning)
+#
+#  EXAMPLE
+#  -------
+#  set.seed(42)
+#  res <- run_iterative_hdbscan(
+#    PC = my_pc,                                # n x d scaled PCs (or will be scaled here)
+#    cluster_labels = c("A","B","C"),           # desired final labels
+#    seed = 42,
+#    metric = "cosine",
+#    umap_n_first = 30L,
+#    umap_n_next  = 15L,
+#    umap_min_dist = 0.1,
+#    min_unassigned_stop = 15L,
+#    minPts_fun = function(n) max(5L, floor(log2(n) + 3)),
+#    reproject = FALSE,                         # set TRUE + original_features to re-PCA remainder
+#    original_features = NULL,
+#    plot_iter = TRUE,
+#    plot_dir = "hdbscan_debug",
+#    logger = log_info
+#  )
+#  table(res$labels)  # Final label counts
+# =============================================================================
