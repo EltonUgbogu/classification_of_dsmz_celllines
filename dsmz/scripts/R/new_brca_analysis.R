@@ -677,7 +677,7 @@ print(table(clusters_kmeans, dataset_lab))
 
 # UMAP for k-means (using same PC space as clustering)
 set.seed(42)
-emb <- uwot::umap(PC, n_neighbors = 20, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
+emb <- uwot::umap(PC, n_neighbors = 20, min_dist = 0.3, metric = "cosine", verbose = TRUE)
 emb <- as.data.frame(emb); colnames(emb) <- c("UMAP1","UMAP2")
 emb$sample <- rownames(PC)
 emb$dataset <- dataset_lab
@@ -939,7 +939,7 @@ safe_pdf(file.path(outdir, "silhouette_dynamic_HVG.pdf"), {
 
 # UMAP for hierarchical clustering (using same PC space as clustering)
 set.seed(42)
-emb_hc <- uwot::umap(PC, n_neighbors = 20, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
+emb_hc <- uwot::umap(PC, n_neighbors = 20, min_dist = 0.3, metric = "cosine", verbose = TRUE)
 emb_hc <- as.data.frame(emb_hc); colnames(emb_hc) <- c("UMAP1","UMAP2")
 emb_hc$sample <- rownames(PC)
 emb_hc$dataset <- dataset_lab
@@ -1528,7 +1528,7 @@ if (nrow(PC) > 5000) {
   cat("[WARN] Large sample set (%d) for UMAP+HDBSCAN; consider subsampling.\n", nrow(PC))
 }
 
-emb1 <- uwot::umap(PC, n_neighbors = 20, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
+emb1 <- uwot::umap(PC, n_neighbors = 20, min_dist = 0.3, metric = "cosine", verbose = TRUE)
 minPts1 <- choose_minPts(nrow(emb1))
 cat(sprintf("[HDBSCAN PCs] Using minPts = %d for n = %d samples\n", minPts1, nrow(emb1)))
 hdb1 <- hdbscan(emb1, minPts = minPts1)
@@ -1540,7 +1540,7 @@ non_basal <- which(clusters_hdb == "Unassigned")
 if (length(non_basal) < 10) {
   cat("[WARN] Too few non-Basal samples (%d); skipping HER2-high identification.\n", length(non_basal))
 } else {
-  emb2 <- uwot::umap(PC[non_basal, , drop = FALSE], n_neighbors = 15, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
+  emb2 <- uwot::umap(PC[non_basal, , drop = FALSE], n_neighbors = 15, min_dist = 0.3, metric = "cosine", verbose = TRUE)
   minPts2 <- choose_minPts(nrow(emb2))
   cat(sprintf("[HDBSCAN PCs] Using minPts = %d for n = %d non-Basal samples\n", minPts2, nrow(emb2)))
   hdb2 <- hdbscan(emb2, minPts = minPts2)
@@ -1552,7 +1552,7 @@ non_her2_high <- which(clusters_hdb == "Unassigned")
 if (length(non_her2_high) < 10) {
   cat("[WARN] Too few non-HER2-high samples (%d); skipping HER2-low identification.\n", length(non_her2_high))
 } else {
-  emb3 <- uwot::umap(PC[non_her2_high, , drop = FALSE], n_neighbors = 15, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
+  emb3 <- uwot::umap(PC[non_her2_high, , drop = FALSE], n_neighbors = 15, min_dist = 0.3, metric = "cosine", verbose = TRUE)
   minPts3 <- choose_minPts(nrow(emb3))
   cat(sprintf("[HDBSCAN PCs] Using minPts = %d for n = %d non-HER2-high samples\n", minPts3, nrow(emb3)))
   hdb3 <- hdbscan(emb3, minPts = minPts3)
@@ -1565,7 +1565,7 @@ if (length(luminal_idx) < 2) {
   cat("[WARN] Too few Luminal samples (%d); assigning all as LumA.\n", length(luminal_idx))
   clusters_hdb[luminal_idx] <- "LumA"
 } else {
-  emb_lum <- uwot::umap(PC[luminal_idx, , drop = FALSE], n_neighbors = 10, min_dist = 0.3, metric = "euclidean", verbose = TRUE)
+  emb_lum <- uwot::umap(PC[luminal_idx, , drop = FALSE], n_neighbors = 10, min_dist = 0.3, metric = "cosine", verbose = TRUE)
   km_lum <- kmeans(emb_lum, centers = 2, nstart = 50)
   lum_clusters <- ifelse(km_lum$cluster == 1, "LumA", "LumB")
   clusters_hdb[luminal_idx] <- lum_clusters
