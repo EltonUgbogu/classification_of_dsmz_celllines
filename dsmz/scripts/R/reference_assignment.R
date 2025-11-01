@@ -1,5 +1,8 @@
 # PAM50-Based Subtype Reference Building & Label Transfer Pipeline
 
+run_hierarchical_clustering(X_tcga, M_pam50_tcga, hvgs, tcga_se, V_tcga, "TCGA", outdir, k_fixed = 4, seed = seed)
+
+
 # --------------------------------------------------------------------------- #
 # (A) Build Balanced TCGA Reference (Top 20 per PAM50 subtype)
 # --------------------------------------------------------------------------- #
@@ -15,22 +18,7 @@ build_tcga_reference <- function(
   ref_dir <- file.path(outdir, "tcga_reference_selection")
   dir.create(ref_dir, showWarnings = FALSE, recursive = TRUE)
   
-  # ------------------- 1. Harmonize samples & subset to TCGA-BRCA -------------------
-  stopifnot("project_id" %in% colnames(colData_tcga))
-  stopifnot(!is.null(colnames(V_tcga)), !is.null(rownames(colData_tcga)))
-  # Align colData and V_tcga by shared sample names
-  sample_names <- intersect(colnames(V_tcga), rownames(colData_tcga))
-  if (length(sample_names) == 0) stop("No overlap between V_tcga columns and colData_tcga rownames")
-  V_tcga <- V_tcga[, sample_names, drop = FALSE]
-  colData_tcga <- colData_tcga[sample_names, , drop = FALSE]
-  # BRCA-only filter
-  tcga_is_brca <- as.character(colData_tcga[, "project_id"]) == "TCGA-BRCA"
-  if (!all(tcga_is_brca, na.rm = TRUE)) {
-    keep_names <- rownames(colData_tcga)[tcga_is_brca]
-    cat(sprintf("[A.1] Filtering to BRCA-only: %d → %d samples\n", ncol(V_tcga), length(keep_names)))
-    V_tcga <- V_tcga[, keep_names, drop = FALSE]
-    colData_tcga <- colData_tcga[keep_names, , drop = FALSE]
-  }
+  
   # Subset to PAM50 rows already implied by M_pam50
   cat(sprintf("[A.1] Using %d PAM50 genes x %d TCGA-BRCA samples\n", nrow(M_pam50), ncol(V_tcga)))
   M_pam50_tcga <- M_pam50[, colnames(V_tcga), drop = FALSE]
@@ -40,56 +28,17 @@ build_tcga_reference <- function(
   cat(sprintf("[A.1] PC space: %d samples x %d PCs\n", nrow(X_tcga), ncol(X_tcga)))
   
   if (nrow(X_tcga) < 5) stop("[FATAL] Too few TCGA samples.")
-  
+}
 
 
   # ------------------- 2. Hierarchical clustering (k=4) -------------------
-  cat("[A.2] Hierarchical clustering (k=4, euclidean, average)...\n")
-  hc_res <- run_fixed_hc(X_tcga, k = 4, dist_method = "euclidean", linkage = "average")
-  hc_tcga <- hc_res$hc
-  cl_tcga <- hc_res$clusters
+# cat("[A.2] Hierarchical clustering (k=4, euclidean, average)...\n")
+#  hc_res <- run_fixed_hc(X_tcga, k = 4, dist_method = "euclidean", linkage = "average")
+#  hc_tcga <- hc_res$hc
+#  cl_tcga <- hc_res$clusters
   
-  # ------------------- 3. Map clusters to PAM50 subtypes -------------------
-  cat("[A.3] Mapping clusters to PAM50 subtypes...\n")
-  tcga_sub_col <- intersect(c("paper_BRCA_Subtype_PAM50"), colnames(colData_tcga))[1]
-  if (is.na(tcga_sub_col)) stop("'paper_BRCA_Subtype_PAM50' not found in colData_tcga")
-  # Build subtype and cluster centroids (genes x categories) using calc_centroids for consistency
-  lab_tcga_full <- as.character(colData_tcga[colnames(V_tcga), tcga_sub_col])
-  sub_lvls <- sort(unique(na.omit(lab_tcga_full)))
-  hvgs_use <- rownames(M_pam50_tcga)  # all PAM50 genes present
-  sub_means <- calc_centroids(M_pam50_tcga, hvgs_use, lab_tcga_full)
-  cl_means  <- calc_centroids(M_pam50_tcga, hvgs_use, cl_tcga)
-  g_common <- intersect(rownames(sub_means), rownames(cl_means))
-  corr_mat <- cor(cl_means[g_common, , drop = FALSE], sub_means[g_common, , drop = FALSE], method = "spearman")
-  cl_to_sub <- apply(corr_mat, 1, function(v) sub_lvls[which.max(v)])
-  # Preserve cluster keys from cl_means matrix
-  cl_to_sub_named <- setNames(unname(cl_to_sub), colnames(cl_means))
-  map_df <- data.frame(Cluster = names(cl_to_sub_named), Mapped_Subtype = cl_to_sub_named)
-  cat("[A.3] Cluster → Subtype Mapping:\n"); print(map_df, row.names = FALSE)
-  
-  # ------------------- 4. Final subtype assignment -------------------
-  # Map each TCGA sample's numeric cluster to its mapped subtype label
-  cl_keys <- names(cl_to_sub_named)
-  # Ensure we can index by cluster labels; coerce clusters to character to match keys
-  subtype_tcga <- factor(cl_to_sub_named[as.character(cl_tcga)], levels = sort(unique(unname(cl_to_sub_named))))
-  cat("[A.4] Subtype counts:\n"); print(table(subtype_tcga))
-  
-  # ------------------- 5. Select top-k nearest to centroid -------------------
-  
-  cat(sprintf("[A.5] Selecting up to %d samples per subtype...\n", k_per_subtype))
-  sel_list <- lapply(levels(subtype_tcga), function(sub) {
-    idx <- which(subtype_tcga == sub)
-    if (length(idx) == 0) return(NULL)
-    cen <- get_centroid(X_tcga, idx)
-    nearest <- get_k_nearest(X_tcga[idx, , drop = FALSE], cen, k = k_per_subtype)
-    nearest$subtype <- sub
-    nearest
-  })
-  sel_df <- dplyr::bind_rows(sel_list)
-  sel_df <- dplyr::relocate(sel_df, subtype, .before = sample)
-  sel_df <- dplyr::group_by(sel_df, subtype)
-  sel_df <- dplyr::slice_head(sel_df, n = k_per_subtype)
-  sel_df <- dplyr::ungroup(sel_df)
+# ------------------- 5. Select top-k nearest to centroid -------------------
+select_top_k_nearest_to_centroid<-function(X_tcga, k_per_subtype){
   
   cat("[A.5] Final reference counts:\n"); print(table(sel_df$subtype))
   stopifnot(all(table(sel_df$subtype) <= k_per_subtype))

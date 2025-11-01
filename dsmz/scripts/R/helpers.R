@@ -168,53 +168,6 @@ make_umap <- function(PC, seed = 42, n_neighbors = 20, min_dist = 0.3,
 }
 
 
-# Fixed-k hierarchical clustering
-run_fixed_hc <- function(PC, k = 4, dist_method = "euclidean",
-                         linkage = "average", seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
-  stopifnot(nrow(PC) >= k, "Too few samples for the requested k.")
-
-  log_info("Calculating distance matrix (%s) on %d PCs for %d samples",
-           dist_method, ncol(PC), nrow(PC))
-  d <- stats::dist(PC, method = dist_method)
-
-  log_info("Building dendrogram with '%s' linkage", linkage)
-  hc <- stats::hclust(d, method = linkage)
-
-  log_info("Cutting dendrogram into k = %d clusters", k)
-  clusters <- stats::cutree(hc, k = k)
-
-  list(hc = hc, dist = d, clusters = clusters)
-}
-
-# Dynamic Tree Cut wrapper
-run_dynamic_cut <- function(PC, min_cluster_size = NULL,
-                            deep_split = 2, pam_stage = TRUE,
-                            dist_method = "euclidean",
-                            linkage = "average") {
-  d  <- stats::dist(PC, method = dist_method)
-  hc <- stats::hclust(d, method = linkage)
-  distM <- as.matrix(d)
-
-  if (is.null(min_cluster_size)) {
-    min_cluster_size <- choose_minCluster(nrow(PC))
-  }
-  log_info("Running cutreeHybrid (deepSplit=%d, pamStage=%s, minClusterSize=%d)",
-           deep_split, pam_stage, min_cluster_size)
-
-  dyn <- dynamicTreeCut::cutreeHybrid(dendro = hc, distM = distM,
-                                      deepSplit = deep_split,
-                                      pamStage = pam_stage,
-                                      minClusterSize = min_cluster_size)
-
-  clusters <- factor(dyn$labels)
-  list(hc = hc, dist = d, clusters = clusters, raw = dyn)
-}
-
-# Legacy aliases
-run_dynamic_tree_cut <- function(PC, deepSplit = 2, pamStage = TRUE) {
-  run_dynamic_cut(PC, deep_split = deepSplit, pam_stage = pamStage)
-}
 
 # Centroid calculation over HVGs
 calc_centroids <- function(expr_mat, hvgs, group_vec) {
@@ -300,10 +253,14 @@ label_by_tcga <- function(clusters,          # cluster assignments from clusteri
   if (!all(unique(cl_chr) %in% names(best_map))) {
     log_warn("Missing cluster mapping in the TCGA-BRCA metadata_ann")
   }
-  labeled <- as.factor(factor(unname(best_map[cl_chr]), levels = sort(unique(unname(best_map)))) # label the clusters with the best-matching PAM50 subtype
+  labeled <- as.factor(factor(unname(best_map[cl_chr]), levels = sort(unique(unname(best_map))))) # label the clusters with the best-matching PAM50 subtype
   log_info("Labeling complete. Levels: %s", paste(levels(labeled), collapse=", ")) # log the levels of the labeled clusters
   return(labeled) # return the labeled clusters
 }
+
+
+
+
 plot_dendrogram_dynamic <- function(hc, clusters, out_pdf) {
   cols <- WGCNA::labels2colors(as.numeric(factor(clusters)))
   safe_pdf(out_pdf, {
