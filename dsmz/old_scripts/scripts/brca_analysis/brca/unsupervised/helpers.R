@@ -104,18 +104,7 @@ safe_pdf <- function(path, expr) {
   force(expr)
 }
 
-build_dsmz_matrix <- function(dsmz_raw) {
-  stopifnot(all(c("Ensembl_ID","gene_name") %in% names(dsmz_raw)))
-  annot <- c("Ensembl_ID","gene_name","Ensembl_ID_with_version")
-  sample_cols <- setdiff(colnames(dsmz_raw), annot)
-  dsmz_raw[sample_cols] <- lapply(dsmz_raw[sample_cols], function(v) as.numeric(as.character(v)))
-  M <- as.matrix(dsmz_raw[, sample_cols, drop = FALSE])
-  rownames(M) <- strip_ensver(dsmz_raw$Ensembl_ID)
-  if (any(duplicated(rownames(M)))) {
-    M <- rowsum(M, rownames(M), reorder = TRUE)
-  }
-  M
-}
+
 
 logCPM <- function(x, prior.count = 1, lib.size = NULL) {
   if (!is.matrix(x)) x <- as.matrix(x)

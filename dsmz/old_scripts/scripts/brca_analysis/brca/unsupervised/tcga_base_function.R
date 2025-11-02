@@ -10,8 +10,9 @@ harmonize_gene_ids <- function(tcga_counts) {           # Define function to har
   } else {
     rownames(tcga_counts) <- g                         # Set harmonized gene IDs as row names
   }
+  
+  storage.mode(tcga_counts) <- "double"                # Convert count matrix to double precision
   tcga_counts                                          # Return harmonized count matrix
-  storage.mode(tcga_counts) <- "double"                # Convert count matrix to double precisio
 }
 
 

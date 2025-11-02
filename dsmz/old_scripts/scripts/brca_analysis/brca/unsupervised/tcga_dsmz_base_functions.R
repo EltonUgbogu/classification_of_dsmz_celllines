@@ -4,6 +4,8 @@
 # min_shared - it can also be used to select features (genes)
 
 common_genes <- function(tcga_counts, dsmz_counts, min_shared=NULL) {
+  cat(sprintf("[INFO] DSMZ count matrix: %d genes x %d samples\n", nrow(dsmz_counts), ncol(dsmz_counts)))  # Print dimensions of DSMZ count matrix M                                                    # Return DSMZ count matrix
+  cat(sprintf("[INFO] TCGA count matrix: %d genes x %d samples\n", nrow(tcga_counts), ncol(tcga_counts)))  # Print dimensions of TCGA count matrix
   common <- intersect(rownames(tcga_counts), rownames(dsmz_counts))  # Find common genes
   cat(sprintf("[INFO] Shared genes: %d\n", length(common)))  # Print number of shared genes
   if(!is.null(min_shared)) {

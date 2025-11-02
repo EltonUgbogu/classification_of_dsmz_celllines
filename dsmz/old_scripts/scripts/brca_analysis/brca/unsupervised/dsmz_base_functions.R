@@ -17,8 +17,8 @@ build_dsmz_matrix <- function(dsmz_raw) {               # Define function to bui
     cat(sprintf("[WARN] Dropping %d DSMZ columns that are all NA\n", sum(!keep)))  # Warn about dropped columns
     M <- M[, keep, drop=FALSE]                         # Drop all-NA columns
   }
-  M                                                    # Return DSMZ count matrix
   storage.mode(M) <- "double"                          # Convert count matrix to double precision
+  M
 }
 
 

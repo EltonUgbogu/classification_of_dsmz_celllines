@@ -10,6 +10,8 @@ suppressPackageStartupMessages({
   library(matrixStats)
   library(sva)
   library(pheatmap)
+  library(SummarizedExperiment)
+  library(tidyverse)
 })
 
 # --- Source your functions ---

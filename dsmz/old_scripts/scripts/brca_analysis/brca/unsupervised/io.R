@@ -7,14 +7,13 @@
 
 config <- list(                                         # Define configuration list for pipeline parameters
   # Inputs
-  tcga_se_rds   = "/home/chu25/data/olddata/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered.rds",  # Path to TCGA SummarizedExperiment RDS
+  tcga_se_rds   = "/home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered.rds",  # Path to TCGA SummarizedExperiment RDS
   dsmz_rds      = "/home/chu25/data/dsmz/DSMZ_count_gene.rds",  # Path to DSMZ count data RDS
   dsmz_meta_csv = "/home/chu25/data/dsmz/DSMZ_metadata.csv",    # Path to DSMZ metadata CSV
   purity_tsv    = NULL,                                # Optional path to purity TSV (sample, purity columns); NULL if not used
-
   # Outputs
   outdir        = "/home/chu25/dsmz/results/",  # Output directory for results
-  dsmz_cache_rds = "/home/chu25/data/dsmz/DSMZ_aligned_cache.rds",  # Path to cached aligned DSMZ data
+  dsmz_cache_rds = "/home/chu25/data/dsmz/DSMZ_aligned_cache.rds"  # Path to cached aligned DSMZ data
 )
 
 # Create necessary directories
