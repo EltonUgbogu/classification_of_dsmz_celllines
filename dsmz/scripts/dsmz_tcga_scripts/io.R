@@ -12,7 +12,7 @@ config <- list(                                         # Define configuration l
   dsmz_meta_csv = "/home/chu25/data/dsmz/DSMZ_metadata.csv",    # Path to DSMZ metadata CSV
   purity_tsv    = NULL,                                # Optional path to purity TSV (sample, purity columns); NULL if not used
   # Outputs
-  outdir        = "/home/chu25/dsmz/results/dsmz_tcga",  # Output directory for results
+  outdir <- "/home/chu25/dsmz/scripts/dsmz_tcga_scripts/results"
   dsmz_cache_rds = "/home/chu25/data/dsmz/DSMZ_aligned_cache.rds" # Path to cached aligned DSMZ data
 )
 
