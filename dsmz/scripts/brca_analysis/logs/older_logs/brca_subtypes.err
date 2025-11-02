@@ -1,4 +1,0 @@
-converting counts to integer mode
-[kmeans] best k by silhouette→CH = 2
-Error: [FATAL] No overlap between marker_ens and (TC_med ∩ DSM_med). Check ID harmonization (Ensembl, version stripping) and markers.
-Execution halted
