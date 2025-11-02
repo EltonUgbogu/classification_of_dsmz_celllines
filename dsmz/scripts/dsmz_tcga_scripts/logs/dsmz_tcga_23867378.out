@@ -1,0 +1,21 @@
+Starting DSMZ-TCGA analysis via R script...
+[INFO] Loading TCGA data...
+[INFO] TCGA dims: 60660 genes x 9259 samples
+[INFO] Loading DSMZ data...
+[INFO] DSMZ table: 60660 rows x 170 cols
+[INFO] Using purity from SummarizedExperiment
+[INFO] Harmonizing TCGA gene IDs...
+[INFO] Collapsing 44 duplicate TCGA genes: ENSG00000002586, ENSG00000124333, ENSG00000124334, ENSG00000167393, ENSG00000169084
+[INFO] Building DSMZ count matrix...
+[INFO] TCGA count matrix: 60616 genes x 9259 sample
+[INFO] DSMZ count matrix: 60660 genes x 167 sample
+[1] "ENSG00000000003" "ENSG00000000005" "ENSG00000000419" "ENSG00000000457"
+[5] "ENSG00000000460" "ENSG00000000938"
+[1] "ENSG00000223972" "ENSG00000227232" "ENSG00000278267" "ENSG00000243485"
+[5] "ENSG00000284332" "ENSG00000237613"
+[INFO] Shared genes: 60616
+Found 2 batches
+Using null model in ComBat-seq.
+Adjusting for 0 covariate(s) or covariate level(s)
+Estimating dispersions
+Fitting the GLM model
