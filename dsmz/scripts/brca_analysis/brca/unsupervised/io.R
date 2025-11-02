@@ -1,52 +1,58 @@
-# I/O: load/save helpers and dimension reporting
-# Place in R/io.R
+#tcga_se_rds - TCGA SummarizedExperiment RDS filtered for Purity
+#dsmz_rds - DSMZ count data from gdc-style processing pipeline
+#dsmz_meta_csv - DSMZ metadata CSV from CellDrive #https://celldive.dsmz.de
+#purity_tsv - Optional path to purity information from TCGA
+#outdir - Output directory for results
+#dsmz_cache_rds - Path to cached aligned DSMZ data
 
-load_input_data <- function(tcga_se_rds, dsmz_rds, dsmz_meta_csv) {
-  tcga_se <- readRDS(tcga_se_rds)
-  dsmz_raw <- readRDS(dsmz_rds)
-  dsmz_meta <- read.csv(dsmz_meta_csv, check.names = FALSE)
-  list(tcga_se = tcga_se, dsmz_raw = dsmz_raw, dsmz_meta = dsmz_meta)
+config <- list(                                         # Define configuration list for pipeline parameters
+  # Inputs
+  tcga_se_rds   = "/home/chu25/data/olddata/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered.rds",  # Path to TCGA SummarizedExperiment RDS
+  dsmz_rds      = "/home/chu25/data/dsmz/DSMZ_count_gene.rds",  # Path to DSMZ count data RDS
+  dsmz_meta_csv = "/home/chu25/data/dsmz/DSMZ_metadata.csv",    # Path to DSMZ metadata CSV
+  purity_tsv    = NULL,                                # Optional path to purity TSV (sample, purity columns); NULL if not used
+
+  # Outputs
+  outdir        = "/home/chu25/dsmz/results/",  # Output directory for results
+  dsmz_cache_rds = "/home/chu25/data/dsmz/DSMZ_aligned_cache.rds",  # Path to cached aligned DSMZ data
+)
+
+# Create necessary directories
+dir.create(config$outdir, showWarnings = FALSE, recursive = TRUE)  # Create output directory, allow recursive creation, suppress warnings
+
+# =============================================================================
+# DATA LOADING
+# =============================================================================
+
+# Load TCGA SummarizedExperiment and extract counts
+#file_path - path to TCGA SummarizedExperiment RDS found in config
+load_tcga_data <- function(file_path) {                 # Define function to load TCGA data
+  cat("[INFO] Loading TCGA data...\n")                 # Print message indicating TCGA data loading
+  if (!file.exists(file_path)) stop(sprintf("[ERROR] TCGA RDS not found: %s", file_path))  # Stop if file does not exist
+  se <- readRDS(file_path)                             # Read TCGA SummarizedExperiment from RDS
+  counts <- assay(se)                                  # Extract count matrix from SummarizedExperiment
+  if (any(duplicated(rownames(counts)))) {                                     # check for duplicate genes  
+    dup_genes <- rownames(counts)[duplicated(rownames(counts))]                  # get duplicate genes
+    cat(sprintf("[INFO] Collapsing %d duplicate TCGA genes: %s\n",                 # print number of duplicate genes and first 5 duplicate genes
+                length(dup_genes), paste(head(dup_genes, 5), collapse=", ")))    # print duplicate genes
+    counts <- rowsum(counts, rownames(counts), reorder = TRUE)                   # collapse duplicate genes by summing counts for each gene
+  }
+  storage.mode(counts) <- "double"                                            # convert counts to double precision
+  cat(sprintf("[INFO] TCGA dims: %d genes x %d samples\n", nrow(counts), ncol(counts)))  # print dimensions of TCGA count matrix
+  list(se = se, counts = counts)                       # return list with SummarizedExperiment and counts
 }
 
-write_dimension_report <- function(outdir, dims_list) {
-  dim_report <- file.path(outdir, "dimension_report.txt")
-  dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
-  con <- file(dim_report, open = "wt")
-  on.exit(close(con), add = TRUE)
-  lapply(names(dims_list), function(nm) write_dims_line(con, nm, dims_list[[nm]]))
-}
-
-safe_rds_save <- function(obj, path) {
-  dir.create(dirname(path), showWarnings = FALSE, recursive = TRUE)
-  saveRDS(obj, path)
-}
-
-log_dims <- function(tag, mat) {
-  ng <- if (!is.null(mat)) nrow(mat) else NA_integer_
-  ns <- if (!is.null(mat)) ncol(mat) else NA_integer_
-  cat(sprintf("[DIM] %-20s: %8s genes x %6s samples\n", tag, format(ng, big.mark=","), format(ns, big.mark=",")))
-}
-
-write_dims_line <- function(con, tag, mat) {
-  ng <- if (!is.null(mat)) nrow(mat) else NA_integer_
-  ns <- if (!is.null(mat)) ncol(mat) else NA_integer_
-  writeLines(sprintf("%-24s\tgenes=%d\tsamples=%d", tag, ng, ns), con)
-}
-
-## form clustering.R
-ensure_dir <- function(path) {
-  dir.create(path, showWarnings = FALSE, recursive = TRUE)
-  invisible(path)
-}
-
-safe_rds_save <- function(object, file) {
-  ensure_dir(dirname(file))
-  saveRDS(object, file = file)
-}
-
-run_pca_and_save <- function(V_adj, outdir, n_hvg = 3000, max_pc = 30) {
-  ensure_dir(outdir)
-  pcs <- make_pcs_matrix(V_adj, n_hvg = n_hvg, max_pc = max_pc)
-  safe_rds_save(pcs, file.path(outdir, "pca_objects.rds"))
-  pcs
+# Load DSMZ raw wide table (counts + gene columns) and metadata CSV
+#counts_path - path to DSMZ count data RDS found in config
+#meta_path - path to DSMZ metadata CSV found in config
+load_dsmz_data <- function(counts_path, meta_path) {    # Define function to load DSMZ data
+  cat("[INFO] Loading DSMZ data...\n")                 # Print message indicating DSMZ data loading
+  if (!file.exists(counts_path)) stop(sprintf("[ERROR] DSMZ RDS not found: %s", counts_path))  # Stop if counts file does not exist
+  if (!file.exists(meta_path)) stop(sprintf("[ERROR] DSMZ metadata CSV not found: %s", meta_path))  # Stop if metadata file does not exist
+  raw <- readRDS(counts_path)                          # Read DSMZ raw count data from RDS
+  meta <- read.csv(meta_path)                          # Read DSMZ metadata from CSV
+  stopifnot(all(c("Ensembl_ID","gene_name") %in% colnames(raw)))  # Verify required columns in raw data
+  stopifnot("sample_name" %in% names(meta))            # Verify sample_name column in metadata
+  cat(sprintf("[INFO] DSMZ table: %d rows x %d cols\n", nrow(raw), ncol(raw)))  # Print dimensions of raw DSMZ data
+  list(raw = raw, meta = meta)                         # Return list with raw counts and metadata
 }
