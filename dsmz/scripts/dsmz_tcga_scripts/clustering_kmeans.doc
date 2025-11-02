@@ -1,0 +1,38 @@
+#' @title K-means Clustering on Principal Components with Comprehensive Diagnostics
+#'
+#' @description
+#' Runs k-means clustering over a user-defined range of `k` values on a low-dimensional
+#' embedding (e.g., PCA). For each `k`, computes:
+#' - Within-cluster sum of squares (WCSS)
+#' - Average silhouette width (if distance matrix is feasible)
+#' - Calinski-Harabasz index
+#' - Davies-Bouldin index
+#'
+#' Automatically selects the **optimal `k`** using a robust hierarchy:
+#' 1. **Maximize silhouette** → best separation
+#' 2. **Tie-break with CH index** → cluster compactness
+#' 3. **Fallback to WCSS elbow** → if internal indices fail
+#'
+#' Outputs:
+#' - Per-k silhouette plots
+#' - Elbow & metrics panel
+#' - Final cluster assignments (CSV)
+#' - Full reproducibility: per-k cluster CSVs
+#'
+#' @param PC Numeric matrix of principal components (samples x PCs). Row names = sample IDs.
+#' @param outdir Output directory. Created if missing.
+#' @param k_grid Integer vector of `k` values to test (e.g., `2:8`).
+#' @param seed Random seed for `kmeans` reproducibility.
+#' @param sample_is_tcga Logical vector (length = nrow(PC)) indicating TCGA samples.
+#'                       Used for stratified reporting. Optional.
+#' @param V_adj Optional normalized expression matrix (genes x samples).
+#'              Used for diagnostic checks (variance, matching).
+#'
+#' @return Invisible list:
+#' \item{best_k}{Optimal number of clusters}
+#' \item{res_list}{List of k-means objects and silhouette per `k`}
+#' \item{metrics}{Data frame of WCSS, Silhouette, CH, DB}
+#' \item{clusters}{Final cluster factor (C1, C2, ...)}
+#' \item{cluster_df}{Tibble with sample, dataset, cluster}
+#'
+#' @export
