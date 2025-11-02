@@ -1,8 +1,0 @@
-Assuming unrestricted shared filesystem usage.
-None
-host: gtw-node01
-Building DAG of jobs...
-MissingInputException in rule all in file "/home/chu25/dsmz/scripts/multiqc/Snakefile", line 3:
-Missing input files for rule all:
-    affected files:
-        /home/chu25/dsmz/results/multiqc/multiqc_report.html

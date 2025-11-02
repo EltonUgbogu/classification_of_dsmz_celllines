@@ -1,6 +1,0 @@
-Assuming unrestricted shared filesystem usage.
-None
-host: gtw-node07
-Building DAG of jobs...
-Creating conda environment /home/chu25/dsmz/envs/multiqc.yaml...
-Downloading and installing remote packages.
