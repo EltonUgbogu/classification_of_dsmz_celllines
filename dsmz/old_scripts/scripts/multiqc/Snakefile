@@ -1,0 +1,17 @@
+# Snakefile to run MultiQC on FastQC outputs
+
+rule all:
+    input:
+        "/home/chu25/dsmz/results/multiqc/multiqc_report.html"
+
+rule multiqc_fastqc_summary:
+    input:
+        fastqc_dir = "/home/chu25/dsmz/results/fastqc"
+    output:
+        html = "/home/chu25/dsmz/results/multiqc/multiqc_report.html"
+    threads: 1
+    shell:
+        """
+        echo "[INFO] Running MultiQC summary..."
+        multiqc {input.fastqc_dir} --outdir $(dirname {output.html})
+        """

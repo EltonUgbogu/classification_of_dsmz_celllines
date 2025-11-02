@@ -1,0 +1,38 @@
+Assuming unrestricted shared filesystem usage.
+None
+host: gtw-node07
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 1 (use --cores to define parallelism)
+Rules claiming more threads will be scaled down.
+Job stats:
+job                       count
+----------------------  -------
+all                           1
+multiqc_fastqc_summary        1
+total                         2
+
+Select jobs to execute...
+Execute 1 jobs...
+[Tue Aug  5 05:59:47 2025]
+localrule multiqc_fastqc_summary:
+    input: /home/chu25/dsmz/results/fastqc
+    output: /home/chu25/dsmz/results/multiqc/multiqc_report.html
+    jobid: 1
+    reason: Missing output files: /home/chu25/dsmz/results/multiqc/multiqc_report.html; Software environment definition has changed since last execution
+    resources: tmpdir=/tmp
+[Tue Aug  5 06:01:58 2025]
+Finished jobid: 1 (Rule: multiqc_fastqc_summary)
+1 of 2 steps (50%) done
+Select jobs to execute...
+Execute 1 jobs...
+[Tue Aug  5 06:01:58 2025]
+localrule all:
+    input: /home/chu25/dsmz/results/multiqc/multiqc_report.html
+    jobid: 0
+    reason: Input files updated by another job: /home/chu25/dsmz/results/multiqc/multiqc_report.html
+    resources: tmpdir=/tmp
+[Tue Aug  5 06:01:58 2025]
+Finished jobid: 0 (Rule: all)
+2 of 2 steps (100%) done
+Complete log(s): /mnt/beegfs/mnt/work/bioinfo/home/chu25/dsmz/scripts/multiqc/.snakemake/log/2025-08-05T055947.364022.snakemake.log

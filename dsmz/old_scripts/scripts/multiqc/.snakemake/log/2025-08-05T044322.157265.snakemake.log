@@ -1,0 +1,263 @@
+Assuming unrestricted shared filesystem usage.
+None
+host: gtw-node08
+Building DAG of jobs...
+Creating conda environment /home/chu25/dsmz/envs/multiqc.yaml...
+Downloading and installing remote packages.
+CreateCondaEnvironmentException:
+Could not create conda environment from /home/chu25/dsmz/envs/multiqc.yaml:
+Command:
+conda env create --quiet --no-default-packages --file "/mnt/beegfs/mnt/work/bioinfo/home/chu25/dsmz/scripts/multiqc/.snakemake/conda/23c1ff4e2347cfedc54f0f54f49e42de_.yaml" --prefix "/mnt/beegfs/mnt/work/bioinfo/home/chu25/dsmz/scripts/multiqc/.snakemake/conda/23c1ff4e2347cfedc54f0f54f49e42de_"
+Output:
+2 channel Terms of Service accepted
+Channels:
+ - bioconda
+ - conda-forge
+ - defaults
+Platform: linux-64
+Collecting package metadata (repodata.json): ...working... WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/2a957770.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/497deca9.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/09cdf8bf.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/47929eba.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/3e39a7aa.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/4ea078d6.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/2ce54b42.info.json
+WARNING conda.gateways.repodata:load_state(588): JSONDecodeError loading /home/chu25/miniconda3/pkgs/cache/ffeee55f.info.json
+done
+Solving environment: ...working... failed
+
+LibMambaUnsatisfiableError: Encountered problems while solving:
+  - nothing provides matplotlib-base 3.0.1 py37hc2fb212_1001 needed by matplotlib-3.0.1-h8a2030e_1001
+
+Could not solve for environment specs
+The following packages are incompatible
+├─ matplotlib =* * is installable with the potential options
+│  ├─ matplotlib [1.5.3|2.1.2|2.2.3|2.2.4] would require
+│  │  ├─ matplotlib-base [==2.1.2 py27h250f245_1|==2.2.3 py27h60b886d_1|==2.2.4 py27h250f245_1|==2.2.4 py27h250f245_2|==2.2.4 py27hfd891ef_0], which requires
+│  │  │  └─ python >=2.7,<2.8.0a0 *, which can be installed;
+│  │  ├─ python =2.7 *, which can be installed;
+│  │  └─ python_abi =* *_cp27mu, which can be installed;
+│  ├─ matplotlib [3.10.0|3.10.1|...|3.9.4] would require
+│  │  └─ pyside6 >=6.7.2 * but there are no viable options
+│  │     ├─ pyside6 6.7.2 would require
+│  │     │  └─ qt6-main =6.7.2 * but there are no viable options
+│  │     │     ├─ qt6-main [6.7.2|6.7.3|...|6.9.1] would require
+│  │     │     │  └─ libtiff >=4.7.0,<4.8.0a0 * but there are no viable options
+│  │     │     │     ├─ libtiff [4.6.0|4.7.0] would require
+│  │     │     │     │  └─ libdeflate >=1.21,<1.22.0a0 *, which conflicts with any installable versions previously reported;
+│  │     │     │     ├─ libtiff 4.7.0 would require
+│  │     │     │     │  └─ libdeflate >=1.22,<1.23.0a0 *, which conflicts with any installable versions previously reported;
+│  │     │     │     ├─ libtiff 4.7.0 would require
+│  │     │     │     │  └─ libdeflate >=1.23,<1.24.0a0 *, which conflicts with any installable versions previously reported;
+│  │     │     │     ├─ libtiff 4.7.0 would require
+│  │     │     │     │  └─ libdeflate >=1.24,<1.25.0a0 *, which conflicts with any installable versions previously reported;
+│  │     │     │     └─ libtiff 4.7.0 conflicts with any installable versions previously reported;
+│  │     │     └─ qt6-main 6.7.2 would require
+│  │     │        └─ libtiff >=4.6.0,<4.8.0a0 * but there are no viable options
+│  │     │           ├─ libtiff [4.6.0|4.7.0], which cannot be installed (as previously explained);
+│  │     │           ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │           ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │           ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │           ├─ libtiff 4.7.0 conflicts with any installable versions previously reported;
+│  │     │           ├─ libtiff 4.6.0 would require
+│  │     │           │  └─ libdeflate >=1.20,<1.21.0a0 *, which conflicts with any installable versions previously reported;
+│  │     │           ├─ libtiff 4.6.0 would require
+│  │     │           │  └─ libdeflate >=1.19,<1.20.0a0 *, which conflicts with any installable versions previously reported;
+│  │     │           └─ libtiff 4.6.0 would require
+│  │     │              └─ libdeflate >=1.18,<1.19.0a0 *, which conflicts with any installable versions previously reported;
+│  │     ├─ pyside6 [6.7.3|6.8.0|...|6.9.1] would require
+│  │     │  └─ qt6-main [=6.7.3 *|=6.8.0 *|...|>=6.9.1,<6.10.0a0 *], which cannot be installed (as previously explained);
+│  │     └─ pyside6 [6.7.2|6.7.3] conflicts with any installable versions previously reported;
+│  ├─ matplotlib [3.1.2|3.1.3|...|3.9.2] conflicts with any installable versions previously reported;
+│  ├─ matplotlib 3.9.1 would require
+│  │  └─ python >=3.10,<3.11.0a0 * but there are no viable options
+│  │     ├─ python [3.10.0|3.10.1|...|3.10.9] would require
+│  │     │  └─ python_abi =3.10 *_cp310, which can be installed;
+│  │     ├─ python 3.10.8 would require
+│  │     │  └─ python_abi =3.10 *_graalpy230_310_native, which conflicts with any installable versions previously reported;
+│  │     └─ python [3.10.0|3.10.10|...|3.10.9] conflicts with any installable versions previously reported;
+│  ├─ matplotlib 3.9.1 would require
+│  │  └─ python >=3.11,<3.12.0a0 *, which can be installed;
+│  ├─ matplotlib 3.9.1 would require
+│  │  ├─ python >=3.11,<3.12.0a0 *, which can be installed;
+│  │  └─ python_abi =3.11 *_cp311, which conflicts with any installable versions previously reported;
+│  ├─ matplotlib 3.9.1 would require
+│  │  └─ python_abi =3.12 *_cp312, which requires
+│  │     └─ python =3.12 *_cpython, which can be installed;
+│  ├─ matplotlib [3.9.1|3.9.2] would require
+│  │  └─ python_abi ==3.9 *_pypy39_pp73, which requires
+│  │     └─ python =3.9 *_73_pypy, which can be installed;
+│  ├─ matplotlib 3.9.1 would require
+│  │  └─ python >=3.9,<3.10.0a0 *, which can be installed;
+│  ├─ matplotlib 1.5.3 would require
+│  │  ├─ python =3.4 *, which can be installed;
+│  │  └─ python_abi =* *_cp34m, which can be installed;
+│  ├─ matplotlib 1.5.3 would require
+│  │  ├─ python =3.5 *, which can be installed;
+│  │  └─ python_abi =* *_cp35m, which can be installed;
+│  ├─ matplotlib [2.1.2|2.2.3|...|3.1.1] would require
+│  │  ├─ matplotlib-base [==2.1.2 py36h250f245_1|==2.2.3 py36h60b886d_1|...|==3.1.1 py36hfd891ef_0], which requires
+│  │  │  └─ python >=3.6,<3.7.0a0 * with the potential options
+│  │  │     ├─ python [3.6.0|3.6.1|...|3.6.9], which can be installed;
+│  │  │     └─ python [3.6.12|3.6.9] would require
+│  │  │        └─ python_abi ==3.6 *_pypy36_pp73, which can be installed;
+│  │  └─ python_abi =* *_cp36m, which conflicts with any installable versions previously reported;
+│  ├─ matplotlib [2.1.2|2.2.3|...|3.1.1] would require
+│  │  ├─ matplotlib-base [==2.1.2 py37h250f245_1|==2.2.3 py37h60b886d_1|...|==3.1.1 py37hfd891ef_0], which requires
+│  │  │  └─ python >=3.7,<3.8.0a0 * with the potential options
+│  │  │     ├─ python [3.7.0|3.7.1|...|3.7.9], which can be installed;
+│  │  │     └─ python [3.7.10|3.7.12|3.7.9] would require
+│  │  │        └─ python_abi ==3.7 *_pypy37_pp73, which can be installed;
+│  │  └─ python_abi =* *_cp37m, which conflicts with any installable versions previously reported;
+│  ├─ matplotlib [2.2.4|3.1.1] would require
+│  │  ├─ matplotlib-base [==2.2.4 py38h250f245_2|==3.1.1 py38h250f245_1|==3.1.1 py38h250f245_2], which requires
+│  │  │  └─ python >=3.8,<3.9.0a0 * with the potential options
+│  │  │     ├─ python [3.8.0|3.8.1|...|3.8.8], which can be installed;
+│  │  │     ├─ python [3.8.12|3.8.13|3.8.16] would require
+│  │  │     │  └─ python_abi ==3.8 *_pypy38_pp73, which can be installed;
+│  │  │     └─ python 3.8.5 would require
+│  │  │        └─ python_abi =3.8 *_graalpy223_38_native, which can be installed;
+│  │  └─ python_abi =* *_cp38, which conflicts with any installable versions previously reported;
+│  ├─ matplotlib 2.2.5 would require
+│  │  └─ matplotlib-base >=2.2.5,<2.2.6.0a0 * with the potential options
+│  │     ├─ matplotlib-base [2.1.2|2.2.3|...|3.1.1], which can be installed (as previously explained);
+│  │     ├─ matplotlib-base 2.2.5 would require
+│  │     │  ├─ python >=2.7,<2.8.0a0 *, which can be installed;
+│  │     │  └─ python_abi =2.7 *_cp27mu, which conflicts with any installable versions previously reported;
+│  │     ├─ matplotlib-base 2.2.5 would require
+│  │     │  ├─ python >=3.6,<3.7.0a0 * with the potential options
+│  │     │  │  ├─ python [3.6.0|3.6.1|...|3.6.9], which can be installed;
+│  │     │  │  └─ python [3.6.12|3.6.9], which can be installed (as previously explained);
+│  │     │  └─ python_abi =3.6 *_cp36m, which conflicts with any installable versions previously reported;
+│  │     ├─ matplotlib-base 2.2.5 would require
+│  │     │  ├─ python >=3.8,<3.9.0a0 * with the potential options
+│  │     │  │  ├─ python [3.8.0|3.8.1|...|3.8.8], which can be installed;
+│  │     │  │  ├─ python [3.8.12|3.8.13|3.8.16], which can be installed (as previously explained);
+│  │     │  │  └─ python 3.8.5, which can be installed (as previously explained);
+│  │     │  └─ python_abi =3.8 *_cp38, which conflicts with any installable versions previously reported;
+│  │     └─ matplotlib-base 2.2.5 would require
+│  │        ├─ python >=3.9,<3.10.0a0 *, which can be installed;
+│  │        └─ python_abi =3.9 *_cp39, which conflicts with any installable versions previously reported;
+│  ├─ matplotlib 3.0.1 would require
+│  │  └─ matplotlib-base ==3.0.1 py37hc2fb212_1001, which does not exist (perhaps a missing channel);
+│  ├─ matplotlib 3.0.2 would require
+│  │  └─ matplotlib-base ==3.0.2 py36h167e16e_1000, which does not exist (perhaps a missing channel);
+│  ├─ matplotlib 3.0.2 would require
+│  │  └─ matplotlib-base ==3.0.2 py36h167e16e_1001, which does not exist (perhaps a missing channel);
+│  ├─ matplotlib 3.0.2 would require
+│  │  └─ matplotlib-base ==3.0.2 py37h167e16e_1001, which does not exist (perhaps a missing channel);
+│  ├─ matplotlib [2.0.2|2.1.0] conflicts with any installable versions previously reported;
+│  ├─ matplotlib [2.1.1|2.1.2|2.2.0|2.2.2|2.2.3] conflicts with any installable versions previously reported;
+│  └─ matplotlib [3.0.0|3.0.1|...|3.1.1] conflicts with any installable versions previously reported;
+├─ multiqc =* * is installable with the potential options
+│  ├─ multiqc [0.4|0.5|...|1.6a0] would require
+│  │  └─ python [=2.7 *|>=2.7,<2.8.0a0 *], which can be installed;
+│  ├─ multiqc [0.4|0.5|...|0.9a] would require
+│  │  └─ python =3.4 *, which can be installed;
+│  ├─ multiqc [0.4|0.5|...|1.6a0] would require
+│  │  └─ python [=3.5 *|>=3.5,<3.6.0a0 *], which can be installed;
+│  ├─ multiqc [1.0|1.3|1.4|1.5a] would require
+│  │  └─ python =3.6 * with the potential options
+│  │     ├─ python [3.6.0|3.6.1|...|3.6.9], which can be installed;
+│  │     ├─ python [3.6.12|3.6.9], which can be installed (as previously explained);
+│  │     └─ python [3.6.0a3|3.6.0a4|...|3.6.0rc1], which can be installed;
+│  ├─ multiqc 1.5 would require
+│  │  └─ matplotlib <=2.1.0 * with the potential options
+│  │     ├─ matplotlib [1.5.3|2.1.2|2.2.3|2.2.4], which can be installed (as previously explained);
+│  │     ├─ matplotlib 1.5.3, which can be installed (as previously explained);
+│  │     ├─ matplotlib 1.5.3, which can be installed (as previously explained);
+│  │     └─ matplotlib [2.0.2|2.1.0] conflicts with any installable versions previously reported;
+│  ├─ multiqc [1.6|1.6a0] would require
+│  │  └─ python >=3.6,<3.7.0a0 * with the potential options
+│  │     ├─ python [3.6.0|3.6.1|...|3.6.9], which can be installed;
+│  │     └─ python [3.6.12|3.6.9], which can be installed (as previously explained);
+│  ├─ multiqc [1.10|1.10.1|...|1.9] would require
+│  │  └─ requests =* * with the potential options
+│  │     ├─ requests [2.10.0|2.11.0|...|2.9.2] would require
+│  │     │  └─ python =2.7 *, which can be installed;
+│  │     ├─ requests [2.10.0|2.11.0|...|2.9.2] would require
+│  │     │  └─ python =3.4 *, which can be installed;
+│  │     ├─ requests [2.10.0|2.11.0|...|2.9.2] would require
+│  │     │  └─ python =3.5 *, which can be installed;
+│  │     ├─ requests [2.12.4|2.12.5|2.13.0] would require
+│  │     │  └─ python =3.6 * with the potential options
+│  │     │     ├─ python [3.6.0|3.6.1|...|3.6.9], which can be installed;
+│  │     │     ├─ python [3.6.12|3.6.9], which can be installed (as previously explained);
+│  │     │     └─ python [3.6.0a3|3.6.0a4|...|3.6.0rc1], which can be installed;
+│  │     ├─ requests [2.17.3|2.18.1|2.18.2|2.18.3|2.18.4] would require
+│  │     │  └─ urllib3 >=1.21.1,<1.22 *, which conflicts with any installable versions previously reported;
+│  │     ├─ requests 2.18.4 would require
+│  │     │  └─ urllib3 >=1.21.1,<1.23 *, which conflicts with any installable versions previously reported;
+│  │     ├─ requests [2.19.0|2.19.1|2.20.0|2.20.1] would require
+│  │     │  └─ urllib3 >=1.21.1,<1.24 *, which conflicts with any installable versions previously reported;
+│  │     ├─ requests [2.21.0|2.22.0] would require
+│  │     │  └─ urllib3 >=1.21.1,<1.25 *, which conflicts with any installable versions previously reported;
+│  │     ├─ requests [2.22.0|2.23.0|2.24.0|2.25.0] would require
+│  │     │  └─ urllib3 >=1.21.1,(<1.26,(!=1.25.0,!=1.25.1)) *, which conflicts with any installable versions previously reported;
+│  │     ├─ requests [2.25.1|2.26.0|...|2.29.0] would require
+│  │     │  └─ urllib3 >=1.21.1,<1.27 *, which conflicts with any installable versions previously reported;
+│  │     ├─ requests [2.31.0|2.32.1|2.32.2|2.32.3|2.32.4] would require
+│  │     │  └─ urllib3 >=1.21.1,<3 *, which conflicts with any installable versions previously reported;
+│  │     └─ requests [2.18.4|2.19.1|...|2.32.4] conflicts with any installable versions previously reported;
+│  ├─ multiqc [1.20|1.21|...|1.27] would require
+│  │  └─ pillow >=10.2.0 * but there are no viable options
+│  │     ├─ pillow [10.2.0|10.3.0|10.4.0] would require
+│  │     │  └─ libtiff >=4.6.0,<4.8.0a0 * but there are no viable options
+│  │     │     ├─ libtiff [4.6.0|4.7.0], which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0 conflicts with any installable versions previously reported;
+│  │     │     ├─ libtiff 4.6.0, which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.6.0, which cannot be installed (as previously explained);
+│  │     │     └─ libtiff 4.6.0, which cannot be installed (as previously explained);
+│  │     ├─ pillow [11.0.0|11.1.0|11.2.1|11.3.0] would require
+│  │     │  └─ libtiff >=4.7.0,<4.8.0a0 * but there are no viable options
+│  │     │     ├─ libtiff [4.6.0|4.7.0], which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │     ├─ libtiff 4.7.0, which cannot be installed (as previously explained);
+│  │     │     └─ libtiff 4.7.0 conflicts with any installable versions previously reported;
+│  │     └─ pillow [10.2.0|10.3.0|...|11.3.0] conflicts with any installable versions previously reported;
+│  ├─ multiqc [1.27.1|1.28|1.29|1.30] would require
+│  │  └─ tiktoken =* * but there are no viable options
+│  │     ├─ tiktoken [0.3.1|0.3.2|...|0.9.0] would require
+│  │     │  └─ regex >=2022.1.18 *, which conflicts with any installable versions previously reported;
+│  │     └─ tiktoken 0.9.0 conflicts with any installable versions previously reported;
+│  ├─ multiqc [1.7|1.8] would require
+│  │  └─ matplotlib [>=2.1.1,<3 *|>=2.1.1,<3.0.0 *] with the potential options
+│  │     ├─ matplotlib [1.5.3|2.1.2|2.2.3|2.2.4], which can be installed (as previously explained);
+│  │     ├─ matplotlib [2.1.2|2.2.3|...|3.1.1], which cannot be installed (as previously explained);
+│  │     ├─ matplotlib [2.1.2|2.2.3|...|3.1.1], which cannot be installed (as previously explained);
+│  │     ├─ matplotlib [2.2.4|3.1.1], which cannot be installed (as previously explained);
+│  │     ├─ matplotlib 2.2.5, which can be installed (as previously explained);
+│  │     └─ matplotlib [2.1.1|2.1.2|2.2.0|2.2.2|2.2.3] conflicts with any installable versions previously reported;
+│  ├─ multiqc 1.8 would require
+│  │  └─ matplotlib >=2.1.1,<3.1.2 * with the potential options
+│  │     ├─ matplotlib [1.5.3|2.1.2|2.2.3|2.2.4], which can be installed (as previously explained);
+│  │     ├─ matplotlib [2.1.2|2.2.3|...|3.1.1], which cannot be installed (as previously explained);
+│  │     ├─ matplotlib [2.1.2|2.2.3|...|3.1.1], which cannot be installed (as previously explained);
+│  │     ├─ matplotlib [2.2.4|3.1.1], which cannot be installed (as previously explained);
+│  │     ├─ matplotlib 2.2.5, which can be installed (as previously explained);
+│  │     ├─ matplotlib 3.0.1, which cannot be installed (as previously explained);
+│  │     ├─ matplotlib 3.0.2, which cannot be installed (as previously explained);
+│  │     ├─ matplotlib 3.0.2, which cannot be installed (as previously explained);
+│  │     ├─ matplotlib 3.0.2, which cannot be installed (as previously explained);
+│  │     ├─ matplotlib [2.1.1|2.1.2|2.2.0|2.2.2|2.2.3] conflicts with any installable versions previously reported;
+│  │     └─ matplotlib [3.0.0|3.0.1|...|3.1.1] conflicts with any installable versions previously reported;
+│  └─ multiqc 1.8 would require
+│     └─ matplotlib-base >=2.1.1,<3.1.2 * with the potential options
+│        ├─ matplotlib-base [2.1.2|2.2.3|2.2.4], which can be installed (as previously explained);
+│        ├─ matplotlib-base [2.1.2|2.2.3|...|3.1.1], which can be installed (as previously explained);
+│        ├─ matplotlib-base [2.1.2|2.2.3|...|3.1.1], which can be installed (as previously explained);
+│        ├─ matplotlib-base [2.2.4|3.1.1], which can be installed (as previously explained);
+│        ├─ matplotlib-base 2.2.5, which cannot be installed (as previously explained);
+│        ├─ matplotlib-base 2.2.5, which cannot be installed (as previously explained);
+│        ├─ matplotlib-base 2.2.5, which cannot be installed (as previously explained);
+│        └─ matplotlib-base 2.2.5, which cannot be installed (as previously explained);
+└─ python =3.10 * is not installable because there are no viable options
+   ├─ python [3.10.0|3.10.1|...|3.10.9], which cannot be installed (as previously explained);
+   ├─ python 3.10.8, which cannot be installed (as previously explained);
+   └─ python [3.10.0|3.10.10|...|3.10.9] conflicts with any installable versions previously reported.
+
+

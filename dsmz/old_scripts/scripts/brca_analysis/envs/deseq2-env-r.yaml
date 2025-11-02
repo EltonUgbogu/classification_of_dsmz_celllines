@@ -1,0 +1,52 @@
+name: deseq2-r-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: strict
+dependencies:
+  # R + Bioconductor (Bioc 3.16 line that matches R 4.2.x)
+  - r-base=4.2.3
+  - bioconductor-deseq2=1.38.*
+  - bioconductor-summarizedexperiment
+  - bioconductor-biobase
+  - bioconductor-genomicranges
+  - bioconductor-iranges
+  - bioconductor-s4vectors
+  - bioconductor-limma
+  - bioconductor-edger
+  # (optional) bioconductor-genefilter, sva if you use them elsewhere
+  - bioconductor-genefilter
+  - bioconductor-sva
+  - bioconductor-biocparallel
+
+  # CRAN packages (all from conda to avoid source builds)
+  - r-tidyverse
+  - r-matrixstats
+  - r-pheatmap
+  - r-uwot
+  - r-cluster
+  - r-fpc
+  - r-clustercrit
+  - r-patchwork
+  - r-rstatix
+  - r-ggpubr
+  - r-rcpp
+  - r-rcolorbrewer
+  - r-viridis
+  - r-viridislite
+  - r-gridextra
+  - r-lubridate
+  - r-data.table
+  - r-glue
+  - r-optparse
+  - r-gtable
+  - r-mass
+  - r-nnet
+  - r-car
+  - r-cardata
+
+  # low-level libs (help avoid runtime surprises)
+  - libxml2
+  - libpng
+  - zlib
