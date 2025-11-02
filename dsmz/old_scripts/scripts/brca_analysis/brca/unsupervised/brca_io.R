@@ -6,38 +6,57 @@ config <- list(
   tcga_brca_subtype_metadata = c("/Users/eltonugbogu/classification_of_dsmz_celllines/dsmz/old_scripts/scripts/brca_analysis/brca/unsupervised/TCGA_BRCA_project_subtype.csv")
 )
 
-
-if (!is.null(dsmz_organ_filter)) {
-  keep_ids <- dsmz_meta$sample_id[dsmz_meta$organ %in% dsmz_organ_filter]
-  dsmz_meta <- dsmz_meta[dsmz_meta$sample_id %in% keep_ids, , drop = FALSE]
-  dsmz_counts <- dsmz_counts[, keep_ids, drop = FALSE]
-}
-# tcga_se - tcga_raw$se from load_tcga_data function
-# tcga_counts - tcga_raw$counts from load_tcga_data function
-# tcga_project_filter - subset of tcga organ/tissue projects_id
+# --- TCGA-BRCA loading function ---
+# tcga_counts - TCGA expression matrix for all projects
+# tcga_se - TCGA SummarizedExperiment for all projects
+# tcga_project_filter - TCGA project filter
+# return: tcga_brca_counts - TCGA expression matrix for all projects matching the project filter
 load_tcga_brca_data <- function(tcga_counts, tcga_se, tcga_project_filter) {
-  if (!is.null(tcga_project_filter)) {
-    keep_tcga_brca <- colnames(tcga_counts) %in% colnames(assay(tcga_se)) &
-               as.character(colData(tcga_se)[colnames(tcga_counts), "project_id"]) %in% tcga_project_filter
-    tcga_brca_counts <- tcga_counts[, keep_tcga_brca, drop = FALSE]
-    log_dims("TCGA (after project subset)", tcga_brca_counts)
-    stopifnot(ncol(tcga_brca_counts) > 0L)
-    return(tcga_brca_counts)
+  if (is.null(tcga_project_filter)) {
+    stop("tcga_project_filter is null")
   }
+  
+  # Get project_id for samples in tcga_counts
+  sample_names <- colnames(tcga_counts)
+  project_ids <- as.character(colData(tcga_se)[sample_names, "project_id"])
+  
+  # Keep only samples with matching project_id
+  keep_tcga_brca <- project_ids %in% tcga_project_filter
+  
+  if (sum(keep_tcga_brca) == 0) {
+    stop("No TCGA samples match the project filter: ", paste(tcga_project_filter, collapse = ", "))
+  }
+  
+  tcga_brca_counts <- tcga_counts[, keep_tcga_brca, drop = FALSE]
+  cat("tcga_brca_counts dimensions: ", dim(tcga_brca_counts), "\n") # print dimensions of tcga_brca_counts
+  
+  return(tcga_brca_counts)
 }
 
-# dsmz_counts - dsmz_raw$counts from load_dsmz_data function
-# dsmz_meta - dsmz_raw$meta from load_dsmz_data function
-# dsmz_organ_filter - subset of dsmz organ/tissue
+
+
+# --- DSMZ-BRCA loading function ---
+# dsmz_counts - DSMZ expression matrix for all samples
+# dsmz_meta - DSMZ metadata
+# dsmz_organ_filter - DSMZ organ filter
+# return: dsmz_brca_counts - DSMZ expression matrix for all samples matching the organ filter
 load_dsmz_brca_data <- function(dsmz_counts, dsmz_meta, dsmz_organ_filter) {
-  stopifnot("organ" %in% colnames(dsmz_meta))
-  if (!is.null(dsmz_organ_filter)) {
-    keep_dsmz_brca <- dsmz_meta$sample_id[dsmz_meta$organ %in% dsmz_organ_filter]
-    dsmz_brca_counts <- dsmz_counts[, keep_dsmz_brca, drop = FALSE]
-    log_dims("DSMZ (after organ subset)", dsmz_brca_counts)
-    stopifnot(ncol(dsmz_brca_counts) > 0L)
-    return(dsmz_brca_counts)
+  if (is.null(dsmz_organ_filter)) {
+    stop("dsmz_organ_filter is null")
   }
+  
+  stopifnot("organ" %in% colnames(dsmz_meta))
+  
+  keep_dsmz_brca <- dsmz_meta$sample_id[dsmz_meta$organ %in% dsmz_organ_filter]
+  
+  if (length(keep_dsmz_brca) == 0) {
+    stop("No DSMZ samples match the organ filter: ", paste(dsmz_organ_filter, collapse = ", "))
+  }
+  
+  dsmz_brca_counts <- dsmz_counts[, keep_dsmz_brca, drop = FALSE]
+  log_dims("DSMZ (after organ subset)", dsmz_brca_counts)
+  
+  return(dsmz_brca_counts)
 }
 
 # brca_counts - tcga_brca_counts from load_tcga_brca_data function
@@ -96,48 +115,3 @@ load_tcga_brca_data_by_pam50 <- function(brca_counts,
   return(list(brca_subtype_counts = tcga_subtype_counts, labels = labels))
 }
 
-
-
-
-write_dimension_report <- function(outdir, dims_list) {
-  dim_report <- file.path(outdir, "dimension_report.txt")
-  dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
-  con <- file(dim_report, open = "wt")
-  on.exit(close(con), add = TRUE)
-  lapply(names(dims_list), function(nm) write_dims_line(con, nm, dims_list[[nm]]))
-}
-
-safe_rds_save <- function(obj, path) {
-  dir.create(dirname(path), showWarnings = FALSE, recursive = TRUE)
-  saveRDS(obj, path)
-}
-
-log_dims <- function(tag, mat) {
-  ng <- if (!is.null(mat)) nrow(mat) else NA_integer_
-  ns <- if (!is.null(mat)) ncol(mat) else NA_integer_
-  cat(sprintf("[DIM] %-20s: %8s genes x %6s samples\n", tag, format(ng, big.mark=","), format(ns, big.mark=",")))
-}
-
-write_dims_line <- function(con, tag, mat) {
-  ng <- if (!is.null(mat)) nrow(mat) else NA_integer_
-  ns <- if (!is.null(mat)) ncol(mat) else NA_integer_
-  writeLines(sprintf("%-24s\tgenes=%d\tsamples=%d", tag, ng, ns), con)
-}
-
-## form clustering.R
-ensure_dir <- function(path) {
-  dir.create(path, showWarnings = FALSE, recursive = TRUE)
-  invisible(path)
-}
-
-safe_rds_save <- function(object, file) {
-  ensure_dir(dirname(file))
-  saveRDS(object, file = file)
-}
-
-run_pca_and_save <- function(V_adj, outdir, n_hvg = 3000, max_pc = 30) {
-  ensure_dir(outdir)
-  pcs <- make_pcs_matrix(V_adj, n_hvg = n_hvg, max_pc = max_pc)
-  safe_rds_save(pcs, file.path(outdir, "pca_objects.rds"))
-  pcs
-}
