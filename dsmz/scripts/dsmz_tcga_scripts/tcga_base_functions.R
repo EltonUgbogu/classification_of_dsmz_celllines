@@ -43,7 +43,7 @@ verify_purity_data <- function(tcga_se, purity_file=NULL) {
 purity_adjust_log <- function(tcga_norm, purity=NULL) {   
   if (is.null(purity)) return(tcga_norm)                # Return input if no purity data
   out <- tcga_norm                                      # Initialize output matrix
-  cat("[INFO] Applying purity adjustment on VST...\n")  # Print message indicating adjustment
+  cat("[INFO] Assessing purity adjustment on VST...\n")  # Print message indicating adjustment
   keep_samp <- intersect(colnames(tcga_norm), names(purity)[!is.na(purity)])  # Find samples with valid purity values
   M <- tcga_norm[, keep_samp, drop=FALSE]               # Subset VST matrix to valid samples
   pu <- purity[keep_samp]                              # Subset purity to valid samples
@@ -61,14 +61,19 @@ purity_adjust_log <- function(tcga_norm, purity=NULL) {
     cat(sprintf("[INFO] Removing %d purity-associated genes\n", length(drop)))  # Print number of dropped genes
     M <- M[setdiff(rownames(M), drop), , drop=FALSE]   # Remove identified genes
   }
+  cat("[INFO] Regressing out infiltration (1 - purity) on the log scale...\n")
   # Regress out infiltration (1 - purity) on the log scale
   infilt <- 1 - pu                                     # Calculate infiltration (1 - purity)
   design <- model.matrix(~ infilt)                      # Create design matrix for regression
+  cat("[INFO] Fitting linear model using limma...\n")
   fit <- lmFit(M, design)                              # Fit linear model using limma
   beta <- fit$coefficients[, "infilt", drop=FALSE]     # Extract infiltration coefficients
   Madj <- as.matrix(M) - beta %*% t(infilt)            # Adjust matrix by subtracting infiltration effect
   out <- tcga_norm                                      # Initialize output matrix
+  cat("[INFO] Finding common genes after assessing purity adjustment...\n")
   common_g <- intersect(rownames(Madj), rownames(out))  # Find common genes
   out[common_g, colnames(Madj)] <- Madj[common_g, ]    # Update adjusted values
+  # save the dropped genes to a file
+  writeLines(drop, file.path(outdir, "purity_negatively_associated_genes.txt"))
   list(V = out, dropped = drop)                        # Return adjusted matrix and dropped genes
 }

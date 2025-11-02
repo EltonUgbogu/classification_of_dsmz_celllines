@@ -12,12 +12,15 @@ make_pca_plot <- function(M,
                           path_pdf,
                           center = TRUE, 
                           scale = FALSE) {  # ← scale = FALSE by default for VST
+  cat("[INFO] Making PCA plot...\n")
   # Input validation
   stopifnot(is.matrix(M) || is.data.frame(M))
   stopifnot(length(batch_labels) == ncol(M))
 
   pr <- prcomp(t(M), center = center, scale. = scale)
+  cat("[INFO] Calculating variance explained...\n")
   var_expl <- (pr$sdev^2) / sum(pr$sdev^2) * 100
+  cat("[INFO] Creating data frame...\n")
   df <- data.frame(
     PC1 = pr$x[, 1],
     PC2 = pr$x[, 2],
@@ -25,7 +28,7 @@ make_pca_plot <- function(M,
     sample = rownames(pr$x),
     stringsAsFactors = FALSE
   )
-
+  cat("[INFO] Saving PCA plot to PDF...\n")
   # Save to PDF safely
   safe_pdf(path_pdf, {
     layout(matrix(c(1, 2), nrow = 1), widths = c(3, 1))
@@ -59,7 +62,47 @@ make_pca_plot <- function(M,
   return(df)
 }
 
-
+# M - matrix of data (merged counts matrix of TCGA and DSMZ)
+# title - title of the plot
+# path_pdf - path to save the plot
+# batch_labels - vector of batch labels e,g c("TCGA", "DSMZ")
+# seed - random seed (default: 42)
+# n_neighbors - number of neighbors (default: 20)
+# min_dist - minimum distance (default: 0.3)
+# metric - metric to use for UMAP (default: cosine)
+make_umap <- function(M, title, path_pdf, batch_labels, seed = 42, n_neighbors = 20, min_dist = 0.3,
+                      metric = "cosine", scale = FALSE) {
+  cat("[INFO] Making UMAP...\n")
+  set.seed(seed)
+  
+  if (length(batch_labels) != ncol(M)) {
+    stop(sprintf("length(batch_labels) must equal number of samples (ncol(M)): %d != %d", length(batch_labels), ncol(M)))
+  }
+  cat(sprintf("[INFO] Running UMAP with %d samples and %d features\n", ncol(M), nrow(M)))
+  cat(sprintf("[INFO] Running UMAP with scale = %s\n", scale))
+  emb <- uwot::umap(t(M),
+                    n_neighbors = n_neighbors,
+                    min_dist = min_dist,
+                    metric = metric,
+                    scale = scale,          # Use uwot's internal scaling
+                    verbose = FALSE)
+  
+  emb <- as.data.frame(emb)
+  colnames(emb) <- c("UMAP1", "UMAP2")
+  emb$sample <- colnames(M)
+  emb$batch <- factor(batch_labels)
+  
+  cat(sprintf("[INFO] Saving UMAP as pdf: %s\n", path_pdf))
+  safe_pdf(path_pdf, {
+    ggplot(emb, aes(UMAP1, UMAP2, color = batch)) + 
+      geom_point(alpha = 0.85, size = 1.5) + 
+      theme_bw() + 
+      ggtitle(title)
+  })
+  
+  cat(sprintf("[INFO] UMAP saved to PDF: %s\n", path_pdf))
+  invisible(emb)
+}
 
 plot_umap_on_PCs <- function(PCs, batch_labels, title, n_neighbors = 20, min_dist = 0.3, metric = "cosine", seed = 42) {
   set.seed(seed)

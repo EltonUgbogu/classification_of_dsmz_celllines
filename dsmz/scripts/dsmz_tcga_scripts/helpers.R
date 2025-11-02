@@ -1,14 +1,6 @@
 # Helpers: low-level utility functions
 # Place in R/helpers.R
 
-# Library imports for helper code (not necessary to call library() here; main script should load them)
-strip_ensver <- function(x) sub("\\..*$","", x)
-as_df <- function(x) as.data.frame(x, stringsAsFactors = FALSE)
-
-# Simple logging helpers
-log_info  <- function(...) cat("[INFO] ", sprintf(...), "\n", sep = "")
-log_warn  <- function(...) cat("[WARN] ", sprintf(...), "\n", sep = "")
-log_error <- function(...) cat("[ERROR]", sprintf(...), "\n", sep = "")
 
 #' @brief Calculates minPts for clustering based on dataset size.
 #' @param n Integer, total samples.
@@ -71,20 +63,6 @@ make_pcs_matrix <- function(V_adj, n_hvg = 3000, max_pc = 30, center = TRUE, sca
   pcs_obj <- helpers_make_pcs(mat, n_hvg = n_hvg, max_pc = max_pc)
   pcs_obj$PC
 }
-
-
-
-make_umap <- function(PC, seed = 42, n_neighbors = 20, min_dist = 0.3,
-                     metric = "cosine") {
-  set.seed(seed)
-  emb <- uwot::umap(PC, n_neighbors = n_neighbors, min_dist = min_dist,
-                    metric = metric, verbose = FALSE)
-  emb <- as.data.frame(emb)
-  colnames(emb) <- c("UMAP1", "UMAP2")
-  emb$sample   <- rownames(PC)
-  emb
-}
-
 
 
 safe_rds_save <- function(obj, path) {
