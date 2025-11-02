@@ -3,26 +3,39 @@
 
 # Build a DSMZ count matrix with Ensembl IDs as row names
 # and sample names as column names
-build_dsmz_matrix <- function(dsmz_raw) {               # Define function to build DSMZ count matrix
-  cat("[INFO] Building DSMZ count matrix...\n")        # Print message indicating matrix construction
-  annot <- c("Ensembl_ID","gene_name","Ensembl_ID_with_version")  # Define annotation columns to exclude
-  sample_cols <- setdiff(colnames(dsmz_raw), annot)    # Identify sample columns
-  dsmz_raw[sample_cols] <- lapply(dsmz_raw[sample_cols], function(x) as.numeric(as.character(x)))  # Convert sample columns to numeric
-  M <- as.matrix(dsmz_raw[, sample_cols, drop=FALSE])  # Create matrix from sample columns
-  rownames(M) <- dsmz_raw$Ensembl_ID                   # Set Ensembl IDs as row names
-  if (any(duplicated(rownames(M)))){                    # Check for duplicate gene IDs
+build_dsmz_matrix <- function(dsmz_raw) {
+  cat("[INFO] Building DSMZ count matrix...\n")
+  annot <- c("Ensembl_ID", "gene_name", "Ensembl_ID_with_version")
+  sample_cols <- setdiff(colnames(dsmz_raw), annot)
+  # Convert sample columns to numeric
+  dsmz_raw[sample_cols] <- lapply(dsmz_raw[sample_cols], function(x) {
+    as.numeric(as.character(x))
+  })  
+  M <- as.matrix(dsmz_raw[, sample_cols, drop = FALSE]) 
+  # Set row names: Ensembl_ID without version
+  rownames(M) <- sub("\\..*$", "", dsmz_raw$Ensembl_ID) 
+  # Collapse duplicates by summing
+  if (any(duplicated(rownames(M)))) {
     dup_genes <- rownames(M)[duplicated(rownames(M))]
-    cat(sprintf("[INFO] Collapsing %d duplicate DSMZ genes: %s\n", 
-                length(dup_genes), paste(head(dup_genes, 5), collapse=", ")))
-    M <- rowsum(M, rownames(M), reorder = TRUE)        # Sum counts for duplicate genes
+    cat(sprintf("[INFO] Collapsing %d duplicate DSMZ genes: %s\n",
+                length(dup_genes), paste(head(dup_genes, 5), collapse = ", ")))
+    M <- rowsum(M, group = rownames(M), reorder = TRUE)
   }
-  keep <- vapply(as.data.frame(M), function(v) any(!is.na(v)), logical(1))  # Identify columns with non-NA values
-  if (!all(keep)) {                                    # Check if any columns are all NA
-    cat(sprintf("[WARN] Dropping %d DSMZ columns that are all NA\n", sum(!keep)))  # Warn about dropped columns
-    M <- M[, keep, drop=FALSE]                         # Drop all-NA columns
+  # Identify and drop all-NA columns
+  keep <- colSums(!is.na(M)) > 0
+  if (!all(keep)) {
+    cat(sprintf("[WARN] Dropping %d DSMZ columns that are all NA\n", sum(!keep)))
+    M <- M[, keep, drop = FALSE]
   }
-  storage.mode(M) <- "double"                          # Convert count matrix to double precision
-  M                                                     # Return DSMZ count matrix
+  storage.mode(M) <- "double"
+  # Print first 5 sample names (colnames) 
+  cat("[INFO] First 5 sample names (colnames):\n")
+  cat(paste("   ", head(colnames(M), 5), collapse = "\n    "), "\n")
+  # Print first 5 gene IDs (rownames) 
+  cat("[INFO] First 5 gene IDs (rownames):\n")
+  cat(paste("   ", head(rownames(M), 5), collapse = "\n    "), "\n")
+  cat(sprintf("[INFO] Final matrix: %d genes x %d samples\n", nrow(M), ncol(M)))
+  M
 }
 
 

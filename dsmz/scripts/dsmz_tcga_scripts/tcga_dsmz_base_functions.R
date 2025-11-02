@@ -4,6 +4,7 @@
 # min_shared - it can also be used to select features (genes)
 
 common_genes <- function(tcga_counts, dsmz_counts, min_shared=NULL) {
+  cat("[INFO] Finding common genes...\n")
   cat(sprintf("[INFO] TCGA count matrix: %d genes x %d sample\n", nrow(tcga_counts), ncol(tcga_counts)))  # Print dimensions of raw DSMZ data
   cat(sprintf("[INFO] DSMZ count matrix: %d genes x %d sample\n", nrow(dsmz_counts), ncol(dsmz_counts)))  # Print dimensions of raw DSMZ data
   print(head(rownames(tcga_counts)))
@@ -24,6 +25,7 @@ common_genes <- function(tcga_counts, dsmz_counts, min_shared=NULL) {
 # return list with merged counts matrix and batch factor
 
 merge_counts <- function(tcga_counts, dsmz_counts, dataset_names) {
+  cat("[INFO] Merging TCGA and DSMZ counts...\n")
   # Combine TCGA and DSMZ counts matrices after common genes have been identified
   Xc_raw <- cbind(tcga_counts, dsmz_counts) 
   # ensure dataset_name is a vector of length n ; n=2
