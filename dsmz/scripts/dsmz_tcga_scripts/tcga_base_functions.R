@@ -3,15 +3,15 @@
 # Remove Ensembl version suffixes and sum duplicates
 harmonize_gene_ids <- function(tcga_counts) {           # Define function to harmonize TCGA gene IDs
   cat("[INFO] Harmonizing TCGA gene IDs...\n")         # Print message indicating gene ID harmonization
-  g <- sub("\\..*$","", rownames(tcga_counts))         # Remove version suffixes from Ensembl IDs
-  if (any(duplicated(g))) {                            # Check for duplicate gene IDs
-    tcga_counts <- rowsum(tcga_counts, g, reorder = TRUE)  # Sum counts for duplicate genes
-    rownames(tcga_counts) <- sort(unique(g))           # Set unique sorted gene IDs as row names
-  } else {
-    rownames(tcga_counts) <- g                         # Set harmonized gene IDs as row names
-  }
+  rownames(tcga_counts) <- sub("\\..*$","", rownames(tcga_counts))         # Remove version suffixes from Ensembl IDs
+  if (any(duplicated(rownames(tcga_counts)))) {
+  dup_genes <- rownames(tcga_counts)[duplicated(rownames(tcga_counts))]
+  cat(sprintf("[INFO] Collapsing %d duplicate TCGA genes: %s\n", 
+              length(dup_genes), paste(head(dup_genes, 5), collapse=", ")))
+  tcga_counts <- rowsum(tcga_counts, rownames(tcga_counts), reorder = TRUE)
+  }                
+  storage.mode(tcga_counts) <- "double"                # Convert count matrix to double precision
   tcga_counts                                          # Return harmonized count matrix
-  storage.mode(tcga_counts) <- "double"                # Convert count matrix to double precisio
 }
 
 

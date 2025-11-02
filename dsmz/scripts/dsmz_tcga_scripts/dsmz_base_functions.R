@@ -10,15 +10,19 @@ build_dsmz_matrix <- function(dsmz_raw) {               # Define function to bui
   dsmz_raw[sample_cols] <- lapply(dsmz_raw[sample_cols], function(x) as.numeric(as.character(x)))  # Convert sample columns to numeric
   M <- as.matrix(dsmz_raw[, sample_cols, drop=FALSE])  # Create matrix from sample columns
   rownames(M) <- dsmz_raw$Ensembl_ID                   # Set Ensembl IDs as row names
-  if (any(duplicated(rownames(M))))                    # Check for duplicate gene IDs
+  if (any(duplicated(rownames(M)))){                    # Check for duplicate gene IDs
+    dup_genes <- rownames(M)[duplicated(rownames(M))]
+    cat(sprintf("[INFO] Collapsing %d duplicate DSMZ genes: %s\n", 
+                length(dup_genes), paste(head(dup_genes, 5), collapse=", ")))
     M <- rowsum(M, rownames(M), reorder = TRUE)        # Sum counts for duplicate genes
+  }
   keep <- vapply(as.data.frame(M), function(v) any(!is.na(v)), logical(1))  # Identify columns with non-NA values
   if (!all(keep)) {                                    # Check if any columns are all NA
     cat(sprintf("[WARN] Dropping %d DSMZ columns that are all NA\n", sum(!keep)))  # Warn about dropped columns
     M <- M[, keep, drop=FALSE]                         # Drop all-NA columns
   }
-  M                                                    # Return DSMZ count matrix
   storage.mode(M) <- "double"                          # Convert count matrix to double precision
+  M                                                     # Return DSMZ count matrix
 }
 
 

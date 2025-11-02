@@ -10,31 +10,33 @@ suppressPackageStartupMessages({
   library(matrixStats)
   library(sva)
   library(pheatmap)
+  library(SummarizedExperiment)
+  library(tidyverse)
+  library(DESeq2)
 })
 
 # --- Source your functions ---
-src <- function(...) lapply(file.path("R", c(...)), source, chdir = TRUE)
-src("io.R",
-    "tcga_base_functions.R",
-    "dsmz_base_functions.R",
-    "tcga_dsmz_base_functions.R",
-    "normalization.R",
-    "visualize.R",
-    "helpers.R",
-    "clustering_fixed.R",
-    "clustering_dynamic.R",
-    "clustering_hdbscan.R",
-    "labeling_tcga.R")
+files <- c(
+  "io.R",
+  "tcga_base_functions.R",
+  "dsmz_base_functions.R",
+  "tcga_dsmz_base_functions.R",
+  "normalization.R",
+  "visualize.R",
+  "helpers.R"
+)
+invisible(lapply(files, source, chdir = TRUE))
 
 
-tcga <- load_tcga_data(config$tcga_se_rds)
+
+tcga_raw <- load_tcga_data(config$tcga_se_rds)
 dsmz <- load_dsmz_data(config$dsmz_rds, config$dsmz_meta_csv)
-outdir <- "/home/chu25/dsmz/results/unsupervised"
-purity <- verify_purity_data(tcga$se, config$purity_tsv)
-tcga_counts <- harmonize_gene_ids(tcga$counts)
+outdir <- "/home/chu25/dsmz/scripts/dsmz_tcga_scripts/results"
+purity <- verify_purity_data(tcga_raw$se, config$purity_tsv)
+tcga_counts <- harmonize_gene_ids(tcga_raw$counts)
 dsmz_counts <- build_dsmz_matrix(dsmz$raw)
 common <- common_genes(tcga_counts, dsmz_counts, min_shared=NULL)
-merged_exp_data <- merge_counts(tcga_counts, dsmz_counts, dataset_names=c("TCGA", "DSMZ"))
+merged_exp_data <- merge_counts(common$tcga_counts, common$dsmz_counts, dataset_names=c("TCGA", "DSMZ"))
 tcga_vst <- vst_per_dataset(common$tcga_counts, coldata = data.frame(row.names = colnames(common$tcga_counts)), design = ~ 1)
 dsmz_vst <- vst_per_dataset(common$dsmz_counts, coldata = data.frame(row.names = colnames(common$dsmz_counts)), design = ~ 1)
 batch_corrected_counts <- batch_adjust(merged_exp_data$Xc_raw, merged_exp_data$batch, seed=config$seed)
