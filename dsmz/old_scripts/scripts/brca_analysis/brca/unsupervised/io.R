@@ -12,8 +12,8 @@ config <- list(                                         # Define configuration l
   dsmz_meta_csv = "/home/chu25/data/dsmz/DSMZ_metadata.csv",    # Path to DSMZ metadata CSV
   purity_tsv    = NULL,                                # Optional path to purity TSV (sample, purity columns); NULL if not used
   # Outputs
-  outdir        = "/home/chu25/dsmz/results/",  # Output directory for results
-  dsmz_cache_rds = "/home/chu25/data/dsmz/DSMZ_aligned_cache.rds"  # Path to cached aligned DSMZ data
+  outdir        = "/home/chu25/dsmz/sctipts/dsmz_tcga_scripts/results"
+  dsmz_cache_rds = "/home/chu25/data/dsmz/DSMZ_aligned_cache.rds" # Path to cached aligned DSMZ data
 )
 
 # Create necessary directories
@@ -55,5 +55,3 @@ load_dsmz_data <- function(counts_path, meta_path) {    # Define function to loa
   cat(sprintf("[INFO] DSMZ table: %d rows x %d cols\n", nrow(raw), ncol(raw)))  # Print dimensions of raw DSMZ data
   list(raw = raw, meta = meta)                         # Return list with raw counts and metadata
 }
-
-
