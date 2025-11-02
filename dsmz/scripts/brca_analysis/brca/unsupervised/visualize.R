@@ -1,28 +1,75 @@
 # Visualization helpers
 # Place in R/visualize.R
 
-make_pca_plot <- function(M, lab_batch, title, path_pdf, n_top = 5000) {
-  sel <- top_var_genes(M, n = min(n_top, nrow(M)))
-  X   <- t(scale(M[sel, , drop = FALSE]))
-  pr  <- prcomp(X, center = FALSE, scale. = FALSE)
+# M - VST normalized matrix of expression data
+# batch_labels - vector of batch labels
+# title - title of the plot
+# path_pdf - path to save the plot
+
+make_pca_plot <- function(M, 
+                          batch_labels,
+                          title = "PCA Plot", 
+                          path_pdf,
+                          center = TRUE, 
+                          scale = FALSE) {  # ← scale = FALSE by default for VST
+  # Input validation
+  stopifnot(is.matrix(M) || is.data.frame(M))
+  stopifnot(length(batch_labels) == ncol(M))
+
+  pr <- prcomp(t(M), center = center, scale. = scale)
   var_expl <- (pr$sdev^2) / sum(pr$sdev^2) * 100
-  df <- data.frame(PC1 = pr$x[,1], PC2 = pr$x[,2],
-                   batch = lab_batch,
-                   sample = rownames(pr$x),
-                   stringsAsFactors = FALSE)
+  df <- data.frame(
+    PC1 = pr$x[, 1],
+    PC2 = pr$x[, 2],
+    batch = factor(batch_labels),
+    sample = rownames(pr$x),
+    stringsAsFactors = FALSE
+  )
+
+  # Save to PDF safely
   safe_pdf(path_pdf, {
-    layout(matrix(c(1,2), nrow = 1))
-    plot(df$PC1, df$PC2, pch = 19, cex = 0.7, col = as.factor(df$batch),
+    layout(matrix(c(1, 2), nrow = 1), widths = c(3, 1))
+
+    # PCA scatter
+    plot(df$PC1, df$PC2,
+         pch = 19, cex = 1.2,
+         col = as.numeric(df$batch),
          xlab = sprintf("PC1 (%.1f%%)", var_expl[1]),
          ylab = sprintf("PC2 (%.1f%%)", var_expl[2]),
-         main = title)
-    legend("topright", legend = levels(as.factor(df$batch)),
-           col = seq_along(levels(as.factor(df$batch))), pch = 19, cex = 0.8)
-    barplot(var_expl[1:20], las = 2, main = "Explained variance (top 20 PCs)",
-            ylab = "% variance", xlab = "PC")
+         main = title,
+         frame.plot = FALSE)
+    legend("topright",
+           legend = levels(df$batch),
+           col = seq_along(levels(df$batch)),
+           pch = 19, cex = 0.9, bty = "n")
+
+    # Variance explained barplot
+    barplot(var_expl[1:min(20, length(var_expl))],
+            names.arg = paste0("PC", 1:min(20, length(var_expl))),
+            las = 2, cex.names = 0.7,
+            ylab = "% Variance Explained",
+            main = "Top 20 PCs")
+
     layout(1)
   })
-  invisible(list(scores = df, var_expl = var_expl))
+
+  message(sprintf("[INFO] PCA plot saved: %s", path_pdf))
+  message(sprintf("   PC1: %.1f%%, PC2: %.1f%%", var_expl[1], var_expl[2]))
+
+  return(df)
+}
+
+
+
+plot_umap_on_PCs <- function(PCs, batch_labels, title, n_neighbors = 20, min_dist = 0.3, metric = "cosine", seed = 42) {
+  set.seed(seed)
+  emb <- uwot::umap(PC, n_neighbors = n_neighbors, min_dist = min_dist, metric = metric)
+  emb <- as.data.frame(emb); colnames(emb) <- c("UMAP1","UMAP2")
+  emb$sample <- rownames(PCs)
+  emb$batch <- factor(batch_labels)
+  p <- ggplot(emb, aes(UMAP1, UMAP2, color = batch)) + geom_point(alpha = 0.85, size = 1.5) + theme_bw() + ggtitle(title)
+  ggsave(path_pdf, p, width = 7, height = 6)
+  emb
 }
 
 plot_umap_with_annotation <- function(PC_or_X, ann, out_file, n_neighbors = 20, min_dist = 0.3, metric = "cosine", title = NULL) {
