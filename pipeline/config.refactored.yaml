@@ -1,0 +1,102 @@
+paths:
+  data_root: /home/chu25/dsmz/bcc_analysis/results
+  tcga_raw_rds: /home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered.rds
+  dsmz_raw_rds: /home/chu25/data/dsmz/DSMZ_count_gene.rds
+  vst_joint_rds: /home/chu25/dsmz/bcc_analysis/results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
+  tcga_brca_pam50_expr: /home/chu25/dsmz/bcc_analysis/bcc_preprocessing/results/TCGA-BRCA_PAM50_expr_matrix.rds
+  dsmz_bcc_pam50_expr: /home/chu25/dsmz/bcc_analysis/bcc_preprocessing/results/DSMZ-BCC_PAM50_expr_matrix.rds
+  tcga_pam50_expr: /home/chu25/dsmz/bcc_analysis/bcc_preprocessing/results/TCGA-BRCA_PAM50_expr_matrix.rds
+  dsmz_pam50_expr: /home/chu25/dsmz/bcc_analysis/bcc_preprocessing/results/DSMZ-BCC_PAM50_expr_matrix.rds
+  tcga_subtype_csv: /home/chu25/dsmz/bcc_analysis/TCGA_BRCA_project_subtype.csv
+  dsmz_meta_csv: /home/chu25/data/dsmz/DSMZ_metadata.csv
+  unsup_root: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results
+  tcga_hvg_expr: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/hvg/TCGA-BRCA_HVG500_expr_matrix.rds
+  dsmz_hvg_expr: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/hvg/DSMZ-BCC_HVG500_expr_matrix.rds
+  tumour_nh_input_root: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/tumour_neighbourhoods_input
+  tumour_nh_expr_pam50: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/tumour_neighbourhoods_input/BRCA_TCGA-DSMZ_PAM50_samples_x_genes.rds
+  tumour_nh_expr_hvg: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/tumour_neighbourhoods_input/BRCA_TCGA-DSMZ_HVG500_samples_x_genes.rds
+  tumour_nh_map_rds_pam50: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/tumour_neighbourhoods_input/cell_line_to_original_sample_id_pam50.rds
+  tumour_nh_map_rds_hvg: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/tumour_neighbourhoods_input/cell_line_to_original_sample_id_hvg.rds
+  tumour_nh_map_rds: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/tumour_neighbourhoods_input/cell_line_to_original_sample_id.rds
+  tumour_nh_base_functions: /home/chu25/dsmz/pipeline/pipeline/unsupervised/R/base_functions
+  base_functions_dir: /home/chu25/dsmz/pipeline/pipeline/unsupervised/R
+  cell_vst_rds: /home/chu25/dsmz/bcc_analysis/results/dsmz_vst_bcc_batch_corrected.rds
+  tumour_vst_rds: /home/chu25/dsmz/bcc_analysis/results/tcga_vst_brca_subtype_batch_corrected.rds
+  agnostic_cluster_root: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/agnostic_clustering
+features:
+  pam50_gene_list: /home/chu25/dsmz/pipeline/pipeline/unsupervised/resources/pam50_genes.txt
+  pam50_ensembl_gene_list: /home/chu25/dsmz/pipeline/pipeline/unsupervised/resources/pam50_ensembl_ids.txt
+  hvg_dir: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/feature_selection_unsupervised
+  hvg_joint_scores_tsv: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_joint_ranks_kTotal_vs_MX.tsv
+  hvg_final_gene_list: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt
+  methods:
+  - Variance
+  - MAD
+  - MeanAbsDev
+  - Entropy
+  - PCA
+  - Spearman
+  - MX
+  - kTotal
+  method_outdir: /home/chu25/dsmz/pipeline/pipeline/unsupervised/results/featuresets
+feature_selection:
+  top_n_method: 3000
+  final_top: 500
+graph:
+  similarity: spearman
+  knn_k: 30
+clustering:
+  k_grid:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+agnostic_clustering:
+  n_pcs: 20
+  max_k_hc: 8
+  k_min: 2
+  k_max: 8
+  dist_method: euclidean
+  seed: 42
+umap:
+  n_neighbors: 20
+  min_dist: 0.3
+  metric_euclidean: euclidean
+  metric_correlation: cosine
+tumour_neighbourhoods:
+  directions:
+  - variance_euc
+  - variance_corr
+  - mad_euc
+  - mad_corr
+  - meanabsdev_euc
+  - meanabsdev_corr
+  - entropy_euc
+  - entropy_corr
+  - pca_euc
+  - pca_corr
+  - spearman_euc
+  - spearman_corr
+  - mx_euc
+  - mx_corr
+  - ktotal_euc
+  - ktotal_corr
+  - pam50_euc
+  - pam50_corr
+  p_consensus_threshold: 0.7
+  top_fraction: 0.1
+  min_composite_score: null
+methods:
+  pam50_corr:
+    feature: PAM50
+    distance: correlation
+  pam50_euc:
+    feature: PAM50
+    distance: euclidean
+  hvg_corr:
+    feature: HVG
+    distance: correlation
+  hvg_euc:
+    feature: HVG
+    distance: euclidean
