@@ -118,21 +118,85 @@ umap:
   metric_correlation: cosine   # use cosine on centered data as proxy for cor
 
 tumour_neighbourhoods:
-  directions: ["pam50_euc", "pam50_corr", "hvg_euc", "hvg_corr"]
+  # All 16 directions: 8 feature sets × 2 distance metrics
+  # PAM50 (legacy, kept for backwards compatibility)
+  directions: [
+    "pam50_euc", "pam50_corr",
+    # 8 feature selection methods × 2 distances
+    "Variance_euc", "Variance_corr",
+    "MAD_euc", "MAD_corr",
+    "MeanAbsDev_euc", "MeanAbsDev_corr",
+    "Entropy_euc", "Entropy_corr",
+    "PCA_euc", "PCA_corr",
+    "Spearman_euc", "Spearman_corr",
+    "MX_euc", "MX_corr",
+    "kTotal_euc", "kTotal_corr"
+  ]
   p_consensus_threshold: 0.7
   top_fraction: 0.10
   min_composite_score: null
 
 methods:
+  # Legacy PAM50 methods (kept for backwards compatibility)
   pam50_corr:
     feature: PAM50
     distance: correlation
   pam50_euc:
     feature: PAM50
     distance: euclidean
+  # Legacy HVG method (kept for backwards compatibility, but now replaced by 8 methods)
   hvg_corr:
     feature: HVG
     distance: correlation
   hvg_euc:
     feature: HVG
     distance: euclidean
+  # New 8 feature selection methods × 2 distances
+  Variance_euc:
+    feature: Variance
+    distance: euclidean
+  Variance_corr:
+    feature: Variance
+    distance: correlation
+  MAD_euc:
+    feature: MAD
+    distance: euclidean
+  MAD_corr:
+    feature: MAD
+    distance: correlation
+  MeanAbsDev_euc:
+    feature: MeanAbsDev
+    distance: euclidean
+  MeanAbsDev_corr:
+    feature: MeanAbsDev
+    distance: correlation
+  Entropy_euc:
+    feature: Entropy
+    distance: euclidean
+  Entropy_corr:
+    feature: Entropy
+    distance: correlation
+  PCA_euc:
+    feature: PCA
+    distance: euclidean
+  PCA_corr:
+    feature: PCA
+    distance: correlation
+  Spearman_euc:
+    feature: Spearman
+    distance: euclidean
+  Spearman_corr:
+    feature: Spearman
+    distance: correlation
+  MX_euc:
+    feature: MX
+    distance: euclidean
+  MX_corr:
+    feature: MX
+    distance: correlation
+  kTotal_euc:
+    feature: kTotal
+    distance: euclidean
+  kTotal_corr:
+    feature: kTotal
+    distance: correlation

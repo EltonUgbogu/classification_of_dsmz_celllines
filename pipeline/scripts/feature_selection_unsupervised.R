@@ -97,7 +97,8 @@ option_list <- list(
   make_option(
     c("--config"),
     type = "character",
-    help = "Path to config.yaml",
+    default = NULL,
+    help = "Path to config.yaml (optional if other args provided)",
     metavar = "FILE"
   ),
   make_option(
@@ -105,6 +106,25 @@ option_list <- list(
     type = "character",
     help = "Path to joint VST .rds",
     metavar = "FILE"
+  ),
+  make_option(
+    c("--outdir"),
+    type = "character",
+    default = NULL,
+    help = "Output directory for feature selection results",
+    metavar = "DIR"
+  ),
+  make_option(
+    c("--top_n_method"),
+    type = "integer",
+    default = NULL,
+    help = "Number of top genes per method (default: 3000)"
+  ),
+  make_option(
+    c("--final_top"),
+    type = "integer",
+    default = NULL,
+    help = "Final number of genes to select per method (default: 500)"
   )
 )
 
@@ -112,21 +132,30 @@ option_list <- list(
 opt <- parse_args(OptionParser(option_list = option_list))
 
 # The script validates that required arguments have been provided.
-if (is.null(opt$config) || is.null(opt$vst_rds)) {
-  stop("Both --config and --vst_rds must be provided.")
+if (is.null(opt$vst_rds)) {
+  stop("--vst_rds must be provided.")
 }
 
 # =============================================================================
 # LOAD CONFIGURATION
 # =============================================================================
 # The config.yaml file contains paths and parameters that may vary between
-# runs or environments, ensuring the code remains flexible and reproducible.
+# runs or environments. If not provided, use command-line arguments directly.
 
-cfg <- yaml::read_yaml(opt$config)
+cfg <- NULL
+if (!is.null(opt$config)) {
+  cfg <- yaml::read_yaml(opt$config)
+}
 
-# Output directory paths are extracted from the configuration.
-unsup_root <- cfg$paths$unsup_root
-fs_subdir  <- file.path(unsup_root, "feature_selection_unsupervised")
+# Output directory: use --outdir if provided, otherwise from config, or default
+if (!is.null(opt$outdir)) {
+  fs_subdir <- opt$outdir
+} else if (!is.null(cfg) && !is.null(cfg$paths$unsup_root)) {
+  unsup_root <- cfg$paths$unsup_root
+  fs_subdir  <- file.path(unsup_root, "feature_selection_unsupervised")
+} else {
+  stop("Either --outdir or --config must be provided.")
+}
 
 # The output directory is created if it does not already exist.
 if (!dir.exists(fs_subdir)) {
@@ -134,8 +163,7 @@ if (!dir.exists(fs_subdir)) {
 }
 
 # Configuration details are logged for debugging and reproducibility purposes.
-message("[FEATURE_SELECTION] unsup_root: ", unsup_root)
-message("[FEATURE_SELECTION] subdir: ", fs_subdir)
+message("[FEATURE_SELECTION] outdir: ", fs_subdir)
 message("[FEATURE_SELECTION] vst_rds: ", opt$vst_rds)
 
 
@@ -1141,6 +1169,28 @@ run_unsupervised_feature_selection <- function(
   nonempty_500 <- vapply(sets_500, length, integer(1)) > 0
   sets_500_use <- sets_500[nonempty_500]
   
+  # ---------------------------------------------------------------------------
+  # EMIT ALL 8 METHOD GENE LISTS FOR DOWNSTREAM PIPELINE FAN-OUT
+  # ---------------------------------------------------------------------------
+  # Create directory for feature set outputs (used by Snakemake fan-out)
+  feature_sets_dir <- file.path(subdir, paste0("feature_sets_top", final_top))
+  dir.create(feature_sets_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  if (!quiet) {
+    message("[INFO] Emitting gene lists for ", length(sets_500_use), " methods to: ", feature_sets_dir)
+  }
+  
+  # Write one gene list file per method
+  for (nm in names(sets_500_use)) {
+    if (length(sets_500_use[[nm]]) > 0) {
+      fn <- file.path(feature_sets_dir, paste0("genes_top", final_top, "_", nm, ".txt"))
+      writeLines(sets_500_use[[nm]], fn)
+      if (!quiet) {
+        message("[INFO]   ", nm, ": ", length(sets_500_use[[nm]]), " genes -> ", basename(fn))
+      }
+    }
+  }
+  
   if (length(sets_500_use) >= 2) {
     # Save method sizes
     method_sizes_500 <- dplyr::tibble(
@@ -1323,13 +1373,28 @@ run_unsupervised_feature_selection <- function(
 # This operator provides default values when configuration parameters are missing.
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-# The main function is executed with parameters from the configuration file.
-# Default values (3000 candidates, 500 final) are used if not specified in the config.
+# Extract parameters: command-line args take precedence over config
+top_n_method <- opt$top_n_method %||% 
+                if (!is.null(cfg) && !is.null(cfg$feature_selection$top_n_method)) {
+                  cfg$feature_selection$top_n_method
+                } else {
+                  3000
+                }
+
+final_top <- opt$final_top %||%
+             if (!is.null(cfg) && !is.null(cfg$feature_selection$final_top)) {
+               cfg$feature_selection$final_top
+             } else {
+               500
+             }
+
+# The main function is executed with parameters from command-line or config.
+# Default values (3000 candidates, 500 final) are used if not specified.
 run_unsupervised_feature_selection(
   vst_rds = opt$vst_rds,
   outdir  = fs_subdir,
-  top_n_method = cfg$feature_selection$top_n_method %||% 3000,
-  final_top    = cfg$feature_selection$final_top %||% 500,
+  top_n_method = top_n_method,
+  final_top    = final_top,
   seed         = 123,
   quiet        = FALSE
 )
