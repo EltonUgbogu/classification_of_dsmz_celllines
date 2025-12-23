@@ -1,28 +1,33 @@
-# tumour_nh_io.R  (pipeline-native)
-# -------------------------------------------------------------------
-# Pipeline-native method discovery for tumour neighbourhood computation
-# Replaces legacy path registry with dynamic discovery based on actual
-# pipeline outputs from Step 1 (agnostic_clustering) and Step 2 (consensus)
-# -------------------------------------------------------------------
+# ==============================================================================
+# tumour_nh_io.R
+# Pipeline-Native Method Discovery for Tumour Neighbourhood Computation
+# ==============================================================================
+#
+# This module dynamically discovers clustering outputs from upstream pipeline
+# stages (agnostic_clustering and consensus) for tumour neighbourhood analysis.
+#
+# ==============================================================================
 
 options(stringsAsFactors = FALSE)
 
-# Return a tibble of clustering methods available for a given direction.
-# This matches your pipeline outputs:
-#  - Step 1 (agnostic_clustering): hc_* and kmeans_* kinds
-#  - Step 2 (consensus): ccp_* kinds
+# ------------------------------------------------------------------------------
+# get_nh_methods: Discover available clustering methods for a given direction
+# ------------------------------------------------------------------------------
+# Returns a tibble with columns: method_id, path, outdir, distance, exists
+
 get_nh_methods <- function(unsup_root, direction) {
+  
   stopifnot(dir.exists(unsup_root))
-  stopifnot(direction %in% c("pam50_euc","pam50_corr","hvg_euc","hvg_corr"))
-
-  # distance type for tumour-neighbourhood computation
+  stopifnot(direction %in% c("pam50_euc", "pam50_corr", "hvg_euc", "hvg_corr"))
+  
+  # Infer distance metric from direction suffix
   dist_type <- if (grepl("_corr$", direction)) "correlation" else "euclidean"
-
-  # roots
+  
+  # Root directories for upstream clustering stages
   agn_root  <- file.path(unsup_root, "agnostic_clustering", direction)
   cons_root <- file.path(unsup_root, "consensus", direction)
-
-  # helper
+  
+  # Helper to construct a method record
   mk <- function(method_id, path) {
     tibble::tibble(
       method_id = method_id,
@@ -31,12 +36,10 @@ get_nh_methods <- function(unsup_root, direction) {
       distance  = dist_type
     )
   }
-
+  
   methods <- list()
-
-  # -------------------------
-  # Step 1: agnostic (integrated)
-  # -------------------------
+  
+  # Step 1: Agnostic clustering (HC available for all; KM for Euclidean only)
   methods <- c(methods,
     list(
       mk("AGN_HC_expr_cell_tumour",
@@ -45,8 +48,7 @@ get_nh_methods <- function(unsup_root, direction) {
          file.path(agn_root, "pca_hc_cell_tumour", "pca_hc_cell_tumour_clusters_optimal.rds"))
     )
   )
-
-  # kmeans only exists for *_euc directions (your Snakefile enforces this)
+  
   if (dist_type == "euclidean") {
     methods <- c(methods,
       list(
@@ -57,10 +59,8 @@ get_nh_methods <- function(unsup_root, direction) {
       )
     )
   }
-
-  # -------------------------
-  # Step 2: CCP consensus (integrated)
-  # -------------------------
+  
+  # Step 2: Consensus clustering (CCP)
   methods <- c(methods,
     list(
       mk("CCP_HC_expr_cell_tumour",
@@ -69,7 +69,7 @@ get_nh_methods <- function(unsup_root, direction) {
          file.path(cons_root, "ccp_hc_pca_cell_tumour", "ccp_hc_pca_cell_tumour_clusters_optimal.rds"))
     )
   )
-
+  
   if (dist_type == "euclidean") {
     methods <- c(methods,
       list(
@@ -80,19 +80,10 @@ get_nh_methods <- function(unsup_root, direction) {
       )
     )
   }
-
+  
+  # Combine and check file existence
   methods <- dplyr::bind_rows(methods) %>%
     dplyr::mutate(exists = file.exists(path))
-
+  
   methods
-}
-
-# Legacy compatibility: provide empty nh_paths for backwards compatibility
-# (some scripts may still reference it, but new code should use get_nh_methods())
-nh_paths <- list()
-
-make_nh_paths <- function(unsup_root) {
-  # Return empty list for legacy compatibility
-  # New code should use get_nh_methods(unsup_root, direction) instead
-  list()
 }
