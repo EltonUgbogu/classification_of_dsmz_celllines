@@ -1,0 +1,930 @@
+#!/usr/bin/env snakemake
+
+# Unsupervised Clustering and Tumour Neighbourhood Analysis Pipeline
+# Fixed: Separate map_rds files for PAM50 and HVG directions
+
+import os
+import re
+from snakemake.shell import shell
+
+configfile: "config/config.yaml"
+
+BASE = os.path.abspath(workflow.basedir)
+
+def abspath(p):
+    return p if os.path.isabs(p) else os.path.abspath(os.path.join(BASE, p))
+
+def cfgpath(*keys):
+    d = cfg
+    for k in keys:
+        d = d[k]
+    return abspath(d)
+
+shell.prefix("set -euo pipefail; source $HOME/miniconda3/etc/profile.d/conda.sh; conda activate tcga-r-env; ")
+
+cfg = config
+
+UNSUP = cfgpath("paths", "unsup_root")
+VST_JOINT = cfgpath("paths", "vst_joint_rds")
+
+# PRESTEP: Feature Selection
+
+rule feature_selection_unsupervised:
+    input:
+        vst = VST_JOINT,
+        cfg_file = "config/config.yaml"
+    output:
+        scores = cfgpath("features", "hvg_joint_scores_tsv"),
+        hvg_list = cfgpath("features", "hvg_final_gene_list"),
+        # Emit all 8 feature set gene lists
+        feature_lists = expand(
+            os.path.join(cfgpath("features", "hvg_dir"), f"feature_sets_top{TOPN}", "genes_top{TOPN}_{{m}}.txt"),
+            m=FEATURE_METHODS
+        )
+    log: "logs/feature_selection_unsupervised.log"
+    shell:
+        r'''
+        mkdir -p $(dirname {output.scores}) $(dirname {output.hvg_list})
+        Rscript scripts/feature_selection_unsupervised.R --config {input.cfg_file} --vst_rds {input.vst} > {log} 2>&1
+        '''
+
+# STEP 1 Config
+
+CELL_VST = cfgpath("paths", "cell_vst_rds")
+TUMOUR_VST = cfgpath("paths", "tumour_vst_rds")
+AGN_ROOT = abspath(cfg["paths"].get("agnostic_cluster_root", os.path.join(UNSUP, "agnostic_clustering")))
+AGN_BASE_FUN = abspath(cfg["paths"].get("agnostic_base_functions_dir", cfg["paths"].get("base_functions_dir", os.path.join(UNSUP, "base_functions"))))
+
+AGN_CFG = cfg.get("agnostic_clustering", {})
+AGN_N_PCS = AGN_CFG.get("n_pcs", 20)
+AGN_MAX_K_HC = AGN_CFG.get("max_k_hc", 8)
+AGN_KMIN = AGN_CFG.get("k_min", 2)
+AGN_KMAX = AGN_CFG.get("k_max", 8)
+AGN_SEED = AGN_CFG.get("seed", 42)
+
+AGN_DIRECTIONS = cfg.get("tumour_neighbourhoods", {}).get("directions", ["hvg_euc", "hvg_corr"])
+AGN_DIRECTION_PATTERN = "|".join(map(re.escape, AGN_DIRECTIONS))
+AGN_EUC_DIRECTIONS = [d for d in AGN_DIRECTIONS if d.endswith("_euc")]
+AGN_EUC_PATTERN = "|".join(map(re.escape, AGN_EUC_DIRECTIONS)) if AGN_EUC_DIRECTIONS else r"a^"
+
+CONS_DIRECTIONS = cfg.get("tumour_neighbourhoods", {}).get("directions", AGN_DIRECTIONS)
+CONS_DIRECTION_PATTERN = "|".join(map(re.escape, CONS_DIRECTIONS))
+CONS_EUC_DIRECTIONS = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
+CONS_EUC_PATTERN = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
+
+# Feature selection methods from config
+FEATURE_METHODS = cfg.get("features", {}).get("methods", ["Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal"])
+TOPN = int(cfg.get("feature_selection", {}).get("final_top", 500))
+
+# Legacy feature sets (for backwards compatibility)
+PAM50_DIRS = [d for d in AGN_DIRECTIONS if d.startswith("pam50")]
+HVG_DIRS = [d for d in AGN_DIRECTIONS if d.startswith("hvg")]
+
+# New feature set directions (8 methods × 2 distances)
+FEATURE_SET_DIRS = [d for d in AGN_DIRECTIONS if not d.startswith("pam50") and not d.startswith("hvg")]
+
+HC_KINDS = ["pca_hc_cell", "pca_hc_tumour", "pca_hc_cell_tumour", "hc_cell", "hc_tumour", "hc_cell_tumour"]
+KM_KINDS = ["pca_kmeans_cell", "pca_kmeans_tumour", "pca_kmeans_cell_tumour", "kmeans_cell", "kmeans_tumour", "kmeans_cell_tumour"]
+
+def dir_to_feature(direction):
+    """Extract feature method name from direction (e.g., 'Variance_euc' -> 'Variance')"""
+    if direction.startswith("pam50"):
+        return "pam50"
+    elif direction.startswith("hvg"):
+        return "hvg"
+    else:
+        # Extract feature method from direction (everything before '_euc' or '_corr')
+        if direction.endswith("_euc") or direction.endswith("_corr"):
+            return direction.rsplit("_", 1)[0]
+        else:
+            return direction
+
+def dir_to_dist(direction):
+    return "correlation" if direction.endswith("corr") else "euclidean"
+
+def dir_to_gene_list(direction):
+    """Get gene list file path for a direction"""
+    feature = dir_to_feature(direction)
+    
+    if feature == "pam50":
+        return cfgpath("features", "pam50_ensembl_gene_list")
+    elif feature == "hvg":
+        return cfgpath("features", "hvg_final_gene_list")
+    else:
+        # For new feature sets, use the feature_sets_top{TOPN} directory
+        fs_dir = cfgpath("features", "hvg_dir")
+        return os.path.join(fs_dir, f"feature_sets_top{TOPN}", f"genes_top{TOPN}_{feature}.txt")
+
+def dir_to_geneset(direction):
+    """Get human-readable gene set label"""
+    feature = dir_to_feature(direction)
+    if feature == "pam50":
+        return "PAM50"
+    elif feature == "hvg":
+        return "HVG500"
+    else:
+        return f"{feature}_top{TOPN}"
+
+def agn_outdir_dir(direction, kind):
+    return os.path.join(AGN_ROOT, direction, kind)
+
+# STEP 1 Rules
+
+rule build_agnostic_mats:
+    input:
+        cell = CELL_VST,
+        tumour = TUMOUR_VST,
+        genes = lambda wc: dir_to_gene_list(wc.direction)
+    output:
+        cell_filt = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds"),
+        tumour_filt = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    log: "logs/build_agnostic_mats_{direction}.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p $(dirname {output.cell_filt}) $(dirname {output.tumour_filt})
+        Rscript scripts/build_agnostic_direction_mats.R --cell_rds {input.cell} --tumour_rds {input.tumour} --genes {input.genes} --out_cell {output.cell_filt} --out_tumour {output.tumour_filt} > {log} 2>&1
+        '''
+
+rule pca_hc_cell:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "pca_hc_cell", "pca_hc_cell_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "pca_hc_cell"),
+        base_dir = AGN_BASE_FUN,
+        n_pcs = AGN_N_PCS,
+        max_k = AGN_MAX_K_HC,
+        dist = lambda wc: dir_to_dist(wc.direction),
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_pca_hc_cell.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/pca_hc_cell.R --cell_rds {input.cell} --outdir {params.outdir} --base_dir {params.base_dir} --label CELL --n_pcs {params.n_pcs} --max_k {params.max_k} --dist_method {params.dist} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule pca_hc_tumour:
+    input:
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "pca_hc_tumour", "pca_hc_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "pca_hc_tumour"),
+        base_dir = AGN_BASE_FUN,
+        n_pcs = AGN_N_PCS,
+        max_k = AGN_MAX_K_HC,
+        dist = lambda wc: dir_to_dist(wc.direction),
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_pca_hc_tumour.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/pca_hc_tumour.R --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --label TUMOUR --n_pcs {params.n_pcs} --max_k {params.max_k} --dist_method {params.dist} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule pca_hc_cell_tumour:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds"),
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "pca_hc_cell_tumour", "pca_hc_cell_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "pca_hc_cell_tumour"),
+        base_dir = AGN_BASE_FUN,
+        n_pcs = AGN_N_PCS,
+        max_k = AGN_MAX_K_HC,
+        dist = lambda wc: dir_to_dist(wc.direction),
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_pca_hc_cell_tumour.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/pca_hc_cell_tumour.R --cell_rds {input.cell} --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --cell_label CELL --tumour_label TUMOUR --n_pcs {params.n_pcs} --max_k {params.max_k} --dist_method {params.dist} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule pca_kmeans_cell:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "pca_kmeans_cell", "pca_kmeans_cell_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "pca_kmeans_cell"),
+        base_dir = AGN_BASE_FUN,
+        n_pcs = AGN_N_PCS,
+        kmin = AGN_KMIN,
+        kmax = AGN_KMAX,
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_pca_kmeans_cell.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/pca_kmeans_cell.R --cell_rds {input.cell} --outdir {params.outdir} --base_dir {params.base_dir} --label CELL --n_pcs {params.n_pcs} --k_min {params.kmin} --k_max {params.kmax} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule pca_kmeans_tumour:
+    input:
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "pca_kmeans_tumour", "pca_kmeans_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "pca_kmeans_tumour"),
+        base_dir = AGN_BASE_FUN,
+        n_pcs = AGN_N_PCS,
+        kmin = AGN_KMIN,
+        kmax = AGN_KMAX,
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_pca_kmeans_tumour.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/pca_kmeans_tumour.R --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --label TUMOUR --n_pcs {params.n_pcs} --k_min {params.kmin} --k_max {params.kmax} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule pca_kmeans_cell_tumour:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds"),
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "pca_kmeans_cell_tumour", "pca_kmeans_cell_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "pca_kmeans_cell_tumour"),
+        base_dir = AGN_BASE_FUN,
+        n_pcs = AGN_N_PCS,
+        kmin = AGN_KMIN,
+        kmax = AGN_KMAX,
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_pca_kmeans_cell_tumour.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/pca_kmeans_cell_tumour.R --cell_rds {input.cell} --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --cell_label CELL --tumour_label TUMOUR --n_pcs {params.n_pcs} --k_min {params.kmin} --k_max {params.kmax} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule hc_cell:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "hc_cell", "hc_cell_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "hc_cell"),
+        base_dir = AGN_BASE_FUN,
+        max_k = AGN_MAX_K_HC,
+        dist = lambda wc: dir_to_dist(wc.direction),
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_hc_cell.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/hc_cell.R --cell_rds {input.cell} --outdir {params.outdir} --base_dir {params.base_dir} --label CELL --max_k {params.max_k} --dist_method {params.dist} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule hc_tumour:
+    input:
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "hc_tumour", "hc_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "hc_tumour"),
+        base_dir = AGN_BASE_FUN,
+        max_k = AGN_MAX_K_HC,
+        dist = lambda wc: dir_to_dist(wc.direction),
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_hc_tumour.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/hc_tumour.R --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --label TUMOUR --max_k {params.max_k} --dist_method {params.dist} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule hc_cell_tumour:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds"),
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "hc_cell_tumour", "hc_cell_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "hc_cell_tumour"),
+        base_dir = AGN_BASE_FUN,
+        max_k = AGN_MAX_K_HC,
+        dist = lambda wc: dir_to_dist(wc.direction),
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_hc_cell_tumour.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/hc_cell_tumour.R --cell_rds {input.cell} --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --cell_label CELL --tumour_label TUMOUR --max_k {params.max_k} --dist_method {params.dist} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule kmeans_cell:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "kmeans_cell", "kmeans_cell_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "kmeans_cell"),
+        base_dir = AGN_BASE_FUN,
+        kmin = AGN_KMIN,
+        kmax = AGN_KMAX,
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_kmeans_cell.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/kmeans_cell.R --cell_rds {input.cell} --outdir {params.outdir} --base_dir {params.base_dir} --label CELL --k_min {params.kmin} --k_max {params.kmax} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule kmeans_tumour:
+    input:
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "kmeans_tumour", "kmeans_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "kmeans_tumour"),
+        base_dir = AGN_BASE_FUN,
+        kmin = AGN_KMIN,
+        kmax = AGN_KMAX,
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_kmeans_tumour.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/kmeans_tumour.R --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --label TUMOUR --k_min {params.kmin} --k_max {params.kmax} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule kmeans_cell_tumour:
+    input:
+        cell = os.path.join(AGN_ROOT, "{direction}", "inputs", "cell_expr.rds"),
+        tumour = os.path.join(AGN_ROOT, "{direction}", "inputs", "tumour_expr.rds")
+    output:
+        clusters = os.path.join(AGN_ROOT, "{direction}", "kmeans_cell_tumour", "kmeans_cell_tumour_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: agn_outdir_dir(wc.direction, "kmeans_cell_tumour"),
+        base_dir = AGN_BASE_FUN,
+        kmin = AGN_KMIN,
+        kmax = AGN_KMAX,
+        seed = AGN_SEED
+    log: "logs/agnostic_{direction}_kmeans_cell_tumour.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/kmeans_cell_tumour.R --cell_rds {input.cell} --tumour_rds {input.tumour} --outdir {params.outdir} --base_dir {params.base_dir} --cell_label CELL --tumour_label TUMOUR --k_min {params.kmin} --k_max {params.kmax} --seed {params.seed} --cluster_rds {output.clusters} > {log} 2>&1
+        '''
+
+rule agnostic_all_directions:
+    input:
+        expand(os.path.join(AGN_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=AGN_DIRECTIONS, kind=HC_KINDS),
+        expand(os.path.join(AGN_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=AGN_EUC_DIRECTIONS, kind=KM_KINDS)
+
+# STEP 2: Consensus Clustering
+
+CONS_ROOT = os.path.join(UNSUP, "consensus")
+CONS_KM_KINDS = ["ccp_kmeans_expr_cell_tumour", "ccp_kmeans_pca_cell_tumour", "ccp_kmeans_expr_cell", "ccp_kmeans_pca_cell", "ccp_kmeans_expr_tumour", "ccp_kmeans_pca_tumour"]
+CONS_HC_KINDS = ["ccp_hc_expr_cell_tumour", "ccp_hc_pca_cell_tumour", "ccp_hc_expr_cell", "ccp_hc_pca_cell", "ccp_hc_expr_tumour", "ccp_hc_pca_tumour"]
+
+def cons_outdir(direction, kind):
+    return os.path.join(CONS_ROOT, direction, kind)
+
+def kind_to_mode(kind):
+    return "pca" if "_pca_" in kind else "expr"
+
+def kind_to_alg(kind):
+    return "hc" if kind.startswith("ccp_hc_") else "km"
+
+rule consensus_ccp_cell_tumour:
+    input:
+        config = "config/config.yaml",
+        hvg_list = cfgpath("features", "hvg_final_gene_list")
+    output:
+        cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
+    params:
+        outdir = lambda wc: cons_outdir(wc.direction, wc.kind),
+        mode = lambda wc: kind_to_mode(wc.kind),
+        alg = lambda wc: kind_to_alg(wc.kind)
+    log: "logs/consensus_ccp_{direction}_{kind}.log"
+    wildcard_constraints:
+        direction=CONS_DIRECTION_PATTERN,
+        kind="ccp_kmeans_expr_cell_tumour|ccp_hc_expr_cell_tumour|ccp_kmeans_pca_cell_tumour|ccp_hc_pca_cell_tumour|ccp_kmeans_expr_cell|ccp_hc_expr_cell|ccp_kmeans_pca_cell|ccp_hc_pca_cell|ccp_kmeans_expr_tumour|ccp_hc_expr_tumour|ccp_kmeans_pca_tumour|ccp_hc_pca_tumour"
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/consensus_ccp_cell_tumour.R --config {input.config} --direction {wildcards.direction} --kind {wildcards.kind} --mode {params.mode} --alg {params.alg} --outdir {params.outdir} --cluster_rds {output.cluster_rds} > {log} 2>&1
+        '''
+
+rule consensus_all_directions:
+    input:
+        expand(os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=CONS_DIRECTIONS, kind=CONS_HC_KINDS),
+        expand(os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=CONS_EUC_DIRECTIONS, kind=CONS_KM_KINDS)
+
+# STEP 3: Tumour Neighbourhood Analysis
+# KEY FIX: Separate map_rds files for PAM50 and HVG
+
+TUMOUR_NH_ROOT = os.path.join(UNSUP, "tumour_neighbourhoods")
+TUMOUR_NH_EXPR_PAM50 = cfgpath("paths", "tumour_nh_expr_pam50")
+TUMOUR_NH_EXPR_HVG = cfgpath("paths", "tumour_nh_expr_hvg")
+TUMOUR_NH_MAP_RDS_PAM50 = cfgpath("paths", "tumour_nh_map_rds_pam50")
+TUMOUR_NH_MAP_RDS_HVG = cfgpath("paths", "tumour_nh_map_rds_hvg")
+
+# Helper functions for tumour neighbourhood paths
+def nh_expr_rds(direction):
+    """Get expression matrix RDS path for a direction"""
+    feature = dir_to_feature(direction)
+    if feature == "pam50":
+        return TUMOUR_NH_EXPR_PAM50
+    elif feature == "hvg":
+        return TUMOUR_NH_EXPR_HVG
+    else:
+        # For new feature sets, use the featuresets directory
+        method_outdir = cfgpath("features", "method_outdir")
+        return os.path.join(method_outdir, feature, "expr_submatrix.rds")
+
+def nh_map_rds(direction):
+    """Get mapping RDS path for a direction"""
+    feature = dir_to_feature(direction)
+    if feature == "pam50":
+        return TUMOUR_NH_MAP_RDS_PAM50
+    elif feature == "hvg":
+        return TUMOUR_NH_MAP_RDS_HVG
+    else:
+        # For new feature sets, create mapping file in tumour_neighbourhoods_input
+        input_root = cfgpath("paths", "tumour_nh_input_root")
+        return os.path.join(input_root, f"cell_line_to_original_sample_id_{feature}.rds")
+
+# Canonical path helpers for tumour neighbourhood outputs (single source of truth)
+def nh_final_consensus_rds(direction):
+    return os.path.join(
+        TUMOUR_NH_ROOT, direction, "final_consensus",
+        f"Final_consensus_tumour_neighbourhoods_{direction}.rds"
+    )
+
+def nh_qc_dir(direction):
+    return os.path.join(TUMOUR_NH_ROOT, direction, "qc")
+
+def nh_qc_tsv(direction):
+    return os.path.join(nh_qc_dir(direction), "nh_qc_summary.tsv")
+
+def nh_umap_tsv(direction):
+    return os.path.join(nh_qc_dir(direction), "nh_umap.tsv")
+
+def nh_umap_pdf(direction):
+    return os.path.join(nh_qc_dir(direction), "nh_umap.pdf")
+
+rule build_tumour_neighbourhood_input_pam50:
+    input:
+        tcga_pam50 = cfgpath("paths", "tcga_brca_pam50_expr") if "tcga_brca_pam50_expr" in cfg["paths"] else cfgpath("paths", "tcga_pam50_expr"),
+        dsmz_pam50 = cfgpath("paths", "dsmz_bcc_pam50_expr") if "dsmz_bcc_pam50_expr" in cfg["paths"] else cfgpath("paths", "dsmz_pam50_expr"),
+        dsmz_meta = cfgpath("paths", "dsmz_meta_csv")
+    output:
+        expr_rds = TUMOUR_NH_EXPR_PAM50,
+        map_rds = TUMOUR_NH_MAP_RDS_PAM50
+    log: "logs/build_tumour_neighbourhood_input_pam50.log"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.expr_rds})
+        Rscript scripts/build_dsmz_tcga_pam50matrix.R --config config/config.yaml > {log} 2>&1
+        test -s {output.expr_rds} || (echo "ERROR: missing {output.expr_rds}" >&2; exit 1)
+        test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
+        '''
+
+rule build_tumour_neighbourhood_input_hvg:
+    input:
+        vst_joint = VST_JOINT,
+        hvg_list = cfgpath("features", "hvg_final_gene_list"),
+        dsmz_meta = cfgpath("paths", "dsmz_meta_csv")
+    output:
+        expr_rds = TUMOUR_NH_EXPR_HVG,
+        map_rds = TUMOUR_NH_MAP_RDS_HVG
+    log: "logs/build_tumour_neighbourhood_input_hvg.log"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.expr_rds})
+        Rscript scripts/build_dsmz_tcga_hvgmatrix.R --config config/config.yaml > {log} 2>&1
+        test -s {output.expr_rds} || (echo "ERROR: missing {output.expr_rds}" >&2; exit 1)
+        test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
+        '''
+
+# Generalized rule for building tumour neighbourhood inputs for new feature sets
+# Note: This uses subset_expr.R to create the expression matrix, then creates mapping
+# The mapping creation logic should be similar to build_dsmz_tcga_hvgmatrix.R
+rule build_tumour_neighbourhood_input_featureset:
+    input:
+        vst_joint = VST_JOINT,
+        gene_list = lambda wc: dir_to_gene_list(wc.direction),
+        dsmz_meta = cfgpath("paths", "dsmz_meta_csv")
+    output:
+        expr_rds = lambda wc: nh_expr_rds(wc.direction),
+        map_rds = lambda wc: nh_map_rds(wc.direction)
+    params:
+        feature = lambda wc: dir_to_feature(wc.direction)
+    log: "logs/build_tumour_neighbourhood_input_{direction}.log"
+    wildcard_constraints:
+        direction="|".join([f"{m}_euc|{m}_corr" for m in FEATURE_METHODS])
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.expr_rds}) $(dirname {output.map_rds})
+        # Step 1: Subset expression matrix using subset_expr.R
+        Rscript scripts/subset_expr.R \
+          --vst_rds {input.vst_joint} \
+          --genes {input.gene_list} \
+          --out_rds {output.expr_rds} \
+          >> {log} 2>&1
+        # Step 2: Create mapping file (same logic as build_dsmz_tcga_hvgmatrix.R)
+        Rscript -e "
+        library(readr)
+        expr <- readRDS('{output.expr_rds}')
+        dsmz_meta <- read_csv('{input.dsmz_meta}', show_col_types = FALSE)
+        # Extract DSMZ sample IDs (rownames in expr matrix)
+        dsmz_sample_ids <- rownames(expr)[grepl('^NG-', rownames(expr))]
+        # Map sample IDs to cell lines using metadata
+        cell_col <- intersect(c('Cell_line', 'Cell_Line', 'CellLine'), colnames(dsmz_meta))[1]
+        if (is.na(cell_col)) stop('No cell line column found in metadata')
+        cell_line_of <- setNames(dsmz_meta[[cell_col]], dsmz_meta\$sample_name)
+        cell_line_to_sample_id <- cell_line_of[dsmz_sample_ids]
+        # For samples not found in metadata, use the sample ID itself
+        cell_line_to_sample_id[is.na(cell_line_to_sample_id)] <- dsmz_sample_ids[is.na(cell_line_to_sample_id)]
+        saveRDS(cell_line_to_sample_id, '{output.map_rds}')
+        " >> {log} 2>&1
+        test -s {output.expr_rds} || (echo "ERROR: missing {output.expr_rds}" >&2; exit 1)
+        test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
+        '''
+
+# ---- explicit tumour neighbourhood rules (NO lambda) ----
+
+rule tumour_neighbourhoods_hc_hvg:
+    input:
+        expr_rds = TUMOUR_NH_EXPR_HVG,
+        map_rds = TUMOUR_NH_MAP_RDS_HVG
+    output:
+        outdir = directory(os.path.join(TUMOUR_NH_ROOT, "{direction}")),
+        done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
+    log: "logs/tumour_neighbourhoods_hc_{direction}.log"
+    wildcard_constraints:
+        direction="hvg_euc|hvg_corr"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p {output.outdir}
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          --expr-rds {input.expr_rds} \
+          --mapping-rds {input.map_rds} \
+          > {log} 2>&1
+        test $(find {output.outdir} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+        touch {output.done}
+        '''
+
+rule tumour_neighbourhoods_hc_pam50:
+    input:
+        expr_rds = TUMOUR_NH_EXPR_PAM50,
+        map_rds = TUMOUR_NH_MAP_RDS_PAM50
+    output:
+        outdir = directory(os.path.join(TUMOUR_NH_ROOT, "{direction}")),
+        done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
+    log: "logs/tumour_neighbourhoods_hc_{direction}.log"
+    wildcard_constraints:
+        direction="pam50_euc|pam50_corr"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p {output.outdir}
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          --expr-rds {input.expr_rds} \
+          --mapping-rds {input.map_rds} \
+          > {log} 2>&1
+        test $(find {output.outdir} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+        touch {output.done}
+        '''
+
+# Generalized rule for tumour neighbourhoods with new feature sets
+rule tumour_neighbourhoods_hc_featureset:
+    input:
+        expr_rds = lambda wc: nh_expr_rds(wc.direction),
+        map_rds = lambda wc: nh_map_rds(wc.direction)
+    output:
+        outdir = directory(os.path.join(TUMOUR_NH_ROOT, "{direction}")),
+        done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
+    log: "logs/tumour_neighbourhoods_hc_{direction}.log"
+    wildcard_constraints:
+        direction="|".join([f"{m}_euc|{m}_corr" for m in FEATURE_METHODS])
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p {output.outdir}
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          --expr-rds {input.expr_rds} \
+          --mapping-rds {input.map_rds} \
+          > {log} 2>&1
+        test $(find {output.outdir} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+        touch {output.done}
+        '''
+
+rule tumour_neighbourhoods_km_any:
+    input:
+        done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
+    output:
+        done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
+    log: "logs/tumour_neighbourhoods_km_{direction}.log"
+    wildcard_constraints:
+        direction=AGN_EUC_PATTERN
+    shell:
+        r'''
+        set -euo pipefail
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        touch {output.done}
+        '''
+
+# ---- consensus: explicit, depends on matching hc_done ----
+
+rule tumour_neighbourhood_p_consensus_hvg:
+    input:
+        hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
+    output:
+        consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
+        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+    log: "logs/tumour_neighbourhood_p_consensus_{direction}.log"
+    wildcard_constraints:
+        direction="hvg_euc|hvg_corr"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.consensus_rds})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_p_consensus.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+rule tumour_neighbourhood_p_consensus_pam50:
+    input:
+        hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
+    output:
+        consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
+        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+    log: "logs/tumour_neighbourhood_p_consensus_{direction}.log"
+    wildcard_constraints:
+        direction="pam50_euc|pam50_corr"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.consensus_rds})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_p_consensus.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+# Generalized rule for p_consensus with new feature sets
+rule tumour_neighbourhood_p_consensus_featureset:
+    input:
+        hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
+    output:
+        consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
+        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+    log: "logs/tumour_neighbourhood_p_consensus_{direction}.log"
+    wildcard_constraints:
+        direction="|".join([f"{m}_euc|{m}_corr" for m in FEATURE_METHODS])
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.consensus_rds})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_p_consensus.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+# STEP 4: DSMZ-DSMZ Similarity Graph
+
+rule dsmz_dsmz_similarity_graph:
+    input:
+        consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction)
+    output:
+        sim_mat_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_similarity_matrix_{direction}.rds"),
+        sim_pairs_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_similarity_pairs_{direction}.tsv"),
+        edges_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_edges_{direction}.tsv"),
+        nodes_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_summary_{direction}.tsv"),
+        nodes_annot = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
+        comm_summary = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_community_summary_{direction}.tsv"),
+        comm_table = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_Louvain_vs_Leiden_community_table_{direction}.tsv"),
+        hist_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_similarity_histogram_{direction}.pdf"),
+        scatter_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_p_consensus_cell_scatter_{direction}.pdf"),
+        comm_heatmap = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_{direction}.pdf"),
+        graph_leiden = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Leiden_{direction}.pdf"),
+        graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
+        graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
+    log: "logs/dsmz_dsmz_similarity_graph_{direction}.log"
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.sim_mat_rds})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/compute_dsmz_dsmz_similarity.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+# STEP 5: Cross-Direction Summary
+
+P_CONS_ALL_DIR = os.path.join(TUMOUR_NH_ROOT, "final_consensus_all")
+
+rule summarize_p_consensus_all:
+    input:
+        consensus_rds = [nh_final_consensus_rds(d) for d in AGN_DIRECTIONS],
+        cfg = "config/config.yaml"
+    output:
+        dir_summary = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
+        cell_dir_summary = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.tsv"),
+        winner_map = os.path.join(P_CONS_ALL_DIR, "p_consensus_winner_map_per_cell_line.tsv"),
+        winners_max_p = os.path.join(P_CONS_ALL_DIR, "p_consensus_winners_by_max_p.tsv"),
+        winners_frac = os.path.join(P_CONS_ALL_DIR, "p_consensus_winners_by_frac_ge_thr.tsv"),
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
+        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv"),
+        composite_weights = os.path.join(P_CONS_ALL_DIR, "p_consensus_composite_weights.tsv"),
+        top_fraction = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_top_fraction.tsv"),
+        top_score = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_top_score.tsv"),
+        fig_pdf = os.path.join(P_CONS_ALL_DIR, "Fig_p_consensus_direction_comparison.pdf"),
+        fig_scree = os.path.join(P_CONS_ALL_DIR, "Fig_p_consensus_composite_PCA_scree.pdf"),
+        fig_weights = os.path.join(P_CONS_ALL_DIR, "Fig_p_consensus_composite_PCA_weights.pdf")
+    params:
+        threshold = lambda wc: config.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
+    log: "logs/summarize_p_consensus_all.log"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p {P_CONS_ALL_DIR}
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/summarize_p_consensus_all.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --threshold {params.threshold} \
+          > {log} 2>&1
+        '''
+
+# STEP 6: QC and Integration UMAP
+# KEY FIX: map_rds now direction-aware (PAM50 vs HVG)
+
+rule tumour_neighbourhood_qc_umap_hvg:
+    input:
+        consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction),
+        expr_rds = TUMOUR_NH_EXPR_HVG,
+        map_rds = TUMOUR_NH_MAP_RDS_HVG
+    output:
+        qc_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_qc_summary.tsv"),
+        umap_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.tsv"),
+        umap_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.pdf")
+    log: "logs/tumour_neighbourhood_qc_umap_{direction}.log"
+    wildcard_constraints:
+        direction="hvg_euc|hvg_corr"
+    conda: "/home/chu25/dsmz/pipeline/pipeline/unsupervised/envs/tumour_nh_qc.yaml"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.qc_tsv})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_qc_umap.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          --consensus_rds {input.consensus_rds} \
+          --expr_rds {input.expr_rds} \
+          --map_rds {input.map_rds} \
+          --qc_tsv {output.qc_tsv} \
+          --umap_pdf {output.umap_pdf} \
+          --umap_tsv {output.umap_tsv} \
+          > {log} 2>&1
+        '''
+
+rule tumour_neighbourhood_qc_umap_pam50:
+    input:
+        consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction),
+        expr_rds = TUMOUR_NH_EXPR_PAM50,
+        map_rds = TUMOUR_NH_MAP_RDS_PAM50
+    output:
+        qc_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_qc_summary.tsv"),
+        umap_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.tsv"),
+        umap_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.pdf")
+    log: "logs/tumour_neighbourhood_qc_umap_{direction}.log"
+    wildcard_constraints:
+        direction="pam50_euc|pam50_corr"
+    conda: "/home/chu25/dsmz/pipeline/pipeline/unsupervised/envs/tumour_nh_qc.yaml"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.qc_tsv})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_qc_umap.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          --consensus_rds {input.consensus_rds} \
+          --expr_rds {input.expr_rds} \
+          --map_rds {input.map_rds} \
+          --qc_tsv {output.qc_tsv} \
+          --umap_pdf {output.umap_pdf} \
+          --umap_tsv {output.umap_tsv} \
+          > {log} 2>&1
+        '''
+
+# Generalized rule for QC/UMAP with new feature sets
+rule tumour_neighbourhood_qc_umap_featureset:
+    input:
+        consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction),
+        expr_rds = lambda wc: nh_expr_rds(wc.direction),
+        map_rds = lambda wc: nh_map_rds(wc.direction)
+    output:
+        qc_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_qc_summary.tsv"),
+        umap_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.tsv"),
+        umap_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.pdf")
+    log: "logs/tumour_neighbourhood_qc_umap_{direction}.log"
+    wildcard_constraints:
+        direction="|".join([f"{m}_euc|{m}_corr" for m in FEATURE_METHODS])
+    conda: "/home/chu25/dsmz/pipeline/pipeline/unsupervised/envs/tumour_nh_qc.yaml"
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p $(dirname {output.qc_tsv})
+        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_qc_umap.R \
+          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+          --direction {wildcards.direction} \
+          --consensus_rds {input.consensus_rds} \
+          --expr_rds {input.expr_rds} \
+          --map_rds {input.map_rds} \
+          --qc_tsv {output.qc_tsv} \
+          --umap_pdf {output.umap_pdf} \
+          --umap_tsv {output.umap_tsv} \
+          > {log} 2>&1
+        '''
+
+# DEFAULT TARGET
+
+rule all:
+    input:
+        # PRESTEP: Feature Selection
+        rules.feature_selection_unsupervised.output.scores,
+        rules.feature_selection_unsupervised.output.hvg_list,
+
+        # STEP 1: Agnostic Clustering
+        rules.agnostic_all_directions.input,
+
+        # STEP 2: Consensus Clustering
+        rules.consensus_all_directions.input,
+
+        # STEP 3: Tumour Neighbourhood Consensus (path-based, not rule-based)
+        [nh_final_consensus_rds(d) for d in AGN_DIRECTIONS],
+        [os.path.join(TUMOUR_NH_ROOT, d, "final_consensus", f"Final_consensus_tumour_neighbourhoods_{d}.tsv") for d in AGN_DIRECTIONS],
+
+        # STEP 4: DSMZ-DSMZ Similarity Graphs (all outputs)
+        expand(rules.dsmz_dsmz_similarity_graph.output.sim_mat_rds,   direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.sim_pairs_tsv, direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.edges_tsv,     direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.nodes_tsv,     direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.nodes_annot,   direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.comm_summary,  direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.comm_table,    direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.hist_pdf,      direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.scatter_pdf,   direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.comm_heatmap,  direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.graph_leiden,  direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.graph_louvain, direction=AGN_DIRECTIONS),
+        expand(rules.dsmz_dsmz_similarity_graph.output.graph_minimal, direction=AGN_DIRECTIONS),
+
+        # STEP 5: Cross-Direction Summary
+        rules.summarize_p_consensus_all.output,
+
+        # STEP 6: QC and Integration UMAP
+        [nh_qc_tsv(d) for d in AGN_DIRECTIONS],
+        [nh_umap_tsv(d) for d in AGN_DIRECTIONS],
+        [nh_umap_pdf(d) for d in AGN_DIRECTIONS]
