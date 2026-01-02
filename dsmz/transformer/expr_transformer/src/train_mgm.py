@@ -222,6 +222,13 @@ class ExprTransformer(nn.Module):
         # Input: (B, G, 1) - one scalar per gene
         # Output: (B, G, d_model) - rich representation of expression level
         self.val_proj = nn.Linear(1, d_model)
+
+        # ---------------------------------------------------------------------
+        # GLOBAL [CLS] TOKEN
+        # ---------------------------------------------------------------------
+        # Learnable token prepended to every sequence so the encoder is trained
+        # with the same structure used at embedding export time.
+        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
         
         # ---------------------------------------------------------------------
         # TRANSFORMER ENCODER
@@ -295,13 +302,21 @@ class ExprTransformer(nn.Module):
         # Combine value information with gene identity
         # This is the input representation for the Transformer
         h = v + g  # Shape: (B, G, d_model)
-        
+
+        # Prepend [CLS] token so the encoder trains with the same context used
+        # during embedding export.
+        cls = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)
+        h = torch.cat([cls, h], dim=1)  # (B, G + 1, d_model)
+
         # Pass through Transformer encoder
         # Self-attention allows each gene to aggregate information from all others
-        h = self.encoder(h)  # Shape: (B, G, d_model)
-        
+        h = self.encoder(h)  # Shape: (B, G + 1, d_model)
+
+        # Drop the CLS token for per-gene predictions
+        h_genes = h[:, 1:, :]  # (B, G, d_model)
+
         # Project to predictions: (B, G, d_model) → (B, G, 1) → (B, G)
-        y = self.out(h).squeeze(-1)
+        y = self.out(h_genes).squeeze(-1)
         
         return y
     
@@ -321,20 +336,28 @@ class ExprTransformer(nn.Module):
         Returns
         -------
         embeddings : torch.Tensor
-            Sample embeddings, shape (B, d_model).
-            One vector per sample summarizing its expression profile.
+            Sample embeddings, shape (B, 2 * d_model) when default d_model=256.
+            Concatenates [CLS] token with mean-pooled gene tokens for a hybrid
+            global representation.
         """
         B, G = x.shape
         gene_ids = self.gene_ids.unsqueeze(0).expand(B, G)
         
         v = self.val_proj(x.unsqueeze(-1))
         g = self.gene_emb(gene_ids)
-        h = self.encoder(v + g)  # (B, G, d_model)
-        
-        # Mean pooling: average across all genes
-        # This gives a single vector per sample regardless of G
-        # Alternative: [CLS] token, max pooling, attention pooling
-        return h.mean(dim=1)  # (B, d_model)
+        h = v + g  # (B, G, d_model)
+
+        # Prepend [CLS] for consistency with training/inference forward pass
+        cls = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)
+        h = torch.cat([cls, h], dim=1)  # (B, G + 1, d_model)
+
+        # Encode sequence
+        h = self.encoder(h)  # (B, G + 1, d_model)
+
+        # Hybrid embedding: CLS + mean over gene tokens
+        cls_emb = h[:, 0, :]  # (B, d_model)
+        mean_emb = h[:, 1:, :].mean(dim=1)  # (B, d_model)
+        return torch.cat([cls_emb, mean_emb], dim=1)  # (B, 2 * d_model)
 
 
 # =============================================================================

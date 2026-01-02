@@ -9,8 +9,9 @@ generate embeddings (learned representations) from gene expression data.
 **What are embeddings?**
 Embeddings are dense, lower-dimensional vector representations that capture
 meaningful patterns in high-dimensional data. Here, we transform ~500 gene
-expression values per sample into a 256-dimensional vector that captures
-the "essence" of that sample's expression profile.
+expression values per sample into a 512-dimensional vector (concatenated
+[CLS] + mean-pooled features) that captures the "essence" of that sample's
+expression profile.
 
 **Workflow:**
 1. Load preprocessed gene expression data (NPZ format)
@@ -43,9 +44,9 @@ class ExprTransformer(nn.Module):
     The model treats each gene as a "token" (similar to words in NLP) and learns
     to understand relationships between genes using self-attention.
     
-    For each sample:
-        Input:  [gene1_expr, gene2_expr, ..., geneG_expr]  (G values)
-        Output: [z1, z2, ..., z256]                        (d_model dimensions)
+        For each sample:
+            Input:  [gene1_expr, gene2_expr, ..., geneG_expr]    (G values)
+            Output: [z1, z2, ..., z512] (2 * d_model dimensions)  ([CLS] + mean)
     
     **Key Components:**
     
@@ -83,7 +84,7 @@ class ExprTransformer(nn.Module):
     
     def __init__(self, n_genes, d_model=256, n_layers=6, n_heads=8, dropout=0.1):
         super().__init__()
-        
+
         # ---------------------------------------------------------------------
         # LEARNABLE GENE IDENTITY EMBEDDINGS
         # ---------------------------------------------------------------------
@@ -104,6 +105,13 @@ class ExprTransformer(nn.Module):
         # This is like converting "expression level" into a rich representation
         # that can interact with gene identity information.
         self.val_proj = nn.Linear(1, d_model)
+
+        # ---------------------------------------------------------------------
+        # GLOBAL [CLS] TOKEN
+        # ---------------------------------------------------------------------
+        # Learnable vector prepended to every sequence so the model can build a
+        # dedicated global summary token alongside the distributed gene tokens.
+        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
         
         # ---------------------------------------------------------------------
         # TRANSFORMER ENCODER
@@ -167,16 +175,17 @@ class ExprTransformer(nn.Module):
         Returns
         -------
         torch.Tensor
-            Embeddings of shape (batch_size, d_model).
-            Each row is the learned representation for one sample.
+            Embeddings of shape (batch_size, 2 * d_model).
+            Each row concatenates [CLS] and mean-pooled gene representations.
         
         How it works
         ------------
         1. For each gene position, look up its identity embedding
         2. Project the expression value to d_model dimensions
         3. ADD them together: final_repr = value_info + gene_identity
-        4. Pass through Transformer to learn cross-gene relationships
-        5. Mean-pool across all genes to get a single vector per sample
+        4. Prepend a learnable [CLS] token for a global summary
+        5. Pass through Transformer to learn cross-gene relationships
+        6. Extract [CLS] and mean-pool across genes, then concatenate
         """
         B, G = x.shape  # B = batch size, G = number of genes
         
@@ -191,15 +200,21 @@ class ExprTransformer(nn.Module):
         # h (combined): (B, G, d_model)
         h = self.val_proj(x.unsqueeze(-1)) + self.gene_emb(gene_ids)
         
+        # Prepend [CLS] so the encoder learns with a dedicated global token
+        cls = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)
+        h = torch.cat([cls, h], dim=1)  # (B, G + 1, d_model)
+
         # Pass through Transformer encoder
-        # Self-attention allows each gene to "see" all other genes
-        # Output shape: (B, G, d_model)
         h = self.encoder(h)
-        
-        # Mean pooling: aggregate information across all genes
-        # (B, G, d_model) -> (B, d_model)
-        # This produces one fixed-size vector per sample regardless of G
-        return h.mean(dim=1)
+
+        # Extract [CLS] embedding
+        cls_emb = h[:, 0, :]  # (B, d_model)
+
+        # Mean pooling over gene tokens only (exclude CLS)
+        mean_emb = h[:, 1:, :].mean(dim=1)  # (B, d_model)
+
+        # Concatenate CLS and mean to form hybrid embedding
+        return torch.cat([cls_emb, mean_emb], dim=1)  # (B, 2 * d_model)
 
 
 def parse_args():
@@ -330,7 +345,7 @@ def main():
     # -------------------------------------------------------------------------
     # Create a DataFrame with:
     # - Index: Sample IDs (e.g., "TCGA-A1-A0SK-01A", "ACC-201")
-    # - Columns: Embedding dimensions (z1, z2, ..., z256)
+    # - Columns: Embedding dimensions (z1, z2, ..., zN)
     df = pd.DataFrame(
         E,
         index=samples,
