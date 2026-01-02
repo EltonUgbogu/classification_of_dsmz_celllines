@@ -20,29 +20,14 @@ the "essence" of that sample's expression profile.
 
 """
 
-import os
+import argparse
 import json
+import os
+
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-
-
-# =============================================================================
-# FILE PATHS - Configure these for your environment
-# =============================================================================
-
-# Input: Preprocessed expression matrix (samples × genes) saved as NumPy archive
-NPZ_PATH = os.path.abspath("data/BRCA_HVG500_joint.npz")
-
-# Input: Metadata JSON containing sample IDs and gene names
-META_PATH = os.path.abspath("data/BRCA_HVG500_joint.meta.json")
-
-# Input: Trained model checkpoint containing weights and configuration
-CKPT_PATH = os.path.abspath("ckpt/exprtf_brca_hvg500_ep30.pt")
-
-# Output: TSV file where each row is a sample, columns are embedding dimensions
-OUT_TSV = os.path.abspath("embeddings/BRCA_HVG500_joint_exprtf.tsv")
 
 
 # =============================================================================
@@ -217,32 +202,72 @@ class ExprTransformer(nn.Module):
         return h.mean(dim=1)
 
 
-# =============================================================================
-# MAIN EXECUTION
-# =============================================================================
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate embeddings with a pretrained Expression Transformer",
+    )
+    parser.add_argument(
+        "--npz",
+        default=os.path.abspath("data/BRCA_HVG500_joint.npz"),
+        help="Path to NPZ file containing expression matrix",
+    )
+    parser.add_argument(
+        "--meta",
+        default=os.path.abspath("data/BRCA_HVG500_joint.meta.json"),
+        help="Path to JSON metadata with sample IDs and gene names",
+    )
+    parser.add_argument(
+        "--ckpt",
+        default=os.path.abspath("ckpt/exprtf_brca_hvg500_ep30.pt"),
+        help="Path to pretrained checkpoint",
+    )
+    parser.add_argument(
+        "--out",
+        default=os.path.abspath("embeddings/BRCA_HVG500_joint_exprtf.tsv"),
+        help="Destination TSV for embeddings",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Batch size for inference (defaults to 512 for CUDA, 64 for CPU)",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["cuda", "cpu"],
+        default=None,
+        help="Force device selection; defaults to CUDA if available",
+    )
+    return parser.parse_args()
 
-if __name__ == "__main__":
+
+def main():
+    args = parse_args()
+
     # -------------------------------------------------------------------------
     # DEVICE SELECTION
     # -------------------------------------------------------------------------
     # Use GPU if available (much faster), otherwise fall back to CPU
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if args.device:
+        device = args.device
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
-    
+
     # -------------------------------------------------------------------------
     # LOAD INPUT DATA
     # -------------------------------------------------------------------------
     # NPZ is a NumPy archive format that can store multiple arrays
     # X: Expression matrix, shape (n_samples, n_genes)
-    data = np.load(NPZ_PATH)
+    data = np.load(args.npz)
     X = torch.from_numpy(data["X"]).to(device)
     print(f"Loaded expression data: {X.shape[0]} samples × {X.shape[1]} genes")
-    
+
     # Load metadata (sample IDs for labeling output rows)
-    with open(META_PATH) as f:
+    with open(args.meta) as f:
         meta = json.load(f)
     samples = meta["samples"]
-    
+
     # -------------------------------------------------------------------------
     # LOAD PRETRAINED MODEL
     # -------------------------------------------------------------------------
@@ -250,8 +275,8 @@ if __name__ == "__main__":
     # - model_state: Learned weights from training
     # - config: Hyperparameters (d_model, n_layers, etc.)
     # - G: Number of genes the model was trained on
-    ckpt = torch.load(CKPT_PATH, map_location=device, weights_only=False)
-    
+    ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
+
     cfg = ckpt["config"]  # Model architecture hyperparameters
     G = ckpt["G"]         # Number of genes (must match input data)
     
@@ -274,7 +299,8 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Process samples in batches to avoid running out of GPU memory.
     # GPU can handle larger batches; CPU needs smaller ones.
-    batch_size = 512 if device == "cuda" else 64
+    default_batch = 512 if device == "cuda" else 64
+    batch_size = args.batch_size or default_batch
     
     embeddings_list = []
     n_samples = X.shape[0]
@@ -310,15 +336,23 @@ if __name__ == "__main__":
         index=samples,
         columns=[f"z{i+1}" for i in range(E.shape[1])]
     )
-    
+
     # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(OUT_TSV), exist_ok=True)
-    
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+
     # Save as tab-separated values (TSV)
     # TSV is easy to load in R, Python, or Excel
-    df.to_csv(OUT_TSV, sep="\t")
-    
+    df.to_csv(args.out, sep="\t")
+
     print(f"\n{'='*60}")
-    print(f"SUCCESS: Saved embeddings to {OUT_TSV}")
+    print(f"SUCCESS: Saved embeddings to {args.out}")
     print(f"Shape: {df.shape[0]} samples × {df.shape[1]} dimensions")
     print(f"{'='*60}")
+
+
+# =============================================================================
+# MAIN EXECUTION
+# =============================================================================
+
+if __name__ == "__main__":
+    main()
