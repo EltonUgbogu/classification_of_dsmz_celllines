@@ -78,7 +78,6 @@ def parse_args():
 def main():
     args = parse_args()
 
-
     # =============================================================================
     # LOAD RDS FILE
     # =============================================================================
@@ -91,9 +90,9 @@ def main():
     print(f"Reading RDS file: {args.rds}")
     obj = pyreadr.read_r(args.rds)
 
-# Extract the first (and usually only) object from the RDS file
-# next(iter(...)) is a Pythonic way to get the first value from a dict
-mat = next(iter(obj.values()))
+    # Extract the first (and usually only) object from the RDS file
+    # next(iter(...)) is a Pythonic way to get the first value from a dict
+    mat = next(iter(obj.values()))
 
     # Validate that we got a DataFrame (expected for expression matrices)
     # RDS files can contain various R objects; we specifically need a matrix/data.frame
@@ -129,30 +128,30 @@ mat = next(iter(obj.values()))
     # Z-SCORE NORMALIZATION (STANDARDIZATION)
     # =============================================================================
 
-# Z-score formula: z = (x - μ) / σ
-#
-# **Why z-score normalize?**
-#
-# 1. Scale invariance: Genes with high baseline expression (e.g., housekeeping
-#    genes) won't dominate the model's attention over lowly-expressed genes.
-#
-# 2. Neural network training: Most neural networks work best when inputs are
-#    centered around 0 with unit variance. This helps with:
-#    - Gradient flow (avoids vanishing/exploding gradients)
-#    - Weight initialization assumptions
-#    - Faster convergence
-#
-# 3. Biological interpretation: We care about relative changes in expression,
-#    not absolute counts. Z-scores capture "how many standard deviations
-#    from normal" each measurement is.
-#
-# **Axis=0 means "per gene" (across all samples):**
-#
-#    Sample1:  gene1  gene2  gene3
-#    Sample2:  gene1  gene2  gene3
-#    Sample3:  gene1  gene2  gene3
-#              ↓      ↓      ↓
-#           normalize each column independently
+    # Z-score formula: z = (x - μ) / σ
+    #
+    # **Why z-score normalize?**
+    #
+    # 1. Scale invariance: Genes with high baseline expression (e.g., housekeeping
+    #    genes) won't dominate the model's attention over lowly-expressed genes.
+    #
+    # 2. Neural network training: Most neural networks work best when inputs are
+    #    centered around 0 with unit variance. This helps with:
+    #    - Gradient flow (avoids vanishing/exploding gradients)
+    #    - Weight initialization assumptions
+    #    - Faster convergence
+    #
+    # 3. Biological interpretation: We care about relative changes in expression,
+    #    not absolute counts. Z-scores capture "how many standard deviations
+    #    from normal" each measurement is.
+    #
+    # **Axis=0 means "per gene" (across all samples):**
+    #
+    #    Sample1:  gene1  gene2  gene3
+    #    Sample2:  gene1  gene2  gene3
+    #    Sample3:  gene1  gene2  gene3
+    #              ↓      ↓      ↓
+    #           normalize each column independently
 
     # Compute mean for each gene (axis=0 = along samples)
     # keepdims=True maintains shape (1, n_genes) for broadcasting
@@ -183,16 +182,16 @@ mat = next(iter(obj.values()))
     # exist_ok=True prevents error if directory already exists
     os.makedirs(os.path.dirname(args.npz), exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# Save compressed NPZ archive
-# -----------------------------------------------------------------------------
-# NPZ format stores multiple named arrays in a single file:
-#   - X: The z-scored expression matrix (n_samples, n_genes)
-#   - mu: Per-gene means (1, n_genes) - for reverse transformation
-#   - sd: Per-gene stds (1, n_genes) - for reverse transformation
-#
-# To reverse z-score later: X_original = X * sd + mu
-#
+    # -----------------------------------------------------------------------------
+    # Save compressed NPZ archive
+    # -----------------------------------------------------------------------------
+    # NPZ format stores multiple named arrays in a single file:
+    #   - X: The z-scored expression matrix (n_samples, n_genes)
+    #   - mu: Per-gene means (1, n_genes) - for reverse transformation
+    #   - sd: Per-gene stds (1, n_genes) - for reverse transformation
+    #
+    # To reverse z-score later: X_original = X * sd + mu
+    #
     # savez_compressed uses ZIP compression (typically 2-5x smaller than raw binary)
     np.savez_compressed(
         args.npz,
@@ -201,16 +200,16 @@ mat = next(iter(obj.values()))
         sd=sd.astype(np.float32)
     )
 
-# -----------------------------------------------------------------------------
-# Save metadata as JSON
-# -----------------------------------------------------------------------------
-# JSON format is:
-# {
-#     "samples": ["TCGA-A1-A0SK-01A", "TCGA-A2-A0CM-01A", ...],
-#     "genes": ["ENSG00000141510", "ENSG00000171862", ...]
-# }
-#
-# Why separate from NPZ?
+    # -----------------------------------------------------------------------------
+    # Save metadata as JSON
+    # -----------------------------------------------------------------------------
+    # JSON format is:
+    # {
+    #     "samples": ["TCGA-A1-A0SK-01A", "TCGA-A2-A0CM-01A", ...],
+    #     "genes": ["ENSG00000141510", "ENSG00000171862", ...]
+    # }
+    #
+    # Why separate from NPZ?
     # - JSON is human-readable (can inspect with any text editor)
     # - Easy to load in any language (R, JavaScript, etc.)
     # - Sample/gene names can have complex characters that NPZ handles poorly
