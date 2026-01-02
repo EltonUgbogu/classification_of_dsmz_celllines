@@ -1,0 +1,18 @@
+name: exprtf
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - pytorch
+  - pytorch-cuda=12.1
+  - torchvision
+  - torchaudio
+  - pip
+  - pip:
+      - tqdm
+      - pyreadr
+
