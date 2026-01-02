@@ -42,8 +42,9 @@ Checkpoint files containing trained model weights that can be used for:
 
 """
 
-import os
 import json
+import hashlib
+import os
 import math
 import time
 import numpy as np
@@ -64,9 +65,34 @@ NPZ_PATH = os.path.abspath("data/BRCA_HVG500_joint.npz")
 # included for completeness
 META_PATH = os.path.abspath("data/BRCA_HVG500_joint.meta.json")
 
+# Metadata keys commonly used for gene lists
+GENE_KEY_CANDIDATES = ("genes", "gene_names", "features", "gene_ids")
+
 # Output: Directory for model checkpoints
 CKPT_DIR = os.path.abspath("ckpt")
 os.makedirs(CKPT_DIR, exist_ok=True)
+
+
+def load_gene_list(meta):
+    """Return the gene list and the metadata key used to store it."""
+
+    gene_key = next((k for k in GENE_KEY_CANDIDATES if k in meta), None)
+    if gene_key is None:
+        raise KeyError(
+            "Could not find gene list in meta.json. "
+            f"Tried: {list(GENE_KEY_CANDIDATES)}. Keys: {list(meta.keys())}"
+        )
+
+    genes = meta[gene_key]
+    if not isinstance(genes, list):
+        raise TypeError(f"meta['{gene_key}'] must be a list, got {type(genes)!r}")
+
+    return gene_key, genes
+
+
+def sha256_lines(values):
+    joined = "\n".join(values).encode("utf-8")
+    return hashlib.sha256(joined).hexdigest()
 
 
 # =============================================================================
@@ -407,10 +433,49 @@ def main():
     
     # Load preprocessed data
     data = np.load(NPZ_PATH)
+    if "X" not in data:
+        raise KeyError(f"NPZ file does not contain 'X'. Keys: {list(data.keys())}")
+
     X = data["X"]  # Shape: (N, G), dtype: float32, z-scored
-    
+
     N, G = X.shape
     print(f"Data: {N} samples × {G} genes")
+
+    # Validate metadata alignment with NPZ
+    with open(META_PATH) as f:
+        meta = json.load(f)
+
+    if "samples" not in meta:
+        raise KeyError(f"meta.json has no 'samples' key. Keys: {list(meta.keys())}")
+    samples = meta["samples"]
+    if not isinstance(samples, list):
+        raise TypeError(f"meta['samples'] must be a list, got {type(samples)!r}")
+
+    gene_key, genes = load_gene_list(meta)
+    if len(genes) != G:
+        raise ValueError(
+            f"Gene count mismatch: NPZ has {G} genes but meta['{gene_key}'] has {len(genes)}"
+        )
+
+    if len(samples) != N:
+        raise ValueError(
+            f"Sample count mismatch: NPZ has {N} rows but meta['samples'] has {len(samples)}"
+        )
+
+    n_unique = len(set(genes))
+    if n_unique != len(genes):
+        raise ValueError(
+            f"Duplicate genes detected: unique={n_unique}, total={len(genes)}"
+        )
+
+    if not all(isinstance(g, str) and g for g in genes):
+        raise TypeError("Some gene IDs are empty or not strings")
+
+    gene_hash = sha256_lines(genes)
+    print(
+        "Gene list validated: "
+        f"first={genes[:5]} last={genes[-5:] if genes else []} sha256={gene_hash}"
+    )
     
     # Create dataset with 15% masking probability
     ds = ExprDataset(X, mask_prob=0.15)
@@ -577,6 +642,12 @@ def main():
             "epoch": ep,
             "model_state": model.state_dict(),
             "G": G,
+            "gene_hash": gene_hash,
+            "gene_key": gene_key,
+            "gene_examples": {
+                "first": genes[:5],
+                "last": genes[-5:]
+            },
             "config": {
                 "d_model": 256,
                 "n_layers": 6,
@@ -596,3 +667,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
