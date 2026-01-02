@@ -343,7 +343,7 @@ class ExprTransformer(nn.Module):
         return y
     
     @torch.no_grad()
-    def embed(self, x):
+    def embed(self, x, mask_f=None):
         """
         Extract sample embeddings (for downstream tasks, not training).
         
@@ -354,6 +354,10 @@ class ExprTransformer(nn.Module):
         ----------
         x : torch.Tensor
             Full expression values (no masking), shape (B, G).
+        mask_f : torch.Tensor, optional
+            Float mask indicator (B, G) where 1.0 flags masked positions.
+            Pass zeros to mirror training-time masking semantics when
+            exporting embeddings from masked inputs.
         
         Returns
         -------
@@ -368,6 +372,9 @@ class ExprTransformer(nn.Module):
         v = self.val_proj(x.unsqueeze(-1))
         g = self.gene_emb(gene_ids)
         h = v + g  # (B, G, d_model)
+
+        if mask_f is not None:
+            h = h + self.mask_emb * mask_f.unsqueeze(-1)
 
         # Prepend [CLS] for consistency with training/inference forward pass
         cls = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)
