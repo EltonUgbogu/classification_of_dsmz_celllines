@@ -22,6 +22,7 @@ expression profile.
 """
 
 import argparse
+import hashlib
 import json
 import os
 
@@ -29,6 +30,31 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+
+# Metadata keys commonly used for gene lists
+GENE_KEY_CANDIDATES = ("genes", "gene_names", "features", "gene_ids")
+
+
+def load_gene_list(meta):
+    """Return the gene list and the metadata key used to store it."""
+
+    gene_key = next((k for k in GENE_KEY_CANDIDATES if k in meta), None)
+    if gene_key is None:
+        raise KeyError(
+            "Could not find gene list in meta.json. "
+            f"Tried: {list(GENE_KEY_CANDIDATES)}. Keys: {list(meta.keys())}"
+        )
+
+    genes = meta[gene_key]
+    if not isinstance(genes, list):
+        raise TypeError(f"meta['{gene_key}'] must be a list, got {type(genes)!r}")
+
+    return gene_key, genes
+
+
+def sha256_lines(values):
+    joined = "\n".join(values).encode("utf-8")
+    return hashlib.sha256(joined).hexdigest()
 
 
 # =============================================================================
@@ -291,13 +317,46 @@ def main():
     # NPZ is a NumPy archive format that can store multiple arrays
     # X: Expression matrix, shape (n_samples, n_genes)
     data = np.load(args.npz)
+    if "X" not in data:
+        raise KeyError(f"NPZ file does not contain 'X'. Keys: {list(data.keys())}")
+
     X = torch.from_numpy(data["X"]).to(device)
     print(f"Loaded expression data: {X.shape[0]} samples × {X.shape[1]} genes")
 
     # Load metadata (sample IDs for labeling output rows)
     with open(args.meta) as f:
         meta = json.load(f)
+
+    if "samples" not in meta:
+        raise KeyError(f"meta.json has no 'samples' key. Keys: {list(meta.keys())}")
     samples = meta["samples"]
+    if not isinstance(samples, list):
+        raise TypeError(f"meta['samples'] must be a list, got {type(samples)!r}")
+
+    gene_key, genes = load_gene_list(meta)
+    if X.shape[1] != len(genes):
+        raise ValueError(
+            f"Gene count mismatch: X has {X.shape[1]} genes but meta['{gene_key}'] has {len(genes)}"
+        )
+
+    if X.shape[0] != len(samples):
+        raise ValueError(
+            f"Sample count mismatch: X has {X.shape[0]} rows but meta['samples'] has {len(samples)}"
+        )
+
+    n_unique = len(set(genes))
+    if n_unique != len(genes):
+        raise ValueError(
+            f"Duplicate genes detected: unique={n_unique}, total={len(genes)}"
+        )
+    if not all(isinstance(g, str) and g for g in genes):
+        raise TypeError("Some gene IDs are empty or not strings")
+
+    gene_hash = sha256_lines(genes)
+    print(
+        "Gene list validated: "
+        f"first={genes[:5]} last={genes[-5:] if genes else []} sha256={gene_hash}"
+    )
 
     # -------------------------------------------------------------------------
     # LOAD PRETRAINED MODEL
@@ -307,9 +366,31 @@ def main():
     # - config: Hyperparameters (d_model, n_layers, etc.)
     # - G: Number of genes the model was trained on
     ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
-    
+
     cfg = ckpt["config"]  # Model architecture hyperparameters
     G = ckpt["G"]         # Number of genes (must match input data)
+
+    if G != X.shape[1]:
+        raise ValueError(
+            f"Checkpoint expects {G} genes but NPZ/meta provide {X.shape[1]}"
+        )
+
+    ckpt_hash = ckpt.get("gene_hash")
+    if ckpt_hash is None:
+        raise KeyError(
+            "Checkpoint is missing 'gene_hash'. Rerun training after validating "
+            "gene ordering with check_gene_order.py."
+        )
+
+    if ckpt_hash != gene_hash:
+        ckpt_examples = ckpt.get("gene_examples", {})
+        raise ValueError(
+            "Gene ordering mismatch between checkpoint and metadata. "
+            f"ckpt_hash={ckpt_hash}, meta_hash={gene_hash}, "
+            f"ckpt_first={ckpt_examples.get('first')}, ckpt_last={ckpt_examples.get('last')}"
+        )
+
+    print(f"Checkpoint gene hash verified: {ckpt_hash}")
     
     # Instantiate model with saved configuration
     model = ExprTransformer(G, **cfg).to(device)
