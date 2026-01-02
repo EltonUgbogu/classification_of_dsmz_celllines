@@ -107,6 +107,14 @@ class ExprTransformer(nn.Module):
         self.val_proj = nn.Linear(1, d_model)
 
         # ---------------------------------------------------------------------
+        # MASK INDICATOR EMBEDDING
+        # ---------------------------------------------------------------------
+        # Added to positions that were masked during training. During export we
+        # typically don't mask, but keeping the parameter ensures checkpoints
+        # remain compatible and masked inference is possible if desired.
+        self.mask_emb = nn.Parameter(torch.zeros(1, 1, d_model))
+
+        # ---------------------------------------------------------------------
         # GLOBAL [CLS] TOKEN
         # ---------------------------------------------------------------------
         # Learnable vector prepended to every sequence so the model can build a
@@ -159,7 +167,7 @@ class ExprTransformer(nn.Module):
         )
     
     @torch.no_grad()  # Disable gradient computation for inference (saves memory)
-    def embed(self, x):
+    def embed(self, x, mask_f=None):
         """
         Extract embeddings from expression data.
         
@@ -171,7 +179,12 @@ class ExprTransformer(nn.Module):
         x : torch.Tensor
             Expression matrix of shape (batch_size, n_genes).
             Each row is a sample, each column is a gene's expression value.
-        
+        mask_f : torch.Tensor, optional
+            Float mask indicator of shape (batch_size, n_genes). When provided,
+            a learned mask embedding is added at masked positions. Use zeros
+            if you want to preserve training-time masking semantics during
+            export.
+
         Returns
         -------
         torch.Tensor
@@ -199,6 +212,9 @@ class ExprTransformer(nn.Module):
         # gene_emb output: (B, G, d_model)
         # h (combined): (B, G, d_model)
         h = self.val_proj(x.unsqueeze(-1)) + self.gene_emb(gene_ids)
+
+        if mask_f is not None:
+            h = h + self.mask_emb * mask_f.unsqueeze(-1)
         
         # Prepend [CLS] so the encoder learns with a dedicated global token
         cls = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)

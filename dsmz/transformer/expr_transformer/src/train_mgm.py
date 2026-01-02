@@ -121,6 +121,9 @@ class ExprDataset(Dataset):
             Original values, shape (G,). Used for computing loss.
         mask : torch.Tensor
             Boolean mask, shape (G,). True where genes were masked.
+        mask_f : torch.Tensor
+            Float mask indicator (1.0 for masked positions) used for adding a
+            learned mask embedding inside the model.
         """
         # Clone to avoid modifying the original data
         x = self.X[i].clone()  # Shape: (G,)
@@ -145,8 +148,11 @@ class ExprDataset(Dataset):
         # - In z-scored space, 0 = mean expression (uninformative)
         # - The model must infer the true value from context
         x[mask] = 0.0
-        
-        return x, target, mask
+
+        # Float mask (1.0 where masked) used to add a learned indicator vector
+        mask_f = mask.float()
+
+        return x, target, mask, mask_f
 
 
 # =============================================================================
@@ -224,6 +230,14 @@ class ExprTransformer(nn.Module):
         self.val_proj = nn.Linear(1, d_model)
 
         # ---------------------------------------------------------------------
+        # MASK INDICATOR EMBEDDING
+        # ---------------------------------------------------------------------
+        # Learned vector added at positions that were masked during training.
+        # Initialized to zeros so early training behaves like the previous
+        # version before the model learns to leverage the indicator.
+        self.mask_emb = nn.Parameter(torch.zeros(1, 1, d_model))
+
+        # ---------------------------------------------------------------------
         # GLOBAL [CLS] TOKEN
         # ---------------------------------------------------------------------
         # Learnable token prepended to every sequence so the encoder is trained
@@ -272,15 +286,19 @@ class ExprTransformer(nn.Module):
             persistent=False
         )
     
-    def forward(self, x):
+    def forward(self, x, mask_f=None):
         """
         Forward pass for training (predicts all gene values).
-        
+
         Parameters
         ----------
         x : torch.Tensor
             Masked expression values, shape (B, G).
             Masked positions contain 0.0.
+        mask_f : torch.Tensor, optional
+            Float mask indicator of shape (B, G) where 1.0 marks masked
+            positions. When provided, a learned mask embedding is added at
+            those locations.
         
         Returns
         -------
@@ -302,6 +320,10 @@ class ExprTransformer(nn.Module):
         # Combine value information with gene identity
         # This is the input representation for the Transformer
         h = v + g  # Shape: (B, G, d_model)
+
+        if mask_f is not None:
+            # mask_f: (B, G) -> (B, G, 1)
+            h = h + self.mask_emb * mask_f.unsqueeze(-1)
 
         # Prepend [CLS] token so the encoder trains with the same context used
         # during embedding export.
@@ -478,7 +500,7 @@ def main():
         # Progress bar for this epoch
         pbar = tqdm(dl, desc=f"epoch {ep}/{epochs}", leave=True)
         
-        for x, target, mask in pbar:
+        for x, target, mask, mask_f in pbar:
             # -----------------------------------------------------------------
             # DATA TRANSFER
             # -----------------------------------------------------------------
@@ -486,6 +508,7 @@ def main():
             x = x.to(device, non_blocking=True)
             target = target.to(device, non_blocking=True)
             mask = mask.to(device, non_blocking=True)
+            mask_f = mask_f.to(device, non_blocking=True)
             
             # -----------------------------------------------------------------
             # FORWARD PASS
@@ -497,7 +520,7 @@ def main():
             # autocast: automatically use FP16 where safe, FP32 where needed
             with torch.amp.autocast("cuda", enabled=(device == "cuda")):
                 # Get predictions for all genes
-                pred = model(x)  # Shape: (B, G)
+                pred = model(x, mask_f=mask_f)  # Shape: (B, G)
                 
                 # Compute MSE only on masked positions
                 # diff[mask] selects only the masked predictions
