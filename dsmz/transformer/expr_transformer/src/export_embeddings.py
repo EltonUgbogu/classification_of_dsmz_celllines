@@ -287,13 +287,13 @@ def parse_args():
         "--batch-size",
         type=int,
         default=None,
-        help="Batch size for inference (defaults to 512 for CUDA, 64 for CPU)",
+        help="Batch size for inference (defaults to 512)",
     )
     parser.add_argument(
         "--device",
         choices=["cuda", "cpu"],
         default=None,
-        help="Force device selection; defaults to CUDA if available",
+        help="GPU-only export; CPU is not supported",
     )
     return parser.parse_args()
 
@@ -304,12 +304,14 @@ def main():
     # -------------------------------------------------------------------------
     # DEVICE SELECTION
     # -------------------------------------------------------------------------
-    # Use GPU if available (much faster), otherwise fall back to CPU
-    if args.device:
-        device = args.device
-    else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    if args.device == "cpu":
+        raise RuntimeError("GPU-only export: remove --device cpu.")
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA required for export. Run this on a GPU node (e.g. --partition=gpu --gres=gpu:1)."
+        )
+    device = torch.device("cuda")
+    print("Using device: cuda:", torch.cuda.get_device_name(0))
 
     # -------------------------------------------------------------------------
     # LOAD INPUT DATA
@@ -320,8 +322,8 @@ def main():
     if "X" not in data:
         raise KeyError(f"NPZ file does not contain 'X'. Keys: {list(data.keys())}")
 
-    X = torch.from_numpy(data["X"]).to(device)
-    print(f"Loaded expression data: {X.shape[0]} samples × {X.shape[1]} genes")
+    X = torch.from_numpy(data["X"])
+    print(f"Loaded expression data: {X.shape[0]} samples × {X.shape[1]} genes (CPU)")
 
     # Load metadata (sample IDs for labeling output rows)
     with open(args.meta) as f:
@@ -365,7 +367,7 @@ def main():
     # - model_state: Learned weights from training
     # - config: Hyperparameters (d_model, n_layers, etc.)
     # - G: Number of genes the model was trained on
-    ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
+    ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=False)
 
     cfg = ckpt["config"]  # Model architecture hyperparameters
     G = ckpt["G"]         # Number of genes (must match input data)
@@ -410,8 +412,7 @@ def main():
     # BATCH INFERENCE
     # -------------------------------------------------------------------------
     # Process samples in batches to avoid running out of GPU memory.
-    # GPU can handle larger batches; CPU needs smaller ones.
-    default_batch = 512 if device == "cuda" else 64
+    default_batch = 512
     batch_size = args.batch_size or default_batch
     
     embeddings_list = []
@@ -420,7 +421,7 @@ def main():
     print(f"Generating embeddings in batches of {batch_size}...")
     for i in range(0, n_samples, batch_size):
         # Extract batch
-        batch = X[i:i + batch_size]
+        batch = X[i:i + batch_size].to(device, non_blocking=True)
         
         # Generate embeddings for this batch
         # .detach(): Ensure no gradient tracking (redundant with @torch.no_grad but explicit)
