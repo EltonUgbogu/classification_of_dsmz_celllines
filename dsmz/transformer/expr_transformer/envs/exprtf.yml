@@ -1,3 +1,4 @@
+# exprtf.yml - Conda environment for the expr_transformer project
 name: exprtf
 channels:
   - pytorch
