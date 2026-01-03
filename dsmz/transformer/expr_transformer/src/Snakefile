@@ -4,18 +4,23 @@ Expression Transformer Snakemake Workflow
 
 GPU-only workflow for Masked Gene Modeling on expression data.
 
-This Snakefile auto-detects paths and works across different repository layouts:
-- HPC: /work/ugbogu/expr_transformer with config/config.yaml
-- Local: .../dsmz/transformer/expr_transformer with config.yaml at root
+Repository structure:
+  expr_transformer/
+    ├── config/
+    │   └── config.yaml      ← All paths configured here
+    ├── src/
+    │   ├── Snakefile        ← This file
+    │   ├── train_mgm.py
+    │   └── ...
+    └── data/
 
-No hardcoded paths - everything computed dynamically from Snakefile location.
+No hardcoded paths - everything computed from Snakefile location and config.yaml.
 """
 
 from pathlib import Path
-import sys
 
 # ============================================================================
-# Auto-detect repository root and config location
+# Auto-detect repository root
 # ============================================================================
 
 # Snakefile is in: <repo_root>/src/Snakefile
@@ -23,25 +28,8 @@ import sys
 SNAKEFILE_DIR = Path(workflow.basedir)  # .../src/
 REPO_ROOT = SNAKEFILE_DIR.parent        # .../expr_transformer/
 
-# Try to find config.yaml in two possible locations
-CONFIG_LOCATIONS = [
-    REPO_ROOT / "config.yaml",         # Local layout
-    REPO_ROOT / "config" / "config.yaml",  # HPC layout
-]
-
-CONFIG_FILE = None
-for cfg in CONFIG_LOCATIONS:
-    if cfg.exists():
-        CONFIG_FILE = cfg
-        break
-
-if CONFIG_FILE is None:
-    sys.stderr.write(f"ERROR: config.yaml not found in any of:\n")
-    for loc in CONFIG_LOCATIONS:
-        sys.stderr.write(f"  - {loc}\n")
-    sys.exit(1)
-
-configfile: str(CONFIG_FILE)
+# Standard config location: ../config/config.yaml
+configfile: "../config/config.yaml"
 
 # ============================================================================
 # Path resolution
