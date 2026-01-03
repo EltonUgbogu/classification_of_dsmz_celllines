@@ -1,6 +1,6 @@
 from pathlib import Path
 
-configfile: "../envs/config.yaml"
+configfile: "../config.yaml"
 
 PROJECT_ROOT = Path(config["project_root"]).expanduser().resolve()
 workdir: str(PROJECT_ROOT)
