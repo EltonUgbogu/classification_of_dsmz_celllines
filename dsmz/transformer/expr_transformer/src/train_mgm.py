@@ -42,11 +42,11 @@ Checkpoint files containing trained model weights that can be used for:
 
 """
 
+import argparse
 import json
 import hashlib
-import os
-import math
-import time
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -59,18 +59,18 @@ from tqdm import tqdm  # Progress bar library
 # =============================================================================
 
 # Input: Preprocessed and z-scored expression matrix
-NPZ_PATH = os.path.abspath("data/BRCA_HVG500_joint.npz")
+DEFAULT_NPZ_PATH = Path("data/BRCA_HVG500_joint.npz").resolve()
 
 # Input: Metadata (sample IDs, gene names) - not used during training but
 # included for completeness
-META_PATH = os.path.abspath("data/BRCA_HVG500_joint.meta.json")
+DEFAULT_META_PATH = Path("data/BRCA_HVG500_joint.meta.json").resolve()
 
 # Metadata keys commonly used for gene lists
 GENE_KEY_CANDIDATES = ("genes", "gene_names", "features", "gene_ids")
 
 # Output: Directory for model checkpoints
-CKPT_DIR = os.path.abspath("ckpt")
-os.makedirs(CKPT_DIR, exist_ok=True)
+DEFAULT_CKPT_DIR = Path("ckpt").resolve()
+DEFAULT_CKPT_PREFIX = "exprtf_brca_hvg500"
 
 
 def load_gene_list(meta):
@@ -93,6 +93,51 @@ def load_gene_list(meta):
 def sha256_lines(values):
     joined = "\n".join(values).encode("utf-8")
     return hashlib.sha256(joined).hexdigest()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Train the Expression Transformer for masked gene modeling (GPU-only)",
+    )
+    parser.add_argument(
+        "--npz",
+        default=str(DEFAULT_NPZ_PATH),
+        help="Path to NPZ file containing the expression matrix",
+    )
+    parser.add_argument(
+        "--meta",
+        default=str(DEFAULT_META_PATH),
+        help="Path to JSON metadata with samples and genes",
+    )
+    parser.add_argument(
+        "--ckpt-dir",
+        default=str(DEFAULT_CKPT_DIR),
+        help="Directory to store checkpoints",
+    )
+    parser.add_argument(
+        "--ckpt-prefix",
+        default=DEFAULT_CKPT_PREFIX,
+        help="Prefix for checkpoint files (suffix _epXX.pt is added automatically)",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=30,
+        help="Number of training epochs",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=256,
+        help="Batch size for GPU training",
+    )
+    parser.add_argument(
+        "--log-every",
+        type=int,
+        default=100,
+        help="Log progress every N batches",
+    )
+    return parser.parse_args()
 
 
 # =============================================================================
@@ -422,20 +467,27 @@ def main():
     - Progress bars and logging
     - Checkpoint saving after each epoch
     """
-    
+
+    args = parse_args()
+
     # -------------------------------------------------------------------------
     # SETUP
     # -------------------------------------------------------------------------
-    
+
     if not torch.cuda.is_available():
         raise RuntimeError(
             "CUDA required. Submit this job to a GPU node (e.g. --partition=gpu --gres=gpu:1)."
         )
     device = "cuda"
     print("Training on: cuda:", torch.cuda.get_device_name(0))
-    
+
+    npz_path = Path(args.npz).resolve()
+    meta_path = Path(args.meta).resolve()
+    ckpt_dir = Path(args.ckpt_dir).resolve()
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+
     # Load preprocessed data
-    data = np.load(NPZ_PATH)
+    data = np.load(npz_path)
     if "X" not in data:
         raise KeyError(f"NPZ file does not contain 'X'. Keys: {list(data.keys())}")
 
@@ -445,7 +497,7 @@ def main():
     print(f"Data: {N} samples × {G} genes")
 
     # Validate metadata alignment with NPZ
-    with open(META_PATH) as f:
+    with open(meta_path) as f:
         meta = json.load(f)
 
     if "samples" not in meta:
@@ -495,7 +547,7 @@ def main():
     # num_workers=2: Background processes for data loading (overlap with GPU)
     #
     # pin_memory=True: Use pinned (page-locked) memory for faster CPU→GPU transfer
-    batch_size = 256
+    batch_size = args.batch_size
     dl = DataLoader(
         ds,
         batch_size=batch_size,
@@ -548,8 +600,8 @@ def main():
     # -------------------------------------------------------------------------
     # TRAINING HYPERPARAMETERS
     # -------------------------------------------------------------------------
-    epochs = 30      # Number of passes through entire dataset
-    log_every = 100  # Log progress every N batches
+    epochs = args.epochs      # Number of passes through entire dataset
+    log_every = args.log_every  # Log progress every N batches
     global_step = 0  # Total batches processed (across all epochs)
     
     print(f"\nStarting training for {epochs} epochs...")
@@ -640,7 +692,7 @@ def main():
         # - model_state: Learned weights
         # - G: Number of genes (needed to instantiate model)
         # - config: Architecture hyperparameters
-        ckpt_path = os.path.join(CKPT_DIR, f"exprtf_brca_hvg500_ep{ep:02d}.pt")
+        ckpt_path = ckpt_dir / f"{args.ckpt_prefix}_ep{ep:02d}.pt"
         torch.save({
             "epoch": ep,
             "model_state": model.state_dict(),
