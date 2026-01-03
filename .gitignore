@@ -4,3 +4,23 @@
 # macOS junk
 .DS_Store
 **/.DS_Store
+
+# outputs
+ckpt/
+logs/
+embeddings/
+fs/logs/
+fs/results/
+
+# large intermediates
+data/*.npz
+data/*.json
+
+# python cache
+__pycache__/
+*.pyc
+
+# local/env artifacts
+.env
+.venv
+*.log
