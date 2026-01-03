@@ -1,3 +1,4 @@
+# config.yaml - Configuration for the expr_transformer project
 # Absolute path to this repository on your cluster/host
 # Update this path to match your system (e.g., /home/username/classification_of_dsmz_celllines)
 project_root: "/home/user/classification_of_dsmz_celllines"

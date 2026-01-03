@@ -1,3 +1,4 @@
+# config.yaml - Configuration for the profiles/slurm/ directory
 executor: cluster-generic
 cluster-generic-submit-cmd: "python profiles/slurm/slurm-submit.py"
 jobs: 20
