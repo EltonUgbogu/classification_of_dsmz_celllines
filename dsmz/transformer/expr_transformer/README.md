@@ -55,7 +55,7 @@ The framework is particularly suited for **unsupervised cancer subtype discovery
 
 ## Model Architecture
 
-![Expression Transformer Architecture](https://raw.githubusercontent.com/EltonUgbogu/classification_of_dsmz_celllines/main/dsmz/transformer/expr_transformer/expression_transformer_schematic.svg)
+![Expression Transformer Architecture](./expression_transformer_schematic.svg)
 
 ### Expression Transformer (`ExprTransformer`)
 
