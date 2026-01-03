@@ -1,6 +1,7 @@
 # config.yaml - Configuration for the expr_transformer project
 # Absolute path to this repository on your cluster/host
-project_root: "/work/ugbogu/expr_transformer"
+# Update this path to match your system (e.g., /home/username/classification_of_dsmz_celllines)
+project_root: "/home/user/classification_of_dsmz_celllines"
 
 datasets:
   brca_hvg500:
@@ -9,13 +10,13 @@ datasets:
     ckpt_prefix: "exprtf_brca_hvg500"
 
 train:
-  script: "dsmz/transformer/expr_transformer/src/train_mgm.py"
+  script: "train_mgm.py"  # Auto-detected in src/ directory
   epochs: 30
   batch_size: 256
   log_every: 100
 
 export:
-  script: "dsmz/transformer/expr_transformer/src/export_embeddings.py"
+  script: "export_embeddings.py"  # Auto-detected in src/ directory
   batch_size: 512
 
 paths:

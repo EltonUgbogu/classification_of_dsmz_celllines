@@ -1,21 +1,70 @@
-# Snakefile for the expr_transformer project
+"""
+Expression Transformer Snakemake Workflow
+==========================================
+
+GPU-only workflow for Masked Gene Modeling on expression data.
+
+Repository structure:
+  expr_transformer/
+    ├── config/
+    │   └── config.yaml      ← All paths configured here
+    ├── src/
+    │   ├── Snakefile        ← This file
+    │   ├── train_mgm.py
+    │   └── ...
+    └── data/
+
+No hardcoded paths - everything computed from Snakefile location and config.yaml.
+"""
 
 from pathlib import Path
 
-configfile: "../config.yaml"
+# ============================================================================
+# Auto-detect repository root
+# ============================================================================
 
-PROJECT_ROOT = Path(config["project_root"]).expanduser().resolve()
+# Snakefile is in: <repo_root>/src/Snakefile
+# So repo_root is one level up from workflow.basedir
+SNAKEFILE_DIR = Path(workflow.basedir)  # .../src/
+REPO_ROOT = SNAKEFILE_DIR.parent        # .../expr_transformer/
+
+# Standard config location: ../config/config.yaml
+configfile: "../config/config.yaml"
+
+# ============================================================================
+# Path resolution
+# ============================================================================
+
+# If config specifies project_root, use it; otherwise use detected REPO_ROOT
+if "project_root" in config:
+    PROJECT_ROOT = Path(config["project_root"]).expanduser().resolve()
+else:
+    PROJECT_ROOT = REPO_ROOT
+
+# Set working directory to project root
 workdir: str(PROJECT_ROOT)
 
 
 def as_abs(path: str) -> str:
+    """Convert relative paths to absolute, relative to PROJECT_ROOT."""
     p = Path(path)
     return str(p if p.is_absolute() else PROJECT_ROOT / p)
 
 
-CHECK_SCRIPT = as_abs("dsmz/transformer/expr_transformer/src/check_gene_order.py")
-TRAIN_SCRIPT = as_abs(config["train"]["script"])
-EXPORT_SCRIPT = as_abs(config["export"]["script"])
+# ============================================================================
+# Script paths - computed from REPO_ROOT, NOT hardcoded
+# ============================================================================
+
+# Scripts are in src/ directory
+SRC_DIR = REPO_ROOT / "src"
+
+CHECK_SCRIPT = str(SRC_DIR / "check_gene_order.py")
+TRAIN_SCRIPT = str(SRC_DIR / config["train"]["script"]) if "/" not in config["train"]["script"] else as_abs(config["train"]["script"])
+EXPORT_SCRIPT = str(SRC_DIR / config["export"]["script"]) if "/" not in config["export"]["script"] else as_abs(config["export"]["script"])
+
+# ============================================================================
+# Output directories
+# ============================================================================
 
 CKPT_DIR = as_abs(config["paths"]["ckpt_dir"])
 EMB_DIR = as_abs(config["paths"]["emb_dir"])
@@ -23,29 +72,42 @@ LOGS_DIR = as_abs(config["paths"]["logs_dir"])
 BENCH_DIR = as_abs(config["paths"]["benchmarks_dir"])
 RESULTS_DIR = PROJECT_ROOT / "results"
 
+# ============================================================================
+# Dataset configuration
+# ============================================================================
+
 DATASETS = list(config["datasets"].keys())
 EPOCHS = int(config["train"]["epochs"])
 
 
 def ds_npz(ds: str) -> str:
+    """Get absolute path to dataset NPZ file."""
     return as_abs(config["datasets"][ds]["npz"])
 
 
 def ds_meta(ds: str) -> str:
+    """Get absolute path to dataset metadata JSON."""
     return as_abs(config["datasets"][ds]["meta"])
 
 
 def ckpt_prefix(ds: str) -> str:
+    """Get checkpoint prefix for dataset."""
     return config["datasets"][ds].get("ckpt_prefix", ds)
 
 
 def ckpt_path(ds: str) -> str:
+    """Get absolute path to checkpoint file."""
     return str(Path(CKPT_DIR) / f"{ckpt_prefix(ds)}_ep{EPOCHS:02d}.pt")
 
 
 def emb_path(ds: str) -> str:
+    """Get absolute path to embeddings TSV file."""
     return str(Path(EMB_DIR) / f"{ds}_embeddings.tsv")
 
+
+# ============================================================================
+# Rules
+# ============================================================================
 
 rule all:
     input:
@@ -54,6 +116,7 @@ rule all:
 
 
 rule check_gene_order:
+    """Verify gene ordering matches between NPZ and metadata."""
     input:
         npz=lambda wc: ds_npz(wc.ds),
         meta=lambda wc: ds_meta(wc.ds),
@@ -76,6 +139,7 @@ rule check_gene_order:
 
 
 rule train_mgm:
+    """Train Masked Gene Model with Transformer architecture (GPU-only)."""
     input:
         ok=lambda wc: str(RESULTS_DIR / wc.ds / "gene_order.ok"),
         npz=lambda wc: ds_npz(wc.ds),
@@ -124,6 +188,7 @@ rule train_mgm:
 
 
 rule export_embeddings:
+    """Export sample embeddings from trained checkpoint (GPU-only)."""
     input:
         ckpt=lambda wc: ckpt_path(wc.ds),
         npz=lambda wc: ds_npz(wc.ds),
@@ -157,4 +222,3 @@ rule export_embeddings:
           --out {output.tsv} \
           --batch-size {params.batch_size} >> {log} 2>&1
         '''
-
