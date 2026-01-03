@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-train_mgm.py
+# train_mgm.py
 ============
 
 This script trains a Masked Gene Model (MGM) on gene expression data using a

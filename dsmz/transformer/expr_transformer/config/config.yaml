@@ -1,10 +1,10 @@
 # config.yaml - Configuration for the expr_transformer project
 # Absolute path to this repository on your cluster/host
-# Update this path to match your system (e.g., /home/username/classification_of_dsmz_celllines)
-project_root: "/home/user/classification_of_dsmz_celllines"
+
+project_root: "/work/ugbogu/expr_transformer"
 
 datasets:
-  brca_hvg500:
+  exprtf_brca_hvg500:
     npz: "data/BRCA_HVG500_joint.npz"
     meta: "data/BRCA_HVG500_joint.meta.json"
     ckpt_prefix: "exprtf_brca_hvg500"

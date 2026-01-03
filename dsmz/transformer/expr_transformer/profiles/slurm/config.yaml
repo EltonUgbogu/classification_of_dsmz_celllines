@@ -1,17 +1,23 @@
-# config.yaml - Configuration for the profiles/slurm/ directory
-executor: cluster-generic
-cluster-generic-submit-cmd: "python profiles/slurm/slurm-submit.py"
+# profiles/slurm/config.yaml - Configuration for the profiles/slurm/ directory (Snakemake 5.10 compatible)
+
 jobs: 20
 latency-wait: 60
 rerun-incomplete: true
 keep-going: true
 printshellcmds: true
-use-conda: true
-conda-frontend: mamba
 
+# Enable per-rule conda envs (Snakemake 5 supports this)
+use-conda: true
+
+# Where Snakemake will create rule environments
+# (relative to repo root - Snakemake doesn't expand %u like Slurm does)
+conda-prefix: .snakemake/conda
+
+# Use the classic cluster submission interface
+cluster: "python profiles/slurm/slurm-submit.py"
+
+# Default resources used if a rule does not specify them
 default-resources:
   - mem_mb=8000
   - runtime=60
-  - cpus=1
   - gpu=0
-
