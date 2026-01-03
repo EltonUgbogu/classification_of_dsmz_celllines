@@ -291,9 +291,9 @@ def parse_args():
     )
     parser.add_argument(
         "--device",
-        choices=["cuda", "cpu"],
-        default=None,
-        help="GPU-only export; CPU is not supported",
+        choices=["cuda"],
+        default="cuda",
+        help="Device for export (CUDA only).",
     )
     return parser.parse_args()
 
@@ -304,8 +304,6 @@ def main():
     # -------------------------------------------------------------------------
     # DEVICE SELECTION
     # -------------------------------------------------------------------------
-    if args.device == "cpu":
-        raise RuntimeError("GPU-only export: remove --device cpu.")
     if not torch.cuda.is_available():
         raise RuntimeError(
             "CUDA required for export. Run this on a GPU node (e.g. --partition=gpu --gres=gpu:1)."
@@ -421,7 +419,7 @@ def main():
     print(f"Generating embeddings in batches of {batch_size}...")
     for i in range(0, n_samples, batch_size):
         # Extract batch
-        batch = X[i:i + batch_size].to(device, non_blocking=True)
+        batch = X[i:i + batch_size].to(device)
         
         # Generate embeddings for this batch
         # .detach(): Ensure no gradient tracking (redundant with @torch.no_grad but explicit)
