@@ -16,11 +16,8 @@ from typing import Iterable, Tuple
 import numpy as np
 
 # Default paths assume execution from repository root
-# Resolve relative to script's parent directory (repo root)
-_SCRIPT_DIR = Path(__file__).parent
-_REPO_ROOT = _SCRIPT_DIR.parent
-DEFAULT_NPZ = _REPO_ROOT / "data" / "BRCA_HVG500_joint.npz"
-DEFAULT_META = _REPO_ROOT / "data" / "BRCA_HVG500_joint.meta.json"
+DEFAULT_NPZ_PATH = Path("data/BRCA_HVG500_joint.npz")
+DEFAULT_META_PATH = Path("data/BRCA_HVG500_joint.meta.json")
 
 # Common metadata keys for gene identifiers
 GENE_KEY_CANDIDATES = ("genes", "gene_names", "features", "gene_ids")
@@ -46,35 +43,36 @@ def sha256_lines(values: Iterable[str]) -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Validate NPZ+meta and print gene-order SHA256."
+        description="Validate NPZ/meta alignment and emit a gene-order hash.",
     )
     parser.add_argument(
         "--npz",
-        type=Path,
-        default=DEFAULT_NPZ,
-        help=f"Path to NPZ file (default: {DEFAULT_NPZ})",
+        default=str(DEFAULT_NPZ_PATH.resolve()),
+        help="Path to NPZ file containing the expression matrix",
     )
     parser.add_argument(
         "--meta",
-        type=Path,
-        default=DEFAULT_META,
-        help=f"Path to metadata JSON (default: {DEFAULT_META})",
+        default=str(DEFAULT_META_PATH.resolve()),
+        help="Path to JSON metadata containing samples and gene list",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    data = np.load(args.npz)
+
+    npz_path = Path(args.npz).resolve()
+    meta_path = Path(args.meta).resolve()
+
+    data = np.load(npz_path)
     if "X" not in data:
         raise KeyError(f"NPZ file does not contain 'X'. Keys: {list(data.keys())}")
 
     X = data["X"]
     print(f"[OK] X shape: {X.shape} (samples × genes)")
 
-    meta = json.loads(args.meta.read_text())
+    meta = json.loads(meta_path.read_text())
     if "genes" not in meta:
         raise KeyError(f"meta.json has no 'genes' key. Keys: {list(meta.keys())}")
     if "samples" not in meta:
