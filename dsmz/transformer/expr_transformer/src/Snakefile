@@ -1,6 +1,6 @@
 from pathlib import Path
 
-configfile: "config.yaml"
+configfile: "../envs/config.yaml"
 
 PROJECT_ROOT = Path(config["project_root"]).expanduser().resolve()
 workdir: str(PROJECT_ROOT)
@@ -47,8 +47,8 @@ def emb_path(ds: str) -> str:
 
 rule all:
     input:
-        expand(emb_path, ds=DATASETS),
-        expand(ckpt_path, ds=DATASETS),
+        [emb_path(ds) for ds in DATASETS],
+        [ckpt_path(ds) for ds in DATASETS],
 
 
 rule check_gene_order:
@@ -84,6 +84,11 @@ rule train_mgm:
         lambda wc: str(Path(LOGS_DIR) / f"train_{wc.ds}.log"),
     benchmark:
         lambda wc: str(Path(BENCH_DIR) / f"train_{wc.ds}.tsv"),
+    params:
+        ckpt_prefix=lambda wc: ckpt_prefix(wc.ds),
+        ds=lambda wc: wc.ds,
+        batch_size=lambda wc: config["train"]["batch_size"],
+        log_every=lambda wc: config["train"]["log_every"],
     conda:
         "../envs/exprtf.yml",
     resources:
@@ -95,7 +100,7 @@ rule train_mgm:
         r'''
         set -euo pipefail
         mkdir -p "{CKPT_DIR}" "$(dirname {log})" "$(dirname {benchmark})"
-        mkdir -p "{RESULTS_DIR}/{wildcards.ds}"
+        mkdir -p "{RESULTS_DIR}/{params.ds}"
 
         nvidia-smi >> {log} 2>&1
 
@@ -103,10 +108,10 @@ rule train_mgm:
           --npz {input.npz} \
           --meta {input.meta} \
           --ckpt-dir {CKPT_DIR} \
-          --ckpt-prefix {ckpt_prefix(wildcards.ds)} \
+          --ckpt-prefix {params.ckpt_prefix} \
           --epochs {EPOCHS} \
-          --batch-size {config["train"]["batch_size"]} \
-          --log-every {config["train"]["log_every"]} >> {log} 2>&1
+          --batch-size {params.batch_size} \
+          --log-every {params.log_every} >> {log} 2>&1
 
         if [ ! -f {output.ckpt} ]; then
           echo "ERROR: expected checkpoint {output.ckpt} not found" >> {log}
@@ -127,6 +132,8 @@ rule export_embeddings:
         lambda wc: str(Path(LOGS_DIR) / f"export_{wc.ds}.log"),
     benchmark:
         lambda wc: str(Path(BENCH_DIR) / f"export_{wc.ds}.tsv"),
+    params:
+        batch_size=lambda wc: config["export"]["batch_size"],
     conda:
         "../envs/exprtf.yml",
     resources:
@@ -146,6 +153,6 @@ rule export_embeddings:
           --meta {input.meta} \
           --ckpt {input.ckpt} \
           --out {output.tsv} \
-          --batch-size {config["export"]["batch_size"]} >> {log} 2>&1
+          --batch-size {params.batch_size} >> {log} 2>&1
         '''
 
