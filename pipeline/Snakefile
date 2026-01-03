@@ -637,6 +637,9 @@ rule tumour_neighbourhoods_hc_hvg:
     output:
         outdir = directory(os.path.join(TUMOUR_NH_ROOT, "{direction}")),
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
+    params:
+        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhoods_hc_{direction}.log"
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
@@ -644,8 +647,8 @@ rule tumour_neighbourhoods_hc_hvg:
         r'''
         set -euo pipefail
         mkdir -p {output.outdir}
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
           --mapping-rds {input.map_rds} \
@@ -662,6 +665,9 @@ if USE_PAM50:
         output:
             outdir = directory(os.path.join(TUMOUR_NH_ROOT, "{direction}")),
             done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
+        params:
+            script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
+            config = os.path.join(BASE, "config", "config.yaml")
         log: "logs/tumour_neighbourhoods_hc_{direction}.log"
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
@@ -669,8 +675,8 @@ if USE_PAM50:
             r'''
             set -euo pipefail
             mkdir -p {output.outdir}
-            Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
-              --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+            Rscript {params.script} \
+              --config {params.config} \
               --direction {wildcards.direction} \
               --expr-rds {input.expr_rds} \
               --mapping-rds {input.map_rds} \
@@ -687,6 +693,9 @@ rule tumour_neighbourhoods_hc_featureset:
     output:
         outdir = directory(os.path.join(TUMOUR_NH_ROOT, "{direction}")),
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
+    params:
+        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhoods_hc_{direction}.log"
     wildcard_constraints:
         direction="|".join(["|".join([f"{m}_{d}" for d in DISTANCES]) for m in FEATURE_METHODS])
@@ -694,8 +703,8 @@ rule tumour_neighbourhoods_hc_featureset:
         r'''
         set -euo pipefail
         mkdir -p {output.outdir}
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
           --mapping-rds {input.map_rds} \
@@ -709,14 +718,17 @@ rule tumour_neighbourhoods_km_any:
         done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
+    params:
+        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhoods_km_{direction}.log"
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
         r'''
         set -euo pipefail
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/comp_tumour_neighbourhoods.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           > {log} 2>&1
         touch {output.done}
@@ -730,6 +742,9 @@ rule tumour_neighbourhood_p_consensus_hvg:
     output:
         consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
         consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhood_p_consensus_{direction}.log"
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
@@ -737,8 +752,8 @@ rule tumour_neighbourhood_p_consensus_hvg:
         r'''
         set -euo pipefail
         mkdir -p $(dirname {output.consensus_rds})
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_p_consensus.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           > {log} 2>&1
         '''
@@ -750,6 +765,9 @@ if USE_PAM50:
         output:
             consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
             consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+        params:
+            script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
+            config = os.path.join(BASE, "config", "config.yaml")
         log: "logs/tumour_neighbourhood_p_consensus_{direction}.log"
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
@@ -757,8 +775,8 @@ if USE_PAM50:
             r'''
             set -euo pipefail
             mkdir -p $(dirname {output.consensus_rds})
-            Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_p_consensus.R \
-              --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+            Rscript {params.script} \
+              --config {params.config} \
               --direction {wildcards.direction} \
               > {log} 2>&1
             '''
@@ -770,6 +788,9 @@ rule tumour_neighbourhood_p_consensus_featureset:
     output:
         consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
         consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhood_p_consensus_{direction}.log"
     wildcard_constraints:
         direction="|".join(["|".join([f"{m}_{d}" for d in DISTANCES]) for m in FEATURE_METHODS])
@@ -777,8 +798,8 @@ rule tumour_neighbourhood_p_consensus_featureset:
         r'''
         set -euo pipefail
         mkdir -p $(dirname {output.consensus_rds})
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_p_consensus.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           > {log} 2>&1
         '''
@@ -802,6 +823,9 @@ rule dsmz_dsmz_similarity_graph:
         graph_leiden = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Leiden_{direction}.pdf"),
         graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
         graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
+    params:
+        script = os.path.join(BASE, "scripts", "compute_dsmz_dsmz_similarity.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/dsmz_dsmz_similarity_graph_{direction}.log"
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -809,8 +833,8 @@ rule dsmz_dsmz_similarity_graph:
         r'''
         set -euo pipefail
         mkdir -p $(dirname {output.sim_mat_rds})
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/compute_dsmz_dsmz_similarity.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           > {log} 2>&1
         '''
@@ -838,14 +862,16 @@ rule summarize_p_consensus_all:
         fig_scree = os.path.join(P_CONS_ALL_DIR, "Fig_p_consensus_composite_PCA_scree.pdf"),
         fig_weights = os.path.join(P_CONS_ALL_DIR, "Fig_p_consensus_composite_PCA_weights.pdf")
     params:
+        script = os.path.join(BASE, "scripts", "summarize_p_consensus_all.R"),
+        config = os.path.join(BASE, "config", "config.yaml"),
         threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
     log: "logs/summarize_p_consensus_all.log"
     shell:
         r'''
         set -euo pipefail
         mkdir -p {P_CONS_ALL_DIR}
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/summarize_p_consensus_all.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --threshold {params.threshold} \
           > {log} 2>&1
         '''
@@ -862,16 +888,19 @@ rule tumour_neighbourhood_qc_umap_hvg:
         qc_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_qc_summary.tsv"),
         umap_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.tsv"),
         umap_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.pdf")
+    params:
+        script = os.path.join(BASE, "scripts", "tumour_neighbourhood_qc_umap.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhood_qc_umap_{direction}.log"
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
-    conda: "/home/chu25/dsmz/pipeline/pipeline/unsupervised/envs/tumour_nh_qc.yaml"
+    conda: os.path.join(BASE, "envs", "tumour_nh_qc.yaml")
     shell:
         r'''
         set -euo pipefail
         mkdir -p $(dirname {output.qc_tsv})
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_qc_umap.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           --consensus_rds {input.consensus_rds} \
           --expr_rds {input.expr_rds} \
@@ -892,16 +921,19 @@ if USE_PAM50:
             qc_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_qc_summary.tsv"),
             umap_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.tsv"),
             umap_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.pdf")
+        params:
+            script = os.path.join(BASE, "scripts", "tumour_neighbourhood_qc_umap.R"),
+            config = os.path.join(BASE, "config", "config.yaml")
         log: "logs/tumour_neighbourhood_qc_umap_{direction}.log"
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
-        conda: "/home/chu25/dsmz/pipeline/pipeline/unsupervised/envs/tumour_nh_qc.yaml"
+        conda: os.path.join(BASE, "envs", "tumour_nh_qc.yaml")
         shell:
             r'''
             set -euo pipefail
             mkdir -p $(dirname {output.qc_tsv})
-            Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_qc_umap.R \
-              --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+            Rscript {params.script} \
+              --config {params.config} \
               --direction {wildcards.direction} \
               --consensus_rds {input.consensus_rds} \
               --expr_rds {input.expr_rds} \
@@ -922,16 +954,19 @@ rule tumour_neighbourhood_qc_umap_featureset:
         qc_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_qc_summary.tsv"),
         umap_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.tsv"),
         umap_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "qc", "nh_umap.pdf")
+    params:
+        script = os.path.join(BASE, "scripts", "tumour_neighbourhood_qc_umap.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
     log: "logs/tumour_neighbourhood_qc_umap_{direction}.log"
     wildcard_constraints:
         direction="|".join(["|".join([f"{m}_{d}" for d in DISTANCES]) for m in FEATURE_METHODS])
-    conda: "/home/chu25/dsmz/pipeline/pipeline/unsupervised/envs/tumour_nh_qc.yaml"
+    conda: os.path.join(BASE, "envs", "tumour_nh_qc.yaml")
     shell:
         r'''
         set -euo pipefail
         mkdir -p $(dirname {output.qc_tsv})
-        Rscript /home/chu25/dsmz/pipeline/pipeline/unsupervised/scripts/tumour_neighbourhood_qc_umap.R \
-          --config /home/chu25/dsmz/pipeline/pipeline/unsupervised/config/config.yaml \
+        Rscript {params.script} \
+          --config {params.config} \
           --direction {wildcards.direction} \
           --consensus_rds {input.consensus_rds} \
           --expr_rds {input.expr_rds} \
