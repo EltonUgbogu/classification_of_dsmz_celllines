@@ -1,0 +1,110 @@
+# Unsupervised Clustering Pipeline Configuration
+# This is a minimal template - adjust paths according to your data location
+
+profile: brca
+
+defaults:
+  paths:
+    # Base output directory
+    unsup_root: "results/unsupervised"
+
+    # Base functions directory
+    base_functions_dir: "R/base_functions"
+    agnostic_base_functions_dir: "R/base_functions"
+
+    # Tumour neighbourhood input root
+    tumour_nh_input_root: "results/unsupervised/tumour_neighbourhoods_input"
+
+  feature_sets:
+    methods: ["Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal"]
+    distances: ["euc", "corr"]
+
+  feature_selection:
+    final_top: 500
+
+  agnostic_clustering:
+    n_pcs: 20
+    max_k_hc: 8
+    k_min: 2
+    k_max: 8
+    seed: 42
+
+  tumour_neighbourhoods:
+    p_consensus_threshold: 0.7
+
+profiles:
+  brca:
+    analysis:
+      cancer_type: BRCA
+      use_pam50: true
+
+    paths:
+      # Input data paths - UPDATE THESE TO YOUR DATA LOCATIONS
+      vst_joint_rds: "data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds"
+      cell_vst_rds: "data/brca/bcc_analysis_results/dsmz_vst_bcc_batch_corrected.rds"
+      tumour_vst_rds: "data/brca/bcc_analysis_results/tcga_vst_brca_subtype_batch_corrected.rds"
+      dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
+
+      # PAM50 specific paths
+      tcga_brca_pam50_expr: "data/brca/bcc_preprocessing_results/TCGA-BRCA_PAM50_expr_matrix.rds"
+      dsmz_bcc_pam50_expr: "data/brca/bcc_preprocessing_results/DSMZ-BCC_PAM50_expr_matrix.rds"
+
+      # Tumour neighbourhood paths
+      tumour_nh_expr_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/expr_matrix.rds"
+      tumour_nh_map_rds_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/cell_line_to_original_sample_id.rds"
+      tumour_nh_expr_pam50: "results/unsupervised/tumour_neighbourhoods_input/pam50/expr_matrix.rds"
+      tumour_nh_map_rds_pam50: "results/unsupervised/tumour_neighbourhoods_input/pam50/cell_line_to_original_sample_id.rds"
+
+    pam50:
+      ensembl_gene_list: "resources/pam50_ensembl_ids.txt"
+
+    features:
+      hvg_dir: "results/unsupervised/feature_selection_unsupervised"
+      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/hvg_joint_scores.tsv"
+      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/hvg_final_gene_list.txt"
+      method_outdir: "results/unsupervised/feature_selection_unsupervised/featuresets"
+      pam50_ensembl_gene_list: "resources/pam50_ensembl_ids.txt"
+
+  rbl:
+    analysis:
+      cancer_type: RBL
+      use_pam50: false
+
+    paths:
+      # Input data paths for RBL - UPDATE THESE
+      vst_joint_rds: "data/rbl/preprocessing_results/vst_rbl_joint_batch_corrected.rds"
+      cell_vst_rds: "data/rbl/preprocessing_results/dsmz_vst_rbl_batch_corrected.rds"
+      tumour_vst_rds: "data/rbl/preprocessing_results/tumour_vst_rbl_batch_corrected.rds"
+      dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
+
+      # Tumour neighbourhood paths
+      tumour_nh_expr_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/expr_matrix.rds"
+      tumour_nh_map_rds_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/cell_line_to_original_sample_id.rds"
+
+    features:
+      hvg_dir: "results/unsupervised/feature_selection_unsupervised"
+      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/hvg_joint_scores.tsv"
+      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/hvg_final_gene_list.txt"
+      method_outdir: "results/unsupervised/feature_selection_unsupervised/featuresets"
+
+  nbl:
+    analysis:
+      cancer_type: NBL
+      use_pam50: false
+
+    paths:
+      # Input data paths for NBL - UPDATE THESE
+      vst_joint_rds: "data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds"
+      cell_vst_rds: "data/nbl/preprocessing_results/dsmz_vst_nbl_batch_corrected.rds"
+      tumour_vst_rds: "data/nbl/preprocessing_results/tumour_vst_nbl_batch_corrected.rds"
+      dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
+
+      # Tumour neighbourhood paths
+      tumour_nh_expr_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/expr_matrix.rds"
+      tumour_nh_map_rds_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/cell_line_to_original_sample_id.rds"
+
+    features:
+      hvg_dir: "results/unsupervised/feature_selection_unsupervised"
+      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/hvg_joint_scores.tsv"
+      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/hvg_final_gene_list.txt"
+      method_outdir: "results/unsupervised/feature_selection_unsupervised/featuresets"
