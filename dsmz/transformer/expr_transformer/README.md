@@ -55,7 +55,7 @@ The framework is particularly suited for **unsupervised cancer subtype discovery
 
 ## Model Architecture
 
-![Expression Transformer Architecture](expression_transformer_schematic.svg)
+<!-- Architecture schematic: expression_transformer_schematic.svg (local file, not in repository) -->
 
 ### Expression Transformer (`ExprTransformer`)
 
@@ -362,25 +362,3 @@ sbatch --partition=gpu --gres=gpu:1 src/train_exprtf.sh
 * Use gradient accumulation
 * Process data in smaller chunks
 
----
-
-## Citation
-
-If this framework is used in academic work, please cite:
-
-```bibtex
-@software{expression_transformer,
-  title = {Expression Transformer: Self-Supervised Representation Learning for Gene Expression Data},
-  author = {Your Name},
-  year = {2024},
-  url = {https://github.com/yourusername/classification_of_dsmz_celllines}
-}
-```
-
----
-
-## License and Contact
-
-[Specify license]
-
-For questions, bug reports, or methodological discussions, please open a GitHub issue or contact the author directly.
