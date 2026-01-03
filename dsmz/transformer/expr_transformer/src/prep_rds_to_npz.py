@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-prep_rds_to_npz.py
+# prep_rds_to_npz.py
 ==================
 
 This script converts an R Data Serialization (RDS) file containing a gene
