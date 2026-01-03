@@ -1,0 +1,25 @@
+# Absolute path to this repository on your cluster/host
+project_root: "/work/ugbogu/expr_transformer"
+
+datasets:
+  brca_hvg500:
+    npz: "data/BRCA_HVG500_joint.npz"
+    meta: "data/BRCA_HVG500_joint.meta.json"
+    ckpt_prefix: "exprtf_brca_hvg500"
+
+train:
+  script: "dsmz/transformer/expr_transformer/src/train_mgm.py"
+  epochs: 30
+  batch_size: 256
+  log_every: 100
+
+export:
+  script: "dsmz/transformer/expr_transformer/src/export_embeddings.py"
+  batch_size: 512
+
+paths:
+  ckpt_dir: "ckpt"
+  emb_dir: "embeddings"
+  logs_dir: "logs"
+  benchmarks_dir: "benchmarks"
+
