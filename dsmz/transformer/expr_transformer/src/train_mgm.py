@@ -427,9 +427,12 @@ def main():
     # SETUP
     # -------------------------------------------------------------------------
     
-    # Select device (GPU if available, else CPU)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Training on: {device}")
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA required. Submit this job to a GPU node (e.g. --partition=gpu --gres=gpu:1)."
+        )
+    device = "cuda"
+    print("Training on: cuda:", torch.cuda.get_device_name(0))
     
     # Load preprocessed data
     data = np.load(NPZ_PATH)
@@ -492,7 +495,7 @@ def main():
     # num_workers=2: Background processes for data loading (overlap with GPU)
     #
     # pin_memory=True: Use pinned (page-locked) memory for faster CPU→GPU transfer
-    batch_size = 256 if device == "cuda" else 32
+    batch_size = 256
     dl = DataLoader(
         ds,
         batch_size=batch_size,
