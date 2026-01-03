@@ -9,13 +9,13 @@ datasets:
     ckpt_prefix: "exprtf_brca_hvg500"
 
 train:
-  script: "dsmz/transformer/expr_transformer/src/train_mgm.py"
+  script: "train_mgm.py"  # Auto-detected in src/ directory
   epochs: 30
   batch_size: 256
   log_every: 100
 
 export:
-  script: "dsmz/transformer/expr_transformer/src/export_embeddings.py"
+  script: "export_embeddings.py"  # Auto-detected in src/ directory
   batch_size: 512
 
 paths:
