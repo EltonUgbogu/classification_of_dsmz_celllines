@@ -39,10 +39,7 @@ This centers each gene at mean=0 with standard deviation=1, which:
 import argparse
 import json
 import os
-
-import numpy as np
-import pandas as pd
-import pyreadr  # Library for reading R data files in Python
+import sys
 
 
 def _default_rds_path():
@@ -77,6 +74,15 @@ def parse_args():
 
 def main():
     args = parse_args()
+    
+    # Heavy imports AFTER args are parsed (so --help works without deps)
+    try:
+        import numpy as np
+        import pandas as pd
+        import pyreadr  # Library for reading R data files in Python
+    except ModuleNotFoundError as e:
+        print(f"[ERROR] Missing dependency: {e.name}. Activate env or install it.", file=sys.stderr)
+        return 2
 
     # =============================================================================
     # LOAD RDS FILE
@@ -231,7 +237,8 @@ def main():
     print(f"    X = data['X']  # z-scored expression matrix")
     print(f"    # To reverse: X_original = X * data['sd'] + data['mu']")
     print(f"{'='*60}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
