@@ -7,6 +7,7 @@ columns align with the gene list recorded in the metadata JSON. It reports a
 stable SHA256 hash you can embed into checkpoints for future validation.
 """
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -15,8 +16,11 @@ from typing import Iterable, Tuple
 import numpy as np
 
 # Default paths assume execution from repository root
-NPZ_PATH = Path("data/BRCA_HVG500_joint.npz")
-META_PATH = Path("data/BRCA_HVG500_joint.meta.json")
+# Resolve relative to script's parent directory (repo root)
+_SCRIPT_DIR = Path(__file__).parent
+_REPO_ROOT = _SCRIPT_DIR.parent
+DEFAULT_NPZ = _REPO_ROOT / "data" / "BRCA_HVG500_joint.npz"
+DEFAULT_META = _REPO_ROOT / "data" / "BRCA_HVG500_joint.meta.json"
 
 # Common metadata keys for gene identifiers
 GENE_KEY_CANDIDATES = ("genes", "gene_names", "features", "gene_ids")
@@ -41,15 +45,36 @@ def sha256_lines(values: Iterable[str]) -> str:
     return hashlib.sha256(joined).hexdigest()
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Validate NPZ+meta and print gene-order SHA256."
+    )
+    parser.add_argument(
+        "--npz",
+        type=Path,
+        default=DEFAULT_NPZ,
+        help=f"Path to NPZ file (default: {DEFAULT_NPZ})",
+    )
+    parser.add_argument(
+        "--meta",
+        type=Path,
+        default=DEFAULT_META,
+        help=f"Path to metadata JSON (default: {DEFAULT_META})",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    data = np.load(NPZ_PATH)
+    args = parse_args()
+    data = np.load(args.npz)
     if "X" not in data:
         raise KeyError(f"NPZ file does not contain 'X'. Keys: {list(data.keys())}")
 
     X = data["X"]
     print(f"[OK] X shape: {X.shape} (samples × genes)")
 
-    meta = json.loads(META_PATH.read_text())
+    meta = json.loads(args.meta.read_text())
     if "genes" not in meta:
         raise KeyError(f"meta.json has no 'genes' key. Keys: {list(meta.keys())}")
     if "samples" not in meta:
