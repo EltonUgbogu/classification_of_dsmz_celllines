@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
+
 """
+# check_gene_order.py
+====================
+
 Verify that NPZ gene ordering matches the accompanying metadata.
 
 This script performs a one-time integrity check to ensure the expression matrix
@@ -73,8 +77,6 @@ def main() -> None:
     print(f"[OK] X shape: {X.shape} (samples × genes)")
 
     meta = json.loads(meta_path.read_text())
-    if "genes" not in meta:
-        raise KeyError(f"meta.json has no 'genes' key. Keys: {list(meta.keys())}")
     if "samples" not in meta:
         raise KeyError(f"meta.json has no 'samples' key. Keys: {list(meta.keys())}")
 

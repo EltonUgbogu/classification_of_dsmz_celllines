@@ -1,20 +1,7 @@
 """
 Expression Transformer Snakemake Workflow
 ==========================================
-
-GPU-only workflow for Masked Gene Modeling on expression data.
-
-Repository structure:
-  expr_transformer/
-    ├── config/
-    │   └── config.yaml      ← All paths configured here
-    ├── src/
-    │   ├── Snakefile        ← This file
-    │   ├── train_mgm.py
-    │   └── ...
-    └── data/
-
-No hardcoded paths - everything computed from Snakefile location and config.yaml.
+# Snakefile for the Expression Transformer project
 """
 
 from pathlib import Path
@@ -28,8 +15,8 @@ from pathlib import Path
 SNAKEFILE_DIR = Path(workflow.basedir)  # .../src/
 REPO_ROOT = SNAKEFILE_DIR.parent        # .../expr_transformer/
 
-# Standard config location: ../config/config.yaml
-configfile: "../config/config.yaml"
+# Standard config location: config/config.yaml (absolute path for robustness)
+configfile: str(REPO_ROOT / "config" / "config.yaml")
 
 # ============================================================================
 # Path resolution
@@ -121,11 +108,12 @@ rule check_gene_order:
         npz=lambda wc: ds_npz(wc.ds),
         meta=lambda wc: ds_meta(wc.ds),
     output:
-        stamp=lambda wc: str(RESULTS_DIR / wc.ds / "gene_order.ok"),
+        stamp=str(RESULTS_DIR / "{ds}" / "gene_order.ok"),
     log:
-        lambda wc: str(Path(LOGS_DIR) / f"check_gene_order_{wc.ds}.log"),
+        str(Path(LOGS_DIR) / "check_gene_order_{ds}.log"),
     conda:
-        "../envs/exprtf.yml",
+        str(REPO_ROOT / "envs" / "exprtf.yml"),
+    threads: 1
     resources:
         mem_mb=2000,
         runtime=5,
@@ -133,7 +121,16 @@ rule check_gene_order:
         r'''
         set -euo pipefail
         mkdir -p "$(dirname {output.stamp})" "$(dirname {log})"
-        python {CHECK_SCRIPT} --npz {input.npz} --meta {input.meta} > {log} 2>&1
+
+        # Debug (optional, but super helpful)
+        echo "CONDA_PREFIX=$CONDA_PREFIX" > {log}
+        "$CONDA_PREFIX/bin/python" -c "import sys; print(sys.executable)" >> {log} 2>&1
+        "$CONDA_PREFIX/bin/python" -c "import numpy as np; print('numpy', np.__version__)" >> {log} 2>&1
+
+        "$CONDA_PREFIX/bin/python" {CHECK_SCRIPT} \
+          --npz {input.npz} \
+          --meta {input.meta} >> {log} 2>&1
+
         echo "OK" > {output.stamp}
         '''
 
@@ -141,40 +138,39 @@ rule check_gene_order:
 rule train_mgm:
     """Train Masked Gene Model with Transformer architecture (GPU-only)."""
     input:
-        ok=lambda wc: str(RESULTS_DIR / wc.ds / "gene_order.ok"),
+        ok=str(RESULTS_DIR / "{ds}" / "gene_order.ok"),
         npz=lambda wc: ds_npz(wc.ds),
         meta=lambda wc: ds_meta(wc.ds),
     output:
-        ckpt=lambda wc: ckpt_path(wc.ds),
+        ckpt=str(Path(CKPT_DIR) / f"{{ds}}_ep{EPOCHS:02d}.pt"),
     log:
-        lambda wc: str(Path(LOGS_DIR) / f"train_{wc.ds}.log"),
+        str(Path(LOGS_DIR) / "train_{ds}.log"),
     benchmark:
-        lambda wc: str(Path(BENCH_DIR) / f"train_{wc.ds}.tsv"),
+        str(Path(BENCH_DIR) / "train_{ds}.tsv"),
     params:
-        ckpt_prefix=lambda wc: ckpt_prefix(wc.ds),
-        ds=lambda wc: wc.ds,
-        batch_size=lambda wc: config["train"]["batch_size"],
-        log_every=lambda wc: config["train"]["log_every"],
+        ckpt_prefix="{ds}",
+        batch_size=config["train"]["batch_size"],
+        log_every=config["train"]["log_every"],
     conda:
-        "../envs/exprtf.yml",
+        str(REPO_ROOT / "envs" / "exprtf.yml"),
+    threads: 4
     resources:
         gpu=1,
-        cpus=4,
         mem_mb=32000,
         runtime=720,
     shell:
         r'''
         set -euo pipefail
-        mkdir -p "{CKPT_DIR}" "$(dirname {log})" "$(dirname {benchmark})"
-        mkdir -p "{RESULTS_DIR}/{params.ds}"
+        mkdir -p "{CKPT_DIR}" "{BENCH_DIR}" "$(dirname {log})"
+        mkdir -p "{RESULTS_DIR}/{wildcards.ds}"
 
         nvidia-smi >> {log} 2>&1
 
-        python {TRAIN_SCRIPT} \
+        "$CONDA_PREFIX/bin/python" {TRAIN_SCRIPT} \
           --npz {input.npz} \
           --meta {input.meta} \
           --ckpt-dir {CKPT_DIR} \
-          --ckpt-prefix {params.ckpt_prefix} \
+          --ckpt-prefix {wildcards.ds} \
           --epochs {EPOCHS} \
           --batch-size {params.batch_size} \
           --log-every {params.log_every} >> {log} 2>&1
@@ -190,32 +186,32 @@ rule train_mgm:
 rule export_embeddings:
     """Export sample embeddings from trained checkpoint (GPU-only)."""
     input:
-        ckpt=lambda wc: ckpt_path(wc.ds),
+        ckpt=str(Path(CKPT_DIR) / f"{{ds}}_ep{EPOCHS:02d}.pt"),
         npz=lambda wc: ds_npz(wc.ds),
         meta=lambda wc: ds_meta(wc.ds),
     output:
-        tsv=lambda wc: emb_path(wc.ds),
+        tsv=str(Path(EMB_DIR) / "{ds}_embeddings.tsv"),
     log:
-        lambda wc: str(Path(LOGS_DIR) / f"export_{wc.ds}.log"),
+        str(Path(LOGS_DIR) / "export_{ds}.log"),
     benchmark:
-        lambda wc: str(Path(BENCH_DIR) / f"export_{wc.ds}.tsv"),
+        str(Path(BENCH_DIR) / "export_{ds}.tsv"),
     params:
-        batch_size=lambda wc: config["export"]["batch_size"],
+        batch_size=config["export"]["batch_size"],
     conda:
-        "../envs/exprtf.yml",
+        str(REPO_ROOT / "envs" / "exprtf.yml"),
+    threads: 2
     resources:
         gpu=1,
-        cpus=2,
         mem_mb=16000,
         runtime=120,
     shell:
         r'''
         set -euo pipefail
-        mkdir -p "{EMB_DIR}" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "{EMB_DIR}" "{BENCH_DIR}" "$(dirname {log})"
 
         nvidia-smi >> {log} 2>&1
 
-        python {EXPORT_SCRIPT} \
+        "$CONDA_PREFIX/bin/python" {EXPORT_SCRIPT} \
           --npz {input.npz} \
           --meta {input.meta} \
           --ckpt {input.ckpt} \

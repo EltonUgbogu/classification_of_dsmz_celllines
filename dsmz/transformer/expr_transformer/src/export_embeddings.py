@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-export_embeddings.py
+# export_embeddings.py
 ====================
 
 This script loads a pretrained Expression Transformer model and uses it to
