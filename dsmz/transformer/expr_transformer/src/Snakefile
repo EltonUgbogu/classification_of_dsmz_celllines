@@ -1,3 +1,5 @@
+# Snakefile for the expr_transformer project
+
 from pathlib import Path
 
 configfile: "../config.yaml"
