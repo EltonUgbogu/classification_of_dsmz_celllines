@@ -55,7 +55,7 @@ The framework is particularly suited for **unsupervised cancer subtype discovery
 
 ## Model Architecture
 
-<!-- Architecture schematic: expression_transformer_schematic.svg (local file, not in repository) -->
+![Expression Transformer Architecture](expression_transformer_schematic.svg)
 
 ### Expression Transformer (`ExprTransformer`)
 
