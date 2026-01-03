@@ -45,8 +45,29 @@ Checkpoint files containing trained model weights that can be used for:
 import argparse
 import json
 import hashlib
+import sys
 from pathlib import Path
 
+# Check for --help BEFORE importing heavy dependencies
+def _check_help():
+    """Check if --help was requested and exit early if so."""
+    if "--help" in sys.argv or "-h" in sys.argv:
+        parser = argparse.ArgumentParser(
+            description="Train the Expression Transformer for masked gene modeling (GPU-only)",
+        )
+        parser.add_argument("--npz", help="Path to NPZ file containing the expression matrix")
+        parser.add_argument("--meta", help="Path to JSON metadata with samples and genes")
+        parser.add_argument("--ckpt-dir", help="Directory to store checkpoints")
+        parser.add_argument("--ckpt-prefix", help="Prefix for checkpoint files")
+        parser.add_argument("--epochs", type=int, help="Number of training epochs")
+        parser.add_argument("--batch-size", type=int, help="Batch size for GPU training")
+        parser.add_argument("--log-every", type=int, help="Log progress every N batches")
+        parser.print_help()
+        sys.exit(0)
+
+_check_help()
+
+# Heavy imports - only after we know --help wasn't requested
 import numpy as np
 import torch
 import torch.nn as nn
@@ -475,9 +496,9 @@ def main():
     # -------------------------------------------------------------------------
 
     if not torch.cuda.is_available():
-        raise RuntimeError(
-            "CUDA required. Submit this job to a GPU node (e.g. --partition=gpu --gres=gpu:1)."
-        )
+        print("[ERROR] CUDA not available. This training script is GPU-only.", file=sys.stderr)
+        print("Submit this job to a GPU node (e.g. --partition=gpu --gres=gpu:1).", file=sys.stderr)
+        return 3
     device = "cuda"
     print("Training on: cuda:", torch.cuda.get_device_name(0))
 
@@ -714,6 +735,7 @@ def main():
         print(f"[OK] epoch={ep} masked_mse={avg_loss:.6f} saved={ckpt_path}")
     
     print("\nTraining complete!")
+    return 0
 
 
 # =============================================================================
@@ -721,5 +743,5 @@ def main():
 # =============================================================================
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 
