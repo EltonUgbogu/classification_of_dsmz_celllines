@@ -60,7 +60,7 @@ rule check_gene_order:
     log:
         lambda wc: str(Path(LOGS_DIR) / f"check_gene_order_{wc.ds}.log"),
     conda:
-        "../workflow/envs/exprtf.yml",
+        "../envs/exprtf.yml",
     resources:
         mem_mb=2000,
         runtime=5,
@@ -85,7 +85,7 @@ rule train_mgm:
     benchmark:
         lambda wc: str(Path(BENCH_DIR) / f"train_{wc.ds}.tsv"),
     conda:
-        "../workflow/envs/exprtf.yml",
+        "../envs/exprtf.yml",
     resources:
         gpu=1,
         cpus=4,
@@ -128,7 +128,7 @@ rule export_embeddings:
     benchmark:
         lambda wc: str(Path(BENCH_DIR) / f"export_{wc.ds}.tsv"),
     conda:
-        "../workflow/envs/exprtf.yml",
+        "../envs/exprtf.yml",
     resources:
         gpu=1,
         cpus=2,
