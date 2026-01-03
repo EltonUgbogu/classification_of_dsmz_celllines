@@ -1,0 +1,151 @@
+from pathlib import Path
+
+configfile: "config.yaml"
+
+PROJECT_ROOT = Path(config["project_root"]).expanduser().resolve()
+workdir: str(PROJECT_ROOT)
+
+
+def as_abs(path: str) -> str:
+    p = Path(path)
+    return str(p if p.is_absolute() else PROJECT_ROOT / p)
+
+
+CHECK_SCRIPT = as_abs("dsmz/transformer/expr_transformer/src/check_gene_order.py")
+TRAIN_SCRIPT = as_abs(config["train"]["script"])
+EXPORT_SCRIPT = as_abs(config["export"]["script"])
+
+CKPT_DIR = as_abs(config["paths"]["ckpt_dir"])
+EMB_DIR = as_abs(config["paths"]["emb_dir"])
+LOGS_DIR = as_abs(config["paths"]["logs_dir"])
+BENCH_DIR = as_abs(config["paths"]["benchmarks_dir"])
+RESULTS_DIR = PROJECT_ROOT / "results"
+
+DATASETS = list(config["datasets"].keys())
+EPOCHS = int(config["train"]["epochs"])
+
+
+def ds_npz(ds: str) -> str:
+    return as_abs(config["datasets"][ds]["npz"])
+
+
+def ds_meta(ds: str) -> str:
+    return as_abs(config["datasets"][ds]["meta"])
+
+
+def ckpt_prefix(ds: str) -> str:
+    return config["datasets"][ds].get("ckpt_prefix", ds)
+
+
+def ckpt_path(ds: str) -> str:
+    return str(Path(CKPT_DIR) / f"{ckpt_prefix(ds)}_ep{EPOCHS:02d}.pt")
+
+
+def emb_path(ds: str) -> str:
+    return str(Path(EMB_DIR) / f"{ds}_embeddings.tsv")
+
+
+rule all:
+    input:
+        expand(emb_path, ds=DATASETS),
+        expand(ckpt_path, ds=DATASETS),
+
+
+rule check_gene_order:
+    input:
+        npz=lambda wc: ds_npz(wc.ds),
+        meta=lambda wc: ds_meta(wc.ds),
+    output:
+        stamp=lambda wc: str(RESULTS_DIR / wc.ds / "gene_order.ok"),
+    log:
+        lambda wc: str(Path(LOGS_DIR) / f"check_gene_order_{wc.ds}.log"),
+    conda:
+        "workflow/envs/exprtf.yml",
+    resources:
+        mem_mb=2000,
+        runtime=5,
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p "$(dirname {output.stamp})" "$(dirname {log})"
+        python {CHECK_SCRIPT} --npz {input.npz} --meta {input.meta} > {log} 2>&1
+        echo "OK" > {output.stamp}
+        '''
+
+
+rule train_mgm:
+    input:
+        ok=lambda wc: str(RESULTS_DIR / wc.ds / "gene_order.ok"),
+        npz=lambda wc: ds_npz(wc.ds),
+        meta=lambda wc: ds_meta(wc.ds),
+    output:
+        ckpt=lambda wc: ckpt_path(wc.ds),
+    log:
+        lambda wc: str(Path(LOGS_DIR) / f"train_{wc.ds}.log"),
+    benchmark:
+        lambda wc: str(Path(BENCH_DIR) / f"train_{wc.ds}.tsv"),
+    conda:
+        "workflow/envs/exprtf.yml",
+    resources:
+        gpu=1,
+        cpus=4,
+        mem_mb=32000,
+        runtime=720,
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p "{CKPT_DIR}" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "{RESULTS_DIR}/{wildcards.ds}"
+
+        nvidia-smi >> {log} 2>&1
+
+        python {TRAIN_SCRIPT} \
+          --npz {input.npz} \
+          --meta {input.meta} \
+          --ckpt-dir {CKPT_DIR} \
+          --ckpt-prefix {ckpt_prefix(wildcards.ds)} \
+          --epochs {EPOCHS} \
+          --batch-size {config["train"]["batch_size"]} \
+          --log-every {config["train"]["log_every"]} >> {log} 2>&1
+
+        if [ ! -f {output.ckpt} ]; then
+          echo "ERROR: expected checkpoint {output.ckpt} not found" >> {log}
+          ls -lah {CKPT_DIR} >> {log} 2>&1 || true
+          exit 2
+        fi
+        '''
+
+
+rule export_embeddings:
+    input:
+        ckpt=lambda wc: ckpt_path(wc.ds),
+        npz=lambda wc: ds_npz(wc.ds),
+        meta=lambda wc: ds_meta(wc.ds),
+    output:
+        tsv=lambda wc: emb_path(wc.ds),
+    log:
+        lambda wc: str(Path(LOGS_DIR) / f"export_{wc.ds}.log"),
+    benchmark:
+        lambda wc: str(Path(BENCH_DIR) / f"export_{wc.ds}.tsv"),
+    conda:
+        "workflow/envs/exprtf.yml",
+    resources:
+        gpu=1,
+        cpus=2,
+        mem_mb=16000,
+        runtime=120,
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p "{EMB_DIR}" "$(dirname {log})" "$(dirname {benchmark})"
+
+        nvidia-smi >> {log} 2>&1
+
+        python {EXPORT_SCRIPT} \
+          --npz {input.npz} \
+          --meta {input.meta} \
+          --ckpt {input.ckpt} \
+          --out {output.tsv} \
+          --batch-size {config["export"]["batch_size"]} >> {log} 2>&1
+        '''
+
