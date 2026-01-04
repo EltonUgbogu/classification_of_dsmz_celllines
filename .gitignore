@@ -33,3 +33,17 @@ envs/
 # snakemake internals
 .snakemake/
 
+# Snakemake working dir / runtime artifacts
+**/.snakemake/
+.snakemake/
+
+# Conda env dirs created inside .snakemake (should never be versioned)
+**/.snakemake/conda/
+**/.snakemake/conda-*/
+**/.snakemake/shadow/
+**/.snakemake/tmp*/
+
+# Logs / job artifacts
+**/.snakemake/log/
+**/.snakemake/metadata/
+
