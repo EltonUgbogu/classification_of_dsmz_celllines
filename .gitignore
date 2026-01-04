@@ -15,3 +15,21 @@ __pycache__/
 
 # Conda envs
 envs/
+
+# generated reports / big artifacts
+*.pdf
+*.html
+*.parquet
+*.png
+*.jpg
+*.jpeg
+
+# R / analysis artifacts
+.Rhistory
+.RData
+*.rds
+*.bak
+
+# snakemake internals
+.snakemake/
+
