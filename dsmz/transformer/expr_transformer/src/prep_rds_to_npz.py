@@ -37,16 +37,19 @@ This centers each gene at mean=0 with standard deviation=1, which:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
 
 
-def _default_rds_path():
-    user = os.environ.get("USER")
-    if user:
-        return f"/work/{user}/data/BRCA/BRCA_TCGA-DSMZ_HVG500_samples_x_genes.rds"
-    return None
+META_GENE_KEY = "genes"
+
+
+def sha256_lines(values):
+    """Compute SHA256 hash of a list of strings (one per line)."""
+    joined = "\n".join(values).encode("utf-8")
+    return hashlib.sha256(joined).hexdigest()
 
 
 def parse_args():
@@ -55,19 +58,28 @@ def parse_args():
     )
     parser.add_argument(
         "--rds",
-        default=_default_rds_path(),
-        required=_default_rds_path() is None,
-        help="Input RDS file containing samples × genes matrix",
+        required=True,
+        help="Input RDS file containing samples × genes matrix (pandas DataFrame after read)",
     )
     parser.add_argument(
         "--npz",
-        default=os.path.abspath("data/BRCA_HVG500_joint.npz"),
+        required=True,
         help="Path to write compressed NPZ archive",
     )
     parser.add_argument(
         "--meta",
-        default=os.path.abspath("data/BRCA_HVG500_joint.meta.json"),
+        required=True,
         help="Path to write metadata JSON",
+    )
+    parser.add_argument(
+        "--cancer",
+        required=True,
+        help="Cancer label for this dataset (e.g., brca, nbl, rbl, pan)",
+    )
+    parser.add_argument(
+        "--no-zscore",
+        action="store_true",
+        help="If set, do NOT z-score normalize; store raw matrix as X.",
     )
     return parser.parse_args()
 
@@ -159,12 +171,10 @@ def main():
     #              ↓      ↓      ↓
     #           normalize each column independently
 
-    # Compute mean for each gene (axis=0 = along samples)
+    # Compute mean and std for each gene (axis=0 = along samples)
     # keepdims=True maintains shape (1, n_genes) for broadcasting
-    mu = X.mean(axis=0, keepdims=True)
-
-    # Compute standard deviation for each gene
-    sd = X.std(axis=0, keepdims=True)
+    mu = X.mean(axis=0, keepdims=True).astype(np.float32)
+    sd = X.std(axis=0, keepdims=True).astype(np.float32)
 
     # Handle edge case: genes with zero variance (constant expression)
     # - Division by zero would produce NaN/Inf
@@ -172,13 +182,16 @@ def main():
     # - These genes carry no information anyway and could be filtered upstream
     sd[sd == 0] = 1.0
 
-    # Apply z-score transformation
-    # Broadcasting: (n_samples, n_genes) - (1, n_genes) / (1, n_genes)
-    Xz = (X - mu) / sd
-
-    print(f"\nZ-score normalization applied:")
-    print(f"  Before: mean={X.mean():.3f}, std={X.std():.3f}")
-    print(f"  After:  mean={Xz.mean():.6f}, std={Xz.std():.3f}")
+    if args.no_zscore:
+        Xz = X
+        print("\n[INFO] --no-zscore set: saving raw X (VST-scale) to NPZ")
+    else:
+        # Apply z-score transformation
+        # Broadcasting: (n_samples, n_genes) - (1, n_genes) / (1, n_genes)
+        Xz = (X - mu) / sd
+        print(f"\nZ-score normalization applied:")
+        print(f"  Before: mean={X.mean():.3f}, std={X.std():.3f}")
+        print(f"  After:  mean={Xz.mean():.6f}, std={Xz.std():.3f}")
 
     # =============================================================================
     # SAVE OUTPUTS
@@ -199,28 +212,48 @@ def main():
     # To reverse z-score later: X_original = X * sd + mu
     #
     # savez_compressed uses ZIP compression (typically 2-5x smaller than raw binary)
+    # Always save mu and sd even if --no-zscore (useful for reference/debugging)
     np.savez_compressed(
         args.npz,
         X=Xz,
-        mu=mu.astype(np.float32),
-        sd=sd.astype(np.float32)
+        mu=mu,
+        sd=sd
     )
 
     # -----------------------------------------------------------------------------
     # Save metadata as JSON
     # -----------------------------------------------------------------------------
-    # JSON format is:
-    # {
-    #     "samples": ["TCGA-A1-A0SK-01A", "TCGA-A2-A0CM-01A", ...],
-    #     "genes": ["ENSG00000141510", "ENSG00000171862", ...]
-    # }
+    # JSON format includes:
+    # - samples: List of sample IDs
+    # - genes: List of gene names (in order matching NPZ columns)
+    # - gene_key: Which key contains the gene list (for consistency)
+    # - gene_hash: SHA256 hash of gene list (for checkpoint validation)
+    # - cancer: Cancer type label
+    # - n_samples, n_genes: Counts for quick reference
+    # - source_rds: Original RDS file path
+    # - normalized: Whether z-score normalization was applied
     #
     # Why separate from NPZ?
     # - JSON is human-readable (can inspect with any text editor)
     # - Easy to load in any language (R, JavaScript, etc.)
     # - Sample/gene names can have complex characters that NPZ handles poorly
+    gene_hash = sha256_lines(genes)
+
+    meta_obj = {
+        "samples": samples,
+        META_GENE_KEY: genes,
+        "gene_key": META_GENE_KEY,
+        "gene_hash": gene_hash,
+        "cancer": str(args.cancer),
+        "n_samples": int(len(samples)),
+        "n_genes": int(len(genes)),
+        "source_rds": os.path.abspath(args.rds),
+        "normalized": (not args.no_zscore),
+    }
+
+    os.makedirs(os.path.dirname(args.meta), exist_ok=True)
     with open(args.meta, "w") as f:
-        json.dump({"samples": samples, "genes": genes}, f, indent=2)
+        json.dump(meta_obj, f, indent=2)
 
     # =============================================================================
     # SUMMARY

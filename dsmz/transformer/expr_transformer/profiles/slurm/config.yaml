@@ -1,17 +1,13 @@
 # profiles/slurm/config.yaml - Configuration for the profiles/slurm/ directory (Snakemake 5.10 compatible)
 
 jobs: 20
-latency-wait: 60
+latency-wait: 300
 rerun-incomplete: true
 keep-going: true
 printshellcmds: true
 
-# Enable per-rule conda envs (Snakemake 5 supports this)
-use-conda: true
-
-# Where Snakemake will create rule environments
-# (relative to repo root - Snakemake doesn't expand %u like Slurm does)
-conda-prefix: .snakemake/conda
+# Disable per-rule conda envs - using existing exprtf env directly
+use-conda: false
 
 # Use the classic cluster submission interface
 cluster: "python profiles/slurm/slurm-submit.py"

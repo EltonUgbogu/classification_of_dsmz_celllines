@@ -232,6 +232,7 @@ dependencies:
   - r-backports=1.5.0=r43hb1dbf0f_1
   - r-base=4.3.3=h2fbd60f_20
   - r-base64enc=0.1_3=r43hb1dbf0f_1007
+  - r-upsetr
   - r-base64url=1.4=r43hb1dbf0f_1007
   - r-bh=1.87.0_1=r43hc72bb7e_0
   - r-bit=4.6.0=r43h2b5f3a1_0

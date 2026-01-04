@@ -265,35 +265,35 @@ def parse_args():
     )
     parser.add_argument(
         "--npz",
-        default=os.path.abspath("data/BRCA_HVG500_joint.npz"),
-        help="Path to NPZ file containing expression matrix",
+        required=True,
+        help="Path to NPZ file containing expression matrix (expects key 'X').",
     )
     parser.add_argument(
         "--meta",
-        default=os.path.abspath("data/BRCA_HVG500_joint.meta.json"),
-        help="Path to JSON metadata with sample IDs and gene names",
+        required=True,
+        help="Path to JSON metadata with sample IDs + gene list.",
     )
     parser.add_argument(
         "--ckpt",
-        default=os.path.abspath("ckpt/exprtf_brca_hvg500_ep30.pt"),
-        help="Path to pretrained checkpoint",
+        required=True,
+        help="Path to pretrained checkpoint (.pt).",
     )
     parser.add_argument(
         "--out",
-        default=os.path.abspath("embeddings/BRCA_HVG500_joint_exprtf.tsv"),
-        help="Destination TSV for embeddings",
+        required=True,
+        help="Destination TSV for embeddings.",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=None,
-        help="Batch size for inference (defaults to 512)",
+        default=512,
+        help="Batch size for inference.",
     )
     parser.add_argument(
         "--device",
-        choices=["cuda"],
+        choices=["cuda", "cpu"],
         default="cuda",
-        help="Device for export (CUDA only).",
+        help="Device for export.",
     )
     return parser.parse_args()
 
@@ -304,12 +304,14 @@ def main():
     # -------------------------------------------------------------------------
     # DEVICE SELECTION
     # -------------------------------------------------------------------------
-    if not torch.cuda.is_available():
-        raise RuntimeError(
-            "CUDA required for export. Run this on a GPU node (e.g. --partition=gpu --gres=gpu:1)."
-        )
-    device = torch.device("cuda")
-    print("Using device: cuda:", torch.cuda.get_device_name(0))
+    if args.device == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("Requested --device cuda but CUDA is not available on this node.")
+        device = torch.device("cuda")
+        print("Using device: cuda:", torch.cuda.get_device_name(0))
+    else:
+        device = torch.device("cpu")
+        print("Using device: cpu")
 
     # -------------------------------------------------------------------------
     # LOAD INPUT DATA
@@ -410,8 +412,7 @@ def main():
     # BATCH INFERENCE
     # -------------------------------------------------------------------------
     # Process samples in batches to avoid running out of GPU memory.
-    default_batch = 512
-    batch_size = args.batch_size or default_batch
+    batch_size = args.batch_size
     
     embeddings_list = []
     n_samples = X.shape[0]
