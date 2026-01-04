@@ -3,11 +3,27 @@
 
 project_root: "/work/ugbogu/expr_transformer"
 
+# List of cancers to process
+# Note: rbl temporarily removed until joint RDS is created
+cancers: ["brca", "nbl"]
+
+# Per-cancer dataset configuration
 datasets:
-  exprtf_brca_hvg500:
-    npz: "data/BRCA_HVG500_joint.npz"
-    meta: "data/BRCA_HVG500_joint.meta.json"
-    ckpt_prefix: "exprtf_brca_hvg500"
+  brca:
+    npz: "data/brca/joint.npz"
+    meta: "data/brca/joint.meta.json"
+    ckpt_prefix: "exprtf_brca_hvg500"  # Matches existing checkpoints: exprtf_brca_hvg500_epXX.pt
+    rds: "data/brca/BRCA_TCGA-DSMZ_HVG500_samples_x_genes.rds"  # Optional: for prep_npz rule
+  nbl:
+    npz: "data/nbl/joint.npz"
+    meta: "data/nbl/joint.meta.json"
+    ckpt_prefix: "exprtf_nbl"
+    rds: "data/nbl/vst_NBL_joint_batch_corrected.rds"  # Optional: for prep_npz rule
+  rbl:
+    npz: "data/rbl/joint.npz"
+    meta: "data/rbl/joint.meta.json"
+    ckpt_prefix: "exprtf_rbl"
+    # rds: "data/rbl/vst_RBL_joint_batch_corrected.rds"  # Not available yet - needs upstream join
 
 train:
   script: "train_mgm.py"  # Auto-detected in src/ directory

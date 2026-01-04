@@ -1,26 +1,17 @@
-.DS_Store
-*/.DS_Store
+# Large outputs
+*.pdf
+*.rds
+*.Rds
+*.html
+*.csv
+*.tsv
 
-# macOS junk
-.DS_Store
-**/.DS_Store
-
-# outputs
-ckpt/
+# Results and caches
+results/
 logs/
-embeddings/
-fs/logs/
-fs/results/
-
-# large intermediates
-data/*.npz
-data/*.json
-
-# python cache
+.snakemake/
 __pycache__/
 *.pyc
 
-# local/env artifacts
-.env
-.venv
-*.log
+# Conda envs
+envs/

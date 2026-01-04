@@ -46,6 +46,7 @@ def as_abs(path: str) -> str:
 SRC_DIR = REPO_ROOT / "src"
 
 CHECK_SCRIPT = str(SRC_DIR / "check_gene_order.py")
+PREP_SCRIPT = str(SRC_DIR / "prep_rds_to_npz.py")
 TRAIN_SCRIPT = str(SRC_DIR / config["train"]["script"]) if "/" not in config["train"]["script"] else as_abs(config["train"]["script"])
 EXPORT_SCRIPT = str(SRC_DIR / config["export"]["script"]) if "/" not in config["export"]["script"] else as_abs(config["export"]["script"])
 
@@ -63,33 +64,34 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 # Dataset configuration
 # ============================================================================
 
-DATASETS = list(config["datasets"].keys())
+CANCERS = config["cancers"]
 EPOCHS = int(config["train"]["epochs"])
 
-
-def ds_npz(ds: str) -> str:
-    """Get absolute path to dataset NPZ file."""
-    return as_abs(config["datasets"][ds]["npz"])
+# Cancers that have RDS sources for prep_npz rule
+PREP_CANCERS = [c for c in CANCERS if "rds" in config["datasets"][c]]
 
 
-def ds_meta(ds: str) -> str:
-    """Get absolute path to dataset metadata JSON."""
-    return as_abs(config["datasets"][ds]["meta"])
+def ckpt_prefix(cancer: str) -> str:
+    """Get checkpoint prefix for cancer (used in params, not outputs)."""
+    return config["datasets"][cancer].get("ckpt_prefix", f"exprtf_{cancer}")
 
 
-def ckpt_prefix(ds: str) -> str:
-    """Get checkpoint prefix for dataset."""
-    return config["datasets"][ds].get("ckpt_prefix", ds)
+def prefix_to_cancer(prefix: str) -> str:
+    """Reverse lookup: find cancer from checkpoint prefix."""
+    for cancer in CANCERS:
+        if ckpt_prefix(cancer) == prefix:
+            return cancer
+    raise ValueError(f"No cancer found for prefix: {prefix}")
 
 
-def ckpt_path(ds: str) -> str:
-    """Get absolute path to checkpoint file."""
-    return str(Path(CKPT_DIR) / f"{ckpt_prefix(ds)}_ep{EPOCHS:02d}.pt")
-
-
-def emb_path(ds: str) -> str:
-    """Get absolute path to embeddings TSV file."""
-    return str(Path(EMB_DIR) / f"{ds}_embeddings.tsv")
+# Output patterns (must be plain strings with wildcards for Snakemake 5.10)
+# Use {prefix} wildcard to match actual checkpoint prefixes (e.g., exprtf_brca_hvg500)
+CKPT_OUT = str(Path(CKPT_DIR) / f"{{prefix}}_ep{EPOCHS:02d}.pt")
+EMB_OUT = str(Path(EMB_DIR) / "{prefix}_embeddings.tsv")
+# Data files use {cancer} wildcard
+NPZ_OUT = str(Path(PROJECT_ROOT) / "data" / "{cancer}" / "joint.npz")
+META_OUT = str(Path(PROJECT_ROOT) / "data" / "{cancer}" / "joint.meta.json")
+OK_STAMP = str(Path(RESULTS_DIR) / "{cancer}" / "gene_order.ok")
 
 
 # ============================================================================
@@ -98,21 +100,57 @@ def emb_path(ds: str) -> str:
 
 rule all:
     input:
-        [emb_path(ds) for ds in DATASETS],
-        [ckpt_path(ds) for ds in DATASETS],
+        # Use expand with prefix from config for each cancer
+        expand(EMB_OUT, prefix=[ckpt_prefix(c) for c in CANCERS]),
+        expand(CKPT_OUT, prefix=[ckpt_prefix(c) for c in CANCERS]),
+
+
+rule prep_npz:
+    """Convert RDS to NPZ and metadata JSON (only for cancers with rds: in config)."""
+    input:
+        rds=lambda wc: (
+            as_abs(config["datasets"][wc.cancer]["rds"])
+            if "rds" in config["datasets"][wc.cancer] and config["datasets"][wc.cancer]["rds"]
+            else None
+        ),
+    output:
+        npz=NPZ_OUT,
+        meta=META_OUT,
+    log:
+        str(Path(LOGS_DIR) / "prep_{cancer}.log"),
+    threads: 1
+    resources:
+        mem_mb=8000,
+        runtime=30,
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p "$(dirname {output.npz})" "$(dirname {output.meta})" "$(dirname {log})"
+
+        # Verify RDS path exists (should be set in config for this cancer)
+        if [ -z "{input.rds}" ] || [ "{input.rds}" = "None" ] || [ ! -f "{input.rds}" ]; then
+          echo "ERROR: RDS file not found or not configured for cancer {wildcards.cancer}" >> {log}
+          echo "Add 'rds: path/to/file.rds' to config['datasets']['{wildcards.cancer}']" >> {log}
+          exit 1
+        fi
+
+        /work/ugbogu/.conda/envs/exprtf/bin/python {PREP_SCRIPT} \
+          --rds {input.rds} \
+          --npz {output.npz} \
+          --meta {output.meta} \
+          --cancer {wildcards.cancer} >> {log} 2>&1
+        '''
 
 
 rule check_gene_order:
     """Verify gene ordering matches between NPZ and metadata."""
     input:
-        npz=lambda wc: ds_npz(wc.ds),
-        meta=lambda wc: ds_meta(wc.ds),
+        npz=NPZ_OUT,
+        meta=META_OUT,
     output:
-        stamp=str(RESULTS_DIR / "{ds}" / "gene_order.ok"),
+        stamp=OK_STAMP,
     log:
-        str(Path(LOGS_DIR) / "check_gene_order_{ds}.log"),
-    conda:
-        str(REPO_ROOT / "envs" / "exprtf.yml"),
+        str(Path(LOGS_DIR) / "check_gene_order_{cancer}.log"),
     threads: 1
     resources:
         mem_mb=2000,
@@ -122,12 +160,8 @@ rule check_gene_order:
         set -euo pipefail
         mkdir -p "$(dirname {output.stamp})" "$(dirname {log})"
 
-        # Debug (optional, but super helpful)
-        echo "CONDA_PREFIX=$CONDA_PREFIX" > {log}
-        "$CONDA_PREFIX/bin/python" -c "import sys; print(sys.executable)" >> {log} 2>&1
-        "$CONDA_PREFIX/bin/python" -c "import numpy as np; print('numpy', np.__version__)" >> {log} 2>&1
-
-        "$CONDA_PREFIX/bin/python" {CHECK_SCRIPT} \
+        # Use existing exprtf env directly
+        /work/ugbogu/.conda/envs/exprtf/bin/python {CHECK_SCRIPT} \
           --npz {input.npz} \
           --meta {input.meta} >> {log} 2>&1
 
@@ -138,21 +172,20 @@ rule check_gene_order:
 rule train_mgm:
     """Train Masked Gene Model with Transformer architecture (GPU-only)."""
     input:
-        ok=str(RESULTS_DIR / "{ds}" / "gene_order.ok"),
-        npz=lambda wc: ds_npz(wc.ds),
-        meta=lambda wc: ds_meta(wc.ds),
+        ok=lambda wc: OK_STAMP.replace("{cancer}", prefix_to_cancer(wc.prefix)),
+        npz=lambda wc: NPZ_OUT.replace("{cancer}", prefix_to_cancer(wc.prefix)),
+        meta=lambda wc: META_OUT.replace("{cancer}", prefix_to_cancer(wc.prefix)),
     output:
-        ckpt=str(Path(CKPT_DIR) / f"{{ds}}_ep{EPOCHS:02d}.pt"),
+        ckpt=CKPT_OUT,
     log:
-        str(Path(LOGS_DIR) / "train_{ds}.log"),
+        str(Path(LOGS_DIR) / "train_{prefix}.log"),
     benchmark:
-        str(Path(BENCH_DIR) / "train_{ds}.tsv"),
+        str(Path(BENCH_DIR) / "train_{prefix}.tsv"),
     params:
-        ckpt_prefix="{ds}",
+        cancer=lambda wc: prefix_to_cancer(wc.prefix),
+        ckpt_prefix=lambda wc: wc.prefix,
         batch_size=config["train"]["batch_size"],
         log_every=config["train"]["log_every"],
-    conda:
-        str(REPO_ROOT / "envs" / "exprtf.yml"),
     threads: 4
     resources:
         gpu=1,
@@ -162,19 +195,20 @@ rule train_mgm:
         r'''
         set -euo pipefail
         mkdir -p "{CKPT_DIR}" "{BENCH_DIR}" "$(dirname {log})"
-        mkdir -p "{RESULTS_DIR}/{wildcards.ds}"
+        mkdir -p "{RESULTS_DIR}/{params.cancer}"
 
         nvidia-smi >> {log} 2>&1
 
-        "$CONDA_PREFIX/bin/python" {TRAIN_SCRIPT} \
+        /work/ugbogu/.conda/envs/exprtf/bin/python {TRAIN_SCRIPT} \
           --npz {input.npz} \
           --meta {input.meta} \
           --ckpt-dir {CKPT_DIR} \
-          --ckpt-prefix {wildcards.ds} \
+          --ckpt-prefix {params.ckpt_prefix} \
           --epochs {EPOCHS} \
           --batch-size {params.batch_size} \
           --log-every {params.log_every} >> {log} 2>&1
 
+        # Verify checkpoint was created (training script uses --ckpt-prefix to create the file)
         if [ ! -f {output.ckpt} ]; then
           echo "ERROR: expected checkpoint {output.ckpt} not found" >> {log}
           ls -lah {CKPT_DIR} >> {log} 2>&1 || true
@@ -186,24 +220,23 @@ rule train_mgm:
 rule export_embeddings:
     """Export sample embeddings from trained checkpoint (GPU-only)."""
     input:
-        ckpt=str(Path(CKPT_DIR) / f"{{ds}}_ep{EPOCHS:02d}.pt"),
-        npz=lambda wc: ds_npz(wc.ds),
-        meta=lambda wc: ds_meta(wc.ds),
+        ckpt=CKPT_OUT,
+        npz=lambda wc: NPZ_OUT.replace("{cancer}", prefix_to_cancer(wc.prefix)),
+        meta=lambda wc: META_OUT.replace("{cancer}", prefix_to_cancer(wc.prefix)),
     output:
-        tsv=str(Path(EMB_DIR) / "{ds}_embeddings.tsv"),
+        tsv=EMB_OUT,
     log:
-        str(Path(LOGS_DIR) / "export_{ds}.log"),
+        str(Path(LOGS_DIR) / "export_{prefix}.log"),
     benchmark:
-        str(Path(BENCH_DIR) / "export_{ds}.tsv"),
+        str(Path(BENCH_DIR) / "export_{prefix}.tsv"),
     params:
+        cancer=lambda wc: prefix_to_cancer(wc.prefix),
         batch_size=config["export"]["batch_size"],
-    conda:
-        str(REPO_ROOT / "envs" / "exprtf.yml"),
     threads: 2
     resources:
         gpu=1,
         mem_mb=16000,
-        runtime=120,
+        runtime=60,
     shell:
         r'''
         set -euo pipefail
@@ -211,10 +244,11 @@ rule export_embeddings:
 
         nvidia-smi >> {log} 2>&1
 
-        "$CONDA_PREFIX/bin/python" {EXPORT_SCRIPT} \
+        /work/ugbogu/.conda/envs/exprtf/bin/python {EXPORT_SCRIPT} \
           --npz {input.npz} \
           --meta {input.meta} \
           --ckpt {input.ckpt} \
           --out {output.tsv} \
-          --batch-size {params.batch_size} >> {log} 2>&1
+          --batch-size {params.batch_size} \
+          --device cuda >> {log} 2>&1
         '''

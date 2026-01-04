@@ -10,7 +10,7 @@ defaults:
 
     # Base functions directory
     base_functions_dir: "R/base_functions"
-    agnostic_base_functions_dir: "R/base_functions"
+    agnostic_base_functions_dir: "R"
 
     # Tumour neighbourhood input root
     tumour_nh_input_root: "results/unsupervised/tumour_neighbourhoods_input"
@@ -45,9 +45,9 @@ profiles:
       tumour_vst_rds: "data/brca/bcc_analysis_results/tcga_vst_brca_subtype_batch_corrected.rds"
       dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
 
-      # PAM50 specific paths
-      tcga_brca_pam50_expr: "data/brca/bcc_preprocessing_results/TCGA-BRCA_PAM50_expr_matrix.rds"
-      dsmz_bcc_pam50_expr: "data/brca/bcc_preprocessing_results/DSMZ-BCC_PAM50_expr_matrix.rds"
+      # PAM50 specific paths (absolute paths for reliability)
+      tcga_brca_pam50_expr: "/work/ugbogu/pipeline/data/brca/bcc_preprocessing_results/TCGA-BRCA_PAM50_expr_matrix.rds"
+      dsmz_bcc_pam50_expr: "/work/ugbogu/pipeline/data/brca/bcc_preprocessing_results/DSMZ-BCC_PAM50_expr_matrix.rds"
 
       # Tumour neighbourhood paths
       tumour_nh_expr_hvg: "results/unsupervised/tumour_neighbourhoods_input/hvg/expr_matrix.rds"
@@ -60,8 +60,8 @@ profiles:
 
     features:
       hvg_dir: "results/unsupervised/feature_selection_unsupervised"
-      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/hvg_joint_scores.tsv"
-      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/hvg_final_gene_list.txt"
+      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_joint_ranks_kTotal_vs_MX.tsv"
+      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt"
       method_outdir: "results/unsupervised/feature_selection_unsupervised/featuresets"
       pam50_ensembl_gene_list: "resources/pam50_ensembl_ids.txt"
 
@@ -83,8 +83,8 @@ profiles:
 
     features:
       hvg_dir: "results/unsupervised/feature_selection_unsupervised"
-      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/hvg_joint_scores.tsv"
-      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/hvg_final_gene_list.txt"
+      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_joint_ranks_kTotal_vs_MX.tsv"
+      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt"
       method_outdir: "results/unsupervised/feature_selection_unsupervised/featuresets"
 
   nbl:
@@ -105,6 +105,6 @@ profiles:
 
     features:
       hvg_dir: "results/unsupervised/feature_selection_unsupervised"
-      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/hvg_joint_scores.tsv"
-      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/hvg_final_gene_list.txt"
+      hvg_joint_scores_tsv: "results/unsupervised/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_joint_ranks_kTotal_vs_MX.tsv"
+      hvg_final_gene_list: "results/unsupervised/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt"
       method_outdir: "results/unsupervised/feature_selection_unsupervised/featuresets"

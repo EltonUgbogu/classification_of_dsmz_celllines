@@ -1,5 +1,5 @@
 # exprtf.yml - Conda environment for the expr_transformer project
-name: exprtf
+# Note: No 'name:' field - Snakemake will create envs under its own hash paths
 channels:
   - pytorch
   - nvidia
