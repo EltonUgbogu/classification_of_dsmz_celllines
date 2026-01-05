@@ -553,3 +553,42 @@ dependencies:
   - zstandard=0.25.0=py314h0f05182_1
   - zstd=1.5.7=hb8e6e7a_2
 prefix: /home/chu25/miniconda3/envs/tcga-r-env
+
+
+name: tumour-nh-qc
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3
+  - r-optparse
+  - r-yaml
+  - r-dplyr
+  - r-tibble
+  - r-readr
+  - r-ggplot2
+  - r-uwot
+  - r-matrixstats
+  - r-irlba
+
+name: r-base
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3
+  - r-optparse
+  - r-yaml
+  - r-dplyr
+
+name: smk
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - snakemake-minimal
+  - r-base
+  - r-dplyr
+  - r-matrixstats  
+  - r-ggplot2      
+ 
