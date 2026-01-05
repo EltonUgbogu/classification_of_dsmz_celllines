@@ -47,6 +47,12 @@ mkdir -p "$CONDA_PREFIX"
 export TMPDIR="${REPO_ROOT}/.snakemake/tmp"
 mkdir -p "$TMPDIR"
 
+# Limit OpenBLAS/MKL/OMP threads to prevent resource exhaustion
+# With many parallel jobs, each R process should use only 1 thread
+export OPENBLAS_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 TARGETS="${TARGETS:-}"
 
 die(){ echo "ERROR: $*" >&2; exit 1; }
