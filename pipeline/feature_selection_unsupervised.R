@@ -110,6 +110,18 @@ option_list <- list(
     metavar = "DIR"
   ),
   make_option(
+    c("--scores_tsv"),
+    type = "character",
+    default = NULL,
+    help = "Output path for joint HVG scores table (TSV)"
+  ),
+  make_option(
+    c("--hvg_list"),
+    type = "character",
+    default = NULL,
+    help = "Output path for final HVG gene list (TXT)"
+  ),
+  make_option(
     c("--profile"),
     type = "character",
     default = NULL,
@@ -1285,8 +1297,13 @@ run_unsupervised_feature_selection <- function(
   # These files are referenced by Snakefile and downstream scripts
   
   profile_tag <- if (!is.null(opt$profile)) toupper(opt$profile) else "PROFILE"
-  joint_tsv  <- file.path(subdir, sprintf("%s_HVG%d_joint_ranks_kTotal_vs_MX.tsv", profile_tag, final_top))
-  genes_file <- file.path(subdir, sprintf("%s_HVG%d_genes_MX_top%d.txt", profile_tag, final_top, final_top))
+  
+  # If Snakemake (or another caller) provides explicit output paths, honour those
+  # exactly; otherwise fall back to profile-tagged filenames under subdir.
+  joint_tsv  <- opt$scores_tsv %||%
+    file.path(subdir, sprintf("%s_HVG%d_joint_ranks_kTotal_vs_MX.tsv", profile_tag, final_top))
+  genes_file <- opt$hvg_list %||%
+    file.path(subdir, sprintf("%s_HVG%d_genes_MX_top%d.txt", profile_tag, final_top, final_top))
   
   if (!quiet) {
     message("[DEBUG] Writing output files:")

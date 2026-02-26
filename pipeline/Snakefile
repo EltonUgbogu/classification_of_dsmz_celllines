@@ -272,22 +272,18 @@ rule feature_selection_unsupervised:
         vst = VST_JOINT,
         cfg_file = CFGFILE_ABS
     output:
-        # Use proper path joining: store relative paths in config, then join with UNSUP
-        # If config path contains UNSUP_BASE, replace it with UNSUP; otherwise make absolute
-        scores = (os.path.join(UNSUP, os.path.relpath(cfgrel("features", "hvg_joint_scores_tsv"), UNSUP_BASE)) 
-                 if UNSUP_BASE in cfgrel("features", "hvg_joint_scores_tsv") 
-                 else abspath(cfgrel("features", "hvg_joint_scores_tsv"))),
-        hvg_list = (os.path.join(UNSUP, os.path.relpath(cfgrel("features", "hvg_final_gene_list"), UNSUP_BASE)) 
-                   if UNSUP_BASE in cfgrel("features", "hvg_final_gene_list") 
-                   else abspath(cfgrel("features", "hvg_final_gene_list"))),
+        # Only the per-method feature set gene lists are required by downstream rules.
+        # The joint scores and final HVG list are optional side products.
         feature_lists = FEATURELIST_FILES  # Already absolute (FEATURESETS_DIR is absolute)
     params:
-        outdir = lambda wc: abspath(os.path.dirname(cfgrel("features", "hvg_joint_scores_tsv")))  # Absolute for params
+        # Use a fixed profile-specific directory under UNSUP for all feature selection
+        # outputs to avoid any drift with config-relative paths.
+        outdir = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised")
     log: os.path.join(LOGROOT, "feature_selection_unsupervised.log")
     conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
     shell:
         r'''
-        mkdir -p $(dirname "{output.scores}") $(dirname "{output.hvg_list}") "{FEATURESETS_DIR}"
+        mkdir -p "{params.outdir}" "{FEATURESETS_DIR}"
         Rscript "{SCRIPTS_DIR}/feature_selection_unsupervised.R" \
           --config="{CFGFILE_ABS}" \
           --profile="{profile_name}" \
@@ -397,7 +393,9 @@ def dir_to_gene_list(direction):
             return cfgabs("pam50", "ensembl_gene_list")  # Input needs absolute
         return cfgabs("features", "pam50_ensembl_gene_list")  # Input needs absolute
     elif feature == "hvg":
-        return rules.feature_selection_unsupervised.output.hvg_list  # Use rule output (absolute)
+        # Legacy HVG direction: use the MX feature-set gene list as the canonical
+        # HVG500 set, so we depend only on feature_sets_top{TOPN}/genes_top{TOPN}_*.txt.
+        return os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt")
     else:
         # For new feature sets, use the feature_sets_top{TOPN} directory
         # Use absolute path (FEATURESETS_DIR is already absolute)
@@ -730,7 +728,8 @@ def kind_to_alg(kind):
 rule consensus_ccp_cell_tumour:
     input:
         config = CFGFILE_ABS,
-        hvg_list = rules.feature_selection_unsupervised.output.hvg_list  # Explicit dependency on producer rule
+        # Use the MX feature-set list as the canonical HVG500 set
+        hvg_list = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt")
     output:
         cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
     params:
@@ -850,7 +849,8 @@ if USE_PAM50:
 rule build_tumour_neighbourhood_input_hvg:
     input:
         vst = VST_JOINT,
-        gene_list = rules.feature_selection_unsupervised.output.hvg_list,  # Explicit dependency on producer rule
+        # Use the MX feature-set list as the canonical HVG500 set
+        gene_list = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt"),
         dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),  # Input needs absolute (external file)
         cfg = CFGFILE_ABS
     output:
@@ -1348,9 +1348,8 @@ rule tumour_neighbourhood_qc_umap_featureset:
 # -----------------------------------------------------------------------------
 rule pipeline_targets:
     input:
-        # PRESTEP: Feature Selection
-        rules.feature_selection_unsupervised.output.scores,
-        rules.feature_selection_unsupervised.output.hvg_list,
+        # PRESTEP: Feature Selection (per-method feature-set gene lists)
+        rules.feature_selection_unsupervised.output.feature_lists,
 
         # STEP 1: Agnostic Clustering
         rules.agnostic_all_directions.input,
