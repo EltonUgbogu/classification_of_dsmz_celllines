@@ -1,0 +1,8 @@
+# Local execution profile
+cores: 8
+use-conda: true
+rerun-incomplete: true
+printshellcmds: true
+show-failed-logs: true
+latency-wait: 60
+keep-going: true

@@ -1,0 +1,577 @@
+#!/usr/bin/env Rscript
+
+# tumour_neighbourhood_p_consensus.R
+# Aggregate tumour neighbourhoods across all available clustering methods to compute
+# p_consensus(c, t) for PAM50/HVG and write outputs under:
+#   <unsup_root>/tumour_neighbourhoods/{direction}/final_consensus/
+# Methods are discovered dynamically from pipeline outputs (agnostic + consensus)
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(purrr)
+  library(tidyr)
+  library(ggplot2)
+  library(ggrepel)
+  library(yaml)
+})
+
+# ----------------------------------------------------------------------
+# 0) Parse command line arguments ( --config, --direction )
+# ----------------------------------------------------------------------
+suppressPackageStartupMessages({
+  library(optparse)
+})
+
+option_list <- list(
+  make_option("--config", type = "character", default = "config/config.yaml",
+              help = "Path to config.yaml [default: %default]"),
+  make_option("--profile", type = "character", default = NULL,
+              help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
+  make_option("--direction", type = "character", default = NULL,
+              help = "Direction identifier (pam50_euc, pam50_corr, hvg_euc, hvg_corr, Entropy_euclidean, etc.)"),
+  make_option("--workdir", type = "character", default = ".",
+              help = "Pipeline working directory (for anchoring relative paths) [default: current directory]"),
+  # Pan-cancer mode: if provided, compute from clustering RDS instead of reading CSV files
+  make_option("--ccp_hc_rds", type = "character", default = NULL,
+              help = "Pan-cancer: CCP HC clustering RDS (optional)"),
+  make_option("--ccp_kmeans_rds", type = "character", default = NULL,
+              help = "Pan-cancer: CCP KMeans clustering RDS (optional)"),
+  make_option("--meta_tsv", type = "character", default = NULL,
+              help = "Pan-cancer: Joint metadata TSV (required if --ccp_hc_rds provided)"),
+  make_option("--out_rds", type = "character", default = NULL,
+              help = "Pan-cancer: Output RDS path (required if --ccp_hc_rds provided)"),
+  make_option("--out_tsv", type = "character", default = NULL,
+              help = "Pan-cancer: Output TSV path (required if --ccp_hc_rds provided)")
+)
+
+opt <- parse_args(OptionParser(option_list = option_list))
+
+# Anchor all relative paths to the pipeline working directory
+workdir <- normalizePath(opt$workdir, winslash = "/", mustWork = TRUE)
+cat("[INFO] getwd(): ", getwd(), "\n", sep = "")
+cat("[INFO] workdir: ", workdir, "\n", sep = "")
+
+# Helper to anchor relative paths
+abs_path <- function(p) {
+  if (is.null(p) || is.na(p) || !nzchar(p)) return(p)
+  if (grepl("^/", p) || grepl("^[A-Za-z]:[\\\\/]", p)) return(p)  # already absolute
+  file.path(workdir, p)
+}
+
+# Source shared plotting helpers
+# Resolve absolute path to R/brca_unsup_methods.R
+pipe_root <- normalizePath(file.path(dirname(opt$config), ".."), mustWork = TRUE)
+source(file.path(pipe_root, "R", "brca_unsup_methods.R"))
+
+if (is.null(opt$direction)) {
+  stop("Please supply --direction.")
+}
+
+direction <- opt$direction
+
+# Validate direction (suffix-based, consistent with get_nh_methods)
+# Accept both legacy disease-specific directions (_euc/_corr)
+# and pan-cancer directions (_euclidean/_cosine)
+if (!grepl("_(euc|corr|euclidean|cosine)$", direction)) {
+  stop("Invalid --direction: ", direction,
+       "\nExpected a direction ending in one of: _euc, _corr, _euclidean, _cosine.",
+       "\nExamples: hvg_euc, pam50_corr, Entropy_euclidean, Variance_cosine.")
+}
+
+# Load config using profiled config loader (merges defaults + profile)
+config_dir <- dirname(normalizePath(opt$config))
+script_dir <- file.path(config_dir, "..", "scripts")
+lib_config_path <- file.path(script_dir, "lib_config.R")
+if (file.exists(lib_config_path)) {
+  source(lib_config_path)
+  # Use profiled config to merge defaults + profile (same as Snakemake)
+  # Priority: opt$profile -> SNAKEMAKE_PROFILE env var -> config default
+  profile_override <- if (!is.null(opt$profile)) opt$profile else Sys.getenv("SNAKEMAKE_PROFILE", unset = "")
+  if (identical(profile_override, "")) profile_override <- NULL
+  cfg <- read_profiled_config(opt$config, profile_override = profile_override)
+} else {
+  # Fallback: use direct yaml read (for backward compatibility)
+  cfg <- yaml::read_yaml(opt$config)
+}
+
+cat("[INFO] Using config file: ", opt$config, "\n", sep = "")
+cat("[INFO] Direction: ", direction, "\n", sep = "")
+
+# Extract gene set from direction (for plot labels)
+gene_set <- if (startsWith(direction, "pam50")) "PAM50" else "HVG500"
+cat("[INFO] Gene set: ", gene_set, "\n", sep = "")
+
+# Fail fast with clear error if unsup_root is missing
+if (is.null(cfg$paths$unsup_root) || !nzchar(cfg$paths$unsup_root)) {
+  profile_used <- cfg$profile %||% Sys.getenv("SNAKEMAKE_PROFILE", "not set")
+  stop("cfg$paths$unsup_root is empty — check profile merge and SNAKEMAKE_PROFILE.\n",
+       "  Profile used: ", profile_used, "\n",
+       "  Config file: ", opt$config, "\n",
+       "  Expected: defaults.paths.unsup_root or profiles.", profile_used, ".paths.unsup_root")
+}
+
+unsup_root <- cfg$paths$unsup_root
+# Anchor relative paths to workdir
+unsup_root <- abs_path(unsup_root)
+base_dir   <- file.path(unsup_root, "tumour_neighbourhoods", direction)
+
+cat("[INFO] unsup_root: ", unsup_root, "\n", sep = "")
+cat("[INFO] tumour_neighbourhoods base_dir: ", base_dir, "\n", sep = "")
+
+# ----------------------------------------------------------------------
+# PAN-CANCER MODE: Compute from clustering RDS files
+# ----------------------------------------------------------------------
+if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
+  cat("[INFO] Pan-cancer mode: computing neighbourhoods from clustering RDS\n")
+  
+  if (is.null(opt$meta_tsv) || is.null(opt$out_rds) || is.null(opt$out_tsv)) {
+    stop("Pan-cancer mode requires --meta_tsv, --out_rds, and --out_tsv")
+  }
+  
+  # Helper: strip CELL:/TUMOUR:/TUMOR: prefixes from IDs
+  strip_prefix <- function(x) sub("^(CELL:|TUMOUR:|TUMOR:)", "", x)
+  
+  # Load metadata and normalize IDs
+  meta <- readr::read_tsv(opt$meta_tsv, show_col_types = FALSE) %>%
+    mutate(sample_id = strip_prefix(as.character(sample_id)))
+  
+  # Helper to extract clusters
+  extract_clusters <- function(obj, label) {
+    cand <- NULL
+    if (is.atomic(obj) && !is.null(names(obj))) {
+      cand <- obj
+    } else if (is.list(obj)) {
+      for (nm in c("clusters", "clusters_labeled", "final_clusters", "consensusClass", "cluster", "labels")) {
+        if (!is.null(obj[[nm]])) {
+          cand <- obj[[nm]]
+          break
+        }
+      }
+    }
+    if (is.null(cand)) stop("Could not extract clusters from ", label)
+    if (is.null(names(cand))) stop("Extracted clusters from ", label, " have no names")
+    cand
+  }
+  
+  # Load clustering results
+  hc_obj <- readRDS(opt$ccp_hc_rds)
+  km_obj <- readRDS(opt$ccp_kmeans_rds)
+  
+  # Extract clusters as named character vectors
+  hc_clusters <- hc_obj$clusters
+  km_clusters <- km_obj$clusters
+  
+  if (is.null(hc_clusters) || is.null(names(hc_clusters))) {
+    stop("HC clusters missing or unnamed. Expected named character vector.")
+  }
+  if (is.null(km_clusters) || is.null(names(km_clusters))) {
+    stop("KMeans clusters missing or unnamed. Expected named character vector.")
+  }
+  
+  # Identify sample ID column
+  pick_col <- function(df, candidates) {
+    hit <- candidates[candidates %in% colnames(df)][1]
+    if (is.na(hit)) return(NULL)
+    hit
+  }
+  
+  id_col <- pick_col(meta, c("sample_id", "sample", "id", "barcode", "sample_name", "cell_line"))
+  if (is.null(id_col)) stop("Could not find sample ID column in metadata")
+  
+  # Infer cell vs tumour
+  infer_is_tumour <- function(meta) {
+    type_col <- pick_col(meta, c("sample_type", "type", "dataset_type"))
+    if (!is.null(type_col)) {
+      x <- tolower(trimws(as.character(meta[[type_col]])))
+      return(x %in% c("tumour", "tumor", "tcga", "primary"))
+    }
+    NULL
+  }
+  
+  is_tumour <- infer_is_tumour(meta)
+  if (is.null(is_tumour)) stop("Cannot infer tumour vs cell from metadata")
+  
+  meta_ids <- as.character(meta[[id_col]])
+  cell_ids <- meta_ids[!is_tumour]
+  tumour_ids <- meta_ids[is_tumour]
+  
+  # Compute neighbourhoods from clustering
+  # Convert clusters to data.frame and join on cluster membership
+  compute_neighbourhoods <- function(clusters, method_name) {
+    # Create data.frame with sample_id and cluster, normalizing IDs
+    clust_df <- data.frame(
+      sample_id = strip_prefix(names(clusters)),
+      cluster = as.character(clusters),
+      stringsAsFactors = FALSE
+    )
+    
+    # Split into cell and tumour
+    cell_clust <- clust_df %>% 
+      filter(sample_id %in% cell_ids) %>%
+      select(sample_id, cluster)
+    
+    tumour_clust <- clust_df %>% 
+      filter(sample_id %in% tumour_ids) %>%
+      select(sample_id, cluster)
+    
+    # Join on cluster: tumours in same cluster as a cell line are in its neighbourhood
+    # Many-to-many is expected: multiple cell lines and tumours can share a cluster
+    cell_clust %>%
+      inner_join(tumour_clust, by = "cluster", suffix = c("_cell", "_tumour"), relationship = "many-to-many") %>%
+      select(cell_line = sample_id_cell, tumor_id = sample_id_tumour, cluster) %>%
+      mutate(method = method_name, in_top = TRUE) %>%
+      select(cell_line, tumor_id, method, in_top)
+  }
+  
+  nh_hc <- compute_neighbourhoods(hc_clusters, "ccp_hc_expr_cell_tumour")
+  nh_km <- compute_neighbourhoods(km_clusters, "ccp_kmeans_expr_cell_tumour")
+  all_long <- dplyr::bind_rows(nh_hc, nh_km)
+  n_methods_total <- length(unique(all_long$method))
+  
+  # Compute p_consensus
+  consensus_pairs <- all_long %>%
+    filter(in_top) %>%
+    count(cell_line, tumor_id, name = "n_methods") %>%
+    mutate(p_consensus = n_methods / n_methods_total) %>%
+    arrange(cell_line, desc(p_consensus))
+  
+  # Write outputs
+  dir.create(dirname(opt$out_rds), showWarnings = FALSE, recursive = TRUE)
+  readr::write_tsv(consensus_pairs, opt$out_tsv)
+  saveRDS(consensus_pairs, opt$out_rds)
+  
+  cat("[SUCCESS] Pan-cancer p_consensus computed and written\n")
+  quit(save = "no", status = 0)
+}
+
+# ----------------------------------------------------------------------
+# PER-DISEASE MODE: Read Top_m_long_*.csv files
+# ----------------------------------------------------------------------
+# 1) Dynamically discover methods from actual pipeline outputs
+# ----------------------------------------------------------------------
+# Find all Top_m_long_*.csv files under tumour_neighbourhoods/{direction}/
+method_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = FALSE)
+method_dirs <- method_dirs[method_dirs != "final_consensus"]  # exclude final_consensus dir
+
+methods_tbl <- tibble::tibble(
+  method_id = character(0),
+  subdir    = character(0),
+  file      = character(0),
+  path      = character(0)
+)
+
+for (subdir in method_dirs) {
+  method_dir <- file.path(base_dir, subdir)
+  csv_files <- list.files(method_dir, pattern = "^Top_m_long_.*\\.csv$", full.names = FALSE)
+  
+  for (csv_file in csv_files) {
+    # Extract method_id from subdir (subdir should match method_id from get_nh_methods)
+    method_id <- subdir
+    full_path <- file.path(method_dir, csv_file)
+    
+    methods_tbl <- methods_tbl %>%
+      dplyr::add_row(
+        method_id = method_id,
+        subdir    = subdir,
+        file      = csv_file,
+        path      = full_path
+      )
+  }
+}
+
+# Filter to only existing files
+methods_tbl <- methods_tbl %>%
+  dplyr::mutate(exists = file.exists(path)) %>%
+  dplyr::filter(exists)
+
+n_methods_total <- nrow(methods_tbl)
+cat("[INFO] Number of clustering methods contributing to p_consensus: ",
+    n_methods_total, "\n", sep = "")
+
+if (n_methods_total == 0) {
+  stop("FATAL: No Top_m_long_*.csv files found in ", base_dir,
+       "\nExpected files under: ", base_dir, "/*/Top_m_long_*.csv")
+}
+
+cat("[INFO] Methods discovered:\n")
+print(methods_tbl %>% dplyr::select(method_id, subdir, file))
+
+# ==============================================================================
+# 2) Read all long tables
+# ==============================================================================
+neigh_list <- methods_tbl %>%
+  mutate(
+    data = map2(path, method_id, ~ {
+      if (!file.exists(.x)) {
+        stop("Neighbourhood file not found: ", .x)
+      }
+      read_csv(.x, show_col_types = FALSE) %>%
+        mutate(method = .y) %>%
+        # core columns first; keep extras if present (rank, distance, etc.)
+        select(
+          method, cell_line, tumor_id, in_top,
+          any_of(c("rank", "distance")),
+          everything()
+        ) %>%
+        # drop cluster-like columns that can be inconsistent across methods
+        select(-any_of(c("cluster", "cluster_id", "cluster_label", "subtype")))
+    })
+  )
+
+all_long <- neigh_list %>%
+  select(method_id, data) %>%
+  unnest(data)
+
+cat("=== Sanity check: counts per method / cell line / in_top ===\n")
+all_long %>%
+  count(method, cell_line, in_top) %>%
+  print(n = 12)
+
+# ==============================================================================
+# 3) Compute p_consensus(c, t)
+#    p_consensus(c, t) = #methods where t ∈ Top_m(c) / n_methods_total
+# ==============================================================================
+consensus_pairs <- all_long %>%
+  filter(in_top) %>%                           # only tumours in top-m neighbourhoods
+  count(cell_line, tumor_id, name = "n_methods") %>%
+  mutate(
+    p_consensus = n_methods / n_methods_total
+  ) %>%
+  arrange(cell_line, desc(p_consensus))
+
+cons_dir <- file.path(base_dir, "final_consensus")
+dir.create(cons_dir, showWarnings = FALSE, recursive = TRUE)
+
+cons_basename <- sprintf("Final_consensus_tumour_neighbourhoods_%s", direction)
+
+cons_rds_path <- file.path(cons_dir, paste0(cons_basename, ".rds"))
+cons_tsv_path <- file.path(cons_dir, paste0(cons_basename, ".tsv"))
+
+write_tsv(consensus_pairs, cons_tsv_path)
+saveRDS(consensus_pairs, cons_rds_path)
+
+cat("\n=== Consensus summary ===\n")
+consensus_pairs %>% glimpse()
+
+cat("\n=== Cell lines with perfect consensus (p_consensus == 1) ===\n")
+consensus_pairs %>%
+  filter(p_consensus == 1) %>%
+  count(cell_line, sort = TRUE) %>%
+  print()
+
+# ==============================================================================
+# 4) Publication-grade histogram of p_consensus
+# ==============================================================================
+# Filter out invalid p_consensus values (NA or outside [0,1]) before plotting
+consensus_pairs <- consensus_pairs %>%
+  filter(!is.na(p_consensus), p_consensus >= 0, p_consensus <= 1)
+
+n_pairs      <- nrow(consensus_pairs)
+frac_ge_0_7  <- mean(consensus_pairs$p_consensus >= 0.7)
+frac_eq_1    <- mean(consensus_pairs$p_consensus == 1)
+
+cat("\n=== Summary of consensus strength ===\n")
+cat(sprintf("Total pairs:        %d\n", n_pairs))
+cat(sprintf("p_consensus >= 0.7 : %.1f%% (%d pairs)\n",
+            100 * frac_ge_0_7,
+            sum(consensus_pairs$p_consensus >= 0.7)))
+cat(sprintf("p_consensus = 1.0 : %.1f%% (%d pairs)\n",
+            100 * frac_eq_1,
+            sum(consensus_pairs$p_consensus == 1)))
+
+annot_text <- sprintf(
+  "Total pairs: %d\n>= 0.7: %.1f%%\n= 1.0: %.1f%%",
+  n_pairs,
+  100 * frac_ge_0_7,
+  100 * frac_eq_1
+)
+
+p_hist <- ggplot(consensus_pairs, aes(x = p_consensus)) +
+  geom_histogram(
+    aes(y = after_stat(count / sum(count))),
+    binwidth = 0.05,
+    colour   = "white"
+  ) +
+  geom_vline(xintercept = 0.7, linetype = "dashed") +
+  scale_x_continuous(
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.1)
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1)
+  ) +
+  theme_dimred(base_size = 14) +
+  labs(
+    title    = sprintf(
+      "Distribution of consensus strength across %d clustering methods (%s)",
+      n_methods_total, gene_set
+    ),
+    subtitle = sprintf(
+      "%d (cell line, TCGA tumour) pairs | %s gene set",
+      n_pairs, gene_set
+    ),
+    x        = expression(p[consensus]),
+    y        = "Proportion of pairs"
+  ) +
+  theme(
+    plot.title       = element_text(face = "bold"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  annotate(
+    "text",
+    x      = 0.98,
+    y      = 0.95,
+    label  = annot_text,
+    hjust  = 1,
+    vjust  = 1,
+    size   = 3.5
+  )
+
+plot_path_hist <- file.path(
+  cons_dir,
+  sprintf("Fig_p_consensus_distribution_%s.pdf", direction)
+)
+ggsave(plot_path_hist, p_hist, width = 8, height = 5)
+
+cat("\nHistogram saved to:\n  ", plot_path_hist, "\n")
+
+# ==============================================================================
+# 5) Per-cell-line summary: max p_consensus per DSMZ line
+# ==============================================================================
+cell_summary <- consensus_pairs %>%
+  group_by(cell_line) %>%
+  summarise(
+    n_pairs      = n(),
+    max_p        = max(p_consensus),
+    median_p     = median(p_consensus),
+    frac_ge_0_7  = mean(p_consensus >= 0.7),
+    .groups      = "drop"
+  ) %>%
+  arrange(desc(max_p))
+
+cat("\n=== Per-cell-line summary (top 10 by max p_consensus) ===\n")
+cell_summary %>% head(10) %>% print()
+
+p_cell <- ggplot(
+  cell_summary,
+  aes(x = reorder(cell_line, max_p), y = max_p,
+      fill = max_p >= 0.7)
+) +
+  geom_col(width = 0.7) +
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.1)
+  ) +
+  scale_fill_manual(
+    values = c("TRUE" = "#2166ac", "FALSE" = "#bdbdbd"),
+    labels = c("FALSE" = "< 0.7", "TRUE" = ">= 0.7"),
+    name   = "Max p_consensus"
+  ) +
+  theme_dimred(base_size = 12) +
+  labs(
+    title    = sprintf(
+      "Per-cell-line consensus with TCGA tumours (%s)",
+      direction
+    ),
+    subtitle = "Bars show max p_consensus across all tumour neighbours",
+    x        = "DSMZ breast cancer cell lines",
+    y        = expression(max~p[consensus])
+  ) +
+  theme(
+    plot.title       = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+plot_path_cell <- file.path(
+  cons_dir,
+  sprintf("Fig_p_consensus_per_cell_line_%s.pdf", direction)
+)
+ggsave(plot_path_cell, p_cell, width = 8, height = 10)
+
+cat("\nPer-cell-line summary plot saved to:\n  ", plot_path_cell, "\n")
+
+# ==============================================================================
+# 6) Scatter: max p_consensus vs. fraction of strong neighbours
+# ==============================================================================
+cell_summary2 <- cell_summary %>%
+  mutate(
+    frac_ge_0_7 = frac_ge_0_7,
+    highlight   = (max_p >= 0.9 | frac_ge_0_7 >= 0.8)
+  )
+
+cell_summary2 %>%
+  filter(highlight) %>%
+  arrange(desc(max_p)) %>%
+  select(cell_line, max_p, frac_ge_0_7) %>%
+  print(n = 30)
+
+p_scatter <- ggplot(
+  cell_summary2,
+  aes(x = max_p, y = frac_ge_0_7)
+) +
+  geom_point(
+    aes(size = n_pairs, fill = max_p >= 0.7),
+    shape = 21,
+    colour = "black",
+    alpha  = 0.8
+  ) +
+  geom_hline(yintercept = 0.5, linetype = "dotted") +
+  geom_vline(xintercept = 0.7, linetype = "dashed") +
+  geom_text_repel(
+    data = subset(cell_summary2, highlight),
+    aes(label = cell_line),
+    size              = 3.5,
+    max.overlaps      = Inf,
+    box.padding       = 0.4,
+    point.padding     = 0.3,
+    segment.size      = 0.3,
+    min.segment.length = 0
+  ) +
+  scale_x_continuous(
+    limits = c(0, 1),
+    breaks = seq(0, 1, 0.1)
+  ) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    breaks = seq(0, 1, 0.1),
+    labels = scales::percent_format(accuracy = 0)
+  ) +
+  scale_fill_manual(
+    values = c("TRUE" = "#2166ac", "FALSE" = "#bdbdbd"),
+    labels = c("FALSE" = "< 0.7", "TRUE" = ">= 0.7"),
+    name   = "Max p_consensus"
+  ) +
+  scale_size_continuous(
+    range = c(2, 6),
+    name  = "Number of tumour neighbours"
+  ) +
+  theme_dimred(base_size = 14) +
+  labs(
+    title    = sprintf(
+      "Anchoring strength of DSMZ breast cancer cell lines (%s)",
+      direction
+    ),
+    subtitle = expression(
+      x == max~p[consensus]~" per line; " ~
+      y == "fraction of neighbours with " ~ p[consensus] >= 0.7
+    ),
+    x = expression(max~p[consensus]),
+    y = "Tumour neighbours with strong consensus (%)"
+  ) +
+  theme(
+    plot.title       = element_text(face = "bold"),
+    legend.position  = "right",
+    panel.grid.minor = element_blank()
+  )
+
+plot_path_scatter <- file.path(
+  cons_dir,
+  sprintf("Fig_p_consensus_cell_scatter_%s.pdf", direction)
+)
+ggsave(plot_path_scatter, p_scatter, width = 7, height = 6)
+
+cat("\nScatter plot (max_p vs frac_ge_0_7) saved to:\n  ", plot_path_scatter, "\n")
+cat("\n[SUCCESS] p_consensus computation finished for gene set: ", gene_set, "\n", sep = "")
