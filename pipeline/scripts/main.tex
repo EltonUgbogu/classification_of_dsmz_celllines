@@ -1,0 +1,88 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,left=2.5cm,right=2.5cm,top=3cm,bottom=3cm]{geometry}
+\usepackage{newtxtext,newtxmath}
+
+\usepackage{graphicx} % Required for inserting images
+\usepackage[export]{adjustbox}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{parskip}
+% Remove Indentation
+\setlength{\parindent}{0cm}
+\usepackage{url}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{amsfonts}
+\usepackage{float}
+\newcommand{\dd}[1]{\mathrm{d}#1}
+\usepackage{subfig}
+\usepackage{booktabs} 
+\usepackage{enumitem}
+\makeatletter
+% Reinsert missing \algbackskip
+\def\algbackskip{\hskip-\ALG@thistlm}
+\makeatother
+
+%\usepackage{natbib}
+\usepackage{cite}
+% Use the PLoS provided BiBTeX style
+\bibliographystyle{plos2015}
+\usepackage{amsmath,amssymb}
+
+\title{\\[2cm]
+\Large \\
+.}
+
+\author{
+Ugbogu Elton\\[1cm]
+\large Advisor: \\
+
+}
+
+\date{August 2025}
+
+\begin{document}
+\maketitle
+\newpage
+
+\tableofcontents
+\newpage
+\listoffigures
+\newpage
+\listoftables
+\newpage
+\input{declaration}
+\addcontentsline{toc}{section}{\numberline{}Declaration of Originality}
+\newpage
+\input{Acknowledgement}
+\addcontentsline{toc}{section}{\numberline{}Acknowledgement}
+\newpage
+\input{Abstract}
+\addcontentsline{toc}{section}{\numberline{}Abstract}
+\newpage
+\input{Zusammenfassung}
+\addcontentsline{toc}{section}{\numberline{}Zusammenfassung}
+
+\newpage
+\include{introduction}
+
+\include{methods}
+
+\include{results}
+
+\include{discussion}
+
+\bibliographystyle{plos2015} 
+\addcontentsline{toc}{section}{References}
+\bibliography{ref}
+\newpage
+
+
+\include{Supplementary}
+
+
+
+\end{document}

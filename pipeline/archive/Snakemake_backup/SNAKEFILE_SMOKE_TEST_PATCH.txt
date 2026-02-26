@@ -1,0 +1,44 @@
+# PATCH FOR Snakefile: Add smoke_test rule
+# 
+# ADD this rule AFTER the "rule all:" block (around line 25, after BASE/SCRIPTS_DIR definitions)
+
+rule smoke_test:
+    output:
+        os.path.join(LOGROOT, "smoke_test.ok")
+    log:
+        os.path.join(LOGROOT, "smoke_test.log")
+    shell:
+        r'''
+        set -euo pipefail
+        mkdir -p "$(dirname "{output}")" "$(dirname "{log}")"
+        
+        {
+            echo "[SMOKE TEST] Pipeline root: {BASE}"
+            echo "[SMOKE TEST] Profile: {profile_name}"
+            echo "[SMOKE TEST] Config file: {CFGFILE_ABS}"
+            echo "[SMOKE TEST] Log root: {LOGROOT}"
+            echo "[SMOKE TEST] Unsup root: {UNSUP}"
+            echo "[SMOKE TEST] Cancer type: {cfg.get('analysis', {}).get('cancer_type', 'MISSING')}"
+            
+            # Validate config can be read
+            if [ ! -f "{CFGFILE_ABS}" ]; then
+                echo "ERROR: Config file not found: {CFGFILE_ABS}"
+                exit 1
+            fi
+            
+            # Validate profile exists
+            if ! grep -q "^  {profile_name}:" "{CFGFILE_ABS}"; then
+                echo "ERROR: Profile '{profile_name}' not found in config"
+                exit 1
+            fi
+            
+            echo "[SMOKE TEST] SUCCESS: Basic validation passed"
+        } | tee "{log}"
+        
+        touch "{output}"
+        '''
+
+# NOTE: This rule uses variables that are defined later in Snakefile (UNSUP, cfg, etc.)
+# So it should be placed AFTER those definitions, or use lazy evaluation.
+# Better: place it right before "rule all:" and use lambda/lazy evaluation for UNSUP.
+
