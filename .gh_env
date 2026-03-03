@@ -1,0 +1,3 @@
+export GH_OWNER="EltonUgbogu"
+export GH_REPO="classification_of_dsmz_celllines"
+export GH_TOKEN="$(< ~/.secrets/github_token)"

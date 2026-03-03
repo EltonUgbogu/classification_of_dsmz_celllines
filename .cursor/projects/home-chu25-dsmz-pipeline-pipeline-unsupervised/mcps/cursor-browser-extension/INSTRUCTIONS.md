@@ -1,0 +1,1 @@
+The cursor-browser-extension is an MCP server that allows you to navigate the web and interact with the page. Please use this server if the user is asking about questions or tasks related to frontend / webapp development, and you are encouraged to test any of your code changes by using the tools from this MCP server.

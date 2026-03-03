@@ -1,0 +1,12 @@
+---
+pid: 3327039
+cwd: /home/chu25/dsmz/pipeline/pipeline/unsupervised
+last_command: ls
+last_exit_code: 0
+---
+(base) chu25@bilogin1:~/dsmz/pipeline/pipeline/unsupervised$ ls
+config                 logs       resources  Snakefile
+envs                   R          results    unsupervised_pipeline.sh
+install_r_packages.sh  README.md  scripts
+(base) chu25@bilogin1:~/ds       mz/pipeline/pipeline/unsup
+(base) chu25@bilogin1:~/dsmz/pipeline/pipeline/unsupervised$

@@ -1,0 +1,13 @@
+name mfware.x86_64-linux
+category TLCore
+revision 74121
+shortdesc x86_64-linux files of mfware
+containersize 125408
+containerchecksum 6e1e328593991cf86b1e17eb0d33cd27becb729c0d8b0f2a78a8ae36af59585c232e7faba40d66961cd754f3b39ca5129e92079cb9004566adb0c264932362a1
+binfiles arch=x86_64-linux size=158
+ bin/x86_64-linux/gftodvi
+ bin/x86_64-linux/gftopk
+ bin/x86_64-linux/gftype
+ bin/x86_64-linux/mft
+ bin/x86_64-linux/pktogf
+ bin/x86_64-linux/pktype

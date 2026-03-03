@@ -1,0 +1,11 @@
+---
+pid: 2547657
+cwd: /home/chu25/dsmz/bcc_analysis/unsupervised/main_scripts/inductive
+last_command: cursor inductive_tcga_with_Dsmz_overlay.R
+last_exit_code: 0
+---
+(base) chu25@bilogin1:~/dsmz/bcc_analysis/unsupervised/main_scripts/inductive$ ls
+caller_bash_scripts      check_clustering_consistency.R   inductive_tcga_tumour_clustering.R  Rplots.pdf          tcga_inductive_clustering_methods.R
+characterize_clusters.R  inductive_tcga_only_checker.txt  inductive_tcga_with_Dsmz_overlay.R  slurm-25509524.out
+(base) chu25@bilogin1:~/dsmz/bcc_analysis/unsupervised/main_scripts/inductive$ cursor inductive_tcga_with_Dsmz_overlay.R 
+(base) chu25@bilogin1:~/dsmz/bcc_analysis/unsupervised/main_scripts/inductive$

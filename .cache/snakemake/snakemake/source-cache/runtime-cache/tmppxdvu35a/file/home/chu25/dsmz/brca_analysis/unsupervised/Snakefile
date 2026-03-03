@@ -1,0 +1,551 @@
+import os
+import yaml
+from snakemake.shell import shell
+
+configfile: "config/config.yaml"
+
+# All shell commands run inside tcga-r-env
+shell.prefix(
+    "source $HOME/miniconda3/etc/profile.d/conda.sh; "
+    "conda activate tcga-r-env; "
+)
+
+cfg = config
+
+UNSUP = cfg["paths"]["unsup_root"]
+VST_JOINT = cfg["paths"]["vst_joint_rds"]
+
+# Tumour neighbourhood paths (used in rule all, so must be defined early)
+TUMOUR_NH_ROOT  = os.path.join(UNSUP, "tumour_neighbourhoods")
+TUMOUR_NH_INPUT = cfg["paths"]["tumour_nh_input_root"]
+
+# 4 combos we want
+COMBOS = [
+    ("pam50", "euclidean"),
+    ("pam50", "correlation"),
+    ("hvg",   "euclidean"),
+    ("hvg",   "correlation"),
+]
+
+# Method definitions for method-aware evaluation/overlays
+METHODS = ["pam50_corr", "pam50_euc", "hvg_corr", "hvg_euc"]
+
+# 4 main directions in TCGA space (for tumour neighbourhoods)
+DIRECTIONS = ["pam50_euc", "pam50_corr", "hvg_euc", "hvg_corr"]
+
+# Gene sets for tumour neighbourhoods (kept for backward compatibility if needed)
+GENESETS = ["PAM50", "HVG500"]
+
+def dir_to_geneset(direction):
+    """Extract gene set from direction: pam50_* -> PAM50, hvg_* -> HVG500"""
+    return "PAM50" if direction.startswith("pam50") else "HVG500"
+
+def dir_to_distance(direction):
+    """Extract distance from direction: *_euc -> euclidean, *_corr -> correlation"""
+    return "euclidean" if direction.endswith("euc") else "correlation"
+
+def cluster_prefix(method):
+    """
+    Map method → clustering prefix used for metrics filenames.
+    """
+    if method == "pam50_corr":
+        return "BRCA_TCGA_PAM50_CORR"
+    elif method == "pam50_euc":
+        return "BRCA_TCGA_PAM50_EUC"
+    elif method == "hvg_corr":
+        return "BRCA_TCGA_HVG_CORR"
+    elif method == "hvg_euc":
+        return "BRCA_TCGA_HVG_EUC"
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+def overlay_prefix(method):
+    """
+    Map method → overlay prefix used for UMAP PDFs.
+    """
+    if method == "pam50_corr":
+        return "BRCA_TCGA-DSMZ_PAM50_CORR"
+    elif method == "pam50_euc":
+        return "BRCA_TCGA-DSMZ_PAM50_EUC"
+    elif method == "hvg_corr":
+        return "BRCA_TCGA-DSMZ_HVG_CORR"
+    elif method == "hvg_euc":
+        return "BRCA_TCGA-DSMZ_HVG_EUC"
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+def combo_outdir(feature, dist):
+    return os.path.join(UNSUP, f"{feature}_{dist}")
+
+# ----------------------------------------------------------------------
+# 1) HVG feature selection (TCGA+DSMZ VST → scores + HVG list)
+# ----------------------------------------------------------------------
+rule feature_selection_unsupervised:
+    input:
+        vst = VST_JOINT,
+        cfg_file = "config/config.yaml"
+    output:
+        scores = cfg["features"]["hvg_joint_scores_tsv"],
+        hvg_list = cfg["features"]["hvg_final_gene_list"]
+    log:
+        "logs/feature_selection_unsupervised.log"
+    shell:
+        r'''
+        Rscript scripts/feature_selection_unsupervised.R \
+          --config {input.cfg_file} \
+          --vst_rds {input.vst} \
+          > {log} 2>&1
+        '''
+
+# ----------------------------------------------------------------------
+# 2) 4 clustering combos (euclidean/correlation × pam50/hvg)
+# ----------------------------------------------------------------------
+rule clustering_combo:
+    input:
+        cfg_file = "config/config.yaml",
+        # For pam50, we use the PAM50 list; for hvg, the HVG list from feature selection
+        genes = lambda wildcards: (
+            cfg["features"]["hvg_final_gene_list"]
+            if wildcards.feature_set == "hvg"
+            else cfg["features"]["pam50_gene_list"]
+        )
+    output:
+        # No lambda here – use a wildcard pattern instead
+        summary = os.path.join(UNSUP, "{feature_set}_{distance}", "DONE.txt")
+    params:
+        # Also as a wildcard pattern – Snakemake will substitute feature_set & distance
+        outdir = os.path.join(UNSUP, "{feature_set}_{distance}")
+    log:
+        # Again, no lambda: use a wildcard pattern
+        "logs/clustering_{feature_set}_{distance}.log"
+    wildcard_constraints:
+        feature_set = "pam50|hvg",
+        distance    = "euclidean|correlation"
+    shell:
+        r'''
+        mkdir -p {params.outdir}
+        Rscript scripts/clustering_driver.R \
+          --config {input.cfg_file} \
+          --feature_set {wildcards.feature_set} \
+          --distance {wildcards.distance} \
+          --outdir {params.outdir} \
+          > {log} 2>&1
+        touch {output.summary}
+        '''
+
+# ----------------------------------------------------------------------
+# 3) TCGA-only consensus clustering & inductive pipeline (your scripts)
+# ----------------------------------------------------------------------
+rule tcga_km_consensus:
+    input:
+        "config/config.yaml"
+    output:
+        # canonical "best-k" file independent of the actual K
+        clusters = os.path.join(
+            UNSUP,
+            "inductive_tcga",
+            "consensusclustering",
+            "km_tcga",
+            "BRCA_TCGA_PAM50_km_clusters_bestk.csv"
+        ),
+        # small metadata file with the chosen K
+        meta = os.path.join(
+            UNSUP,
+            "inductive_tcga",
+            "consensusclustering",
+            "km_tcga",
+            "BRCA_TCGA_PAM50_km_best_k.tsv"
+        )
+    log:
+        "logs/km_tcga_consensus.log"
+    shell:
+        r'''
+        Rscript scripts/km_tcga_consensusclustering.R \
+          > {log} 2>&1
+        '''
+
+rule tcga_pca_kmeans_consensus:
+    input:
+        km_clusters = rules.tcga_km_consensus.output.clusters
+    output:
+        os.path.join(UNSUP, "inductive_tcga", "consensusclustering", "kmeans_pca_tcga", "consensus", "consensus_clusters_K3.csv")
+    log:
+        "logs/kmeans_pca_tcga_consenclust.log"
+    shell:
+        r'''
+        Rscript scripts/kmeans_pca_tcga_consenclust.R \
+          > {log} 2>&1
+        '''
+
+rule tcga_pca_hc:
+    input:
+        km_clusters = rules.tcga_km_consensus.output.clusters
+    output:
+        os.path.join(UNSUP, "inductive_tcga", "pca_hc_tcga", "PCA_TCGA_BRCA_PAM50_samples_clusters_optimal_k=2.csv")
+    log:
+        "logs/pca_hc_tcga.log"
+    shell:
+        r'''
+        Rscript scripts/pca_hc_tcga.R \
+          > {log} 2>&1
+        '''
+
+rule tcga_pca_kmeans_tcga_only:
+    input:
+        km_clusters = rules.tcga_km_consensus.output.clusters
+    output:
+        os.path.join(UNSUP, "inductive_tcga", "pca_kmeans_tcga", "patient_clustering_kmeans_tcga", "final_clusters.csv")
+    log:
+        "logs/pca_kmeans_tcga.log"
+    shell:
+        r'''
+        Rscript scripts/pca_kmeans_tcga.R \
+          > {log} 2>&1
+        '''
+
+rule tcga_consensus_from_methods:
+    """
+    Build TCGA-only consensus clustering from multiple methods
+    (k-means, PCA+k-means, PCA+HC, CCP variants).
+    K is chosen data-driven by silhouette on the co-association matrix.
+    """
+    input:
+        # Upstream methods whose results are used by the R script
+        km_bestk = rules.tcga_km_consensus.output.clusters,
+        km_pca_cc = rules.tcga_pca_kmeans_consensus.output,
+        hc_pca_opt = rules.tcga_pca_hc.output,
+        km_pca_tcga = rules.tcga_pca_kmeans_tcga_only.output
+    output:
+        clusters = os.path.join(UNSUP, "inductive_tcga", "BRCA_TCGA_PAM50_CONSENSUS_clusters_bestk.csv"),
+        bestk = os.path.join(UNSUP, "inductive_tcga", "BRCA_TCGA_PAM50_CONSENSUS_best_k_summary.tsv")
+    log:
+        "logs/tcga_consensus_clustering_methods.log"
+    shell:
+        r'''
+        Rscript scripts/tcga_consensus_clustering_methods.R \
+          > {log} 2>&1
+        '''
+
+rule tcga_inductive_clustering_eval:
+    """
+    Method-aware evaluation of the *same* TCGA PAM50 consensus clustering.
+    
+    For each method (PAM50/HVG × COR/EUC), we:
+      - Read the canonical consensus_clusters_bestk.csv
+      - Load the appropriate expression matrix / config inside the R script
+      - Compute external + internal metrics
+      - Save to a method-specific *_CONSENSUS_CLUSTERING_METRICS.tsv
+    """
+    input:
+        # Same canonical consensus for all methods
+        consensus = rules.tcga_consensus_from_methods.output.clusters
+    output:
+        metrics = os.path.join(
+            UNSUP,
+            "inductive_tcga",
+            "inductive_tcga_clusters",
+            "{method_prefix}_CONSENSUS_CLUSTERING_METRICS.tsv"
+        )
+    params:
+        method = lambda wc: (
+            "pam50_corr" if wc.method_prefix == "BRCA_TCGA_PAM50_CORR"
+            else "pam50_euc" if wc.method_prefix == "BRCA_TCGA_PAM50_EUC"
+            else "hvg_corr" if wc.method_prefix == "BRCA_TCGA_HVG_CORR"
+            else "hvg_euc" if wc.method_prefix == "BRCA_TCGA_HVG_EUC"
+            else None
+        )
+    log:
+        "logs/inductive_tcga_tumour_clustering_{method_prefix}.log"
+    wildcard_constraints:
+        method_prefix = "BRCA_TCGA_PAM50_CORR|BRCA_TCGA_PAM50_EUC|BRCA_TCGA_HVG_CORR|BRCA_TCGA_HVG_EUC"
+    shell:
+        r'''
+        Rscript scripts/inductive_tcga_tumour_clustering.R \
+          --method {params.method} \
+          > {log} 2>&1
+        '''
+
+rule tcga_dsmz_overlay_umap:
+    """
+    Method-aware DSMZ overlay UMAPs using the inductive TCGA evaluation results.
+    """
+    input:
+        eval = lambda wc: os.path.join(
+            UNSUP,
+            "inductive_tcga",
+            "inductive_tcga_clusters",
+            # Map overlay_prefix back to method_prefix for the metrics file
+            f"{wc.overlay_prefix.replace('BRCA_TCGA-DSMZ_', 'BRCA_TCGA_')}_CONSENSUS_CLUSTERING_METRICS.tsv"
+        )
+    output:
+        overlay = os.path.join(
+            UNSUP,
+            "inductive_tcga",
+            "{overlay_prefix}_UMAP_OVERLAY_INDUCTIVE_SAMPLES.pdf"
+        )
+    params:
+        method = lambda wc: (
+            "pam50_corr" if wc.overlay_prefix == "BRCA_TCGA-DSMZ_PAM50_CORR"
+            else "pam50_euc" if wc.overlay_prefix == "BRCA_TCGA-DSMZ_PAM50_EUC"
+            else "hvg_corr" if wc.overlay_prefix == "BRCA_TCGA-DSMZ_HVG_CORR"
+            else "hvg_euc" if wc.overlay_prefix == "BRCA_TCGA-DSMZ_HVG_EUC"
+            else None
+        )
+    log:
+        "logs/inductive_tcga_with_dsmz_overlay_umap_{overlay_prefix}.log"
+    wildcard_constraints:
+        overlay_prefix = "BRCA_TCGA-DSMZ_PAM50_CORR|BRCA_TCGA-DSMZ_PAM50_EUC|BRCA_TCGA-DSMZ_HVG_CORR|BRCA_TCGA-DSMZ_HVG_EUC"
+    shell:
+        r'''
+        Rscript scripts/inductive_tcga_with_dsmz_overlay_umap.R \
+          --method {params.method} \
+          > {log} 2>&1
+        '''
+
+# ----------------------------------------------------------------------
+# 4) Tumour neighbourhoods (DSMZ vs TCGA) across 10 clustering methods
+#     - uses comp_tumour_neighbourhoods.R
+#     - outputs Top_m_long_*.csv for each method
+# ----------------------------------------------------------------------
+rule build_tumour_neighbourhood_input_pam50:
+    """
+    Build integrated DSMZ+TCGA PAM50 matrix + cell_line→original_id mapping
+    for tumour neighbourhood analysis.
+    """
+    input:
+        tcga_pam50 = cfg["paths"].get(
+            "tcga_brca_pam50_expr",
+            cfg["paths"]["tcga_pam50_expr"]
+        ),
+        dsmz_pam50 = cfg["paths"].get(
+            "dsmz_bcc_pam50_expr",
+            cfg["paths"]["dsmz_pam50_expr"]
+        ),
+        dsmz_meta  = cfg["paths"]["dsmz_meta_csv"]
+    output:
+        expr_rds = cfg["paths"]["tumour_nh_expr_pam50"],
+        map_rds  = cfg["paths"]["tumour_nh_map_rds"]
+    log:
+        "logs/build_tumour_neighbourhood_input_pam50.log"
+    shell:
+        r'''
+        Rscript scripts/build_dsmz_tcga_pam50matrix.R \
+          --config config/config.yaml \
+          > {log} 2>&1
+        '''
+
+rule build_tumour_neighbourhood_input_hvg:
+    """
+    Build integrated DSMZ+TCGA HVG500 matrix + cell_line→original_id mapping
+    for tumour neighbourhood analysis.
+    """
+    input:
+        vst_joint = VST_JOINT,
+        hvg_list  = cfg["features"]["hvg_final_gene_list"],
+        dsmz_meta = cfg["paths"]["dsmz_meta_csv"],
+        # ensure mapping exists (can be from pam50 rule)
+        map_rds   = cfg["paths"]["tumour_nh_map_rds"]
+    output:
+        expr_rds = cfg["paths"]["tumour_nh_expr_hvg"]
+    log:
+        "logs/build_tumour_neighbourhood_input_hvg.log"
+    shell:
+        r'''
+        Rscript scripts/build_dsmz_tcga_hvgmatrix.R \
+          --config config/config.yaml \
+          > {log} 2>&1
+        '''
+
+rule tumour_neighbourhoods:
+    """
+    Compute tumour neighbourhoods for a given direction
+    (PAM50/HVG500 × EUC/CORR).
+    Uses the *same* 10 clustering methods but different embedding matrices.
+    """
+    input:
+        # pick expression matrix based on direction
+        expr_rds = lambda wc: (
+            cfg["paths"]["tumour_nh_expr_pam50"]
+            if dir_to_geneset(wc.direction) == "PAM50"
+            else cfg["paths"]["tumour_nh_expr_hvg"]
+        ),
+        map_rds  = cfg["paths"]["tumour_nh_map_rds"]
+    output:
+        hc_pam50_dyn = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "HC_PAM50_dynamic",
+            "Top_m_long_HC_PAM50_dynamic.csv"
+        ),
+        hc_pam50_opt = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "HC_PAM50_optimal",
+            "Top_m_long_HC_PAM50_optimal.csv"
+        ),
+        hc_pca_dyn   = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "HC_PCA_dynamic",
+            "Top_m_long_HC_PCA_dynamic.csv"
+        ),
+        hc_pca_opt   = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "HC_PCA_optimal",
+            "Top_m_long_HC_PCA_optimal.csv"
+        ),
+        km_pam50     = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "km_PAM50",
+            "Top_m_long_km_PAM50.csv"
+        ),
+        km_pca       = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "km_PCA",
+            "Top_m_long_km_PCA.csv"
+        ),
+        cons_hc_pam50 = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "consensus_HC_PAM50",
+            "Top_m_long_consensus_HC_PAM50.csv"
+        ),
+        cons_km_pam50 = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "consensus_kmeans_PAM50",
+            "Top_m_long_consensus_kmeans_PAM50.csv"
+        ),
+        cons_hc_pca   = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "consensus_HC_PCA",
+            "Top_m_long_consensus_HC_PCA.csv"
+        ),
+        cons_km_pca   = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "consensus_kmeans_PCA",
+            "Top_m_long_consensus_kmeans_PCA.csv"
+        )
+    log:
+        "logs/tumour_neighbourhoods_{direction}.log"
+    wildcard_constraints:
+        direction = "pam50_euc|pam50_corr|hvg_euc|hvg_corr"
+    shell:
+        r'''
+        Rscript scripts/comp_tumour_neighbourhoods.R \
+          --config config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+# ----------------------------------------------------------------------
+# 5) Consensus over tumour neighbourhoods
+#     - uses compute_p_consensus.R
+#     - p_consensus(c, t) across the 10 methods
+# ----------------------------------------------------------------------
+rule tumour_neighbourhood_p_consensus:
+    input:
+        rules.tumour_neighbourhoods.output  # all 10 Top_m_long_*.csv for {direction}
+    output:
+        consensus_rds = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+            "Final_consensus_tumour_neighbourhoods_{direction}.rds"
+        ),
+        consensus_csv = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+            "Final_consensus_tumour_neighbourhoods_{direction}.csv"
+        )
+    log:
+        "logs/tumour_neighbourhood_p_consensus_{direction}.log"
+    wildcard_constraints:
+        direction = "pam50_euc|pam50_corr|hvg_euc|hvg_corr"
+    shell:
+        r'''
+        Rscript scripts/compute_p_consensus.R \
+          --config config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+# ----------------------------------------------------------------------
+# 6) DSMZ–DSMZ similarity graph from p_consensus
+#     - uses compute_dsmz_dsmz_similarity.R
+#     - produces similarity matrix + graph outputs
+# ----------------------------------------------------------------------
+rule dsmz_dsmz_similarity_graph:
+    input:
+        consensus_rds = os.path.join(
+            TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+            "Final_consensus_tumour_neighbourhoods_{direction}.rds"
+        )
+    output:
+        sim_mat_rds   = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_similarity_matrix_{direction}.rds"),
+        sim_pairs_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_similarity_pairs_{direction}.tsv"),
+        edges_tsv     = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_edges_{direction}.tsv"),
+        nodes_tsv     = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_summary_{direction}.tsv"),
+        nodes_annot   = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
+        comm_summary  = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_community_summary_{direction}.tsv"),
+        comm_table    = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_Louvain_vs_Leiden_community_table_{direction}.tsv"),
+        hist_pdf      = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_similarity_histogram_{direction}.pdf"),
+        scatter_pdf   = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_p_consensus_cell_scatter_{direction}.pdf"),
+        comm_heatmap  = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_{direction}.pdf"),
+        graph_leiden  = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Leiden_{direction}.pdf"),
+        graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
+        graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
+    log:
+        "logs/dsmz_dsmz_similarity_graph_{direction}.log"
+    wildcard_constraints:
+        direction = "pam50_euc|pam50_corr|hvg_euc|hvg_corr"
+    shell:
+        r'''
+        Rscript scripts/compute_dsmz_dsmz_similarity.R \
+          --config config/config.yaml \
+          --direction {wildcards.direction} \
+          > {log} 2>&1
+        '''
+
+# ----------------------------------------------------------------------
+# Final rule: all outputs
+# ----------------------------------------------------------------------
+rule all:
+    input:
+        # 4 combo summaries (DONE.txt markers)
+        [os.path.join(combo_outdir(f, d), "DONE.txt") for (f, d) in COMBOS],
+        # HVG joint scores + final HVG list
+        cfg["features"]["hvg_joint_scores_tsv"],
+        cfg["features"]["hvg_final_gene_list"],
+        # TCGA inductive consensus (from tcga_consensus_clustering_methods.R)
+        rules.tcga_consensus_from_methods.output.clusters,
+        rules.tcga_consensus_from_methods.output.bestk,
+        # Inductive evaluation metrics (all 4 methods)
+        expand(
+            os.path.join(
+                UNSUP,
+                "inductive_tcga",
+                "inductive_tcga_clusters",
+                "{prefix}_CONSENSUS_CLUSTERING_METRICS.tsv"
+            ),
+            prefix=[cluster_prefix(m) for m in METHODS]
+        ),
+        # DSMZ overlay combined UMAP (all 4 methods)
+        expand(
+            os.path.join(
+                UNSUP,
+                "inductive_tcga",
+                "{overlay_prefix}_UMAP_OVERLAY_INDUCTIVE_SAMPLES.pdf"
+            ),
+            overlay_prefix=[overlay_prefix(m) for m in METHODS]
+        ),
+        # Tumour neighbourhood inputs (built from PAM50 and HVG500 matrices)
+        rules.build_tumour_neighbourhood_input_pam50.output.expr_rds,
+        rules.build_tumour_neighbourhood_input_pam50.output.map_rds,
+        rules.build_tumour_neighbourhood_input_hvg.output.expr_rds,
+        # Final tumour–neighbourhood consensus (per direction)
+        [
+            os.path.join(
+                TUMOUR_NH_ROOT, d, "final_consensus",
+                f"Final_consensus_tumour_neighbourhoods_{d}.rds"
+            )
+            for d in DIRECTIONS
+        ],
+        # DSMZ–DSMZ similarity matrices (per direction)
+        [
+            os.path.join(
+                TUMOUR_NH_ROOT, d, "final_consensus",
+                f"DSMZ_DSMZ_similarity_matrix_{d}.rds"
+            )
+            for d in DIRECTIONS
+        ],
+        # DSMZ–DSMZ node summaries (per direction)
+        [
+            os.path.join(
+                TUMOUR_NH_ROOT, d, "final_consensus",
+                f"DSMZ_DSMZ_graph_node_summary_{d}.tsv"
+            )
+            for d in DIRECTIONS
+        ]

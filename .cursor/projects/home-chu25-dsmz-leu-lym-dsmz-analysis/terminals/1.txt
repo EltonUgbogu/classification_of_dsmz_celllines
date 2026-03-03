@@ -1,0 +1,8 @@
+---
+pid: 3119877
+cwd: /home/chu25/dsmz/pipeline/pipeline/unsupervised/config
+last_command: cursor config.yaml
+last_exit_code: 0
+---
+(base) chu25@bilogin1:~/dsmz/pipeline/pipeline/unsupervised/config$ cursor config.yaml 
+(base) chu25@bilogin1:~/dsmz/pipeline/pipeline/unsupervised/config$
