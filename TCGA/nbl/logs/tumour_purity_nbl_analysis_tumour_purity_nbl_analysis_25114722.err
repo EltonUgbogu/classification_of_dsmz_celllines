@@ -1,0 +1,32 @@
+[INFO] Loading SummarizedExperiment...
+[INFO] Loaded: 60660 genes × 282 samples
+[INFO] Project counts BEFORE filtering:
+[INFO] Loading Ensembl → HGNC map...
+[INFO] Mapped 41554 / 60660 genes (68.5%)
+[INFO] Selecting common ESTIMATE genes (manual filter)...
+[INFO] Using 10378 common genes for ESTIMATE scoring.
+[INFO] Running ESTIMATE...
+Number of stromal_signature genes in data: 141 (out of 141)
+
+Number of immune_signature genes in data: 141 (out of 141)
+
+[INFO] Derived tumourPurity from ESTIMATEScore.
+[INFO] Scores: 282 samples × 4 metrics
+[INFO] Scores saved to: /home/chu25/data/nbl/results/tumour_purity_results/estimate_scores.csv
+[INFO] Kept 244 / 282 samples (purity ≥ 0.70)
+[INFO] Filtered counts (HGNC) saved to: /home/chu25/data/nbl/results/tumour_purity_results/filtered_hgnc_counts_purity0.7.rds
+[INFO] Filtered Ensembl matrix saved to: /home/chu25/data/nbl/nbl_filtered_count_matrix_ensembl_purity0.7.rds
+[INFO] Project counts AFTER filtering:
+[INFO] Generating bar plot...
+[SUCCESS] Bar plot saved: /home/chu25/data/nbl/results/tumour_purity_results/sample_retention_by_project_same_axis.pdf
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+[SUCCESS] Diagnostics saved: /home/chu25/data/nbl/results/tumour_purity_results/purity_diagnostics.pdf
+[SUCCESS] All done! Output in: /home/chu25/data/nbl/results/tumour_purity_results
+Warning messages:
+1: In geom_col(position = position_dodge(width = 0.8), width = 0.7,  :
+  Ignoring unknown parameters: `size`
+2: The `size` argument of `element_rect()` is deprecated as of ggplot2 3.4.0.
+ℹ Please use the `linewidth` argument instead. 
+3: In grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y,  :
+  for '≥ 0.7' in 'mbcsToSbcs': >= substituted for ≥ (U+2265)

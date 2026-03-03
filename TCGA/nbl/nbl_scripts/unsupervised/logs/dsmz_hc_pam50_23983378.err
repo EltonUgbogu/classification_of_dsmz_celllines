@@ -1,0 +1,12 @@
+[INFO] Found 60616 unique Ensembl IDs in expression matrix.
+[INFO] Attempting mapping via org.Hs.eg.db...
+'select()' returned 1:many mapping between keys and columns
+[INFO] org.Hs.eg.db: 36309 mappings
+[INFO] Final mapping: 36309/60616 genes mapped (59.9%)
+[INFO] 60616 / 60616 genes mapped to symbols.
+[INFO] 50 rows match PAM50 genes (before collapsing).
+[WARN] 2 PAM50 genes missing: ORC6L, WHSC1L1
+[SUCCESS] Final PAM50 matrix: 50 genes × 29 samples
+
+[SUCCESS]  heatmaps saved in:
+    /home/chu25/dsmz/old_scripts/brca_analysis/brca/unsupervised/results

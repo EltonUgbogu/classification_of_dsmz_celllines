@@ -1,0 +1,14 @@
+[INFO] Loading GEO matrix ...
+   GEO: samples × genes: 120 x 60660
+[INFO] Loading TARGET object ...
+   TARGET assays: unstranded, stranded_first, stranded_second, tpm_unstrand, fpkm_unstrand, fpkm_uq_unstrand
+   TARGET: genes × samples → transposing...
+[INFO] GEO matrix (final):    120 samples x 60660 genes
+[INFO] TARGET matrix (final): 162 samples x 60660 genes
+[INFO] Common Ensembl genes: 60660
+[INFO] Loading Ensembl → HGNC map ...
+[INFO] HGNC mapped: 41554 / 60660 genes
+[INFO] Final SE: 60660 genes (Ensembl) x 282 samples
+[INFO]   → HGNC in rowData: 41554 symbols
+[INFO] Saving to /home/chu25/data/nbl/nbl_combined_count_matrix_ensembl.rds
+[SUCCESS] Merged on Ensembl, HGNC in metadata!

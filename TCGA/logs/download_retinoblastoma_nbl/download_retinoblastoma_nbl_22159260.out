@@ -1,0 +1,6 @@
+== Mon Sep 29 13:54:24 CEST 2025 ==
+Host: frodo.hpc.dsmz.de
+Job: 22159260  CPUs: 8  MEM: 65536
+BASE: /home/chu25/data
+TMPDIR: /home/chu25/data/rbl/tmp
+--- Part 1 : TARGET-NBL with TCGAbiolinks ---

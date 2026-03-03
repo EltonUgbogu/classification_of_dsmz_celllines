@@ -1,0 +1,75 @@
+== Mon Oct  6 23:41:06 CEST 2025 :: START ==
+Host: frodo.hpc.dsmz.de
+[INFO] LIST=/home/chu25/data/nbl/GSE49711/SRP109627.txt  TOTAL=5  OUT=/home/chu25/data/nbl/GSE49711/fastq  SRA=/home/chu25/data/nbl/GSE49711/sra  TMP=/home/chu25/data/nbl/GSE49711/tmp
+[SEQ] (1/5) SRR5710452
+---- Mon Oct  6 23:41:25 CEST 2025 :: START SRR5710452 ----
+[prefetch] SRR5710452 → /home/chu25/data/nbl/GSE49711/sra
+
+2025-10-06T21:41:28 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-06T21:41:28 prefetch.3.0.10: 1) Downloading 'SRR5710452'...
+2025-10-06T21:41:28 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-06T21:41:28 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-06T21:47:39 prefetch.3.0.10:  HTTPS download succeed
+2025-10-06T21:48:02 prefetch.3.0.10:  'SRR5710452' is valid
+2025-10-06T21:48:02 prefetch.3.0.10: 1) 'SRR5710452' was downloaded successfully
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE49711/sra/SRR5710452 threads=8 tmp=/home/chu25/data/nbl/GSE49711/tmp
+[pigz] compressing SRR5710452_*.fastq
+---- Mon Oct  6 23:52:14 CEST 2025 :: DONE  SRR5710452 ----
+[SEQ] (2/5) SRR5710457
+---- Mon Oct  6 23:52:14 CEST 2025 :: START SRR5710457 ----
+[prefetch] SRR5710457 → /home/chu25/data/nbl/GSE49711/sra
+
+2025-10-06T21:52:16 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-06T21:52:17 prefetch.3.0.10: 1) Downloading 'SRR5710457'...
+2025-10-06T21:52:17 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-06T21:52:17 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-06T21:55:28 prefetch.3.0.10:  HTTPS download succeed
+2025-10-06T21:55:42 prefetch.3.0.10:  'SRR5710457' is valid
+2025-10-06T21:55:42 prefetch.3.0.10: 1) 'SRR5710457' was downloaded successfully
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE49711/sra/SRR5710457 threads=8 tmp=/home/chu25/data/nbl/GSE49711/tmp
+[pigz] compressing SRR5710457_*.fastq
+---- Mon Oct  6 23:58:20 CEST 2025 :: DONE  SRR5710457 ----
+[SEQ] (3/5) SRR5710462
+---- Mon Oct  6 23:58:20 CEST 2025 :: START SRR5710462 ----
+[prefetch] SRR5710462 → /home/chu25/data/nbl/GSE49711/sra
+
+2025-10-06T21:58:22 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-06T21:58:22 prefetch.3.0.10: 1) Downloading 'SRR5710462'...
+2025-10-06T21:58:22 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-06T21:58:22 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-06T22:01:45 prefetch.3.0.10:  HTTPS download succeed
+2025-10-06T22:02:02 prefetch.3.0.10:  'SRR5710462' is valid
+2025-10-06T22:02:02 prefetch.3.0.10: 1) 'SRR5710462' was downloaded successfully
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE49711/sra/SRR5710462 threads=8 tmp=/home/chu25/data/nbl/GSE49711/tmp
+[pigz] compressing SRR5710462_*.fastq
+---- Tue Oct  7 00:04:56 CEST 2025 :: DONE  SRR5710462 ----
+[SEQ] (4/5) SRR5710467
+---- Tue Oct  7 00:04:56 CEST 2025 :: START SRR5710467 ----
+[prefetch] SRR5710467 → /home/chu25/data/nbl/GSE49711/sra
+
+2025-10-06T22:04:58 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-06T22:04:59 prefetch.3.0.10: 1) Downloading 'SRR5710467'...
+2025-10-06T22:04:59 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-06T22:04:59 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-06T22:09:28 prefetch.3.0.10:  HTTPS download succeed
+2025-10-06T22:09:49 prefetch.3.0.10:  'SRR5710467' is valid
+2025-10-06T22:09:49 prefetch.3.0.10: 1) 'SRR5710467' was downloaded successfully
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE49711/sra/SRR5710467 threads=8 tmp=/home/chu25/data/nbl/GSE49711/tmp
+[pigz] compressing SRR5710467_*.fastq
+---- Tue Oct  7 00:13:57 CEST 2025 :: DONE  SRR5710467 ----
+[SEQ] (5/5) SRR5710479
+---- Tue Oct  7 00:13:57 CEST 2025 :: START SRR5710479 ----
+[prefetch] SRR5710479 → /home/chu25/data/nbl/GSE49711/sra
+
+2025-10-06T22:13:59 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-06T22:13:59 prefetch.3.0.10: 1) Downloading 'SRR5710479'...
+2025-10-06T22:13:59 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-06T22:13:59 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-06T22:22:19 prefetch.3.0.10:  HTTPS download succeed
+2025-10-06T22:23:06 prefetch.3.0.10:  'SRR5710479' is valid
+2025-10-06T22:23:06 prefetch.3.0.10: 1) 'SRR5710479' was downloaded successfully
+2025-10-06T22:23:06 prefetch.3.0.10: 'SRR5710479' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE49711/sra/SRR5710479 threads=8 tmp=/home/chu25/data/nbl/GSE49711/tmp
+[pigz] compressing SRR5710479_*.fastq
+---- Tue Oct  7 00:36:34 CEST 2025 :: DONE  SRR5710479 ----
+== Tue Oct  7 00:36:35 CEST 2025 :: ALL DONE ==

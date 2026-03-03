@@ -1,0 +1,10 @@
+=== [frodo] Starting EGAD00001001672 download at Thu Dec  4 19:30:16 CET 2025 ===
+[INFO] Using conda env: myenv
+[INFO] Output dir: /home/chu25/data/icgc_mmml/EGAD00001001672/fastq
+[INFO] pyega3 in use: /home/chu25/miniconda3/envs/myenv/bin/pyega3
+usage: pyega3 [-h] [-d] [-cf CONFIG_FILE] [-sf SERVER_FILE] [-c CONNECTIONS]
+              [-t] [-ms MAX_SLICE_SIZE] [-j] [-v]
+              {datasets,files,fetch} ...
+
+Download from the European Genome-phenome Archive. Client version: 5.2.0
+Enter Username :

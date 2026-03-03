@@ -1,0 +1,196 @@
+== Mon Sep 29 14:20:42 CEST 2025 ==
+Host: frodo.hpc.dsmz.de
+Job: 22159488  CPUs: 8  MEM: 65536
+BASE: /home/chu25/data
+TMPDIR: /home/chu25/data/rbl/tmp
+
+--- Part 2: GSE196420 (primary RB tumors) ---
+[GSE196420] prefetch SRA → /home/chu25/data/rbl/sra
+
+2025-09-29T12:20:46 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:20:47 prefetch.3.0.10: 1) 'SRR17960480' (32GB) is larger than maximum allowed: skipped 
+
+2025-09-29T12:20:47 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:20:48 prefetch.3.0.10: 2) Downloading 'SRR17960481'...
+2025-09-29T12:20:48 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:20:48 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:31:33 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:32:07 prefetch.3.0.10:  'SRR17960481' is valid
+2025-09-29T12:32:07 prefetch.3.0.10: 2) 'SRR17960481' was downloaded successfully
+2025-09-29T12:32:08 prefetch.3.0.10: 'SRR17960481' has 0 unresolved dependencies
+
+2025-09-29T12:32:08 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:32:08 prefetch.3.0.10: 3) 'SRR17960482' (23GB) is larger than maximum allowed: skipped 
+
+2025-09-29T12:32:09 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:32:09 prefetch.3.0.10: 4) 'SRR17960483' (23GB) is larger than maximum allowed: skipped 
+
+2025-09-29T12:32:10 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:32:10 prefetch.3.0.10: 5) Downloading 'SRR17960497'...
+2025-09-29T12:32:10 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:32:10 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:34:40 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:34:49 prefetch.3.0.10:  'SRR17960497' is valid
+2025-09-29T12:34:49 prefetch.3.0.10: 5) 'SRR17960497' was downloaded successfully
+2025-09-29T12:34:49 prefetch.3.0.10: 'SRR17960497' has 0 unresolved dependencies
+
+2025-09-29T12:34:50 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:34:50 prefetch.3.0.10: 6) Downloading 'SRR17960498'...
+2025-09-29T12:34:50 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:34:50 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:37:55 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:38:07 prefetch.3.0.10:  'SRR17960498' is valid
+2025-09-29T12:38:07 prefetch.3.0.10: 6) 'SRR17960498' was downloaded successfully
+2025-09-29T12:38:07 prefetch.3.0.10: 'SRR17960498' has 0 unresolved dependencies
+
+2025-09-29T12:38:08 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:38:08 prefetch.3.0.10: 7) Downloading 'SRR17960499'...
+2025-09-29T12:38:08 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:38:08 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:42:34 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:42:46 prefetch.3.0.10:  'SRR17960499' is valid
+2025-09-29T12:42:46 prefetch.3.0.10: 7) 'SRR17960499' was downloaded successfully
+2025-09-29T12:42:46 prefetch.3.0.10: 'SRR17960499' has 0 unresolved dependencies
+
+2025-09-29T12:42:46 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:42:47 prefetch.3.0.10: 8) Downloading 'SRR17960500'...
+2025-09-29T12:42:47 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:42:47 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:44:51 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:45:01 prefetch.3.0.10:  'SRR17960500' is valid
+2025-09-29T12:45:01 prefetch.3.0.10: 8) 'SRR17960500' was downloaded successfully
+2025-09-29T12:45:01 prefetch.3.0.10: 'SRR17960500' has 0 unresolved dependencies
+
+2025-09-29T12:45:02 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:45:02 prefetch.3.0.10: 9) Downloading 'SRR17960501'...
+2025-09-29T12:45:02 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:45:02 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:47:32 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:47:44 prefetch.3.0.10:  'SRR17960501' is valid
+2025-09-29T12:47:44 prefetch.3.0.10: 9) 'SRR17960501' was downloaded successfully
+2025-09-29T12:47:44 prefetch.3.0.10: 'SRR17960501' has 0 unresolved dependencies
+
+2025-09-29T12:47:45 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:47:45 prefetch.3.0.10: 10) Downloading 'SRR17960502'...
+2025-09-29T12:47:45 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:47:45 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:51:36 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:51:54 prefetch.3.0.10:  'SRR17960502' is valid
+2025-09-29T12:51:54 prefetch.3.0.10: 10) 'SRR17960502' was downloaded successfully
+2025-09-29T12:51:54 prefetch.3.0.10: 'SRR17960502' has 0 unresolved dependencies
+
+2025-09-29T12:51:55 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:51:55 prefetch.3.0.10: 11) Downloading 'SRR17960503'...
+2025-09-29T12:51:55 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:51:55 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:54:32 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:54:43 prefetch.3.0.10:  'SRR17960503' is valid
+2025-09-29T12:54:43 prefetch.3.0.10: 11) 'SRR17960503' was downloaded successfully
+2025-09-29T12:54:43 prefetch.3.0.10: 'SRR17960503' has 0 unresolved dependencies
+
+2025-09-29T12:54:43 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:54:44 prefetch.3.0.10: 12) Downloading 'SRR17960504'...
+2025-09-29T12:54:44 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:54:44 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T12:57:52 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T12:58:03 prefetch.3.0.10:  'SRR17960504' is valid
+2025-09-29T12:58:03 prefetch.3.0.10: 12) 'SRR17960504' was downloaded successfully
+2025-09-29T12:58:03 prefetch.3.0.10: 'SRR17960504' has 0 unresolved dependencies
+
+2025-09-29T12:58:04 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T12:58:04 prefetch.3.0.10: 13) Downloading 'SRR17960505'...
+2025-09-29T12:58:04 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T12:58:04 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:01:40 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:01:49 prefetch.3.0.10:  'SRR17960505' is valid
+2025-09-29T13:01:49 prefetch.3.0.10: 13) 'SRR17960505' was downloaded successfully
+2025-09-29T13:01:49 prefetch.3.0.10: 'SRR17960505' has 0 unresolved dependencies
+
+2025-09-29T13:01:49 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:01:50 prefetch.3.0.10: 14) Downloading 'SRR17960506'...
+2025-09-29T13:01:50 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:01:50 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:04:11 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:04:22 prefetch.3.0.10:  'SRR17960506' is valid
+2025-09-29T13:04:22 prefetch.3.0.10: 14) 'SRR17960506' was downloaded successfully
+2025-09-29T13:04:22 prefetch.3.0.10: 'SRR17960506' has 0 unresolved dependencies
+
+2025-09-29T13:04:23 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:04:23 prefetch.3.0.10: 15) Downloading 'SRR17960507'...
+2025-09-29T13:04:23 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:04:23 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:06:59 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:07:11 prefetch.3.0.10:  'SRR17960507' is valid
+2025-09-29T13:07:11 prefetch.3.0.10: 15) 'SRR17960507' was downloaded successfully
+2025-09-29T13:07:11 prefetch.3.0.10: 'SRR17960507' has 0 unresolved dependencies
+
+2025-09-29T13:07:11 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:07:11 prefetch.3.0.10: 16) Downloading 'SRR17960508'...
+2025-09-29T13:07:12 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:07:12 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:09:25 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:09:34 prefetch.3.0.10:  'SRR17960508' is valid
+2025-09-29T13:09:34 prefetch.3.0.10: 16) 'SRR17960508' was downloaded successfully
+2025-09-29T13:09:34 prefetch.3.0.10: 'SRR17960508' has 0 unresolved dependencies
+
+2025-09-29T13:09:35 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:09:35 prefetch.3.0.10: 17) Downloading 'SRR17960509'...
+2025-09-29T13:09:35 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:09:35 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:12:31 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:12:43 prefetch.3.0.10:  'SRR17960509' is valid
+2025-09-29T13:12:43 prefetch.3.0.10: 17) 'SRR17960509' was downloaded successfully
+2025-09-29T13:12:43 prefetch.3.0.10: 'SRR17960509' has 0 unresolved dependencies
+
+2025-09-29T13:12:44 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:12:44 prefetch.3.0.10: 18) Downloading 'SRR17960510'...
+2025-09-29T13:12:44 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:12:44 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:15:15 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:15:26 prefetch.3.0.10:  'SRR17960510' is valid
+2025-09-29T13:15:26 prefetch.3.0.10: 18) 'SRR17960510' was downloaded successfully
+2025-09-29T13:15:26 prefetch.3.0.10: 'SRR17960510' has 0 unresolved dependencies
+
+2025-09-29T13:15:27 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:15:27 prefetch.3.0.10: 19) Downloading 'SRR17960511'...
+2025-09-29T13:15:27 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:15:27 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:18:17 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:18:29 prefetch.3.0.10:  'SRR17960511' is valid
+2025-09-29T13:18:29 prefetch.3.0.10: 19) 'SRR17960511' was downloaded successfully
+2025-09-29T13:18:29 prefetch.3.0.10: 'SRR17960511' has 0 unresolved dependencies
+
+2025-09-29T13:18:30 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-09-29T13:18:30 prefetch.3.0.10: 20) Downloading 'SRR17960512'...
+2025-09-29T13:18:30 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-09-29T13:18:30 prefetch.3.0.10:  Downloading via HTTPS...
+2025-09-29T13:21:09 prefetch.3.0.10:  HTTPS download succeed
+2025-09-29T13:21:19 prefetch.3.0.10:  'SRR17960512' is valid
+2025-09-29T13:21:19 prefetch.3.0.10: 20) 'SRR17960512' was downloaded successfully
+2025-09-29T13:21:19 prefetch.3.0.10: 'SRR17960512' has 0 unresolved dependencies
+
+Download of some files was skipped because they are too large
+You can change size download limit by setting
+--min-size and --max-size command line arguments
+[GSE196420] fasterq-dump → FASTQ
+WARNING: /home/chu25/data/rbl/sra/SRR17960480.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960481.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960482.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960483.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960497.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960498.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960499.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960500.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960501.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960502.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960503.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960504.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960505.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960506.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960507.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960508.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960509.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960510.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960511.sra not found
+WARNING: /home/chu25/data/rbl/sra/SRR17960512.sra not found
+[GSE196420] compress FASTQs

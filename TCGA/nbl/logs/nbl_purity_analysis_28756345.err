@@ -1,0 +1,8 @@
+[INFO] Log file closed: /home/chu25/data/nbl/results/tumour_purity_results/nbl_purity_pipeline_20260216_142703.log
+Warning messages:
+1: In geom_col(position = position_dodge(width = 0.8), width = 0.7,  :
+  Ignoring unknown parameters: `size`
+2: The `size` argument of `element_rect()` is deprecated as of ggplot2 3.4.0.
+ℹ Please use the `linewidth` argument instead. 
+3: In grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y,  :
+  for '≥ 0.7' in 'mbcsToSbcs': >= substituted for ≥ (U+2265)
