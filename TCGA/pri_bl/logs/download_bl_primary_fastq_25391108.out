@@ -1,0 +1,128 @@
+=== [frodo] Starting download BL primary FASTQ job at Thu Dec  4 20:34:40 CET 2025 ===
+[INFO] Using conda env: sra3
+[INFO] Output directory: /home/chu25/data/pri_bl/GSE199413/fastq
+[INFO] which prefetch: /home/chu25/miniconda3/envs/sra3/bin/prefetch
+[INFO] which fasterq-dump: /home/chu25/miniconda3/envs/sra3/bin/fasterq-dump
+
+prefetch : 3.0.10
+
+
+fasterq-dump : 3.0.10
+
+[INFO] Using pigz for compression
+============================================================
+[INFO] Downloading and converting SRR18482594 ...
+============================================================
+
+2025-12-04T19:34:48 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T19:34:49 prefetch.3.0.10: 1) 'SRR18482594' is found locally
+2025-12-04T19:34:49 prefetch.3.0.10: 'SRR18482594' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482594
+[INFO] FASTQ conversion complete for SRR18482594
+[INFO] Compressing SRR18482594_1.fastq and SRR18482594_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482595 ...
+============================================================
+
+2025-12-04T19:44:06 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T19:44:06 prefetch.3.0.10: 1) Downloading 'SRR18482595'...
+2025-12-04T19:44:07 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T19:44:07 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T19:47:23 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T19:47:36 prefetch.3.0.10:  'SRR18482595' is valid
+2025-12-04T19:47:36 prefetch.3.0.10: 1) 'SRR18482595' was downloaded successfully
+2025-12-04T19:47:36 prefetch.3.0.10: 'SRR18482595' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482595
+[INFO] FASTQ conversion complete for SRR18482595
+[INFO] Compressing SRR18482595_1.fastq and SRR18482595_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482596 ...
+============================================================
+
+2025-12-04T19:55:03 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T19:55:04 prefetch.3.0.10: 1) Downloading 'SRR18482596'...
+2025-12-04T19:55:04 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T19:55:04 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T19:58:14 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T19:58:27 prefetch.3.0.10:  'SRR18482596' is valid
+2025-12-04T19:58:27 prefetch.3.0.10: 1) 'SRR18482596' was downloaded successfully
+2025-12-04T19:58:27 prefetch.3.0.10: 'SRR18482596' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482596
+[INFO] FASTQ conversion complete for SRR18482596
+[INFO] Compressing SRR18482596_1.fastq and SRR18482596_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482597 ...
+============================================================
+
+2025-12-04T20:05:46 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T20:05:46 prefetch.3.0.10: 1) Downloading 'SRR18482597'...
+2025-12-04T20:05:46 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T20:05:46 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T20:09:33 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T20:09:46 prefetch.3.0.10:  'SRR18482597' is valid
+2025-12-04T20:09:46 prefetch.3.0.10: 1) 'SRR18482597' was downloaded successfully
+2025-12-04T20:09:46 prefetch.3.0.10: 'SRR18482597' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482597
+[INFO] FASTQ conversion complete for SRR18482597
+[INFO] Compressing SRR18482597_1.fastq and SRR18482597_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482598 ...
+============================================================
+
+2025-12-04T20:17:43 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T20:17:43 prefetch.3.0.10: 1) Downloading 'SRR18482598'...
+2025-12-04T20:17:43 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T20:17:43 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T20:26:53 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T20:27:06 prefetch.3.0.10:  'SRR18482598' is valid
+2025-12-04T20:27:06 prefetch.3.0.10: 1) 'SRR18482598' was downloaded successfully
+2025-12-04T20:27:06 prefetch.3.0.10: 'SRR18482598' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482598
+[INFO] FASTQ conversion complete for SRR18482598
+[INFO] Compressing SRR18482598_1.fastq and SRR18482598_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482599 ...
+============================================================
+
+2025-12-04T20:34:43 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T20:34:44 prefetch.3.0.10: 1) Downloading 'SRR18482599'...
+2025-12-04T20:34:44 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T20:34:44 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T20:40:52 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T20:41:07 prefetch.3.0.10:  'SRR18482599' is valid
+2025-12-04T20:41:07 prefetch.3.0.10: 1) 'SRR18482599' was downloaded successfully
+2025-12-04T20:41:07 prefetch.3.0.10: 'SRR18482599' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482599
+[INFO] FASTQ conversion complete for SRR18482599
+[INFO] Compressing SRR18482599_1.fastq and SRR18482599_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482600 ...
+============================================================
+
+2025-12-04T20:49:31 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T20:49:31 prefetch.3.0.10: 1) Downloading 'SRR18482600'...
+2025-12-04T20:49:31 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T20:49:31 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T20:54:16 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T20:54:31 prefetch.3.0.10:  'SRR18482600' is valid
+2025-12-04T20:54:31 prefetch.3.0.10: 1) 'SRR18482600' was downloaded successfully
+2025-12-04T20:54:31 prefetch.3.0.10: 'SRR18482600' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482600
+[INFO] FASTQ conversion complete for SRR18482600
+[INFO] Compressing SRR18482600_1.fastq and SRR18482600_2.fastq ...
+============================================================
+[INFO] Downloading and converting SRR18482601 ...
+============================================================
+
+2025-12-04T21:02:13 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-12-04T21:02:14 prefetch.3.0.10: 1) Downloading 'SRR18482601'...
+2025-12-04T21:02:14 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-12-04T21:02:14 prefetch.3.0.10:  Downloading via HTTPS...
+2025-12-04T21:10:49 prefetch.3.0.10:  HTTPS download succeed
+2025-12-04T21:11:07 prefetch.3.0.10:  'SRR18482601' is valid
+2025-12-04T21:11:07 prefetch.3.0.10: 1) 'SRR18482601' was downloaded successfully
+2025-12-04T21:11:07 prefetch.3.0.10: 'SRR18482601' has 0 unresolved dependencies
+[INFO] prefetch complete for SRR18482601
+[INFO] FASTQ conversion complete for SRR18482601
+[INFO] Compressing SRR18482601_1.fastq and SRR18482601_2.fastq ...
+=== Finished BL primary FASTQ downloads at Thu Dec  4 22:20:32 CET 2025 ===

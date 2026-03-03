@@ -1,0 +1,6 @@
+[1] Loading SummarizedExperiment ...
+[2] 1085 TCGA-BRCA samples retained.
+[3] Using PAM50 column: 'paper_BRCA_Subtype_PAM50'
+[4] 966 samples have a PAM50 label (89.0% of BRCA).
+[5] CSV written to:
+   /home/chu25/data/tcga/brca_processed/TCGA_BRCA_project_subtype.csv

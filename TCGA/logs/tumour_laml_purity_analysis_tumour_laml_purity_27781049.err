@@ -1,0 +1,40 @@
+[INFO] Starting tidyestimate purity analysis pipeline...
+[INFO] Subsetting to TCGA-LAML using colData$project_id: kept 151 / 11499 samples.
+[INFO] Input expression matrix: 60660 genes × 151 samples
+[INFO] All sample IDs are unique.
+[INFO] Mapping Ensembl IDs to HGNC symbols using GTF: /home/chu25/data/GTF/Homo_sapiens.GRCh38.107.gtf
+[INFO] Successfully mapped 60466 / 60660 Ensembl IDs (99.7%).
+[INFO] Filtering to ESTIMATE signature genes...
+[INFO] Kept 10349 / 10391 ESTIMATE signature genes
+[INFO] Computing ESTIMATE scores...
+Number of stromal_signature genes in data: 141 (out of 141)
+
+Number of immune_signature genes in data: 133 (out of 141)
+
+[INFO] Derived tumourPurity from ESTIMATEScore.
+[INFO] All required ESTIMATE columns are present.
+[INFO] Final scores: 151 samples × 4 metrics
+[INFO] ESTIMATE scores saved to: /home/chu25/TCGA/all_tcga_count_data/tumour_purity/results/TCGA_LAML/TCGA-LAML/TCGA-LAML_tidyestimate_scores.csv
+[INFO] Updated colData with tumourPurity (151/151 samples). Saved to: /home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_update_TCGA-LAML.rds
+[INFO] Applying tumour purity filtering (threshold >= 0.7)...
+[INFO] tumour purity summary:
+[INFO] Filtering summary:
+  Total samples: 151
+  NA purity: 0
+  Low purity (< 0.70): 84
+  Kept (>= 0.70): 67 (44.4%)
+[INFO] Filtered SummarizedExperiment saved to: /home/chu25/data/tcga/ALL_TCGA_STAR_Counts_SummarizedExperiment_filtered_TCGA-LAML.rds
+[INFO] Filtered expression matrix: 60660 genes × 67 samples
+[RETENTION] TCGA-LAML: 151 -> 67 (44.4% kept)
+[SUCCESS] Retention plot saved: /home/chu25/TCGA/all_tcga_count_data/tumour_purity/results/TCGA_LAML/TCGA-LAML/TCGA-LAML_retention_before_after.pdf
+[INFO] Generating diagnostic correlation plots...
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+[INFO] Diagnostic plots saved to: /home/chu25/TCGA/all_tcga_count_data/tumour_purity/results/TCGA_LAML/TCGA-LAML/TCGA-LAML_purity_diagnostics.pdf
+[SUCCESS] tidyestimate purity analysis completed successfully.
+[INFO] Filtered dataset ready: 60660 genes × 67 samples
+Warning messages:
+1: In grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y,  :
+  for 'Purity ≥ 0.7 | 151 → 67 (44.4% kept)' in 'mbcsToSbcs': >= substituted for ≥ (U+2265)
+2: In grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y,  :
+  for 'Purity ≥ 0.7 | 151 → 67 (44.4% kept)' in 'mbcsToSbcs': -> substituted for → (U+2192)

@@ -1,0 +1,91 @@
+Starting DSMZ BCC HC analysis...
+[SRC]  brca_io.R 
+[OK ]  brca_io.R 
+[SRC]  tcga_base_functions.R 
+[OK ]  tcga_base_functions.R 
+[SRC]  dsmz_base_functions.R 
+[OK ]  dsmz_base_functions.R 
+[SRC]  tcga_dsmz_base_functions.R 
+[OK ]  tcga_dsmz_base_functions.R 
+[SRC]  normalization.R 
+[OK ]  normalization.R 
+[SRC]  visualize.R 
+[OK ]  visualize.R 
+[SRC]  helpers.R 
+[OK ]  helpers.R 
+[SRC]  PAM50_feature_subset.R 
+[OK ]  PAM50_feature_subset.R 
+[SRC]  clustering_hierarchical.R 
+[OK ]  clustering_hierarchical.R 
+[INFO] VST matrix: 60616 29 
+
+[1/2] Gene-level Dynamic Clustering clustering...
+[INFO] [OPTIMAL K] Testing k = 2 to 10
+[INFO]   k =  2 → mean silhouette = 0.205 | sizes: 33, 17
+[INFO]   k =  3 → mean silhouette = 0.218 | sizes: 31, 17, 2
+[INFO]   k =  4 → mean silhouette = 0.226 | sizes: 28, 17, 3, 2
+[INFO]   k =  5 → mean silhouette = 0.161 | sizes: 21, 17, 7, 3, 2
+[INFO]   k =  6 → mean silhouette = 0.165 | sizes: 21, 17, 7, 3, 1, 1
+[INFO]   k =  7 → mean silhouette = 0.156 | sizes: 18, 17, 7, 3, 3, 1, 1
+[INFO]   k =  8 → mean silhouette = 0.136 | sizes: 18, 10, 7, 3, 7, 3, 1, 1
+[INFO]   k =  9 → mean silhouette = 0.141 | sizes: 18, 10, 7, 3, 7, 2, 1, 1, 1
+[INFO]   k = 10 → mean silhouette = 0.148 | sizes: 18, 10, 7, 3, 6, 1, 2, 1, 1, 1
+[INFO] [OPTIMAL K] Best k = 4 (silhouette = 0.226)
+[INFO] [HC] Using optimal k = 4
+[INFO] [HC] Optimal clusters saved: /home/chu25/dsmz/old_scripts/brca_analysis/brca/unsupervised/results/DSMZ-BRCA_PAM50_genes_clusters_optimal_k=4.csv
+[INFO] [HC] Running dynamic tree cut...
+[INFO] Running cutreeHybrid (deepSplit=2, pamStage=TRUE, minClusterSize=5)
+ ..cutHeight not given, setting it to 38.8  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+[INFO] [HC] Dynamic cut: k = 6 | sizes: 2, 20, 11, 7, 5, 5
+
+[1/2] Gene-level optimal clustering...
+[INFO] [OPTIMAL K] Testing k = 2 to 5
+[INFO]   k =  2 → mean silhouette = 0.205 | sizes: 33, 17
+[INFO]   k =  3 → mean silhouette = 0.218 | sizes: 31, 17, 2
+[INFO]   k =  4 → mean silhouette = 0.226 | sizes: 28, 17, 3, 2
+[INFO]   k =  5 → mean silhouette = 0.161 | sizes: 21, 17, 7, 3, 2
+[INFO] [OPTIMAL K] Best k = 4 (silhouette = 0.226)
+[INFO] [HC] Using optimal k = 4
+[INFO] [HC] Optimal clusters saved: /home/chu25/dsmz/old_scripts/brca_analysis/brca/unsupervised/results/DSMZ-BRCA_PAM50_genes_clusters_optimal_k=4.csv
+[INFO] [HC] Running dynamic tree cut...
+[INFO] Running cutreeHybrid (deepSplit=2, pamStage=TRUE, minClusterSize=5)
+ ..cutHeight not given, setting it to 38.8  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+[INFO] [HC] Dynamic cut: k = 6 | sizes: 2, 20, 11, 7, 5, 5
+
+[1/2] Gene-level clustering (forced k=4)...
+
+[2/2] Patient-level clustering...
+[INFO] [OPTIMAL K] Testing k = 2 to 10
+[INFO]   k =  2 → mean silhouette = 0.238 | sizes: 15, 14
+[INFO]   k =  3 → mean silhouette = 0.258 | sizes: 8, 14, 7
+[INFO]   k =  4 → mean silhouette = 0.256 | sizes: 5, 14, 7, 3
+[INFO]   k =  5 → mean silhouette = 0.202 | sizes: 5, 6, 7, 8, 3
+[INFO]   k =  6 → mean silhouette = 0.185 | sizes: 3, 6, 2, 7, 8, 3
+[INFO]   k =  7 → mean silhouette = 0.201 | sizes: 3, 4, 2, 7, 8, 3, 2
+[INFO]   k =  8 → mean silhouette = 0.199 | sizes: 3, 4, 1, 7, 1, 8, 3, 2
+[INFO]   k =  9 → mean silhouette = 0.201 | sizes: 3, 4, 1, 7, 1, 8, 1, 2, 2
+[INFO]   k = 10 → mean silhouette = 0.183 | sizes: 3, 4, 1, 6, 1, 1, 8, 1, 2, 2
+[INFO] [OPTIMAL K] Best k = 3 (silhouette = 0.258)
+[INFO] [HC] Using optimal k = 3
+[INFO] [HC] Optimal clusters saved: /home/chu25/dsmz/old_scripts/brca_analysis/brca/unsupervised/results/DSMZ-BRCA_PAM50_patients_clusters_optimal_k=3.csv
+[INFO] [HC] Running dynamic tree cut...
+[INFO] Running cutreeHybrid (deepSplit=2, pamStage=TRUE, minClusterSize=5)
+ ..cutHeight not given, setting it to 26.5  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+[INFO] [HC] Dynamic cut: k = 3 | sizes: 15, 8, 6
+[INFO] [OPTIMAL K] Testing k = 2 to 6
+[INFO]   k =  2 → mean silhouette = 0.238 | sizes: 15, 14
+[INFO]   k =  3 → mean silhouette = 0.258 | sizes: 8, 14, 7
+[INFO]   k =  4 → mean silhouette = 0.256 | sizes: 5, 14, 7, 3
+[INFO]   k =  5 → mean silhouette = 0.202 | sizes: 5, 6, 7, 8, 3
+[INFO]   k =  6 → mean silhouette = 0.185 | sizes: 3, 6, 2, 7, 8, 3
+[INFO] [OPTIMAL K] Best k = 3 (silhouette = 0.258)
+[INFO] [HC] Using optimal k = 3
+[INFO] [HC] Optimal clusters saved: /home/chu25/dsmz/old_scripts/brca_analysis/brca/unsupervised/results/DSMZ-BRCA_PAM50_patients_clusters_optimal_k=3.csv
+[INFO] [HC] Running dynamic tree cut...
+[INFO] Running cutreeHybrid (deepSplit=2, pamStage=TRUE, minClusterSize=5)
+ ..cutHeight not given, setting it to 26.5  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+[INFO] [HC] Dynamic cut: k = 3 | sizes: 15, 8, 6

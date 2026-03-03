@@ -1,0 +1,964 @@
+== Thu Oct  2 01:03:56 CEST 2025 :: START ==
+Host: frodo.hpc.dsmz.de
+[INFO] LIST=/home/chu25/data/nbl/GSE189367/SRP347311.txt  TOTAL=64  OUT=/home/chu25/data/nbl/GSE189367/fastq  SRA=/home/chu25/data/nbl/GSE189367/sra  TMP=/home/chu25/data/nbl/GSE189367/tmp
+[SEQ] (1/64) SRR17010968
+---- Thu Oct  2 01:04:32 CEST 2025 :: START SRR17010968 ----
+[prefetch] SRR17010968 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-01T23:04:35 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-01T23:04:35 prefetch.3.0.10: 1) Downloading 'SRR17010968'...
+2025-10-01T23:04:35 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-01T23:04:35 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-01T23:07:20 prefetch.3.0.10:  HTTPS download succeed
+2025-10-01T23:07:56 prefetch.3.0.10:  'SRR17010968' is valid
+2025-10-01T23:07:56 prefetch.3.0.10: 1) 'SRR17010968' was downloaded successfully
+2025-10-01T23:07:56 prefetch.3.0.10: 'SRR17010968' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010968 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010968_*.fastq
+---- Thu Oct  2 01:13:56 CEST 2025 :: DONE  SRR17010968 ----
+[SEQ] (2/64) SRR17010969
+---- Thu Oct  2 01:13:56 CEST 2025 :: START SRR17010969 ----
+[prefetch] SRR17010969 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-01T23:13:58 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-01T23:13:59 prefetch.3.0.10: 1) Downloading 'SRR17010969'...
+2025-10-01T23:13:59 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-01T23:13:59 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-01T23:16:50 prefetch.3.0.10:  HTTPS download succeed
+2025-10-01T23:17:29 prefetch.3.0.10:  'SRR17010969' is valid
+2025-10-01T23:17:29 prefetch.3.0.10: 1) 'SRR17010969' was downloaded successfully
+2025-10-01T23:17:29 prefetch.3.0.10: 'SRR17010969' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010969 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010969_*.fastq
+---- Thu Oct  2 01:23:34 CEST 2025 :: DONE  SRR17010969 ----
+[SEQ] (3/64) SRR17010970
+---- Thu Oct  2 01:23:34 CEST 2025 :: START SRR17010970 ----
+[prefetch] SRR17010970 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-01T23:23:38 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-01T23:23:38 prefetch.3.0.10: 1) Downloading 'SRR17010970'...
+2025-10-01T23:23:38 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-01T23:23:38 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-01T23:26:59 prefetch.3.0.10:  HTTPS download succeed
+2025-10-01T23:27:53 prefetch.3.0.10:  'SRR17010970' is valid
+2025-10-01T23:27:53 prefetch.3.0.10: 1) 'SRR17010970' was downloaded successfully
+2025-10-01T23:27:53 prefetch.3.0.10: 'SRR17010970' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010970 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010970_*.fastq
+---- Thu Oct  2 01:36:46 CEST 2025 :: DONE  SRR17010970 ----
+[SEQ] (4/64) SRR17010971
+---- Thu Oct  2 01:36:46 CEST 2025 :: START SRR17010971 ----
+[prefetch] SRR17010971 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-01T23:36:49 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-01T23:36:49 prefetch.3.0.10: 1) Downloading 'SRR17010971'...
+2025-10-01T23:36:49 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-01T23:36:49 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-01T23:41:36 prefetch.3.0.10:  HTTPS download succeed
+2025-10-01T23:42:38 prefetch.3.0.10:  'SRR17010971' is valid
+2025-10-01T23:42:38 prefetch.3.0.10: 1) 'SRR17010971' was downloaded successfully
+2025-10-01T23:42:38 prefetch.3.0.10: 'SRR17010971' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010971 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010971_*.fastq
+---- Thu Oct  2 01:53:23 CEST 2025 :: DONE  SRR17010971 ----
+[SEQ] (5/64) SRR17010972
+---- Thu Oct  2 01:53:23 CEST 2025 :: START SRR17010972 ----
+[prefetch] SRR17010972 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-01T23:53:26 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-01T23:53:27 prefetch.3.0.10: 1) Downloading 'SRR17010972'...
+2025-10-01T23:53:27 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-01T23:53:27 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-01T23:58:10 prefetch.3.0.10:  HTTPS download succeed
+2025-10-01T23:59:35 prefetch.3.0.10:  'SRR17010972' is valid
+2025-10-01T23:59:35 prefetch.3.0.10: 1) 'SRR17010972' was downloaded successfully
+2025-10-01T23:59:36 prefetch.3.0.10: 'SRR17010972' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010972 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010972_*.fastq
+---- Thu Oct  2 02:10:30 CEST 2025 :: DONE  SRR17010972 ----
+[SEQ] (6/64) SRR17010973
+---- Thu Oct  2 02:10:30 CEST 2025 :: START SRR17010973 ----
+[prefetch] SRR17010973 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T00:10:33 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T00:10:34 prefetch.3.0.10: 1) Downloading 'SRR17010973'...
+2025-10-02T00:10:34 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T00:10:34 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T00:17:17 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T00:18:47 prefetch.3.0.10:  'SRR17010973' is valid
+2025-10-02T00:18:47 prefetch.3.0.10: 1) 'SRR17010973' was downloaded successfully
+2025-10-02T00:18:47 prefetch.3.0.10: 'SRR17010973' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010973 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010973_*.fastq
+---- Thu Oct  2 02:32:49 CEST 2025 :: DONE  SRR17010973 ----
+[SEQ] (7/64) SRR17010974
+---- Thu Oct  2 02:32:49 CEST 2025 :: START SRR17010974 ----
+[prefetch] SRR17010974 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T00:32:51 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T00:32:51 prefetch.3.0.10: 1) Downloading 'SRR17010974'...
+2025-10-02T00:32:51 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T00:32:51 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T00:35:59 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T00:36:49 prefetch.3.0.10:  'SRR17010974' is valid
+2025-10-02T00:36:49 prefetch.3.0.10: 1) 'SRR17010974' was downloaded successfully
+2025-10-02T00:36:49 prefetch.3.0.10: 'SRR17010974' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010974 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010974_*.fastq
+---- Thu Oct  2 02:44:40 CEST 2025 :: DONE  SRR17010974 ----
+[SEQ] (8/64) SRR17010975
+---- Thu Oct  2 02:44:40 CEST 2025 :: START SRR17010975 ----
+[prefetch] SRR17010975 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T00:44:44 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T00:44:44 prefetch.3.0.10: 1) Downloading 'SRR17010975'...
+2025-10-02T00:44:44 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T00:44:44 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T00:48:16 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T00:49:01 prefetch.3.0.10:  'SRR17010975' is valid
+2025-10-02T00:49:01 prefetch.3.0.10: 1) 'SRR17010975' was downloaded successfully
+2025-10-02T00:49:02 prefetch.3.0.10: 'SRR17010975' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010975 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010975_*.fastq
+---- Thu Oct  2 02:56:23 CEST 2025 :: DONE  SRR17010975 ----
+[SEQ] (9/64) SRR17010976
+---- Thu Oct  2 02:56:24 CEST 2025 :: START SRR17010976 ----
+[prefetch] SRR17010976 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T00:56:26 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T00:56:27 prefetch.3.0.10: 1) Downloading 'SRR17010976'...
+2025-10-02T00:56:27 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T00:56:27 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T01:00:03 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T01:01:02 prefetch.3.0.10:  'SRR17010976' is valid
+2025-10-02T01:01:02 prefetch.3.0.10: 1) 'SRR17010976' was downloaded successfully
+2025-10-02T01:01:03 prefetch.3.0.10: 'SRR17010976' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010976 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010976_*.fastq
+---- Thu Oct  2 03:10:32 CEST 2025 :: DONE  SRR17010976 ----
+[SEQ] (10/64) SRR17010977
+---- Thu Oct  2 03:10:32 CEST 2025 :: START SRR17010977 ----
+[prefetch] SRR17010977 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T01:10:35 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T01:10:36 prefetch.3.0.10: 1) Downloading 'SRR17010977'...
+2025-10-02T01:10:36 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T01:10:36 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T01:13:20 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T01:13:57 prefetch.3.0.10:  'SRR17010977' is valid
+2025-10-02T01:13:57 prefetch.3.0.10: 1) 'SRR17010977' was downloaded successfully
+2025-10-02T01:13:58 prefetch.3.0.10: 'SRR17010977' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010977 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010977_*.fastq
+---- Thu Oct  2 03:20:08 CEST 2025 :: DONE  SRR17010977 ----
+[SEQ] (11/64) SRR17010978
+---- Thu Oct  2 03:20:08 CEST 2025 :: START SRR17010978 ----
+[prefetch] SRR17010978 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T01:20:10 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T01:20:11 prefetch.3.0.10: 1) Downloading 'SRR17010978'...
+2025-10-02T01:20:11 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T01:20:11 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T01:22:28 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T01:23:00 prefetch.3.0.10:  'SRR17010978' is valid
+2025-10-02T01:23:00 prefetch.3.0.10: 1) 'SRR17010978' was downloaded successfully
+2025-10-02T01:23:00 prefetch.3.0.10: 'SRR17010978' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010978 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010978_*.fastq
+---- Thu Oct  2 03:28:45 CEST 2025 :: DONE  SRR17010978 ----
+[SEQ] (12/64) SRR17010979
+---- Thu Oct  2 03:28:45 CEST 2025 :: START SRR17010979 ----
+[prefetch] SRR17010979 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T01:28:47 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T01:28:47 prefetch.3.0.10: 1) Downloading 'SRR17010979'...
+2025-10-02T01:28:47 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T01:28:47 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T01:36:06 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T01:37:44 prefetch.3.0.10:  'SRR17010979' is valid
+2025-10-02T01:37:44 prefetch.3.0.10: 1) 'SRR17010979' was downloaded successfully
+2025-10-02T01:37:45 prefetch.3.0.10: 'SRR17010979' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010979 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010979_*.fastq
+---- Thu Oct  2 03:53:54 CEST 2025 :: DONE  SRR17010979 ----
+[SEQ] (13/64) SRR17010980
+---- Thu Oct  2 03:53:54 CEST 2025 :: START SRR17010980 ----
+[prefetch] SRR17010980 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T01:53:57 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T01:53:58 prefetch.3.0.10: 1) Downloading 'SRR17010980'...
+2025-10-02T01:53:58 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T01:53:58 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T01:56:20 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T01:56:55 prefetch.3.0.10:  'SRR17010980' is valid
+2025-10-02T01:56:55 prefetch.3.0.10: 1) 'SRR17010980' was downloaded successfully
+2025-10-02T01:56:55 prefetch.3.0.10: 'SRR17010980' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010980 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010980_*.fastq
+---- Thu Oct  2 04:02:48 CEST 2025 :: DONE  SRR17010980 ----
+[SEQ] (14/64) SRR17010981
+---- Thu Oct  2 04:02:48 CEST 2025 :: START SRR17010981 ----
+[prefetch] SRR17010981 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T02:02:51 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T02:02:51 prefetch.3.0.10: 1) Downloading 'SRR17010981'...
+2025-10-02T02:02:51 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T02:02:51 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T02:06:00 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T02:06:29 prefetch.3.0.10:  'SRR17010981' is valid
+2025-10-02T02:06:29 prefetch.3.0.10: 1) 'SRR17010981' was downloaded successfully
+2025-10-02T02:06:29 prefetch.3.0.10: 'SRR17010981' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010981 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010981_*.fastq
+---- Thu Oct  2 04:12:49 CEST 2025 :: DONE  SRR17010981 ----
+[SEQ] (15/64) SRR17010982
+---- Thu Oct  2 04:12:49 CEST 2025 :: START SRR17010982 ----
+[prefetch] SRR17010982 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T02:12:52 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T02:12:52 prefetch.3.0.10: 1) Downloading 'SRR17010982'...
+2025-10-02T02:12:52 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T02:12:52 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T02:15:45 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T02:16:23 prefetch.3.0.10:  'SRR17010982' is valid
+2025-10-02T02:16:23 prefetch.3.0.10: 1) 'SRR17010982' was downloaded successfully
+2025-10-02T02:16:23 prefetch.3.0.10: 'SRR17010982' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010982 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010982_*.fastq
+---- Thu Oct  2 04:22:38 CEST 2025 :: DONE  SRR17010982 ----
+[SEQ] (16/64) SRR17010983
+---- Thu Oct  2 04:22:38 CEST 2025 :: START SRR17010983 ----
+[prefetch] SRR17010983 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T02:22:40 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T02:22:41 prefetch.3.0.10: 1) Downloading 'SRR17010983'...
+2025-10-02T02:22:41 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T02:22:41 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T02:27:25 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T02:28:23 prefetch.3.0.10:  'SRR17010983' is valid
+2025-10-02T02:28:23 prefetch.3.0.10: 1) 'SRR17010983' was downloaded successfully
+2025-10-02T02:28:24 prefetch.3.0.10: 'SRR17010983' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010983 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010983_*.fastq
+---- Thu Oct  2 04:38:35 CEST 2025 :: DONE  SRR17010983 ----
+[SEQ] (17/64) SRR17010984
+---- Thu Oct  2 04:38:35 CEST 2025 :: START SRR17010984 ----
+[prefetch] SRR17010984 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T02:38:37 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T02:38:38 prefetch.3.0.10: 1) Downloading 'SRR17010984'...
+2025-10-02T02:38:38 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T02:38:38 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T02:42:19 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T02:43:10 prefetch.3.0.10:  'SRR17010984' is valid
+2025-10-02T02:43:10 prefetch.3.0.10: 1) 'SRR17010984' was downloaded successfully
+2025-10-02T02:43:10 prefetch.3.0.10: 'SRR17010984' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010984 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010984_*.fastq
+---- Thu Oct  2 04:51:47 CEST 2025 :: DONE  SRR17010984 ----
+[SEQ] (18/64) SRR17010985
+---- Thu Oct  2 04:51:47 CEST 2025 :: START SRR17010985 ----
+[prefetch] SRR17010985 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T02:51:50 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T02:51:51 prefetch.3.0.10: 1) Downloading 'SRR17010985'...
+2025-10-02T02:51:51 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T02:51:51 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T02:57:15 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T02:58:20 prefetch.3.0.10:  'SRR17010985' is valid
+2025-10-02T02:58:20 prefetch.3.0.10: 1) 'SRR17010985' was downloaded successfully
+2025-10-02T02:58:20 prefetch.3.0.10: 'SRR17010985' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010985 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010985_*.fastq
+---- Thu Oct  2 05:09:04 CEST 2025 :: DONE  SRR17010985 ----
+[SEQ] (19/64) SRR17010986
+---- Thu Oct  2 05:09:04 CEST 2025 :: START SRR17010986 ----
+[prefetch] SRR17010986 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T03:09:08 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T03:09:08 prefetch.3.0.10: 1) Downloading 'SRR17010986'...
+2025-10-02T03:09:08 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T03:09:08 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T03:12:15 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T03:12:54 prefetch.3.0.10:  'SRR17010986' is valid
+2025-10-02T03:12:54 prefetch.3.0.10: 1) 'SRR17010986' was downloaded successfully
+2025-10-02T03:12:54 prefetch.3.0.10: 'SRR17010986' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010986 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010986_*.fastq
+---- Thu Oct  2 05:19:36 CEST 2025 :: DONE  SRR17010986 ----
+[SEQ] (20/64) SRR17010987
+---- Thu Oct  2 05:19:36 CEST 2025 :: START SRR17010987 ----
+[prefetch] SRR17010987 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T03:19:39 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T03:19:39 prefetch.3.0.10: 1) Downloading 'SRR17010987'...
+2025-10-02T03:19:39 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T03:19:39 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T03:24:08 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T03:25:01 prefetch.3.0.10:  'SRR17010987' is valid
+2025-10-02T03:25:01 prefetch.3.0.10: 1) 'SRR17010987' was downloaded successfully
+2025-10-02T03:25:01 prefetch.3.0.10: 'SRR17010987' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010987 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010987_*.fastq
+---- Thu Oct  2 05:33:44 CEST 2025 :: DONE  SRR17010987 ----
+[SEQ] (21/64) SRR17010988
+---- Thu Oct  2 05:33:44 CEST 2025 :: START SRR17010988 ----
+[prefetch] SRR17010988 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T03:33:47 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T03:33:48 prefetch.3.0.10: 1) Downloading 'SRR17010988'...
+2025-10-02T03:33:48 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T03:33:48 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T03:38:16 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T03:39:09 prefetch.3.0.10:  'SRR17010988' is valid
+2025-10-02T03:39:09 prefetch.3.0.10: 1) 'SRR17010988' was downloaded successfully
+2025-10-02T03:39:09 prefetch.3.0.10: 'SRR17010988' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010988 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010988_*.fastq
+---- Thu Oct  2 05:48:04 CEST 2025 :: DONE  SRR17010988 ----
+[SEQ] (22/64) SRR17010989
+---- Thu Oct  2 05:48:04 CEST 2025 :: START SRR17010989 ----
+[prefetch] SRR17010989 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T03:48:07 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T03:48:07 prefetch.3.0.10: 1) Downloading 'SRR17010989'...
+2025-10-02T03:48:07 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T03:48:07 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T03:51:03 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T03:51:42 prefetch.3.0.10:  'SRR17010989' is valid
+2025-10-02T03:51:42 prefetch.3.0.10: 1) 'SRR17010989' was downloaded successfully
+2025-10-02T03:51:42 prefetch.3.0.10: 'SRR17010989' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010989 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010989_*.fastq
+---- Thu Oct  2 05:58:29 CEST 2025 :: DONE  SRR17010989 ----
+[SEQ] (23/64) SRR17010990
+---- Thu Oct  2 05:58:29 CEST 2025 :: START SRR17010990 ----
+[prefetch] SRR17010990 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T03:58:32 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T03:58:32 prefetch.3.0.10: 1) Downloading 'SRR17010990'...
+2025-10-02T03:58:32 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T03:58:32 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T04:15:05 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T04:16:29 prefetch.3.0.10:  'SRR17010990' is valid
+2025-10-02T04:16:29 prefetch.3.0.10: 1) 'SRR17010990' was downloaded successfully
+2025-10-02T04:16:29 prefetch.3.0.10: 'SRR17010990' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010990 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010990_*.fastq
+---- Thu Oct  2 06:30:28 CEST 2025 :: DONE  SRR17010990 ----
+[SEQ] (24/64) SRR17010991
+---- Thu Oct  2 06:30:28 CEST 2025 :: START SRR17010991 ----
+[prefetch] SRR17010991 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T04:30:32 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T04:30:33 prefetch.3.0.10: 1) Downloading 'SRR17010991'...
+2025-10-02T04:30:33 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T04:30:33 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T04:34:19 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T04:35:05 prefetch.3.0.10:  'SRR17010991' is valid
+2025-10-02T04:35:05 prefetch.3.0.10: 1) 'SRR17010991' was downloaded successfully
+2025-10-02T04:35:05 prefetch.3.0.10: 'SRR17010991' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010991 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010991_*.fastq
+---- Thu Oct  2 06:43:11 CEST 2025 :: DONE  SRR17010991 ----
+[SEQ] (25/64) SRR17010992
+---- Thu Oct  2 06:43:11 CEST 2025 :: START SRR17010992 ----
+[prefetch] SRR17010992 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T04:43:14 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T04:43:14 prefetch.3.0.10: 1) Downloading 'SRR17010992'...
+2025-10-02T04:43:14 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T04:43:14 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T04:50:54 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T04:52:33 prefetch.3.0.10:  'SRR17010992' is valid
+2025-10-02T04:52:33 prefetch.3.0.10: 1) 'SRR17010992' was downloaded successfully
+2025-10-02T04:52:33 prefetch.3.0.10: 'SRR17010992' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010992 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010992_*.fastq
+---- Thu Oct  2 07:08:54 CEST 2025 :: DONE  SRR17010992 ----
+[SEQ] (26/64) SRR17010993
+---- Thu Oct  2 07:08:54 CEST 2025 :: START SRR17010993 ----
+[prefetch] SRR17010993 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T05:08:57 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T05:08:58 prefetch.3.0.10: 1) Downloading 'SRR17010993'...
+2025-10-02T05:08:58 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T05:08:58 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T05:14:13 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T05:15:27 prefetch.3.0.10:  'SRR17010993' is valid
+2025-10-02T05:15:27 prefetch.3.0.10: 1) 'SRR17010993' was downloaded successfully
+2025-10-02T05:15:27 prefetch.3.0.10: 'SRR17010993' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010993 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010993_*.fastq
+---- Thu Oct  2 07:27:27 CEST 2025 :: DONE  SRR17010993 ----
+[SEQ] (27/64) SRR17010994
+---- Thu Oct  2 07:27:27 CEST 2025 :: START SRR17010994 ----
+[prefetch] SRR17010994 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T05:27:30 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T05:27:31 prefetch.3.0.10: 1) Downloading 'SRR17010994'...
+2025-10-02T05:27:31 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T05:27:31 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T05:38:59 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T05:40:37 prefetch.3.0.10:  'SRR17010994' is valid
+2025-10-02T05:40:37 prefetch.3.0.10: 1) 'SRR17010994' was downloaded successfully
+2025-10-02T05:40:37 prefetch.3.0.10: 'SRR17010994' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010994 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010994_*.fastq
+---- Thu Oct  2 07:56:42 CEST 2025 :: DONE  SRR17010994 ----
+[SEQ] (28/64) SRR17010995
+---- Thu Oct  2 07:56:42 CEST 2025 :: START SRR17010995 ----
+[prefetch] SRR17010995 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T05:56:46 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T05:56:46 prefetch.3.0.10: 1) Downloading 'SRR17010995'...
+2025-10-02T05:56:46 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T05:56:46 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T06:01:52 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T06:02:38 prefetch.3.0.10:  'SRR17010995' is valid
+2025-10-02T06:02:38 prefetch.3.0.10: 1) 'SRR17010995' was downloaded successfully
+2025-10-02T06:02:39 prefetch.3.0.10: 'SRR17010995' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010995 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010995_*.fastq
+---- Thu Oct  2 08:14:29 CEST 2025 :: DONE  SRR17010995 ----
+[SEQ] (29/64) SRR17010996
+---- Thu Oct  2 08:14:29 CEST 2025 :: START SRR17010996 ----
+[prefetch] SRR17010996 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T06:14:33 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T06:14:34 prefetch.3.0.10: 1) Downloading 'SRR17010996'...
+2025-10-02T06:14:34 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T06:14:34 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T06:20:43 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T06:22:53 prefetch.3.0.10:  'SRR17010996' is valid
+2025-10-02T06:22:53 prefetch.3.0.10: 1) 'SRR17010996' was downloaded successfully
+2025-10-02T06:22:53 prefetch.3.0.10: 'SRR17010996' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010996 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010996_*.fastq
+---- Thu Oct  2 08:37:07 CEST 2025 :: DONE  SRR17010996 ----
+[SEQ] (30/64) SRR17010997
+---- Thu Oct  2 08:37:07 CEST 2025 :: START SRR17010997 ----
+[prefetch] SRR17010997 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T06:37:11 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T06:37:11 prefetch.3.0.10: 1) Downloading 'SRR17010997'...
+2025-10-02T06:37:11 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T06:37:11 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T06:42:36 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T06:44:24 prefetch.3.0.10:  'SRR17010997' is valid
+2025-10-02T06:44:24 prefetch.3.0.10: 1) 'SRR17010997' was downloaded successfully
+2025-10-02T06:44:25 prefetch.3.0.10: 'SRR17010997' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010997 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010997_*.fastq
+---- Thu Oct  2 08:58:15 CEST 2025 :: DONE  SRR17010997 ----
+[SEQ] (31/64) SRR17010998
+---- Thu Oct  2 08:58:15 CEST 2025 :: START SRR17010998 ----
+[prefetch] SRR17010998 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T06:58:19 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T06:58:20 prefetch.3.0.10: 1) Downloading 'SRR17010998'...
+2025-10-02T06:58:20 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T06:58:20 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T07:02:14 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T07:02:54 prefetch.3.0.10:  'SRR17010998' is valid
+2025-10-02T07:02:54 prefetch.3.0.10: 1) 'SRR17010998' was downloaded successfully
+2025-10-02T07:02:54 prefetch.3.0.10: 'SRR17010998' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010998 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010998_*.fastq
+---- Thu Oct  2 09:11:52 CEST 2025 :: DONE  SRR17010998 ----
+[SEQ] (32/64) SRR17010999
+---- Thu Oct  2 09:11:52 CEST 2025 :: START SRR17010999 ----
+[prefetch] SRR17010999 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T07:11:55 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T07:11:56 prefetch.3.0.10: 1) Downloading 'SRR17010999'...
+2025-10-02T07:11:56 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T07:11:56 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T07:18:58 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T07:20:20 prefetch.3.0.10:  'SRR17010999' is valid
+2025-10-02T07:20:20 prefetch.3.0.10: 1) 'SRR17010999' was downloaded successfully
+2025-10-02T07:20:20 prefetch.3.0.10: 'SRR17010999' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17010999 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17010999_*.fastq
+---- Thu Oct  2 09:34:34 CEST 2025 :: DONE  SRR17010999 ----
+[SEQ] (33/64) SRR17011000
+---- Thu Oct  2 09:34:34 CEST 2025 :: START SRR17011000 ----
+[prefetch] SRR17011000 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T07:34:39 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T07:34:40 prefetch.3.0.10: 1) Downloading 'SRR17011000'...
+2025-10-02T07:34:40 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T07:34:40 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T07:41:00 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T07:42:03 prefetch.3.0.10:  'SRR17011000' is valid
+2025-10-02T07:42:03 prefetch.3.0.10: 1) 'SRR17011000' was downloaded successfully
+2025-10-02T07:42:03 prefetch.3.0.10: 'SRR17011000' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011000 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011000_*.fastq
+---- Thu Oct  2 09:57:10 CEST 2025 :: DONE  SRR17011000 ----
+[SEQ] (34/64) SRR17011001
+---- Thu Oct  2 09:57:10 CEST 2025 :: START SRR17011001 ----
+[prefetch] SRR17011001 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T07:57:14 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T07:57:14 prefetch.3.0.10: 1) Downloading 'SRR17011001'...
+2025-10-02T07:57:14 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T07:57:14 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T07:59:51 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T08:00:27 prefetch.3.0.10:  'SRR17011001' is valid
+2025-10-02T08:00:27 prefetch.3.0.10: 1) 'SRR17011001' was downloaded successfully
+2025-10-02T08:00:27 prefetch.3.0.10: 'SRR17011001' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011001 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011001_*.fastq
+---- Thu Oct  2 10:07:00 CEST 2025 :: DONE  SRR17011001 ----
+[SEQ] (35/64) SRR17011002
+---- Thu Oct  2 10:07:00 CEST 2025 :: START SRR17011002 ----
+[prefetch] SRR17011002 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T08:07:02 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T08:07:03 prefetch.3.0.10: 1) Downloading 'SRR17011002'...
+2025-10-02T08:07:03 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T08:07:03 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T08:10:05 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T08:10:45 prefetch.3.0.10:  'SRR17011002' is valid
+2025-10-02T08:10:45 prefetch.3.0.10: 1) 'SRR17011002' was downloaded successfully
+2025-10-02T08:10:45 prefetch.3.0.10: 'SRR17011002' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011002 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011002_*.fastq
+---- Thu Oct  2 10:17:55 CEST 2025 :: DONE  SRR17011002 ----
+[SEQ] (36/64) SRR17011003
+---- Thu Oct  2 10:17:55 CEST 2025 :: START SRR17011003 ----
+[prefetch] SRR17011003 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T08:17:58 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T08:17:59 prefetch.3.0.10: 1) Downloading 'SRR17011003'...
+2025-10-02T08:17:59 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T08:17:59 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T08:21:06 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T08:21:46 prefetch.3.0.10:  'SRR17011003' is valid
+2025-10-02T08:21:46 prefetch.3.0.10: 1) 'SRR17011003' was downloaded successfully
+2025-10-02T08:21:46 prefetch.3.0.10: 'SRR17011003' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011003 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011003_*.fastq
+---- Thu Oct  2 10:28:20 CEST 2025 :: DONE  SRR17011003 ----
+[SEQ] (37/64) SRR17011004
+---- Thu Oct  2 10:28:20 CEST 2025 :: START SRR17011004 ----
+[prefetch] SRR17011004 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T08:28:22 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T08:28:23 prefetch.3.0.10: 1) Downloading 'SRR17011004'...
+2025-10-02T08:28:23 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T08:28:23 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T08:31:20 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T08:31:57 prefetch.3.0.10:  'SRR17011004' is valid
+2025-10-02T08:31:57 prefetch.3.0.10: 1) 'SRR17011004' was downloaded successfully
+2025-10-02T08:31:58 prefetch.3.0.10: 'SRR17011004' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011004 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011004_*.fastq
+---- Thu Oct  2 10:38:12 CEST 2025 :: DONE  SRR17011004 ----
+[SEQ] (38/64) SRR17011005
+---- Thu Oct  2 10:38:12 CEST 2025 :: START SRR17011005 ----
+[prefetch] SRR17011005 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T08:38:15 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T08:38:15 prefetch.3.0.10: 1) Downloading 'SRR17011005'...
+2025-10-02T08:38:15 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T08:38:15 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T08:41:52 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T08:42:58 prefetch.3.0.10:  'SRR17011005' is valid
+2025-10-02T08:42:58 prefetch.3.0.10: 1) 'SRR17011005' was downloaded successfully
+2025-10-02T08:42:58 prefetch.3.0.10: 'SRR17011005' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011005 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011005_*.fastq
+---- Thu Oct  2 10:51:28 CEST 2025 :: DONE  SRR17011005 ----
+[SEQ] (39/64) SRR17011006
+---- Thu Oct  2 10:51:28 CEST 2025 :: START SRR17011006 ----
+[prefetch] SRR17011006 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T08:51:32 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T08:51:32 prefetch.3.0.10: 1) Downloading 'SRR17011006'...
+2025-10-02T08:51:32 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T08:51:32 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T08:54:52 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T08:55:40 prefetch.3.0.10:  'SRR17011006' is valid
+2025-10-02T08:55:40 prefetch.3.0.10: 1) 'SRR17011006' was downloaded successfully
+2025-10-02T08:55:40 prefetch.3.0.10: 'SRR17011006' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011006 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011006_*.fastq
+---- Thu Oct  2 11:03:37 CEST 2025 :: DONE  SRR17011006 ----
+[SEQ] (40/64) SRR17011007
+---- Thu Oct  2 11:03:37 CEST 2025 :: START SRR17011007 ----
+[prefetch] SRR17011007 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T09:03:41 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T09:03:41 prefetch.3.0.10: 1) Downloading 'SRR17011007'...
+2025-10-02T09:03:41 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T09:03:41 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T09:08:06 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T09:09:06 prefetch.3.0.10:  'SRR17011007' is valid
+2025-10-02T09:09:06 prefetch.3.0.10: 1) 'SRR17011007' was downloaded successfully
+2025-10-02T09:09:06 prefetch.3.0.10: 'SRR17011007' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011007 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011007_*.fastq
+---- Thu Oct  2 11:19:22 CEST 2025 :: DONE  SRR17011007 ----
+[SEQ] (41/64) SRR17011008
+---- Thu Oct  2 11:19:29 CEST 2025 :: START SRR17011008 ----
+[prefetch] SRR17011008 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T09:20:47 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T09:20:48 prefetch.3.0.10: 1) Downloading 'SRR17011008'...
+2025-10-02T09:20:48 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T09:20:48 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T09:23:28 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T09:24:12 prefetch.3.0.10:  'SRR17011008' is valid
+2025-10-02T09:24:12 prefetch.3.0.10: 1) 'SRR17011008' was downloaded successfully
+2025-10-02T09:24:12 prefetch.3.0.10: 'SRR17011008' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011008 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011008_*.fastq
+---- Thu Oct  2 11:32:20 CEST 2025 :: DONE  SRR17011008 ----
+[SEQ] (42/64) SRR17011009
+---- Thu Oct  2 11:32:21 CEST 2025 :: START SRR17011009 ----
+[prefetch] SRR17011009 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T09:32:25 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T09:32:26 prefetch.3.0.10: 1) Downloading 'SRR17011009'...
+2025-10-02T09:32:26 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T09:32:26 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T09:35:30 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T09:36:12 prefetch.3.0.10:  'SRR17011009' is valid
+2025-10-02T09:36:12 prefetch.3.0.10: 1) 'SRR17011009' was downloaded successfully
+2025-10-02T09:36:12 prefetch.3.0.10: 'SRR17011009' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011009 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011009_*.fastq
+---- Thu Oct  2 11:43:25 CEST 2025 :: DONE  SRR17011009 ----
+[SEQ] (43/64) SRR17011010
+---- Thu Oct  2 11:43:25 CEST 2025 :: START SRR17011010 ----
+[prefetch] SRR17011010 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T09:43:28 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T09:43:29 prefetch.3.0.10: 1) Downloading 'SRR17011010'...
+2025-10-02T09:43:29 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T09:43:29 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T09:47:50 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T09:49:03 prefetch.3.0.10:  'SRR17011010' is valid
+2025-10-02T09:49:03 prefetch.3.0.10: 1) 'SRR17011010' was downloaded successfully
+2025-10-02T09:49:03 prefetch.3.0.10: 'SRR17011010' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011010 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011010_*.fastq
+---- Thu Oct  2 11:59:00 CEST 2025 :: DONE  SRR17011010 ----
+[SEQ] (44/64) SRR17011011
+---- Thu Oct  2 11:59:00 CEST 2025 :: START SRR17011011 ----
+[prefetch] SRR17011011 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T09:59:03 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T09:59:03 prefetch.3.0.10: 1) Downloading 'SRR17011011'...
+2025-10-02T09:59:03 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T09:59:03 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T10:07:04 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T10:09:11 prefetch.3.0.10:  'SRR17011011' is valid
+2025-10-02T10:09:11 prefetch.3.0.10: 1) 'SRR17011011' was downloaded successfully
+2025-10-02T10:09:11 prefetch.3.0.10: 'SRR17011011' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011011 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011011_*.fastq
+---- Thu Oct  2 12:27:55 CEST 2025 :: DONE  SRR17011011 ----
+[SEQ] (45/64) SRR17011012
+---- Thu Oct  2 12:27:55 CEST 2025 :: START SRR17011012 ----
+[prefetch] SRR17011012 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T10:27:59 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T10:27:59 prefetch.3.0.10: 1) Downloading 'SRR17011012'...
+2025-10-02T10:27:59 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T10:27:59 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T10:32:57 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T10:34:26 prefetch.3.0.10:  'SRR17011012' is valid
+2025-10-02T10:34:26 prefetch.3.0.10: 1) 'SRR17011012' was downloaded successfully
+2025-10-02T10:34:26 prefetch.3.0.10: 'SRR17011012' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011012 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011012_*.fastq
+---- Thu Oct  2 12:50:14 CEST 2025 :: DONE  SRR17011012 ----
+[SEQ] (46/64) SRR17011013
+---- Thu Oct  2 12:50:14 CEST 2025 :: START SRR17011013 ----
+[prefetch] SRR17011013 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T10:50:19 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T10:50:19 prefetch.3.0.10: 1) Downloading 'SRR17011013'...
+2025-10-02T10:50:19 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T10:50:19 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T10:58:13 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T11:01:20 prefetch.3.0.10:  'SRR17011013' is valid
+2025-10-02T11:01:20 prefetch.3.0.10: 1) 'SRR17011013' was downloaded successfully
+2025-10-02T11:01:20 prefetch.3.0.10: 'SRR17011013' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011013 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011013_*.fastq
+---- Thu Oct  2 13:21:25 CEST 2025 :: DONE  SRR17011013 ----
+[SEQ] (47/64) SRR17011014
+---- Thu Oct  2 13:21:25 CEST 2025 :: START SRR17011014 ----
+[prefetch] SRR17011014 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T11:21:30 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T11:21:31 prefetch.3.0.10: 1) Downloading 'SRR17011014'...
+2025-10-02T11:21:31 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T11:21:31 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T11:27:14 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T11:29:56 prefetch.3.0.10:  'SRR17011014' is valid
+2025-10-02T11:29:56 prefetch.3.0.10: 1) 'SRR17011014' was downloaded successfully
+2025-10-02T11:29:56 prefetch.3.0.10: 'SRR17011014' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011014 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011014_*.fastq
+---- Thu Oct  2 13:44:49 CEST 2025 :: DONE  SRR17011014 ----
+[SEQ] (48/64) SRR17011015
+---- Thu Oct  2 13:44:51 CEST 2025 :: START SRR17011015 ----
+[prefetch] SRR17011015 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T11:45:55 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T11:45:55 prefetch.3.0.10: 1) Downloading 'SRR17011015'...
+2025-10-02T11:45:55 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T11:45:55 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T11:53:11 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T11:54:28 prefetch.3.0.10:  'SRR17011015' is valid
+2025-10-02T11:54:28 prefetch.3.0.10: 1) 'SRR17011015' was downloaded successfully
+2025-10-02T11:54:28 prefetch.3.0.10: 'SRR17011015' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011015 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011015_*.fastq
+---- Thu Oct  2 14:07:43 CEST 2025 :: DONE  SRR17011015 ----
+[SEQ] (49/64) SRR17011016
+---- Thu Oct  2 14:07:47 CEST 2025 :: START SRR17011016 ----
+[prefetch] SRR17011016 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T12:08:13 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T12:08:13 prefetch.3.0.10: 1) Downloading 'SRR17011016'...
+2025-10-02T12:08:13 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T12:08:13 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T12:18:35 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T12:20:33 prefetch.3.0.10:  'SRR17011016' is valid
+2025-10-02T12:20:33 prefetch.3.0.10: 1) 'SRR17011016' was downloaded successfully
+2025-10-02T12:20:33 prefetch.3.0.10: 'SRR17011016' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011016 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011016_*.fastq
+---- Thu Oct  2 14:38:56 CEST 2025 :: DONE  SRR17011016 ----
+[SEQ] (50/64) SRR17011017
+---- Thu Oct  2 14:38:56 CEST 2025 :: START SRR17011017 ----
+[prefetch] SRR17011017 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T12:39:00 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T12:39:01 prefetch.3.0.10: 1) Downloading 'SRR17011017'...
+2025-10-02T12:39:01 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T12:39:01 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T12:42:22 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T12:42:52 prefetch.3.0.10:  'SRR17011017' is valid
+2025-10-02T12:42:52 prefetch.3.0.10: 1) 'SRR17011017' was downloaded successfully
+2025-10-02T12:42:52 prefetch.3.0.10: 'SRR17011017' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011017 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011017_*.fastq
+---- Thu Oct  2 14:50:24 CEST 2025 :: DONE  SRR17011017 ----
+[SEQ] (51/64) SRR17011018
+---- Thu Oct  2 14:50:24 CEST 2025 :: START SRR17011018 ----
+[prefetch] SRR17011018 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T12:50:27 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T12:50:28 prefetch.3.0.10: 1) Downloading 'SRR17011018'...
+2025-10-02T12:50:28 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T12:50:28 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T12:56:41 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T12:57:47 prefetch.3.0.10:  'SRR17011018' is valid
+2025-10-02T12:57:47 prefetch.3.0.10: 1) 'SRR17011018' was downloaded successfully
+2025-10-02T12:57:47 prefetch.3.0.10: 'SRR17011018' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011018 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011018_*.fastq
+---- Thu Oct  2 15:13:06 CEST 2025 :: DONE  SRR17011018 ----
+[SEQ] (52/64) SRR17011019
+---- Thu Oct  2 15:13:06 CEST 2025 :: START SRR17011019 ----
+[prefetch] SRR17011019 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T13:13:10 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T13:13:11 prefetch.3.0.10: 1) Downloading 'SRR17011019'...
+2025-10-02T13:13:11 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T13:13:11 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T13:16:27 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T13:16:58 prefetch.3.0.10:  'SRR17011019' is valid
+2025-10-02T13:16:58 prefetch.3.0.10: 1) 'SRR17011019' was downloaded successfully
+2025-10-02T13:16:58 prefetch.3.0.10: 'SRR17011019' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011019 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011019_*.fastq
+---- Thu Oct  2 15:24:07 CEST 2025 :: DONE  SRR17011019 ----
+[SEQ] (53/64) SRR17011020
+---- Thu Oct  2 15:24:07 CEST 2025 :: START SRR17011020 ----
+[prefetch] SRR17011020 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T13:24:10 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T13:24:10 prefetch.3.0.10: 1) Downloading 'SRR17011020'...
+2025-10-02T13:24:10 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T13:24:10 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T13:28:50 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T13:29:52 prefetch.3.0.10:  'SRR17011020' is valid
+2025-10-02T13:29:52 prefetch.3.0.10: 1) 'SRR17011020' was downloaded successfully
+2025-10-02T13:29:52 prefetch.3.0.10: 'SRR17011020' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011020 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011020_*.fastq
+---- Thu Oct  2 15:40:14 CEST 2025 :: DONE  SRR17011020 ----
+[SEQ] (54/64) SRR17011021
+---- Thu Oct  2 15:40:14 CEST 2025 :: START SRR17011021 ----
+[prefetch] SRR17011021 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T13:40:17 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T13:40:17 prefetch.3.0.10: 1) Downloading 'SRR17011021'...
+2025-10-02T13:40:17 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T13:40:17 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T13:43:11 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T13:43:51 prefetch.3.0.10:  'SRR17011021' is valid
+2025-10-02T13:43:51 prefetch.3.0.10: 1) 'SRR17011021' was downloaded successfully
+2025-10-02T13:43:51 prefetch.3.0.10: 'SRR17011021' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011021 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011021_*.fastq
+---- Thu Oct  2 15:50:33 CEST 2025 :: DONE  SRR17011021 ----
+[SEQ] (55/64) SRR17011022
+---- Thu Oct  2 15:50:33 CEST 2025 :: START SRR17011022 ----
+[prefetch] SRR17011022 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T13:50:36 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T13:50:37 prefetch.3.0.10: 1) Downloading 'SRR17011022'...
+2025-10-02T13:50:37 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T13:50:37 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T13:53:46 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T13:54:29 prefetch.3.0.10:  'SRR17011022' is valid
+2025-10-02T13:54:29 prefetch.3.0.10: 1) 'SRR17011022' was downloaded successfully
+2025-10-02T13:54:29 prefetch.3.0.10: 'SRR17011022' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011022 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011022_*.fastq
+---- Thu Oct  2 16:01:46 CEST 2025 :: DONE  SRR17011022 ----
+[SEQ] (56/64) SRR17011023
+---- Thu Oct  2 16:01:46 CEST 2025 :: START SRR17011023 ----
+[prefetch] SRR17011023 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T14:01:49 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T14:01:49 prefetch.3.0.10: 1) Downloading 'SRR17011023'...
+2025-10-02T14:01:49 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T14:01:49 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T14:04:32 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T14:05:01 prefetch.3.0.10:  'SRR17011023' is valid
+2025-10-02T14:05:01 prefetch.3.0.10: 1) 'SRR17011023' was downloaded successfully
+2025-10-02T14:05:01 prefetch.3.0.10: 'SRR17011023' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011023 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011023_*.fastq
+---- Thu Oct  2 16:11:53 CEST 2025 :: DONE  SRR17011023 ----
+[SEQ] (57/64) SRR17011024
+---- Thu Oct  2 16:11:53 CEST 2025 :: START SRR17011024 ----
+[prefetch] SRR17011024 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T14:11:56 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T14:11:57 prefetch.3.0.10: 1) Downloading 'SRR17011024'...
+2025-10-02T14:11:57 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T14:11:57 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T14:18:16 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T14:20:37 prefetch.3.0.10:  'SRR17011024' is valid
+2025-10-02T14:20:37 prefetch.3.0.10: 1) 'SRR17011024' was downloaded successfully
+2025-10-02T14:20:37 prefetch.3.0.10: 'SRR17011024' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011024 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011024_*.fastq
+---- Thu Oct  2 16:37:34 CEST 2025 :: DONE  SRR17011024 ----
+[SEQ] (58/64) SRR17011025
+---- Thu Oct  2 16:37:34 CEST 2025 :: START SRR17011025 ----
+[prefetch] SRR17011025 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T14:37:39 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T14:37:39 prefetch.3.0.10: 1) Downloading 'SRR17011025'...
+2025-10-02T14:37:39 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T14:37:39 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T14:41:32 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T14:42:49 prefetch.3.0.10:  'SRR17011025' is valid
+2025-10-02T14:42:49 prefetch.3.0.10: 1) 'SRR17011025' was downloaded successfully
+2025-10-02T14:42:49 prefetch.3.0.10: 'SRR17011025' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011025 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011025_*.fastq
+---- Thu Oct  2 16:52:39 CEST 2025 :: DONE  SRR17011025 ----
+[SEQ] (59/64) SRR17011026
+---- Thu Oct  2 16:52:39 CEST 2025 :: START SRR17011026 ----
+[prefetch] SRR17011026 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T14:52:42 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T14:52:43 prefetch.3.0.10: 1) Downloading 'SRR17011026'...
+2025-10-02T14:52:43 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T14:52:43 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T15:01:15 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T15:02:38 prefetch.3.0.10:  'SRR17011026' is valid
+2025-10-02T15:02:38 prefetch.3.0.10: 1) 'SRR17011026' was downloaded successfully
+2025-10-02T15:02:38 prefetch.3.0.10: 'SRR17011026' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011026 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011026_*.fastq
+---- Thu Oct  2 17:21:15 CEST 2025 :: DONE  SRR17011026 ----
+[SEQ] (60/64) SRR17011027
+---- Thu Oct  2 17:21:17 CEST 2025 :: START SRR17011027 ----
+[prefetch] SRR17011027 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T15:21:50 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T15:21:50 prefetch.3.0.10: 1) Downloading 'SRR17011027'...
+2025-10-02T15:21:50 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T15:21:50 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T15:26:33 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T15:27:41 prefetch.3.0.10:  'SRR17011027' is valid
+2025-10-02T15:27:41 prefetch.3.0.10: 1) 'SRR17011027' was downloaded successfully
+2025-10-02T15:27:41 prefetch.3.0.10: 'SRR17011027' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011027 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011027_*.fastq
+---- Thu Oct  2 17:38:39 CEST 2025 :: DONE  SRR17011027 ----
+[SEQ] (61/64) SRR17011028
+---- Thu Oct  2 17:38:39 CEST 2025 :: START SRR17011028 ----
+[prefetch] SRR17011028 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T15:38:42 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T15:38:43 prefetch.3.0.10: 1) Downloading 'SRR17011028'...
+2025-10-02T15:38:43 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T15:38:43 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T15:48:46 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T15:50:42 prefetch.3.0.10:  'SRR17011028' is valid
+2025-10-02T15:50:42 prefetch.3.0.10: 1) 'SRR17011028' was downloaded successfully
+2025-10-02T15:50:43 prefetch.3.0.10: 'SRR17011028' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011028 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011028_*.fastq
+---- Thu Oct  2 18:09:09 CEST 2025 :: DONE  SRR17011028 ----
+[SEQ] (62/64) SRR17011029
+---- Thu Oct  2 18:09:09 CEST 2025 :: START SRR17011029 ----
+[prefetch] SRR17011029 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T16:09:13 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T16:09:13 prefetch.3.0.10: 1) Downloading 'SRR17011029'...
+2025-10-02T16:09:14 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T16:09:14 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T16:15:54 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T16:17:23 prefetch.3.0.10:  'SRR17011029' is valid
+2025-10-02T16:17:23 prefetch.3.0.10: 1) 'SRR17011029' was downloaded successfully
+2025-10-02T16:17:23 prefetch.3.0.10: 'SRR17011029' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011029 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011029_*.fastq
+---- Thu Oct  2 18:31:25 CEST 2025 :: DONE  SRR17011029 ----
+[SEQ] (63/64) SRR17011030
+---- Thu Oct  2 18:31:25 CEST 2025 :: START SRR17011030 ----
+[prefetch] SRR17011030 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T16:31:30 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T16:31:30 prefetch.3.0.10: 1) Downloading 'SRR17011030'...
+2025-10-02T16:31:30 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T16:31:30 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T16:37:18 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T16:38:36 prefetch.3.0.10:  'SRR17011030' is valid
+2025-10-02T16:38:36 prefetch.3.0.10: 1) 'SRR17011030' was downloaded successfully
+2025-10-02T16:38:36 prefetch.3.0.10: 'SRR17011030' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011030 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011030_*.fastq
+---- Thu Oct  2 18:51:42 CEST 2025 :: DONE  SRR17011030 ----
+[SEQ] (64/64) SRR17011031
+---- Thu Oct  2 18:51:42 CEST 2025 :: START SRR17011031 ----
+[prefetch] SRR17011031 → /home/chu25/data/nbl/GSE189367/sra
+
+2025-10-02T16:51:46 prefetch.3.0.10: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-02T16:51:47 prefetch.3.0.10: 1) Downloading 'SRR17011031'...
+2025-10-02T16:51:47 prefetch.3.0.10: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-02T16:51:47 prefetch.3.0.10:  Downloading via HTTPS...
+2025-10-02T17:00:30 prefetch.3.0.10:  HTTPS download succeed
+2025-10-02T17:02:25 prefetch.3.0.10:  'SRR17011031' is valid
+2025-10-02T17:02:25 prefetch.3.0.10: 1) 'SRR17011031' was downloaded successfully
+2025-10-02T17:02:25 prefetch.3.0.10: 'SRR17011031' has 0 unresolved dependencies
+[fasterq-dump] SRC=/home/chu25/data/nbl/GSE189367/sra/SRR17011031 threads=8 tmp=/home/chu25/data/nbl/GSE189367/tmp
+[pigz] compressing SRR17011031_*.fastq
+---- Thu Oct  2 19:22:02 CEST 2025 :: DONE  SRR17011031 ----
+== Thu Oct  2 19:22:02 CEST 2025 :: ALL DONE ==

@@ -1,0 +1,12 @@
+Running R script /home/chu25/TCGA/tumour_purity/tcga_estimate_purity.Rmd
+1/9                                   
+2/9 [setup]                           
+3/9 [libraries]                       
+4/9 [map_ensembl_to_hgnc]             
+5/9 [get_estimate_scoring_function]   
+6/9 [standardize_estimate_scores]     
+7/9 [filter_samples_by_purity]        
+8/9 [run_tidyestimate_purity_analysis]
+9/9 [execute_pipeline]                
+/home/chu25/miniconda3/envs/tcga-r-env/bin/pandoc +RTS -K512m -RTS tcga_estimate_purity.knit.md --to latex --from markdown+autolink_bare_uris+tex_math_single_backslash --output /home/chu25/TCGA/results/tumour_purity_results/tcga_estimate_purity.tex --lua-filter /home/chu25/miniconda3/envs/tcga-r-env/lib/R/library/rmarkdown/rmarkdown/lua/pagebreak.lua --lua-filter /home/chu25/miniconda3/envs/tcga-r-env/lib/R/library/rmarkdown/rmarkdown/lua/latex-div.lua --embed-resources --standalone --highlight-style tango --pdf-engine xelatex --variable graphics --variable 'geometry:margin=1in' 
+Job completed successfully. Output saved in /home/chu25/TCGA/results/tumour_purity_results
