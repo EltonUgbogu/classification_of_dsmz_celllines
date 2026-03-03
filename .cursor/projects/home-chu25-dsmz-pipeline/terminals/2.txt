@@ -1,0 +1,21 @@
+---
+pid: 3655471
+cwd: /home/chu25/TCGA/rbl
+last_command: cursor tumour_purity_estimation.R
+last_exit_code: 0
+---
+(base) chu25@bilogin1:~/TCGA/rbl$ ls
+checker.R                  rbl_gdc_rnaseq_pipeline.smk
+config                     rbl_gdc_snakemake.sh
+convert_parquet_to_rds.R   results
+convert_parquet_to_rds.sh  scrna_checker.py
+GSE268136.sh               sra_GSE196420.sh
+logs                       sra_SRP409177.R
+map_colrownames_to_rds.R   sra_SRP409177.sh
+map_colrownames_to_rds.sh  testing_conversion.R
+rbl_cohort_aggregator.py   testing_conversion.sh
+rbl_cohort_aggregator.sh   tumour_purity_estimation.R
+rbl_gdc_git.sh             tumour_purity_estimation.sh
+(base) chu25@bilogin1:~/TCGA/rbl$ cursor tumour_purity_estimation.R
+(base) chu25@bil    ogin1:~/TCGA/rbl
+(base) chu25@bilogin1:~/TCGA/rbl$

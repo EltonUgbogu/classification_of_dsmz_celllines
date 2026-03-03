@@ -1,0 +1,4650 @@
+user:
+<attached_files>
+
+<code_selection path="\1769865452490\2" lines="7-8">
+     7|(base) chu25@bilogin1:~/dsmz/dsmz_nbl_analysis/preprocessing/results$ pwd
+     8|/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results
+</code_selection>
+
+<terminal_selection title="Terminal" path="\home\chu25\.cursor\projects\1769865452490\terminals\2.txt" lines="13-14">
+(base) chu25@bilogin1:~/dsmz/dsmz_nbl_analysis/preprocessing/results$ pwd
+/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results
+</terminal_selection>
+
+</attached_files>
+<user_query>
+@\home\chu25\dsmz\dsmz_nbl_analysis\preprocessing\results\nbl_dsmz_counts.rds 
+
+@@\home\chu25\.cursor\projects\1769865452490\terminals\2.txt:13-14 /nbl_tumour_counts.rds
+
+confirm that both this data are raw counts
+</user_query>
+
+assistant:
+<think>
+The user wants me to confirm that two RDS files contain raw counts:
+1. `/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/nbl_dsmz_counts.rds`
+2. They mentioned `nbl_tumour_counts.rds` - I need to find where this file is. The user referenced the terminal which shows they're in `/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results`, so the second file is likely `/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/nbl_tumour_counts.rds`
+
+RDS files are R serialized objects. To inspect them, I need to use R to load and examine the data. Raw counts would typically be:
+- Integer values (not normalized/transformed)
+- Non-negative
+- Could have zeros
+- Not log-transformed (so values could be in hundreds or thousands)
+- Not TPM/FPKM/RPKM normalized (those are typically non-integer)
+
+Let me write a quick R script to load both files and check:
+1. Data type (integer vs numeric)
+2. Value range
+3. Whether values look like raw counts (integers, non-negative, typical range)
+4. Sample statistics
+
+I'll need to run R to load these .rds files and inspect them.
+</think>
+Loading both RDS files in R and inspecting their structure and values to confirm they're raw counts.
+
+[Tool call] Shell
+  command: cd /home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results && Rscript -e '
+# Load both RDS files
+nbl_dsmz <- readRDS("nbl_dsmz_counts.rds")
+nbl_tumour <- readRDS("nbl_tumour_counts.rds")
+
+cat("=== nbl_dsmz_counts.rds ===\n")
+cat("Class:", class(nbl_dsmz), "\n")
+cat("Dimensions:", dim(nbl_dsmz), "\n")
+cat("Value type / storage:", typeof(nbl_dsmz), "\n")
+if (is.matrix(nbl_dsmz) || inherits(nbl_dsmz, "Matrix")) {
+  cat("Min:", min(nbl_dsmz, na.rm=TRUE), " Max:", max(nbl_dsmz, na.rm=TRUE), "\n")
+  cat("Sample of values (first 20):", head(as.vector(nbl_dsmz), 20), "\n")
+  cat("All integers?", all(nbl_dsmz == floor(nbl_dsmz), na.rm=TRUE), "\n")
+  cat("Any negative?", any(nbl_dsmz < 0, na.rm=TRUE), "\n")
+} else {
+  print(str(nbl_dsmz))
+  if (!is.null(nbl_dsmz$counts)) {
+    cts <- nbl_dsmz$counts
+    cat("Counts matrix - Min:", min(cts), " Max:", max(cts), " All int?", all(cts==floor(cts)), "\n")
+  }
+}
+
+cat("\n=== nbl_tumour_counts.rds ===\n")
+cat("Class:", class(nbl_tumour), "\n")
+cat("Dimensions:", dim(nbl_tumour), "\n")
+cat("Value type / storage:", typeof(nbl_tumour), "\n")
+if (is.matrix(nbl_tumour) || inherits(nbl_tumour, "Matrix")) {
+  cat("Min:", min(nbl_tumour, na.rm=TRUE), " Max:", max(nbl_tumour, na.rm=TRUE), "\n")
+  cat("Sample of values (first 20):", head(as.vector(nbl_tumour), 20), "\n")
+  cat("All integers?", all(nbl_tumour == floor(nbl_tumour), na.rm=TRUE), "\n")
+  cat("Any negative?", any(nbl_tumour < 0, na.rm=TRUE), "\n")
+} else {
+  print(str(nbl_tumour))
+  if (!is.null(nbl_tumour$counts)) {
+    cts <- nbl_tumour$counts
+    cat("Counts matrix - Min:", min(cts), " Max:", max(cts), " All int?", all(cts==floor(cts)), "\n")
+  }
+}
+'
+
+  description: Inspect RDS files for raw count structure and values
+
+[Tool result] Shell
+
+assistant:
+<think>
+The output clearly shows both datasets have the characteristics of raw counts:
+
+1. **nbl_dsmz_counts.rds**: 60616 rows (genes/features) × 18 columns (samples). Values are 0 to 1,204,460. All values are integers (stored as double but equal to floor). No negatives.
+
+2. **nbl_tumour_counts.rds**: 60616 rows × 244 columns. Values 0 to 6,568,583. All integers, no negatives.
+
+Both have the same number of rows (60616) which suggests the same gene/feature set. The value ranges (0 to millions), integer nature, and non-negativity are all consistent with raw (unnormalized) count data. Normalized data (TPM, FPKM, log2CPM) would typically be non-integer and/or on a different scale.
+</think>
+Summary of what was checked:
+
+**nbl_dsmz_counts.rds**
+- **Dimensions:** 60,616 features × 18 samples  
+- **Range:** 0 to 1,204,460  
+- **Values:** All integers (stored as double but equal to their floor)  
+- **Negatives:** None  
+
+**nbl_tumour_counts.rds**
+- **Dimensions:** 60,616 features × 244 samples  
+- **Range:** 0 to 6,568,583  
+- **Values:** All integers  
+- **Negatives:** None  
+
+**Conclusion:** Both objects behave as **raw counts**:
+- Non-negative integers only  
+- Ranges (up to millions) typical of unnormalized count matrices  
+- Same feature set (60,616 rows) across both  
+
+So you can treat both as raw count matrices for methods that expect counts (e.g. DESeq2, edgeR).
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+Perfect — we’ll reuse those **unchanged**. Now you just need two additional pieces:
+
+1. a **tumour-only** plotting function that matches the DEG theme (same `theme_umap_main()` + same palette/legend rules)
+2. a **main script** that loads/merges your *raw* and *batch-corrected VST* per-dataset matrices, builds `annot`, runs UMAP(s), and saves outputs + summary — with **no VST/ComBat/cPCA inside**.
+
+Below is a complete `pan_cancer_umap_main.R` that does exactly that, using your DEG plotting functions as-is.
+
+---
+
+# ✅ `pan_cancer_umap_main.R` (mirrors DEG script style, no DEG, raw + batch, tumour-only + integrated)
+
+```r
+#!/usr/bin/env Rscript
+
+# ==============================================================================
+# PAN-CANCER UMAP VISUALISATION (NO DEG)
+# ==============================================================================
+# Mirrors plotting + output conventions of: plot_pan_cancer_umap_deg_set.R
+#
+# Inputs:
+#   1) raw counts per dataset (RDS; genes x samples)
+#   2) batch-corrected VST per dataset (RDS; genes x samples)
+#
+# Outputs (for RAW and BATCH):
+#   - Tumour-only UMAP (per distance metric)
+#   - Integrated Tumour+CellLine UMAP (per distance metric)
+#   - coords TSV per run
+#   - PDF/PNG per run
+#   - summary TSV
+#
+# No batch correction, VST, PCA, or cPCA is performed here.
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(tibble)
+  library(ggplot2)
+  library(stringr)
+  library(optparse)
+  library(uwot)
+  library(scales)
+})
+
+# ------------------------------------------------------------------------------
+# NULL-COALESCING OPERATOR
+# ------------------------------------------------------------------------------
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0 || all(is.na(x))) y else x
+
+# ==============================================================================
+# SECTION 1: THREAD CONFIGURATION (HPC)
+# ==============================================================================
+n_threads <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "8"))
+if (is.na(n_threads) || n_threads < 1) n_threads <- 8
+
+Sys.setenv(
+  OMP_NUM_THREADS = n_threads,
+  OPENBLAS_NUM_THREADS = n_threads,
+  MKL_NUM_THREADS = n_threads,
+  VECLIB_MAXIMUM_THREADS = n_threads,
+  NUMEXPR_NUM_THREADS = n_threads
+)
+options(mc.cores = n_threads)
+Sys.setenv(RCPP_PARALLEL_NUM_THREADS = n_threads)
+
+# ==============================================================================
+# SECTION 2: CLI (same style as DEG script)
+# ==============================================================================
+option_list <- list(
+  make_option("--pipe_root", type="character", default=".",
+              help="Pipeline root [default: %default]"),
+
+  make_option("--outdir", type="character",
+              default="results/unsupervised/pan_cancer/umap_main_no_deg",
+              help="Output directory [default: %default]"),
+
+  make_option("--dist_metrics", type="character",
+              default="cosine,euclidean",
+              help="Comma-separated uwot metrics [default: %default]"),
+
+  make_option("--n_neighbors", type="integer", default=30,
+              help="UMAP n_neighbors [default: %default]"),
+
+  make_option("--min_dist", type="double", default=0.3,
+              help="UMAP min_dist [default: %default]"),
+
+  make_option("--seed", type="integer", default=42,
+              help="Seed [default: %default]"),
+
+  make_option("--page", type="character", default="slide",
+              help="Output size preset: slide (16:9), a4, a4_landscape [default: %default]")
+)
+
+opt <- parse_args(OptionParser(option_list = option_list))
+
+# ==============================================================================
+# SECTION 3: PATH RESOLUTION
+# ==============================================================================
+pipe_root <- normalizePath(opt$pipe_root, mustWork = TRUE)
+
+abs_from_root <- function(p) {
+  if (is.null(p) || !nzchar(p)) return(p)
+  if (grepl("^/", p) || grepl("^[A-Za-z]:[\\\\/]", p)) return(p)
+  file.path(pipe_root, p)
+}
+
+outdir <- abs_from_root(opt$outdir)
+dir.create(outdir, recursive=TRUE, showWarnings=FALSE)
+
+dist_metrics <- strsplit(opt$dist_metrics, ",")[[1]] %>% trimws()
+dist_metrics <- dist_metrics[nzchar(dist_metrics)]
+
+cat("[INFO] outdir  :", outdir, "\n")
+cat("[INFO] metrics :", paste(dist_metrics, collapse=", "), "\n")
+cat(sprintf("[INFO] threads: %d\n", n_threads))
+
+# ==============================================================================
+# SECTION 4: CONFIG (YOUR DATASETS)
+# ==============================================================================
+raw_config_Datasets <- c(
+  # neuroblastoma (NBL)
+  nbl_counts        = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/nbl_tumour_counts.rds",
+  dsmz_nbl_counts   = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/nbl_dsmz_counts.rds",
+  # breast cancer (BRCA)
+  dsmz_bcc_counts   = "/home/chu25/dsmz/bcc_analysis/results/dsmz_bcc_counts.rds",
+  tcga_brca_counts  = "/home/chu25/dsmz/bcc_analysis/results/tcga_brca_counts.rds",
+  # retinoblastoma (RBL)
+  rbl_dsmz_counts   = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/RBL_dsmz_counts.rds",
+  rbl_tumour_counts = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/RBL_tumour_counts.rds"
+)
+
+# IMPORTANT: must be NAMED like raw_config_Datasets
+config_batch_corrected_data <- c(
+  # NBL
+  nbl_tumour_vst_bc = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/tumour_vst_nbl_batch_corrected.rds",
+  nbl_dsmz_vst_bc   = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/dsmz_vst_nbl_batch_corrected.rds",
+  # RBL
+  rbl_tumour_vst_bc = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/tumour_vst_RBL_batch_corrected.rds",
+  rbl_dsmz_vst_bc   = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/dsmz_vst_RBL_batch_corrected.rds",
+  # BRCA
+  brca_tumour_vst_bc = "/home/chu25/dsmz/bcc_analysis/results/tcga_vst_brca_subtype_batch_corrected.rds",
+  brca_dsmz_vst_bc   = "/home/chu25/dsmz/bcc_analysis/results/dsmz_vst_bcc_batch_corrected.rds"
+)
+
+# ==============================================================================
+# SECTION 5: HELPERS (LOAD + MERGE)
+# ==============================================================================
+clean_ensg_rows <- function(mat) {
+  rownames(mat) <- sub("\\.\\d+$", "", rownames(mat))
+  mat
+}
+
+load_matrix <- function(path) {
+  if (!file.exists(path)) stop("Missing file: ", path)
+  m <- readRDS(path)
+  m <- as.matrix(m)
+  m
+}
+
+make_dataset_meta <- function(cfg) {
+  tibble(
+    id   = names(cfg),
+    path = unname(cfg)
+  ) %>%
+    mutate(
+      cancer_type = case_when(
+        grepl("nbl",  id, ignore.case=TRUE) ~ "NBL",
+        grepl("brca|bcc", id, ignore.case=TRUE) ~ "BRCA",
+        grepl("rbl",  id, ignore.case=TRUE) ~ "RBL",
+        grepl("leu_lym|laml", id, ignore.case=TRUE) ~ "LEU/LYM",
+        TRUE ~ "OTHER"
+      ),
+      sample_type = case_when(
+        grepl("dsmz", id, ignore.case=TRUE) ~ "Cell Line",
+        TRUE ~ "Tumour"
+      )
+    )
+}
+
+merge_by_common_genes <- function(dataset_meta) {
+  mats <- purrr::map(dataset_meta$path, load_matrix)
+  names(mats) <- dataset_meta$id
+  mats <- purrr::map(mats, clean_ensg_rows)
+
+  common_genes <- Reduce(intersect, purrr::map(mats, rownames))
+  cat("[INFO] Common genes across datasets:", length(common_genes), "\n")
+
+  mats <- purrr::map(mats, ~ .x[common_genes, , drop=FALSE])
+  merged <- do.call(cbind, mats)  # genes x samples
+
+  annot <- purrr::imap_dfr(mats, function(mat, nm) {
+    tibble(sample = colnames(mat), dataset_id = nm)
+  }) %>%
+    left_join(dataset_meta, by = c("dataset_id" = "id"))
+
+  annot <- annot[match(colnames(merged), annot$sample), ]
+  stopifnot(all(annot$sample == colnames(merged)))
+
+  list(merged = merged, annot = annot, common_genes = common_genes)
+}
+
+# ==============================================================================
+# SECTION 6: PLOTTING FUNCTIONS (REUSE YOUR DEG SCRIPT FUNCTIONS)
+# ==============================================================================
+# 1) theme_umap_main  (PASTE YOUR EXACT FUNCTION)
+theme_umap_main <- function() {
+  theme_minimal(base_size = 11) +
+    theme(
+      panel.grid        = element_blank(),
+      axis.line         = element_line(linewidth = 0.4, colour = "grey20"),
+      axis.ticks        = element_line(linewidth = 0.3, colour = "grey30"),
+      axis.text         = element_text(size = 9, colour = "grey20"),
+      axis.title        = element_text(size = 10, colour = "grey10"),
+      legend.position   = "bottom",
+      legend.direction  = "horizontal",
+      legend.title      = element_text(face = "bold", size = 10),
+      legend.text       = element_text(size = 9),
+      legend.key.size   = grid::unit(0.8, "lines"),
+      legend.background = element_rect(fill = scales::alpha("white", 0.8), colour = NA),
+      plot.title        = element_text(size = 13, face = "bold", colour = "grey10"),
+      plot.subtitle     = element_text(size = 10, colour = "grey40"),
+      plot.caption      = element_text(size = 7, colour = "grey50", hjust = 0),
+      plot.margin       = margin(12, 12, 8, 8),
+      panel.background  = element_rect(fill = "white", colour = NA)
+    )
+}
+
+# 2) save_plot (PASTE YOUR EXACT FUNCTION)
+save_plot <- function(plot, path_base, page = "slide") {
+  page <- tolower(page)
+
+  if (page == "slide") {
+    width <- 13.33
+    height <- 7.5
+  } else if (page == "a4") {
+    width <- 8.27
+    height <- 11.69
+  } else if (page == "a4_landscape") {
+    width <- 11.69
+    height <- 8.27
+  } else {
+    stop("Unknown --page: ", page, " (use slide, a4, a4_landscape)")
+  }
+
+  ggsave(paste0(path_base, ".pdf"), plot, width = width, height = height,
+         units = "in", device = grDevices::cairo_pdf)
+  ggsave(paste0(path_base, ".png"), plot, width = width, height = height,
+         units = "in", dpi = 400)
+}
+
+# prepare_plot_data (same logic as DEG script)
+prepare_plot_data <- function(df) {
+  df %>%
+    mutate(
+      type = ifelse(sample_type == "Cell Line", "Cell Line", "Tumour"),
+      type = factor(type, levels = c("Tumour", "Cell Line")),
+      disease = case_when(
+        cancer_type == "BRCA" ~ "Breast Cancer",
+        cancer_type == "NBL"  ~ "Neuroblastoma",
+        cancer_type == "RBL"  ~ "Retinoblastoma",
+        cancer_type %in% c("LEU/LYM","LEU","LYM","HEME") ~ "Leukemia/Lymphoma",
+        TRUE ~ cancer_type
+      ),
+      disease = factor(disease,
+                       levels = c("Breast Cancer","Neuroblastoma",
+                                  "Leukemia/Lymphoma","Retinoblastoma"))
+    )
+}
+
+# 3) plot_main_overview (PASTE YOUR EXACT FUNCTION)
+plot_main_overview <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    geom_point(
+      data   = df %>% filter(type == "Tumour"),
+      aes(colour = disease, shape = type),
+      size   = 2.5, alpha  = 0.95, stroke = 0.5
+    ) +
+
+    geom_point(
+      data   = df %>% filter(type == "Cell Line"),
+      shape  = 4,
+      colour = "black",
+      size   = 3.4,
+      stroke = 1.4,
+      alpha  = 1
+    ) +
+
+    geom_point(
+      data   = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape  = 4,
+      size   = 3.0,
+      stroke = 1.1,
+      alpha  = 1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    scale_shape_manual(values = c("Tumour" = 16, "Cell Line" = 4),
+                       name = "Sample type") +
+
+    coord_fixed(ratio = 1) +
+    theme_umap_main() +
+
+    guides(
+      colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1)),
+      shape  = guide_legend(order = 2, override.aes = list(size = 3.2, alpha = 1, stroke = 1.2))
+    ) +
+
+    labs(
+      title    = "Pan-Cancer Tumour–Cell Line Alignment",
+      subtitle = subtitle_text,
+      caption  = "Colour: cancer type; shape: circle = tumour, cross = cell line",
+      x = "UMAP 1", y = "UMAP 2"
+    )
+}
+
+# Tumour-only view (new, but matches DEG theme + palette)
+plot_tumour_only <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+    geom_point(
+      aes(colour = disease),
+      size = 2.5, alpha = 0.95, stroke = 0.5
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed(ratio = 1) +
+    theme_umap_main() +
+    guides(colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1))) +
+    labs(
+      title    = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption  = "Colour: cancer type (tumours only)",
+      x = "UMAP 1", y = "UMAP 2"
+    )
+}
+
+# Palette (same as DEG script)
+disease_palette <- c(
+  "Breast Cancer"     = "#E41A1C",
+  "Neuroblastoma"     = "#377EB8",
+  "Leukemia/Lymphoma" = "#4DAF4A",
+  "Retinoblastoma"    = "#FF7F00"
+)
+
+# ==============================================================================
+# SECTION 7: UMAP RUNNER (RAW/BATCH × TUMOUR_ONLY/INTEGRATED)
+# ==============================================================================
+run_umap_block <- function(X_sxg, annot, source_label) {
+  summaries <- list()
+
+  for (subset_mode in c("TUMOUR_ONLY", "INTEGRATED")) {
+
+    if (subset_mode == "TUMOUR_ONLY") {
+      keep <- annot$sample_type == "Tumour"
+      X_use <- X_sxg[keep, , drop = FALSE]
+      annot_use <- annot[keep, , drop = FALSE]
+    } else {
+      X_use <- X_sxg
+      annot_use <- annot
+    }
+
+    for (dm in dist_metrics) {
+
+      tag <- paste(source_label, subset_mode, dm, sep = "_")
+      cat("\n[INFO] Running UMAP:", tag, "\n")
+      set.seed(opt$seed)
+
+      emb <- uwot::umap(
+        X           = X_use,
+        n_neighbors = opt$n_neighbors,
+        min_dist    = opt$min_dist,
+        metric      = dm,
+        n_threads   = n_threads,
+        scale       = FALSE,
+        verbose     = TRUE
+      )
+
+      coords <- as.data.frame(emb)
+      colnames(coords) <- c("UMAP1","UMAP2")
+      coords$sample_id <- rownames(X_use)
+
+      coords <- coords %>%
+        left_join(
+          annot_use %>% transmute(sample_id = sample, cancer_type, sample_type, dataset_id),
+          by = "sample_id"
+        )
+
+      coords_path <- file.path(outdir, paste0("coords_", tag, ".tsv"))
+      write_tsv(coords, coords_path)
+
+      plot_df <- prepare_plot_data(coords)
+
+      subtitle <- sprintf(
+        "%s; %s; metric=%s; nn=%d; min_dist=%.2f; genes=%d",
+        source_label,
+        ifelse(subset_mode == "TUMOUR_ONLY", "tumours only", "tumours + cell lines"),
+        dm, opt$n_neighbors, opt$min_dist, ncol(X_use)
+      )
+
+      if (subset_mode == "TUMOUR_ONLY") {
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle)
+      } else {
+        p <- plot_main_overview(plot_df, disease_palette, subtitle)
+      }
+
+      plot_base <- file.path(outdir, paste0("Fig_umap_", tag))
+      save_plot(p, plot_base, page = opt$page)
+
+      summaries[[tag]] <- tibble(
+        source      = source_label,
+        subset      = tolower(subset_mode),
+        dist_metric = dm,
+        n_genes     = ncol(X_use),
+        n_samples   = nrow(X_use),
+        n_tumours   = sum(annot_use$sample_type == "Tumour"),
+        n_cell_lines= sum(annot_use$sample_type == "Cell Line"),
+        coords_tsv  = basename(coords_path),
+        plot_pdf    = basename(paste0(plot_base, ".pdf")),
+        plot_png    = basename(paste0(plot_base, ".png"))
+      )
+
+      cat("[SAVED] ", coords_path, "\n", sep="")
+      cat("[SAVED] ", paste0(plot_base, ".pdf/.png"), "\n", sep="")
+    }
+  }
+
+  bind_rows(summaries)
+}
+
+# ==============================================================================
+# SECTION 8: LOAD + MERGE RAW + BATCH, THEN RUN
+# ==============================================================================
+cat("\n[INFO] Loading + merging RAW counts...\n")
+raw_meta <- make_dataset_meta(raw_config_Datasets)
+raw_obj  <- merge_by_common_genes(raw_meta)
+
+cat("[INFO] RAW sample table:\n")
+print(table(raw_obj$annot$cancer_type, raw_obj$annot$sample_type))
+
+cat("\n[INFO] Loading + merging BATCH-CORRECTED VST...\n")
+batch_meta <- make_dataset_meta(config_batch_corrected_data)
+batch_obj  <- merge_by_common_genes(batch_meta)
+
+cat("[INFO] BATCH sample table:\n")
+print(table(batch_obj$annot$cancer_type, batch_obj$annot$sample_type))
+
+# UMAP needs samples x genes
+X_raw_sxg   <- t(raw_obj$merged)
+X_batch_sxg <- t(batch_obj$merged)
+
+rownames(X_raw_sxg)   <- colnames(raw_obj$merged)
+rownames(X_batch_sxg) <- colnames(batch_obj$merged)
+
+stopifnot(all(rownames(X_raw_sxg)   == raw_obj$annot$sample))
+stopifnot(all(rownames(X_batch_sxg) == batch_obj$annot$sample))
+
+all_summ <- list()
+all_summ[["RAW"]]   <- run_umap_block(X_raw_sxg,   raw_obj$annot,   "RAW_COUNTS")
+all_summ[["BATCH"]] <- run_umap_block(X_batch_sxg, batch_obj$annot, "BATCH_CORR_VST")
+
+summary_tbl  <- bind_rows(all_summ)
+summary_path <- file.path(outdir, "summary_umap_MAIN_NO_DEG.tsv")
+write_tsv(summary_tbl, summary_path)
+
+cat("\n[SAVED] ", summary_path, "\n", sep="")
+cat("\n[SUCCESS] pan_cancer_umap_main complete.\n")
+```
+
+---
+
+## Two small “gotchas” I fixed for you (from your earlier draft)
+
+1. **Your batch-corrected config must be named** (otherwise `dataset_meta` cannot assign cancer_type/sample_type).
+2. Your earlier `save_plot(p_main, fname_base, width, height)` call would error because `width/height` aren’t defined.
+   Here we keep the **DEG-style `save_plot(plot, path_base, page)`**.
+
+---
+
+## What you’ll get in `outdir`
+
+For each source × subset × metric:
+
+* `coords_RAW_COUNTS_TUMOUR_ONLY_cosine.tsv`
+* `Fig_umap_RAW_COUNTS_TUMOUR_ONLY_cosine.pdf/.png`
+* `coords_RAW_COUNTS_INTEGRATED_cosine.tsv`
+* `Fig_umap_RAW_COUNTS_INTEGRATED_cosine.pdf/.png`
+
+…and same for `BATCH_CORR_VST_*_*`
+
+Plus:
+
+* `summary_umap_MAIN_NO_DEG.tsv`
+
+---
+
+If you want one extra tiny improvement: I can add an optional `--point_alpha_tumour` and `--point_size` CLI so you can quickly tune density for tumour-only vs integrated without editing code.
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to create/update the file `pan_cancer_umap_main.R` at `/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R` with the complete script they've provided. They've given me the full script content and explained what it does.
+
+Let me:
+1. Read the existing file (if any) to see current state
+2. Write the complete script as provided
+3. Optionally add the suggested CLI options for `--point_alpha_tumour` and `--point_size` since they asked "If you want one extra tiny improvement: I can add an optional..."
+
+Actually re-reading - they said "I can add" - so they're offering. I'll implement the script as given and add those optional CLI params as a small improvement since they mentioned it.
+
+Let me first check if the file/directory exists and what's there.
+</think>
+Creating the script and adding optional `--point_alpha_tumour` and `--point_size` CLI options.
+
+[Tool call] LS
+  target_directory: /home/chu25/colDataAnnData/scripts
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  limit: 50
+
+[Tool result] LS
+
+[Tool result] Read
+
+assistant:
+<think>
+The file exists but its current content appears to be the markdown/instructions text (the user's message), not the actual R script. I need to write the full R script. Let me read more of the file to see the full extent, then write the complete script with the optional CLI params added.
+</think>
+Checking the rest of the file:
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 50
+
+[Tool result] Read
+
+assistant:
+<think>
+The file currently contains the markdown/instructions text (including the code block and commentary), not a clean R script. I need to:
+
+1. Write the full R script (only the R code, no markdown) to the file
+2. Add the optional `--point_alpha_tumour` and `--point_size` CLI options
+3. Wire those options into `plot_main_overview` and `plot_tumour_only` (and possibly `run_umap_block` so they get passed through)
+
+Let me build the complete script:
+- Add `library(purrr)` since merge_by_common_genes uses purrr
+- Add CLI: `--point_alpha_tumour` (default 0.95), `--point_size` (default 2.5)
+- In plot_main_overview: use opt$point_size and opt$point_alpha_tumour for tumour points; cell line size could stay or get a separate opt - I'll just add point_size and point_alpha_tumour for simplicity
+- In plot_tumour_only: use opt$point_size and opt$point_alpha_tumour
+
+Actually the script uses `purrr::map` etc so purrr is needed - it's not in the library() list. Let me add it.
+
+I'll write the complete script to the file, stripping the markdown wrapper and adding the two CLI options plus passing them into the plotting functions.
+</think>
+Replacing the file's markdown with the R script and adding optional `--point_alpha_tumour` and `--point_size` CLI options.
+
+[Tool call] Write
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  contents: #!/usr/bin/env Rscript
+
+# ==============================================================================
+# PAN-CANCER UMAP VISUALISATION (NO DEG)
+# ==============================================================================
+# Mirrors plotting + output conventions of: plot_pan_cancer_umap_deg_set.R
+#
+# Inputs:
+#   1) raw counts per dataset (RDS; genes x samples)
+#   2) batch-corrected VST per dataset (RDS; genes x samples)
+#
+# Outputs (for RAW and BATCH):
+#   - Tumour-only UMAP (per distance metric)
+#   - Integrated Tumour+CellLine UMAP (per distance metric)
+#   - coords TSV per run
+#   - PDF/PNG per run
+#   - summary TSV
+#
+# No batch correction, VST, PCA, or cPCA is performed here.
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(tibble)
+  library(purrr)
+  library(ggplot2)
+  library(stringr)
+  library(optparse)
+  library(uwot)
+  library(scales)
+})
+
+# ------------------------------------------------------------------------------
+# NULL-COALESCING OPERATOR
+# ------------------------------------------------------------------------------
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0 || all(is.na(x))) y else x
+
+# ==============================================================================
+# SECTION 1: THREAD CONFIGURATION (HPC)
+# ==============================================================================
+n_threads <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "8"))
+if (is.na(n_threads) || n_threads < 1) n_threads <- 8
+
+Sys.setenv(
+  OMP_NUM_THREADS = n_threads,
+  OPENBLAS_NUM_THREADS = n_threads,
+  MKL_NUM_THREADS = n_threads,
+  VECLIB_MAXIMUM_THREADS = n_threads,
+  NUMEXPR_NUM_THREADS = n_threads
+)
+options(mc.cores = n_threads)
+Sys.setenv(RCPP_PARALLEL_NUM_THREADS = n_threads)
+
+# ==============================================================================
+# SECTION 2: CLI (same style as DEG script)
+# ==============================================================================
+option_list <- list(
+  make_option("--pipe_root", type="character", default=".",
+              help="Pipeline root [default: %default]"),
+
+  make_option("--outdir", type="character",
+              default="results/unsupervised/pan_cancer/umap_main_no_deg",
+              help="Output directory [default: %default]"),
+
+  make_option("--dist_metrics", type="character",
+              default="cosine,euclidean",
+              help="Comma-separated uwot metrics [default: %default]"),
+
+  make_option("--n_neighbors", type="integer", default=30,
+              help="UMAP n_neighbors [default: %default]"),
+
+  make_option("--min_dist", type="double", default=0.3,
+              help="UMAP min_dist [default: %default]"),
+
+  make_option("--seed", type="integer", default=42,
+              help="Seed [default: %default]"),
+
+  make_option("--page", type="character", default="slide",
+              help="Output size preset: slide (16:9), a4, a4_landscape [default: %default]"),
+
+  make_option("--point_size", type="double", default=2.5,
+              help="Point size for tumour/cell-line points [default: %default]"),
+
+  make_option("--point_alpha_tumour", type="double", default=0.95,
+              help="Alpha for tumour points (0-1) [default: %default]")
+)
+
+opt <- parse_args(OptionParser(option_list = option_list))
+
+# ==============================================================================
+# SECTION 3: PATH RESOLUTION
+# ==============================================================================
+pipe_root <- normalizePath(opt$pipe_root, mustWork = TRUE)
+
+abs_from_root <- function(p) {
+  if (is.null(p) || !nzchar(p)) return(p)
+  if (grepl("^/", p) || grepl("^[A-Za-z]:[\\\\/]", p)) return(p)
+  file.path(pipe_root, p)
+}
+
+outdir <- abs_from_root(opt$outdir)
+dir.create(outdir, recursive=TRUE, showWarnings=FALSE)
+
+dist_metrics <- strsplit(opt$dist_metrics, ",")[[1]] %>% trimws()
+dist_metrics <- dist_metrics[nzchar(dist_metrics)]
+
+cat("[INFO] outdir  :", outdir, "\n")
+cat("[INFO] metrics :", paste(dist_metrics, collapse=", "), "\n")
+cat(sprintf("[INFO] threads: %d\n", n_threads))
+cat(sprintf("[INFO] point_size: %.2f, point_alpha_tumour: %.2f\n", opt$point_size, opt$point_alpha_tumour))
+
+# ==============================================================================
+# SECTION 4: CONFIG (YOUR DATASETS)
+# ==============================================================================
+raw_config_Datasets <- c(
+  # neuroblastoma (NBL)
+  nbl_counts        = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/nbl_tumour_counts.rds",
+  dsmz_nbl_counts   = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/nbl_dsmz_counts.rds",
+  # breast cancer (BRCA)
+  dsmz_bcc_counts   = "/home/chu25/dsmz/bcc_analysis/results/dsmz_bcc_counts.rds",
+  tcga_brca_counts  = "/home/chu25/dsmz/bcc_analysis/results/tcga_brca_counts.rds",
+  # retinoblastoma (RBL)
+  rbl_dsmz_counts   = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/RBL_dsmz_counts.rds",
+  rbl_tumour_counts = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/RBL_tumour_counts.rds"
+)
+
+# IMPORTANT: must be NAMED like raw_config_Datasets
+config_batch_corrected_data <- c(
+  # NBL
+  nbl_tumour_vst_bc = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/tumour_vst_nbl_batch_corrected.rds",
+  nbl_dsmz_vst_bc   = "/home/chu25/dsmz/dsmz_nbl_analysis/preprocessing/results/dsmz_vst_nbl_batch_corrected.rds",
+  # RBL
+  rbl_tumour_vst_bc = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/tumour_vst_RBL_batch_corrected.rds",
+  rbl_dsmz_vst_bc   = "/home/chu25/dsmz/dsmz_rbl_analysis/preprocessing/results/dsmz_vst_RBL_batch_corrected.rds",
+  # BRCA
+  brca_tumour_vst_bc = "/home/chu25/dsmz/bcc_analysis/results/tcga_vst_brca_subtype_batch_corrected.rds",
+  brca_dsmz_vst_bc   = "/home/chu25/dsmz/bcc_analysis/results/dsmz_vst_bcc_batch_corrected.rds"
+)
+
+# ==============================================================================
+# SECTION 5: HELPERS (LOAD + MERGE)
+# ==============================================================================
+clean_ensg_rows <- function(mat) {
+  rownames(mat) <- sub("\\.\\d+$", "", rownames(mat))
+  mat
+}
+
+load_matrix <- function(path) {
+  if (!file.exists(path)) stop("Missing file: ", path)
+  m <- readRDS(path)
+  m <- as.matrix(m)
+  m
+}
+
+make_dataset_meta <- function(cfg) {
+  tibble(
+    id   = names(cfg),
+    path = unname(cfg)
+  ) %>%
+    mutate(
+      cancer_type = case_when(
+        grepl("nbl",  id, ignore.case=TRUE) ~ "NBL",
+        grepl("brca|bcc", id, ignore.case=TRUE) ~ "BRCA",
+        grepl("rbl",  id, ignore.case=TRUE) ~ "RBL",
+        grepl("leu_lym|laml", id, ignore.case=TRUE) ~ "LEU/LYM",
+        TRUE ~ "OTHER"
+      ),
+      sample_type = case_when(
+        grepl("dsmz", id, ignore.case=TRUE) ~ "Cell Line",
+        TRUE ~ "Tumour"
+      )
+    )
+}
+
+merge_by_common_genes <- function(dataset_meta) {
+  mats <- purrr::map(dataset_meta$path, load_matrix)
+  names(mats) <- dataset_meta$id
+  mats <- purrr::map(mats, clean_ensg_rows)
+
+  common_genes <- Reduce(intersect, purrr::map(mats, rownames))
+  cat("[INFO] Common genes across datasets:", length(common_genes), "\n")
+
+  mats <- purrr::map(mats, ~ .x[common_genes, , drop=FALSE])
+  merged <- do.call(cbind, mats)  # genes x samples
+
+  annot <- purrr::imap_dfr(mats, function(mat, nm) {
+    tibble(sample = colnames(mat), dataset_id = nm)
+  }) %>%
+    left_join(dataset_meta, by = c("dataset_id" = "id"))
+
+  annot <- annot[match(colnames(merged), annot$sample), ]
+  stopifnot(all(annot$sample == colnames(merged)))
+
+  list(merged = merged, annot = annot, common_genes = common_genes)
+}
+
+# ==============================================================================
+# SECTION 6: PLOTTING FUNCTIONS (REUSE YOUR DEG SCRIPT FUNCTIONS)
+# ==============================================================================
+# 1) theme_umap_main  (PASTE YOUR EXACT FUNCTION)
+theme_umap_main <- function() {
+  theme_minimal(base_size = 11) +
+    theme(
+      panel.grid        = element_blank(),
+      axis.line         = element_line(linewidth = 0.4, colour = "grey20"),
+      axis.ticks        = element_line(linewidth = 0.3, colour = "grey30"),
+      axis.text         = element_text(size = 9, colour = "grey20"),
+      axis.title        = element_text(size = 10, colour = "grey10"),
+      legend.position   = "bottom",
+      legend.direction  = "horizontal",
+      legend.title      = element_text(face = "bold", size = 10),
+      legend.text       = element_text(size = 9),
+      legend.key.size   = grid::unit(0.8, "lines"),
+      legend.background = element_rect(fill = scales::alpha("white", 0.8), colour = NA),
+      plot.title        = element_text(size = 13, face = "bold", colour = "grey10"),
+      plot.subtitle     = element_text(size = 10, colour = "grey40"),
+      plot.caption      = element_text(size = 7, colour = "grey50", hjust = 0),
+      plot.margin       = margin(12, 12, 8, 8),
+      panel.background  = element_rect(fill = "white", colour = NA)
+    )
+}
+
+# 2) save_plot (PASTE YOUR EXACT FUNCTION)
+save_plot <- function(plot, path_base, page = "slide") {
+  page <- tolower(page)
+
+  if (page == "slide") {
+    width <- 13.33
+    height <- 7.5
+  } else if (page == "a4") {
+    width <- 8.27
+    height <- 11.69
+  } else if (page == "a4_landscape") {
+    width <- 11.69
+    height <- 8.27
+  } else {
+    stop("Unknown --page: ", page, " (use slide, a4, a4_landscape)")
+  }
+
+  ggsave(paste0(path_base, ".pdf"), plot, width = width, height = height,
+         units = "in", device = grDevices::cairo_pdf)
+  ggsave(paste0(path_base, ".png"), plot, width = width, height = height,
+         units = "in", dpi = 400)
+}
+
+# prepare_plot_data (same logic as DEG script)
+prepare_plot_data <- function(df) {
+  df %>%
+    mutate(
+      type = ifelse(sample_type == "Cell Line", "Cell Line", "Tumour"),
+      type = factor(type, levels = c("Tumour", "Cell Line")),
+      disease = case_when(
+        cancer_type == "BRCA" ~ "Breast Cancer",
+        cancer_type == "NBL"  ~ "Neuroblastoma",
+        cancer_type == "RBL"  ~ "Retinoblastoma",
+        cancer_type %in% c("LEU/LYM","LEU","LYM","HEME") ~ "Leukemia/Lymphoma",
+        TRUE ~ cancer_type
+      ),
+      disease = factor(disease,
+                       levels = c("Breast Cancer","Neuroblastoma",
+                                  "Leukemia/Lymphoma","Retinoblastoma"))
+    )
+}
+
+# 3) plot_main_overview (PASTE YOUR EXACT FUNCTION; uses opt for point_size/alpha)
+plot_main_overview <- function(df, palette, subtitle_text, point_size = 2.5, point_alpha_tumour = 0.95) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    geom_point(
+      data   = df %>% filter(type == "Tumour"),
+      aes(colour = disease, shape = type),
+      size   = point_size, alpha  = point_alpha_tumour, stroke = 0.5
+    ) +
+
+    geom_point(
+      data   = df %>% filter(type == "Cell Line"),
+      shape  = 4,
+      colour = "black",
+      size   = point_size * 1.36,
+      stroke = 1.4,
+      alpha  = 1
+    ) +
+
+    geom_point(
+      data   = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape  = 4,
+      size   = point_size * 1.2,
+      stroke = 1.1,
+      alpha  = 1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    scale_shape_manual(values = c("Tumour" = 16, "Cell Line" = 4),
+                       name = "Sample type") +
+
+    coord_fixed(ratio = 1) +
+    theme_umap_main() +
+
+    guides(
+      colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1)),
+      shape  = guide_legend(order = 2, override.aes = list(size = 3.2, alpha = 1, stroke = 1.2))
+    ) +
+
+    labs(
+      title    = "Pan-Cancer Tumour–Cell Line Alignment",
+      subtitle = subtitle_text,
+      caption  = "Colour: cancer type; shape: circle = tumour, cross = cell line",
+      x = "UMAP 1", y = "UMAP 2"
+    )
+}
+
+# Tumour-only view (new, but matches DEG theme + palette)
+plot_tumour_only <- function(df, palette, subtitle_text, point_size = 2.5, point_alpha_tumour = 0.95) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+    geom_point(
+      aes(colour = disease),
+      size = point_size, alpha = point_alpha_tumour, stroke = 0.5
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed(ratio = 1) +
+    theme_umap_main() +
+    guides(colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1))) +
+    labs(
+      title    = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption  = "Colour: cancer type (tumours only)",
+      x = "UMAP 1", y = "UMAP 2"
+    )
+}
+
+# Palette (same as DEG script)
+disease_palette <- c(
+  "Breast Cancer"     = "#E41A1C",
+  "Neuroblastoma"     = "#377EB8",
+  "Leukemia/Lymphoma" = "#4DAF4A",
+  "Retinoblastoma"    = "#FF7F00"
+)
+
+# ==============================================================================
+# SECTION 7: UMAP RUNNER (RAW/BATCH × TUMOUR_ONLY/INTEGRATED)
+# ==============================================================================
+run_umap_block <- function(X_sxg, annot, source_label) {
+  summaries <- list()
+  pt_size   <- opt$point_size
+  pt_alpha  <- opt$point_alpha_tumour
+
+  for (subset_mode in c("TUMOUR_ONLY", "INTEGRATED")) {
+
+    if (subset_mode == "TUMOUR_ONLY") {
+      keep <- annot$sample_type == "Tumour"
+      X_use <- X_sxg[keep, , drop = FALSE]
+      annot_use <- annot[keep, , drop = FALSE]
+    } else {
+      X_use <- X_sxg
+      annot_use <- annot
+    }
+
+    for (dm in dist_metrics) {
+
+      tag <- paste(source_label, subset_mode, dm, sep = "_")
+      cat("\n[INFO] Running UMAP:", tag, "\n")
+      set.seed(opt$seed)
+
+      emb <- uwot::umap(
+        X           = X_use,
+        n_neighbors = opt$n_neighbors,
+        min_dist    = opt$min_dist,
+        metric      = dm,
+        n_threads   = n_threads,
+        scale       = FALSE,
+        verbose     = TRUE
+      )
+
+      coords <- as.data.frame(emb)
+      colnames(coords) <- c("UMAP1","UMAP2")
+      coords$sample_id <- rownames(X_use)
+
+      coords <- coords %>%
+        left_join(
+          annot_use %>% transmute(sample_id = sample, cancer_type, sample_type, dataset_id),
+          by = "sample_id"
+        )
+
+      coords_path <- file.path(outdir, paste0("coords_", tag, ".tsv"))
+      write_tsv(coords, coords_path)
+
+      plot_df <- prepare_plot_data(coords)
+
+      subtitle <- sprintf(
+        "%s; %s; metric=%s; nn=%d; min_dist=%.2f; genes=%d",
+        source_label,
+        ifelse(subset_mode == "TUMOUR_ONLY", "tumours only", "tumours + cell lines"),
+        dm, opt$n_neighbors, opt$min_dist, ncol(X_use)
+      )
+
+      if (subset_mode == "TUMOUR_ONLY") {
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle, point_size = pt_size, point_alpha_tumour = pt_alpha)
+      } else {
+        p <- plot_main_overview(plot_df, disease_palette, subtitle, point_size = pt_size, point_alpha_tumour = pt_alpha)
+      }
+
+      plot_base <- file.path(outdir, paste0("Fig_umap_", tag))
+      save_plot(p, plot_base, page = opt$page)
+
+      summaries[[tag]] <- tibble(
+        source      = source_label,
+        subset      = tolower(subset_mode),
+        dist_metric = dm,
+        n_genes     = ncol(X_use),
+        n_samples   = nrow(X_use),
+        n_tumours   = sum(annot_use$sample_type == "Tumour"),
+        n_cell_lines= sum(annot_use$sample_type == "Cell Line"),
+        coords_tsv  = basename(coords_path),
+        plot_pdf    = basename(paste0(plot_base, ".pdf")),
+        plot_png    = basename(paste0(plot_base, ".png"))
+      )
+
+      cat("[SAVED] ", coords_path, "\n", sep="")
+      cat("[SAVED] ", paste0(plot_base, ".pdf/.png"), "\n", sep="")
+    }
+  }
+
+  bind_rows(summaries)
+}
+
+# ==============================================================================
+# SECTION 8: LOAD + MERGE RAW + BATCH, THEN RUN
+# ==============================================================================
+cat("\n[INFO] Loading + merging RAW counts...\n")
+raw_meta <- make_dataset_meta(raw_config_Datasets)
+raw_obj  <- merge_by_common_genes(raw_meta)
+
+cat("[INFO] RAW sample table:\n")
+print(table(raw_obj$annot$cancer_type, raw_obj$annot$sample_type))
+
+cat("\n[INFO] Loading + merging BATCH-CORRECTED VST...\n")
+batch_meta <- make_dataset_meta(config_batch_corrected_data)
+batch_obj  <- merge_by_common_genes(batch_meta)
+
+cat("[INFO] BATCH sample table:\n")
+print(table(batch_obj$annot$cancer_type, batch_obj$annot$sample_type))
+
+# UMAP needs samples x genes
+X_raw_sxg   <- t(raw_obj$merged)
+X_batch_sxg <- t(batch_obj$merged)
+
+rownames(X_raw_sxg)   <- colnames(raw_obj$merged)
+rownames(X_batch_sxg) <- colnames(batch_obj$merged)
+
+stopifnot(all(rownames(X_raw_sxg)   == raw_obj$annot$sample))
+stopifnot(all(rownames(X_batch_sxg) == batch_obj$annot$sample))
+
+all_summ <- list()
+all_summ[["RAW"]]   <- run_umap_block(X_raw_sxg,   raw_obj$annot,   "RAW_COUNTS")
+all_summ[["BATCH"]] <- run_umap_block(X_batch_sxg, batch_obj$annot, "BATCH_CORR_VST")
+
+summary_tbl  <- bind_rows(all_summ)
+summary_path <- file.path(outdir, "summary_umap_MAIN_NO_DEG.tsv")
+write_tsv(summary_tbl, summary_path)
+
+cat("\n[SAVED] ", summary_path, "\n", sep="")
+cat("\n[SUCCESS] pan_cancer_umap_main complete.\n")
+
+
+[Tool result] Write
+
+assistant:
+<think>
+I've written the full script. Changes made:
+1. Removed all markdown/commentary; file is pure R.
+2. Added `library(purrr)` so `merge_by_common_genes` works (it uses purrr::map, purrr::imap_dfr).
+3. Added CLI options: `--point_size` (default 2.5), `--point_alpha_tumour` (default 0.95).
+4. Logged those options in the INFO block.
+5. `plot_main_overview` and `plot_tumour_only` now take optional `point_size` and `point_alpha_tumour` with the same defaults; in `run_umap_block` we pass `opt$point_size` and `opt$point_alpha_tumour`.
+6. For integrated view, cell-line point sizes are scaled from the base (point_size * 1.36 and point_size * 1.2) so they stay proportional when you change --point_size.
+
+Let me double-check: in the original script, tumour points were size 2.5, cell line outer was 3.4 and inner 3.0. So 3.4/2.5 = 1.36 and 3.0/2.5 = 1.2. Good.
+
+I'll run a quick lint check.
+</think>
+
+
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+No linter errors. The script is complete. Let me summarize for the user.
+</think>
+Summary of what’s in place:
+
+**1. Script content**
+- Replaced the markdown/instructions in the file with the full R script.
+- Added `library(purrr)` so `merge_by_common_genes()` (which uses `purrr::map` / `purrr::imap_dfr`) runs correctly.
+
+**2. Optional CLI for point appearance**
+- **`--point_size`** (default `2.5`): point size for tumour and cell-line points.
+- **`--point_alpha_tumour`** (default `0.95`): alpha for tumour points (0–1).
+
+These are wired into:
+- **`plot_tumour_only()`** – tumour-only plots use `point_size` and `point_alpha_tumour`.
+- **`plot_main_overview()`** – tumour points use them; cell-line points stay proportional (outer = `point_size * 1.36`, inner = `point_size * 1.2`).
+- **`run_umap_block()`** – passes `opt$point_size` and `opt$point_alpha_tumour` into both plotters.
+
+**3. Usage**
+```bash
+# Defaults (slide, cosine+euclidean, point_size=2.5, point_alpha_tumour=0.95)
+Rscript pan_cancer_umap_main.R --pipe_root /path/to/root
+
+# Tune density for tumour-only / integrated
+Rscript pan_cancer_umap_main.R --point_size 1.8 --point_alpha_tumour 0.85
+Rscript pan_cancer_umap_main.R --point_size 3 --point_alpha_tumour 0.98
+```
+
+**4. Outputs (unchanged)**
+- Per run: `coords_<SOURCE>_<SUBSET>_<metric>.tsv`, `Fig_umap_<SOURCE>_<SUBSET>_<metric>.pdf/.png`.
+- Single summary: `summary_umap_MAIN_NO_DEG.tsv`.
+
+The script is ready to run; no VST/ComBat/cPCA is done inside—it only loads raw and batch-corrected VST RDS, merges, runs UMAP, and saves coords + figures.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+since we don'T have "LEU/LYM"in the dataset at all then we can remove it from the script.
+
+</user_query>
+
+assistant:
+<think>
+The user wants to remove references to "LEU/LYM" from the pan_cancer_umap_main.R script since that cancer type is not in their dataset. I need to find all places where LEU/LYM is mentioned and remove or adjust them.
+
+Let me search for LEU/LYM in the script.
+</think>
+
+
+[Tool call] Grep
+  pattern: LEU|LYM|leu_lym|laml|Leukemia
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+
+[Tool result] Grep
+
+assistant:
+<think>
+I need to:
+1. In make_dataset_meta: remove the LEU/LYM case - change it to TRUE ~ "OTHER" or just remove that line so OTHER catches it.
+2. In prepare_plot_data: remove "LEU/LYM","LEU","LYM","HEME" and "Leukemia/Lymphoma" from the disease case_when and from the factor levels.
+3. In disease_palette: remove "Leukemia/Lymphoma" = "#4DAF4A"
+
+Let me read the relevant sections to get exact context for the edits.
+</think>
+
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 158
+  limit: 30
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 250
+  limit: 95
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I'll make four edits:
+1. Remove the LEU/LYM line from make_dataset_meta (so anything matching leu_lym|laml falls through to OTHER).
+2. In prepare_plot_data: remove the LEU/LYM case and remove "Leukemia/Lymphoma" from the factor levels.
+3. In disease_palette: remove the "Leukemia/Lymphoma" entry.
+</think>
+Removing all LEU/LYM and Leukemia/Lymphoma references from the script.
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       cancer_type = case_when(
+        grepl("nbl",  id, ignore.case=TRUE) ~ "NBL",
+        grepl("brca|bcc", id, ignore.case=TRUE) ~ "BRCA",
+        grepl("rbl",  id, ignore.case=TRUE) ~ "RBL",
+        grepl("leu_lym|laml", id, ignore.case=TRUE) ~ "LEU/LYM",
+        TRUE ~ "OTHER"
+      ),
+  new_string:       cancer_type = case_when(
+        grepl("nbl",  id, ignore.case=TRUE) ~ "NBL",
+        grepl("brca|bcc", id, ignore.case=TRUE) ~ "BRCA",
+        grepl("rbl",  id, ignore.case=TRUE) ~ "RBL",
+        TRUE ~ "OTHER"
+      ),
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       disease = case_when(
+        cancer_type == "BRCA" ~ "Breast Cancer",
+        cancer_type == "NBL"  ~ "Neuroblastoma",
+        cancer_type == "RBL"  ~ "Retinoblastoma",
+        cancer_type %in% c("LEU/LYM","LEU","LYM","HEME") ~ "Leukemia/Lymphoma",
+        TRUE ~ cancer_type
+      ),
+      disease = factor(disease,
+                       levels = c("Breast Cancer","Neuroblastoma",
+                                  "Leukemia/Lymphoma","Retinoblastoma"))
+  new_string:       disease = case_when(
+        cancer_type == "BRCA" ~ "Breast Cancer",
+        cancer_type == "NBL"  ~ "Neuroblastoma",
+        cancer_type == "RBL"  ~ "Retinoblastoma",
+        TRUE ~ cancer_type
+      ),
+      disease = factor(disease,
+                       levels = c("Breast Cancer","Neuroblastoma","Retinoblastoma"))
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Palette (same as DEG script)
+disease_palette <- c(
+  "Breast Cancer"     = "#E41A1C",
+  "Neuroblastoma"     = "#377EB8",
+  "Leukemia/Lymphoma" = "#4DAF4A",
+  "Retinoblastoma"    = "#FF7F00"
+)
+  new_string: # Palette (same as DEG script)
+disease_palette <- c(
+  "Breast Cancer"     = "#E41A1C",
+  "Neuroblastoma"     = "#377EB8",
+  "Retinoblastoma"    = "#FF7F00"
+)
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+All three edits done. The factor levels in prepare_plot_data only include the three cancer types now; if "OTHER" appears it won't be in the levels and will show as NA in the legend unless we add it. Actually for this dataset they said they only have NBL, BRCA, RBL - so "OTHER" might never appear. If it does, factor(disease, levels = ...) will put OTHER as NA since it's not in levels. We could add "OTHER" to the levels and palette if we want future-proofing, but the user only asked to remove LEU/LYM. I'll leave as is. If they have only those three types, it's fine.
+</think>
+Summary of edits:
+
+1. **`make_dataset_meta()`**  
+   - Removed the `grepl("leu_lym|laml", ...) ~ "LEU/LYM"` branch so those IDs are treated as `"OTHER"`.
+
+2. **`prepare_plot_data()`**  
+   - Dropped the `cancer_type %in% c("LEU/LYM","LEU","LYM","HEME") ~ "Leukemia/Lymphoma"` case.  
+   - Set disease factor levels to `c("Breast Cancer","Neuroblastoma","Retinoblastoma")` only.
+
+3. **`disease_palette`**  
+   - Removed the `"Leukemia/Lymphoma" = "#4DAF4A"` entry.
+
+The script now only uses NBL, BRCA, and RBL (plus `"OTHER"` for any other dataset IDs). No LEU/LYM or Leukemia/Lymphoma references remain.
+
+user:
+<user_query>
+so in order to run @\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R  i would run @\home\chu25\colDataAnnData\scripts\pan_cancer_umap.sh 
+</user_query>
+
+assistant:
+<think>
+The user is asking whether they run pan_cancer_umap_main.R by executing pan_cancer_umap.sh. I should check what pan_cancer_umap.sh does - does it call the R script?
+</think>
+
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap.sh
+
+[Tool result] Read
+
+assistant:
+<think>
+The shell script:
+1. Sets SLURM job parameters (job name, output/error logs, 1 task, 120h, 8 CPUs, 64G mem)
+2. Activates conda env `tcga-r-env`
+3. cd to colDataAnnData/scripts
+4. Runs `Rscript pan_cancer_umap_main.R` with no arguments
+
+So yes - to run the R script, they would run the .sh script. The R script will use its defaults (--pipe_root ".", --outdir "results/unsupervised/pan_cancer/umap_main_no_deg", etc.) because no args are passed.
+
+If they want to pass options (e.g. --pipe_root or --outdir), they'd need to add them to the Rscript line in the .sh. I could mention that briefly.
+</think>
+Yes. To run the UMAP pipeline you run the shell script:
+
+```bash
+# From anywhere (SLURM will cd into scripts):
+sbatch /home/chu25/colDataAnnData/scripts/pan_cancer_umap.sh
+```
+
+Or, without SLURM (interactive, same dir):
+
+```bash
+cd /home/chu25/colDataAnnData/scripts
+bash pan_cancer_umap.sh
+```
+
+**What the script does**
+- Activates conda env `tcga-r-env`
+- `cd`s to `/home/chu25/colDataAnnData/scripts`
+- Runs `Rscript pan_cancer_umap_main.R` with **no arguments** (so the R script uses its defaults: `--pipe_root .`, default `--outdir`, etc.)
+
+**If you want to pass options** (e.g. different `--pipe_root` or `--outdir`), change the Rscript line in the `.sh` to something like:
+
+```bash
+Rscript pan_cancer_umap_main.R --pipe_root /home/chu25/colDataAnnData --outdir results/unsupervised/pan_cancer/umap_main_no_deg
+```
+
+So: run `pan_cancer_umap.sh` (via `sbatch` or `bash`) to execute `pan_cancer_umap_main.R`.
+
+user:
+<user_query>
+where would the plots be saved?
+</user_query>
+
+assistant:
+<think>
+The user wants to know where the plots from pan_cancer_umap_main.R get saved. I already know from the script - the default outdir is "results/unsupervised/pan_cancer/umap_main_no_deg" and it's resolved via abs_from_root(opt$outdir), and pipe_root defaults to "." when no args are passed. So when run via pan_cancer_umap.sh, the working directory is /home/chu25/colDataAnnData/scripts, so pipe_root gets normalized to that. So outdir would be /home/chu25/colDataAnnData/scripts/results/unsupervised/pan_cancer/umap_main_no_deg.
+
+Let me double-check the script - pipe_root comes from opt$pipe_root which defaults to ".". When they run Rscript pan_cancer_umap_main.R with no args, pipe_root = normalizePath(".", mustWork = TRUE) which will be the current working directory when R starts - which is /home/chu25/colDataAnnData/scripts (because the .sh does cd there before Rscript). So outdir = abs_from_root("results/unsupervised/pan_cancer/umap_main_no_deg") = file.path(pipe_root, "results/unsupervised/pan_cancer/umap_main_no_deg") = /home/chu25/colDataAnnData/scripts/results/unsupervised/pan_cancer/umap_main_no_deg.
+
+So the plots go there. I'll state that clearly and mention the exact filenames pattern.
+</think>
+With the **default** options (as when you run `pan_cancer_umap.sh`), the R script uses:
+
+- **`--pipe_root`** = `.` (current working directory)
+- **`--outdir`** = `results/unsupervised/pan_cancer/umap_main_no_deg`
+
+The shell script does `cd /home/chu25/colDataAnnData/scripts` before calling R, so the current directory is the `scripts` folder. That makes:
+
+**Plots (and coords/summary) are saved under:**
+
+```text
+/home/chu25/colDataAnnData/scripts/results/unsupervised/pan_cancer/umap_main_no_deg/
+```
+
+There you get:
+
+- **Coords:** `coords_<SOURCE>_<SUBSET>_<metric>.tsv`  
+  e.g. `coords_RAW_COUNTS_TUMOUR_ONLY_cosine.tsv`
+- **Figures:** `Fig_umap_<SOURCE>_<SUBSET>_<metric>.pdf` and `.png`  
+  e.g. `Fig_umap_RAW_COUNTS_TUMOUR_ONLY_cosine.pdf` / `.png`
+- **Summary:** `summary_umap_MAIN_NO_DEG.tsv`
+
+If you run the R script with e.g. `--pipe_root /home/chu25/colDataAnnData`, then the same relative `--outdir` would put everything in:
+
+```text
+/home/chu25/colDataAnnData/results/unsupervised/pan_cancer/umap_main_no_deg/
+```
+
+user:
+<user_query>
+change the outdir to /home/chu25/colDataAnnData/results/pan_cancer_umap_main, and for now i only have run it with pan_cancer_umap.sh
+</user_query>
+
+assistant:
+<think>
+The user wants to:
+1. Change the default outdir in the R script to /home/chu25/colDataAnnData/results/pan_cancer_umap_main
+2. They only run it via pan_cancer_umap.sh (so we should make sure the shell script doesn't need to pass --outdir; we just change the default in the R script)
+
+I'll update the default for --outdir in pan_cancer_umap_main.R to "/home/chu25/colDataAnnData/results/pan_cancer_umap_main".
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:   make_option("--outdir", type="character",
+              default="results/unsupervised/pan_cancer/umap_main_no_deg",
+              help="Output directory [default: %default]"),
+  new_string:   make_option("--outdir", type="character",
+              default="/home/chu25/colDataAnnData/results/pan_cancer_umap_main",
+              help="Output directory [default: %default]"),
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Done. The default outdir is now an absolute path. When abs_from_root is called with an absolute path, it returns it as-is (see the check: if (grepl("^/", p) ... return(p)). So plots will go to /home/chu25/colDataAnnData/results/pan_cancer_umap_main. No change needed to the .sh since they only run via that and we're just changing the R default.
+</think>
+Updated the default `--outdir` in `pan_cancer_umap_main.R` to:
+
+**`/home/chu25/colDataAnnData/results/pan_cancer_umap_main`**
+
+Because that path is absolute, it’s used as-is no matter where you run the script from. Running `pan_cancer_umap.sh` as before (no extra args) will now write all outputs there: coords TSVs, PDF/PNG figures, and `summary_umap_MAIN_NO_DEG.tsv`. No changes to the shell script are required.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+* **Batch-corrected integrated UMAPs** → very tight tumour manifolds → extreme overplotting
+* **Cell lines** sit *inside* or *on the boundary* of those manifolds → easily buried
+* Euclidean vs cosine doesn’t change that qualitative issue
+
+---
+
+## 1️⃣ Separate the goals explicitly
+
+You now have **three different visual tasks**, and they should *not* share identical aesthetics:
+
+| Plot type   | Goal                               | Design priority         |
+| ----------- | ---------------------------------- | ----------------------- |
+| Tumour-only | Show disease separation & topology | Density & shape clarity |
+| Integrated  | Show *where cell lines land*       | Cell-line visibility    |
+| DEG UMAP    | Feature-driven separation          | Consistency & fairness  |
+
+So let’s **optimize RAW + BATCH plots independently** of DEG.
+
+---
+
+## 2️⃣ Tumour-only plots: show density, not points
+
+For **tumour-only**, crosses don’t matter, so we can go much denser and cleaner.
+
+### Recommended settings
+
+* **Point size**: `0.6–0.9`
+* **Alpha**: `0.35–0.5`
+* **Remove axes entirely**
+* **Optionally add contours** (this works beautifully on slides)
+
+### Optimised tumour-only function
+
+```r
+plot_tumour_only <- function(df, palette, subtitle_text) {
+
+  ggplot(df, aes(UMAP1, UMAP2)) +
+    geom_point(
+      aes(colour = disease),
+      size = 0.8,
+      alpha = 0.4
+    ) +
+    # Optional density contours (comment out if you dislike)
+    stat_density_2d(
+      aes(colour = disease),
+      linewidth = 0.3,
+      bins = 6,
+      alpha = 0.6
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption = "Tumours only; batch-corrected expression"
+    )
+}
+```
+
+📌 This makes the **batch-corrected tumour topology** instantly readable, especially for non-technical audiences.
+
+---
+
+## 3️⃣ Integrated plots: invert the visual hierarchy
+
+This is the *key fix*.
+
+Right now, tumours dominate.
+For integrated plots, **cell lines are the signal**, tumours are the background.
+
+### New hierarchy
+
+1. Tumours → **tiny, very transparent**
+2. Cell lines → **large, opaque, outlined**
+3. Legends → pushed away from plot body
+
+### Optimised integrated plotting function
+
+```r
+plot_integrated_focus_cell_lines <- function(df, palette, subtitle_text) {
+
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    # Tumours: background cloud
+    geom_point(
+      data = df %>% filter(type == "Tumour"),
+      aes(colour = disease),
+      size = 0.6,
+      alpha = 0.12
+    ) +
+
+    # Cell lines: black underlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      shape = 4,
+      colour = "black",
+      size = 3.6,
+      stroke = 1.4
+    ) +
+
+    # Cell lines: coloured overlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape = 4,
+      size = 3.1,
+      stroke = 1.1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "right",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Tumour–Cell Line Alignment (Integrated)",
+      subtitle = subtitle_text,
+      caption = "Cell lines highlighted; tumours shown as density backdrop"
+    )
+}
+```
+
+### Why this works (especially for your batch-corrected data)
+
+* Tumours form *continuous manifolds* → should be treated as **fields**
+* Cell lines are *discrete hypotheses* → should pop out visually
+* Cross shape + outline + opacity gives **immediate salience**
+
+This will fix the visibility issues you saw in the batch-corrected integrated PDFs.
+
+---
+
+## 4️⃣ Direct cluster labels: use medians, not centroids
+
+For slide readability, I **strongly recommend direct labels**.
+
+Add this *only to tumour-only plots*:
+
+```r
+label_df <- df %>%
+  filter(type == "Tumour") %>%
+  group_by(disease) %>%
+  summarise(
+    UMAP1 = median(UMAP1),
+    UMAP2 = median(UMAP2),
+    .groups = "drop"
+  )
+
+p <- p + geom_label(
+  data = label_df,
+  aes(UMAP1, UMAP2, label = disease),
+  inherit.aes = FALSE,
+  size = 3,
+  label.size = 0.2,
+  alpha = 0.9
+)
+```
+
+This:
+
+* eliminates legend-hunting
+* massively improves “glance comprehension” in talks
+* does **not** bias interpretation (labels sit at medians)
+
+---
+
+## 5️⃣ UMAP hyperparameters (based on your data)
+
+From the batch-corrected coordinate behaviour:
+
+* `min_dist = 0.05–0.1` → better internal structure
+* `n_neighbors = 30` is fine; don’t go higher for slides
+* **Cosine** is preferable for expression-level embeddings (keep it)
+
+I’d suggest:
+
+```bash
+--min_dist 0.08
+--n_neighbors 30
+--dist_metrics cosine
+```
+
+Then only show **one** distance metric per slide to avoid cognitive overload.
+
+---
+
+## 6️⃣ What I’d put on slides (storytelling)
+
+**Slide 1**
+Tumour-only, batch-corrected
+→ “Global pan-cancer transcriptomic structure”
+
+**Slide 2**
+Integrated, batch-corrected (cell lines highlighted)
+→ “Where DSMZ cell lines map onto tumour space”
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to implement a comprehensive set of changes to pan_cancer_umap_main.R based on their detailed design document. Let me break this down:
+
+1. **Tumour-only plots**: 
+   - New design: smaller points (0.6-0.9), lower alpha (0.35-0.5), remove axes, optional density contours
+   - Add direct cluster labels (median positions per disease) - only for tumour-only
+   - Replace current plot_tumour_only with the optimized version
+
+2. **Integrated plots**:
+   - Replace plot_main_overview with plot_integrated_focus_cell_lines
+   - Tumours: tiny (0.6), very transparent (0.12) - background cloud
+   - Cell lines: large, opaque, outlined (same cross treatment)
+   - Legend position "right" instead of "bottom"
+   - No axes (axis.text, axis.ticks, axis.title = element_blank())
+   - Different title/caption
+
+3. **Defaults**:
+   - Change --min_dist default to 0.08 (or add as suggestion - they said "I'd suggest" so I'll change the default)
+   - --n_neighbors 30 (already default)
+   - --dist_metrics default to just "cosine" (they said "only show one distance metric per slide" and "Cosine is preferable")
+
+4. **CLI**: They had --point_size and --point_alpha_tumour - the new tumour-only and integrated have fixed aesthetics in the suggested code. I could either remove those CLI options or keep them but the new functions don't use them. Looking at the suggested code, the values are hardcoded (0.8, 0.4 for tumour-only; 0.6, 0.12 for integrated). I'll implement as given and could leave the CLI for future tweaking or remove. I'll implement the exact functions they gave - if they want CLI later they can ask. I'll remove the point_size/point_alpha_tumour from the plot calls in run_umap_block since the new functions don't take those params.
+
+5. **Labels**: Add the median-label logic only to tumour-only plots (in run_umap_block we call plot_tumour_only then add geom_label with label_df). So the flow is: plot_tumour_only returns p, then we add geom_label to p before saving. I need to do that in the script.
+
+6. **stat_density_2d**: In the tumour-only they have both geom_point and stat_density_2d with aes(colour = disease). That might cause a double legend or issues - typically you'd want contour by group. Let me check: stat_density_2d(aes(colour = disease)) will compute density per disease and draw contours. The geom_point is also coloured by disease. So we get points + contours per disease. Good. But we're adding geom_label for disease labels - so we might have legend + labels. They said "eliminates legend-hunting" for the labels - so maybe we drop the legend for tumour-only when we have labels? Or keep both. I'll implement as specified and keep legend; they can remove if redundant.
+
+7. **theme_umap_main**: The new functions use theme_minimal() + custom theme, not theme_umap_main(). So they're deliberately different (lighter, no axes). I'll use their exact code.
+
+8. **save_plot**: Still used as-is.
+
+Let me read the current script to make precise edits.
+</think>
+Implementing the design changes: reading the script and applying the updates.
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 65
+  limit: 35
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 238
+  limit: 200
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I need to:
+1. Change CLI defaults: --min_dist 0.08, --dist_metrics cosine. Remove --point_size and --point_alpha_tumour (or keep for backwards compat - user said "optimize independently" so I'll remove them to avoid confusion with the new fixed aesthetics).
+2. Replace plot_main_overview with plot_integrated_focus_cell_lines (the new integrated function).
+3. Replace plot_tumour_only with the new tumour-only (density, small points, no axes) and add median labels after.
+4. In run_umap_block: remove pt_size, pt_alpha; for TUMOUR_ONLY call plot_tumour_only(...) then add geom_label with label_df; for INTEGRATED call plot_integrated_focus_cell_lines(...).
+5. Remove the INFO line that prints point_size and point_alpha_tumour.
+
+stat_density_2d: In the user's code they have geom_point and stat_density_2d both with aes(colour = disease). But stat_density_2d by default draws contours - and the contour might not have "colour" in the same way. Actually in ggplot2, stat_density_2d with aes(colour = disease) will compute density per group and draw contour lines coloured by disease. So we need to use geom_density_2d or stat_density_2d. The user wrote stat_density_2d(aes(colour = disease), ...). In ggplot2, the function is stat_density_2d() and it creates contour lines. For contour lines by group we use aes(colour = disease) or aes(group = disease). So that should work. Let me check - actually stat_density_2d returns contour paths; we might need geom_path or similar. In ggplot2, stat_density_2d() with geom = "density_2d" or the default produces contours. The default stat for geom_density_2d is StatDensity2d. So stat_density_2d(geom = "path") or just stat_density_2d() - I think we need geom_density_2d() which uses StatDensity2d and draws contours. Let me use geom_density_2d(data = df, aes(UMAP1, UMAP2, colour = disease), linewidth = 0.3, bins = 6, alpha = 0.6) - but geom_density_2d doesn't take "bins" in the same way. Actually in ggplot2:
+- geom_density_2d() draws contour lines from 2D density
+- bins = 6 is a common argument
+
+I'll use stat_density_2d(geom = "polygon", ...) no - the user said "contours". So stat_density_2d with geom = "path" or the default contour. In ggplot2 3.4+, stat_density_2d() defaults to contour. Let me use:
+stat_density_2d(aes(colour = disease), linewidth = 0.3, bins = 6, alpha = 0.6)
+
+Actually in ggplot2, stat_density_2d() by default uses geom="density_2d" which draws paths. The aesthetic for contour line colour would be "colour". So we need to make sure the contour is drawn with colour by disease. The stat computes density and outputs level; for contours by group we need to have group = disease in the parent aes and then contour is computed per group. So:
+ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+  geom_point(...) +
+  stat_density_2d(linewidth = 0.3, bins = 6, alpha = 0.6)
+
+That way both point and contour inherit colour = disease. Good.
+
+For the label_df we need to compute median UMAP1, UMAP2 per disease. The plot_df already has "disease". So label_df <- plot_df %>% filter(type == "Tumour") %>% group_by(disease) %>% summarise(UMAP1 = median(UMAP1), UMAP2 = median(UMAP2), .groups = "drop"). Then p + geom_label(data = label_df, aes(UMAP1, UMAP2, label = disease), inherit.aes = FALSE, ...). We need to filter plot_df for type == "Tumour" - and plot_df has type. So that's correct.
+
+Implementing.
+</think>
+Implementing the design changes.
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Update CLI defaults (min_dist 0.08, dist_metrics cosine); remove point_* opts","status":"in_progress"},{"id":"2","content":"Replace plot_tumour_only with density + contours + median labels","status":"pending"},{"id":"3","content":"Replace plot_main_overview with plot_integrated_focus_cell_lines","status":"pending"},{"id":"4","content":"Update run_umap_block to use new plotters and add labels to tumour-only","status":"pending"}]
+  merge: false
+
+[Tool result] TodoWrite
+
+assistant:
+<think>
+Let me do the edits. First CLI and path resolution (remove point_size/point_alpha_tumour, change defaults).
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:   make_option("--dist_metrics", type="character",
+              default="cosine,euclidean",
+              help="Comma-separated uwot metrics [default: %default]"),
+
+  make_option("--n_neighbors", type="integer", default=30,
+              help="UMAP n_neighbors [default: %default]"),
+
+  make_option("--min_dist", type="double", default=0.3,
+              help="UMAP min_dist [default: %default]"),
+
+  make_option("--seed", type="integer", default=42,
+              help="Seed [default: %default]"),
+
+  make_option("--page", type="character", default="slide",
+              help="Output size preset: slide (16:9), a4, a4_landscape [default: %default]"),
+
+  make_option("--point_size", type="double", default=2.5,
+              help="Point size for tumour/cell-line points [default: %default]"),
+
+  make_option("--point_alpha_tumour", type="double", default=0.95,
+              help="Alpha for tumour points (0-1) [default: %default]")
+)
+  new_string:   make_option("--dist_metrics", type="character",
+              default="cosine",
+              help="Comma-separated uwot metrics [default: %default]"),
+
+  make_option("--n_neighbors", type="integer", default=30,
+              help="UMAP n_neighbors [default: %default]"),
+
+  make_option("--min_dist", type="double", default=0.08,
+              help="UMAP min_dist (0.05-0.1 for structure) [default: %default]"),
+
+  make_option("--seed", type="integer", default=42,
+              help="Seed [default: %default]"),
+
+  make_option("--page", type="character", default="slide",
+              help="Output size preset: slide (16:9), a4, a4_landscape [default: %default]")
+)
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: cat("[INFO] outdir  :", outdir, "\n")
+cat("[INFO] metrics :", paste(dist_metrics, collapse=", "), "\n")
+cat(sprintf("[INFO] threads: %d\n", n_threads))
+cat(sprintf("[INFO] point_size: %.2f, point_alpha_tumour: %.2f\n", opt$point_size, opt$point_alpha_tumour))
+  new_string: cat("[INFO] outdir  :", outdir, "\n")
+cat("[INFO] metrics :", paste(dist_metrics, collapse=", "), "\n")
+cat(sprintf("[INFO] threads: %d; n_neighbors: %d; min_dist: %.2f\n", n_threads, opt$n_neighbors, opt$min_dist))
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Good. Now replace plot_main_overview with plot_integrated_focus_cell_lines and plot_tumour_only with the new tumour-only (density, contours, no axes). Then update run_umap_block to use them and add median labels for tumour-only.
+</think>
+
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Update CLI defaults (min_dist 0.08, dist_metrics cosine); remove point_* opts","status":"completed"},{"id":"2","content":"Replace plot_tumour_only with density + contours + median labels","status":"in_progress"}]
+  merge: true
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # 3) plot_main_overview (PASTE YOUR EXACT FUNCTION; uses opt for point_size/alpha)
+plot_main_overview <- function(df, palette, subtitle_text, point_size = 2.5, point_alpha_tumour = 0.95) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    geom_point(
+      data   = df %>% filter(type == "Tumour"),
+      aes(colour = disease, shape = type),
+      size   = point_size, alpha  = point_alpha_tumour, stroke = 0.5
+    ) +
+
+    geom_point(
+      data   = df %>% filter(type == "Cell Line"),
+      shape  = 4,
+      colour = "black",
+      size   = point_size * 1.36,
+      stroke = 1.4,
+      alpha  = 1
+    ) +
+
+    geom_point(
+      data   = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape  = 4,
+      size   = point_size * 1.2,
+      stroke = 1.1,
+      alpha  = 1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    scale_shape_manual(values = c("Tumour" = 16, "Cell Line" = 4),
+                       name = "Sample type") +
+
+    coord_fixed(ratio = 1) +
+    theme_umap_main() +
+
+    guides(
+      colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1)),
+      shape  = guide_legend(order = 2, override.aes = list(size = 3.2, alpha = 1, stroke = 1.2))
+    ) +
+
+    labs(
+      title    = "Pan-Cancer Tumour–Cell Line Alignment",
+      subtitle = subtitle_text,
+      caption  = "Colour: cancer type; shape: circle = tumour, cross = cell line",
+      x = "UMAP 1", y = "UMAP 2"
+    )
+}
+
+# Tumour-only view (new, but matches DEG theme + palette)
+plot_tumour_only <- function(df, palette, subtitle_text, point_size = 2.5, point_alpha_tumour = 0.95) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+    geom_point(
+      aes(colour = disease),
+      size = point_size, alpha = point_alpha_tumour, stroke = 0.5
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed(ratio = 1) +
+    theme_umap_main() +
+    guides(colour = guide_legend(order = 1, override.aes = list(size = 3, alpha = 1))) +
+    labs(
+      title    = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption  = "Colour: cancer type (tumours only)",
+      x = "UMAP 1", y = "UMAP 2"
+    )
+}
+  new_string: # Tumour-only: density + contours, no axes, median labels (slide-ready)
+plot_tumour_only <- function(df, palette, subtitle_text) {
+  p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(
+      aes(colour = disease),
+      size = 0.8,
+      alpha = 0.4
+    ) +
+    stat_density_2d(
+      aes(colour = disease),
+      linewidth = 0.3,
+      bins = 6,
+      alpha = 0.6
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption = "Tumours only; batch-corrected expression"
+    )
+
+  # Direct cluster labels at medians (slide readability)
+  label_df <- df %>%
+    filter(type == "Tumour") %>%
+    group_by(disease) %>%
+    summarise(
+      UMAP1 = median(UMAP1),
+      UMAP2 = median(UMAP2),
+      .groups = "drop"
+    )
+  p + geom_label(
+    data = label_df,
+    aes(UMAP1, UMAP2, label = disease),
+    inherit.aes = FALSE,
+    size = 3,
+    label.size = 0.2,
+    alpha = 0.9
+  )
+}
+
+# Integrated: cell lines highlighted, tumours as transparent backdrop
+plot_integrated_focus_cell_lines <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    # Tumours: background cloud
+    geom_point(
+      data = df %>% filter(type == "Tumour"),
+      aes(colour = disease),
+      size = 0.6,
+      alpha = 0.12
+    ) +
+
+    # Cell lines: black underlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      shape = 4,
+      colour = "black",
+      size = 3.6,
+      stroke = 1.4
+    ) +
+
+    # Cell lines: coloured overlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape = 4,
+      size = 3.1,
+      stroke = 1.1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "right",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Tumour–Cell Line Alignment (Integrated)",
+      subtitle = subtitle_text,
+      caption = "Cell lines highlighted; tumours shown as density backdrop"
+    )
+}
+
+[Tool result] TodoWrite
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+I need to fix plot_tumour_only: it has aes(colour = disease) in both geom_point and the parent. And in geom_point we're mapping colour again - that's redundant. Also, for stat_density_2d we need to have the contour computed per group. In ggplot2, stat_density_2d with aes(colour = disease) - actually the contour stat doesn't use "colour" for grouping by default; we need contour_var or the aesthetic. Let me check: in ggplot2 3.4+, stat_density_2d(aes(colour = after_stat(level))) no - for multiple groups we need to use aes(group = disease) or the data is split. So:
+ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+  geom_point(size = 0.8, alpha = 0.4) +
+  stat_density_2d(linewidth = 0.3, bins = 6, alpha = 0.6)
+
+That way both get colour from disease. Good. I had aes(colour = disease) inside geom_point which is redundant since it's in the parent. I'll remove the inner aes(colour = disease) from geom_point - actually leaving it doesn't hurt, it's the same. Let me leave as is.
+
+Actually one issue: in plot_tumour_only we're called with plot_df %>% filter(type == "Tumour"), so df only has Tumour rows. So filter(type == "Tumour") in label_df is redundant but harmless (all rows are Tumour). I'll leave it for clarity.
+
+Now update run_umap_block: remove pt_size, pt_alpha; call plot_tumour_only(plot_df %>% filter(type == "Tumour"), ...) with no extra args; call plot_integrated_focus_cell_lines(plot_df, ...) for integrated.
+</think>
+Updating run_umap_block to use the new plotters and remove point-size/alpha references:
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: run_umap_block <- function(X_sxg, annot, source_label) {
+  summaries <- list()
+  pt_size   <- opt$point_size
+  pt_alpha  <- opt$point_alpha_tumour
+
+  for (subset_mode in c("TUMOUR_ONLY", "INTEGRATED")) {
+  new_string: run_umap_block <- function(X_sxg, annot, source_label) {
+  summaries <- list()
+
+  for (subset_mode in c("TUMOUR_ONLY", "INTEGRATED")) {
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle, point_size = pt_size, point_alpha_tumour = pt_alpha)
+      } else {
+        p <- plot_main_overview(plot_df, disease_palette, subtitle, point_size = pt_size, point_alpha_tumour = pt_alpha)
+      }
+  new_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle)
+      } else {
+        p <- plot_integrated_focus_cell_lines(plot_df, disease_palette, subtitle)
+      }
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Now remove theme_umap_main if it's no longer used - let me check. We removed plot_main_overview which used it. plot_tumour_only and plot_integrated_focus_cell_lines use theme_minimal() + custom theme. So theme_umap_main is now unused. I could leave it in case someone wants to reuse it elsewhere, or remove it. I'll leave it - it doesn't hurt and might be useful for DEG UMAP consistency elsewhere.
+
+Fix plot_tumour_only: geom_point has aes(colour = disease) but the parent ggplot already has aes(UMAP1, UMAP2, colour = disease). So geom_point doesn't need aes(colour = disease) again - but it doesn't hurt. Actually in the user's snippet they had just aes(colour = disease) inside geom_point - so the aesthetic is inherited. Let me remove the redundant aes from geom_point to avoid duplication: geom_point(size = 0.8, alpha = 0.4) - colour is inherited from parent. Done in my version I have aes(colour = disease) in geom_point - I'll simplify to just size and alpha.
+
+Also check: stat_density_2d with aes(colour = disease) - in ggplot2, for stat_density_2d to draw contours per group we need the data to be grouped. The default is that colour = disease will cause the stat to be computed per colour group. So we're good.
+
+Let me double-check label_df: we're filtering plot_df for type == "Tumour", but when we call plot_tumour_only we pass plot_df %>% filter(type == "Tumour"), so df in the function only has Tumour rows. So in label_df, filter(type == "Tumour") is redundant (all rows are Tumour). It's harmless. I'll leave it for robustness in case the function is ever called with mixed data.
+
+Read lints.
+</think>
+
+
+[Tool call] TodoWrite
+  todos: [{"id":"2","content":"Replace plot_tumour_only with density + contours + median labels","status":"completed"},{"id":"3","content":"Replace plot_main_overview with plot_integrated_focus_cell_lines","status":"completed"},{"id":"4","content":"Update run_umap_block to use new plotters and add labels to tumour-only","status":"completed"}]
+  merge: true
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:   p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(
+      aes(colour = disease),
+      size = 0.8,
+      alpha = 0.4
+    ) +
+  new_string:   p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(
+      size = 0.8,
+      alpha = 0.4
+    ) +
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] TodoWrite
+
+[Tool result] StrReplace
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+theme_umap_main is now unused - the two new plot functions use theme_minimal() + inline theme(). I could remove theme_umap_main to avoid dead code, or leave it for DEG scripts. The user said "optimize RAW + BATCH plots independently of DEG" and "So let's optimize RAW + BATCH plots independently" - so this script no longer uses theme_umap_main. I'll leave it in the file in case they want to keep it for reference or another script; removing it might break if something else expected it. Actually nothing in this file uses it now. I'll leave it - it's a small helper and doesn't affect execution.
+
+Done. Summarize for the user.
+</think>
+Summary of changes:
+
+**1. CLI**
+- **`--dist_metrics`** default: `cosine` (was `cosine,euclidean`).
+- **`--min_dist`** default: `0.08` (was `0.3`).
+- **`--n_neighbors`** default: `30` (unchanged).
+- **Removed** `--point_size` and `--point_alpha_tumour` (aesthetics are fixed in the new plotters).
+
+**2. Tumour-only (`plot_tumour_only`)**
+- Points: size `0.8`, alpha `0.4`; axes removed (no axis text/ticks/titles).
+- **2D density contours** by disease: `stat_density_2d(..., bins = 6, alpha = 0.6)`.
+- **Median labels**: per-disease median UMAP1/UMAP2 with `geom_label` for “glance” reading.
+- Theme: `theme_minimal()` + no grid; legend at bottom; caption “Tumours only; batch-corrected expression”.
+
+**3. Integrated (`plot_integrated_focus_cell_lines`)**
+- **Tumours**: size `0.6`, alpha `0.12` (background cloud).
+- **Cell lines**: black cross underlay (size 3.6, stroke 1.4) + coloured overlay (size 3.1, stroke 1.1).
+- No axes; legend on the **right**; caption “Cell lines highlighted; tumours shown as density backdrop”.
+- Replaces the old `plot_main_overview`.
+
+**4. Runner**
+- `run_umap_block` calls the new plotters and no longer uses point_size/point_alpha.
+- Tumour-only plots get the median labels from inside `plot_tumour_only`.
+
+**Slide story**
+- **Slide 1**: Tumour-only, batch-corrected → “Global pan-cancer transcriptomic structure”.
+- **Slide 2**: Integrated, batch-corrected → “Where DSMZ cell lines map onto tumour space”.
+
+Running `pan_cancer_umap.sh` (or the R script with defaults) now uses `min_dist=0.08` and `cosine` only. To add euclidean again: `--dist_metrics cosine,euclidean`.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+## 1) Your RAW vs BATCH UMAPs are **not using the same gene set**
+
+Right now you compute `common_genes` **separately** for raw and batch:
+
+* `raw_obj$common_genes` = intersect across raw datasets
+* `batch_obj$common_genes` = intersect across batch datasets
+
+Those two intersections are often **not identical**, so you end up doing:
+
+* RAW UMAP on gene set A
+* BATCH UMAP on gene set B
+
+That makes the comparison **not fair**, because the feature space differs.
+
+### Fix: force a shared gene universe for both
+
+After loading both objects, define a final gene set and subset both to it:
+
+```r
+# After raw_obj and batch_obj are built
+final_genes <- intersect(raw_obj$common_genes, batch_obj$common_genes)
+cat("[INFO] Final shared genes (RAW ∩ BATCH):", length(final_genes), "\n")
+
+# Subset merged matrices to the same genes
+raw_obj$merged   <- raw_obj$merged[final_genes, , drop = FALSE]
+batch_obj$merged <- batch_obj$merged[final_genes, , drop = FALSE]
+```
+
+Then (re)create `X_raw_sxg` and `X_batch_sxg` from these subset matrices.
+
+✅ This is the single most important “comparison integrity” fix.
+
+---
+
+## 2) UMAP on **raw counts** is almost always dominated by library size
+
+You said “no normalisation”, but be aware: UMAP on raw counts typically clusters by:
+
+* sequencing depth / library size
+* batch-specific count scaling
+* dataset size differences
+
+…not biology.
+
+### Minimal, *non-invasive* compromise
+
+If you still want a “raw-ish” view, do **log1p CPM** (no DESeq2, no batch correction):
+
+```r
+log1p_cpm <- function(counts_gxs) {
+  lib <- colSums(counts_gxs)
+  cpm <- sweep(counts_gxs, 2, lib, "/") * 1e6
+  log1p(cpm)
+}
+```
+
+Then use:
+
+```r
+X_raw_sxg <- t(log1p_cpm(raw_obj$merged))
+```
+
+You can still call it **RAW (log1p-CPM)** in the subtitle, and it stays faithful to “no heavy normalisation”.
+
+If you *really* insist on strictly raw counts, keep it — but then interpret the RAW plot as “technical baseline”.
+
+---
+
+## 3) Small plotting correctness notes
+
+### A) Your tumour-only caption is misleading for RAW
+
+Right now tumour-only plot caption says:
+
+> “Tumours only; batch-corrected expression”
+
+That is wrong for RAW.
+
+Fix by letting the caption depend on `source_label`, or just remove it and keep the subtitle accurate.
+
+## 4) Quick patch summary (what I’d actually change)
+
+### After loading both raw and batch:
+
+```r
+# enforce shared genes
+final_genes <- intersect(raw_obj$common_genes, batch_obj$common_genes)
+raw_obj$merged   <- raw_obj$merged[final_genes, , drop = FALSE]
+batch_obj$merged <- batch_obj$merged[final_genes, , drop = FALSE]
+```
+
+### Build RAW embedding matrix with log1p-CPM (recommended):
+
+```r
+log1p_cpm <- function(counts_gxs) {
+  lib <- colSums(counts_gxs)
+  cpm <- sweep(counts_gxs, 2, lib, "/") * 1e6
+  log1p(cpm)
+}
+
+X_raw_sxg <- t(log1p_cpm(raw_obj$merged))
+X_batch_sxg <- t(batch_obj$merged)   # already VST
+```
+
+### Fix tumour-only caption
+
+Make caption reflect the source (quickest: remove the fixed caption line), or:
+
+```r
+plot_tumour_only <- function(df, palette, subtitle_text, caption_text) {
+  ...
+  labs(..., caption = caption_text)
+}
+```
+
+Then call with:
+
+* RAW: `"Tumours only; log1p-CPM (raw counts)"`
+* BATCH: `"Tumours only; batch-corrected VST"`
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to implement four changes to pan_cancer_umap_main.R:
+
+1. **Shared gene set**: After loading raw_obj and batch_obj, compute final_genes = intersect(raw_obj$common_genes, batch_obj$common_genes), then subset both merged matrices to final_genes. Then (re)create X_raw_sxg and X_batch_sxg from these subset matrices.
+
+2. **RAW as log1p-CPM**: Add a log1p_cpm() function and use X_raw_sxg <- t(log1p_cpm(raw_obj$merged)) instead of t(raw_obj$merged). X_batch_sxg stays t(batch_obj$merged). The source_label for RAW could stay "RAW_COUNTS" or we could change to "RAW_LOG1P_CPM" - the user said "You can still call it **RAW (log1p-CPM)** in the subtitle". So I'll keep the runner passing "RAW_COUNTS" or change to something like "RAW_LOG1P_CPM" for clarity in the output filenames. Actually re-reading: "You can still call it **RAW (log1p-CPM)** in the subtitle" - so the subtitle can say that. The source_label is used in tags like "RAW_COUNTS_TUMOUR_ONLY_cosine". I could change to "RAW_LOG1P_CPM" so the filenames are accurate, or keep "RAW_COUNTS" and let the subtitle say "RAW (log1p-CPM)". I'll use "RAW_LOG1P_CPM" as the source_label for clarity in outputs.
+
+3. **Tumour-only caption**: Make caption depend on source. Add caption_text parameter to plot_tumour_only and pass it from run_umap_block: for RAW use "Tumours only; log1p-CPM (raw counts)" and for BATCH use "Tumours only; batch-corrected VST".
+
+4. **Integrated plot caption**: The user didn't ask to change the integrated caption, but it might also say something batch-specific. Let me check - the integrated caption is "Cell lines highlighted; tumours shown as density backdrop". That's generic. I'll only change tumour-only caption as requested.
+
+Let me find the exact code locations and make the edits.
+</think>
+Implementing the four changes: locating the exact code sections to edit.
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 418
+  limit: 100
+[Tool call] Grep
+  pattern: plot_tumour_only|caption|X_raw_sxg|X_batch_sxg|raw_obj\$merged|batch_obj\$merged
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+
+[Tool result] Read
+
+[Tool result] Grep
+
+assistant:
+<think>
+I need to:
+1. Add log1p_cpm function (before SECTION 8 or in helpers).
+2. After loading both raw_obj and batch_obj: compute final_genes, subset both merged matrices, then build X_raw_sxg and X_batch_sxg. X_raw_sxg = t(log1p_cpm(raw_obj$merged)), X_batch_sxg = t(batch_obj$merged). Use source_label "RAW_LOG1P_CPM" for raw.
+3. plot_tumour_only: add caption_text parameter and use it in labs(..., caption = caption_text).
+4. In run_umap_block, when calling plot_tumour_only, pass caption_text: for source_label "RAW_LOG1P_CPM" use "Tumours only; log1p-CPM (raw counts)", for "BATCH_CORR_VST" use "Tumours only; batch-corrected VST".
+
+Let me read plot_tumour_only full signature and labs to get exact string.
+</think>
+
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 253
+  limit: 100
+
+[Tool result] Read
+
+assistant:
+<think>
+Now I need to see where plot_tumour_only is called to add the caption_text argument.
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: merge_by_common_genes <- function(dataset_meta) {
+  new_string: log1p_cpm <- function(counts_gxs) {
+  lib <- colSums(counts_gxs)
+  cpm <- sweep(counts_gxs, 2, lib, "/") * 1e6
+  log1p(cpm)
+}
+
+merge_by_common_genes <- function(dataset_meta) {
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Tumour-only: density + contours, no axes, median labels (slide-ready)
+plot_tumour_only <- function(df, palette, subtitle_text) {
+  p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(
+      size = 0.8,
+      alpha = 0.4
+    ) +
+    stat_density_2d(
+      aes(colour = disease),
+      linewidth = 0.3,
+      bins = 6,
+      alpha = 0.6
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption = "Tumours only; batch-corrected expression"
+    )
+  new_string: # Tumour-only: density + contours, no axes, median labels (slide-ready)
+plot_tumour_only <- function(df, palette, subtitle_text, caption_text) {
+  p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(
+      size = 0.8,
+      alpha = 0.4
+    ) +
+    stat_density_2d(
+      aes(colour = disease),
+      linewidth = 0.3,
+      bins = 6,
+      alpha = 0.6
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption = caption_text
+    )
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: cat("[INFO] BATCH sample table:\n")
+print(table(batch_obj$annot$cancer_type, batch_obj$annot$sample_type))
+
+# UMAP needs samples x genes
+X_raw_sxg   <- t(raw_obj$merged)
+X_batch_sxg <- t(batch_obj$merged)
+
+rownames(X_raw_sxg)   <- colnames(raw_obj$merged)
+rownames(X_batch_sxg) <- colnames(batch_obj$merged)
+
+stopifnot(all(rownames(X_raw_sxg)   == raw_obj$annot$sample))
+stopifnot(all(rownames(X_batch_sxg) == batch_obj$annot$sample))
+
+all_summ <- list()
+all_summ[["RAW"]]   <- run_umap_block(X_raw_sxg,   raw_obj$annot,   "RAW_COUNTS")
+all_summ[["BATCH"]] <- run_umap_block(X_batch_sxg, batch_obj$annot, "BATCH_CORR_VST")
+  new_string: cat("[INFO] BATCH sample table:\n")
+print(table(batch_obj$annot$cancer_type, batch_obj$annot$sample_type))
+
+# Enforce shared gene set for fair RAW vs BATCH comparison
+final_genes <- intersect(raw_obj$common_genes, batch_obj$common_genes)
+cat("[INFO] Final shared genes (RAW ∩ BATCH):", length(final_genes), "\n")
+raw_obj$merged   <- raw_obj$merged[final_genes, , drop = FALSE]
+batch_obj$merged <- batch_obj$merged[final_genes, , drop = FALSE]
+
+# UMAP needs samples x genes; RAW as log1p-CPM (not raw counts) for interpretable embedding
+X_raw_sxg   <- t(log1p_cpm(raw_obj$merged))
+X_batch_sxg <- t(batch_obj$merged)
+
+rownames(X_raw_sxg)   <- colnames(raw_obj$merged)
+rownames(X_batch_sxg) <- colnames(batch_obj$merged)
+
+stopifnot(all(rownames(X_raw_sxg)   == raw_obj$annot$sample))
+stopifnot(all(rownames(X_batch_sxg) == batch_obj$annot$sample))
+
+all_summ <- list()
+all_summ[["RAW"]]   <- run_umap_block(X_raw_sxg,   raw_obj$annot,   "RAW_LOG1P_CPM")
+all_summ[["BATCH"]] <- run_umap_block(X_batch_sxg, batch_obj$annot, "BATCH_CORR_VST")
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Now I need to update the call to plot_tumour_only in run_umap_block to pass caption_text. The call is:
+  if (subset_mode == "TUMOUR_ONLY") {
+    p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                          disease_palette, subtitle)
+So I need to add a fourth argument: caption_text. The value should depend on source_label:
+- "RAW_LOG1P_CPM" -> "Tumours only; log1p-CPM (raw counts)"
+- "BATCH_CORR_VST" -> "Tumours only; batch-corrected VST"
+
+I'll use a simple if/else or switch in run_umap_block when calling plot_tumour_only.
+</think>
+Updating the `plot_tumour_only` call in `run_umap_block` to pass the source-dependent caption:
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle)
+      } else {
+  new_string:       if (subset_mode == "TUMOUR_ONLY") {
+        caption_tumour <- if (source_label == "RAW_LOG1P_CPM") {
+          "Tumours only; log1p-CPM (raw counts)"
+        } else {
+          "Tumours only; batch-corrected VST"
+        }
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle, caption_tumour)
+      } else {
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Subtitle in run_umap_block uses source_label - so for RAW it will say "RAW_LOG1P_CPM; ..." which is correct. Output filenames will be e.g. coords_RAW_LOG1P_CPM_TUMOUR_ONLY_cosine.tsv. Good.
+
+Let me verify: final_genes - we're subsetting raw_obj$merged and batch_obj$merged. The merged matrices have rownames = genes. So raw_obj$merged[final_genes, , drop = FALSE] keeps only rows in final_genes. final_genes is a character vector of gene IDs. Good.
+
+Read lints.
+</think>
+
+
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+All good. Summarize for the user.
+</think>
+Summary of changes:
+
+**1) Shared gene set (RAW ∩ BATCH)**  
+- After building `raw_obj` and `batch_obj`, the script now:
+  - Sets `final_genes <- intersect(raw_obj$common_genes, batch_obj$common_genes)`
+  - Logs: `[INFO] Final shared genes (RAW ∩ BATCH): <n>`
+  - Subsets both: `raw_obj$merged` and `batch_obj$merged` to `final_genes`  
+- RAW and BATCH UMAPs now use the same gene set for a fair comparison.
+
+**2) RAW as log1p-CPM**  
+- Added helper:
+  - `log1p_cpm(counts_gxs)`: CPM then `log1p`, no DESeq2/batch correction.
+- RAW embedding is now:
+  - `X_raw_sxg <- t(log1p_cpm(raw_obj$merged))`
+- BATCH stays:
+  - `X_batch_sxg <- t(batch_obj$merged)` (already VST).
+- Source label for RAW is now **`RAW_LOG1P_CPM`** (outputs e.g. `coords_RAW_LOG1P_CPM_TUMOUR_ONLY_cosine.tsv`). Subtitle still describes “RAW (log1p-CPM)” via the tag.
+
+**3) Tumour-only caption by source**  
+- `plot_tumour_only(..., caption_text)` now takes a 4th argument `caption_text`.
+- In `run_umap_block`, for tumour-only:
+  - **RAW_LOG1P_CPM**: `"Tumours only; log1p-CPM (raw counts)"`
+  - **BATCH_CORR_VST**: `"Tumours only; batch-corrected VST"`
+
+**4) No other changes**  
+- Integrated plot caption is unchanged.  
+- Summary TSV and other behaviour are unchanged; only the RAW source name in the summary is now `RAW_LOG1P_CPM`.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+A strictly colour-blind-safe alternative (recommended)
+Okabe–Ito palette (gold standard)
+
+This palette is designed to be safe across all major forms of colour blindness and is widely used in genomics.
+
+Recommended subset for 3 cancers:
+
+disease_palette <- c(
+  "Breast Cancer"  = "#D55E00",  # vermillion
+  "Neuroblastoma"  = "#0072B2",  # blue
+  "Retinoblastoma" = "#E69F00"   # orange
+)
+
+Why this is better
+
+Larger perceptual distance between red-like colours
+
+Works with transparency
+
+Works in grayscale better than your current red/orange combo
+
+Publication-safe and reviewer-proof
+
+This is a drop-in replacement — no other code changes needed.
+</user_query>
+
+assistant:
+<think>
+The user wants to replace the current disease_palette in pan_cancer_umap_main.R with the Okabe–Ito colour-blind-safe palette they provided. It's a simple drop-in replacement.
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Palette (same as DEG script)
+disease_palette <- c(
+  "Breast Cancer"     = "#E41A1C",
+  "Neuroblastoma"     = "#377EB8",
+  "Retinoblastoma"    = "#FF7F00"
+)
+  new_string: # Palette: Okabe–Ito (colour-blind safe, 3 cancers)
+disease_palette <- c(
+  "Breast Cancer"     = "#D55E00",  # vermillion
+  "Neuroblastoma"     = "#0072B2",  # blue
+  "Retinoblastoma"   = "#E69F00"   # orange
+)
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Done. Simple replacement. No other code changes needed.
+</think>
+Updated the script to use the Okabe–Ito palette:
+
+- **Breast Cancer** = `#D55E00` (vermillion)  
+- **Neuroblastoma** = `#0072B2` (blue)  
+- **Retinoblastoma** = `#E69F00` (orange)  
+
+No other code changes; all plots that use `disease_palette` will now use these colours.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+s your palette color-blind friendly?
+
+Your new palette:
+
+BRCA: #D55E00 (vermillion)
+
+NBL: #0072B2 (blue)
+
+RBL: #E69F00 (orange)
+
+This is from Okabe–Ito, which is widely used specifically because it holds up well under common forms of color vision deficiency.
+
+The one caveat
+
+Vermillion vs orange can get closer under protanopia/deuteranopia, especially when points are small and alpha is low. It’s usually still distinguishable, but it can degrade depending on background density.
+
+Two practical improvements you already partly did:
+
+keep shape encoding (tumour vs cell line)
+
+add direct labels on tumour-only plots (median labels)
+
+Those two are what make the plot readable even if two hues converge under CVD.
+
+If you want a palette with more separation for those two groups under red-green deficiencies, you can switch BRCA from vermillion to a purple-ish Okabe–Ito option like #CC79A7 (reddish purple) and keep NBL blue + RBL orange. That usually separates better than orange/vermillion.
+</user_query>
+
+assistant:
+<think>
+The user is sharing context about the palette and suggesting an optional improvement: if they want more separation under red-green colour vision deficiency (protanopia/deuteranopia), they could switch BRCA from vermillion (#D55E00) to a purple-ish Okabe–Ito option #CC79A7 (reddish purple), keeping NBL blue and RBL orange.
+
+They're not explicitly asking me to make the change - they're explaining the caveat and offering an alternative. I'll implement the suggested improvement (BRCA = #CC79A7) since they framed it as "if you want... you can switch" and it's a clear, practical recommendation for better CVD separation. I'll make the change and briefly note why.
+</think>
+Switching BRCA to Okabe–Ito reddish purple (#CC79A7) for better separation from orange under red–green CVD.
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Palette: Okabe–Ito (colour-blind safe, 3 cancers)
+disease_palette <- c(
+  "Breast Cancer"     = "#D55E00",  # vermillion
+  "Neuroblastoma"     = "#0072B2",  # blue
+  "Retinoblastoma"   = "#E69F00"   # orange
+)
+  new_string: # Palette: Okabe–Ito (colour-blind safe; BRCA purple for better separation from orange under red-green CVD)
+disease_palette <- c(
+  "Breast Cancer"     = "#CC79A7",  # reddish purple
+  "Neuroblastoma"     = "#0072B2",  # blue
+  "Retinoblastoma"   = "#E69F00"   # orange
+)
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Done. I switched BRCA to #CC79A7 (reddish purple) so BRCA vs RBL (orange) separate better under protanopia/deuteranopia. Shape encoding and median labels are already in place for extra readability.
+</think>
+Updated BRCA to **#CC79A7** (Okabe–Ito reddish purple). You now have:
+
+- **BRCA** = #CC79A7 (reddish purple) — clearer separation from orange under red–green CVD  
+- **NBL** = #0072B2 (blue)  
+- **RBL** = #E69F00 (orange)  
+
+Shape encoding (tumour vs cell line) and median labels on tumour-only plots are unchanged, so the plots stay readable even when hues are hard to tell apart.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+Perfect — then you’ll keep the plot exactly as-is **except**:
+
+* **(3)** move labels to the side + smaller font (and prevent clipping)
+* **(4)** make the integrated plot use the same visual logic (tumours as light backdrop, cell lines pop), and also remove centroid-style labeling from tumour-only (since you want side labels)
+
+Below are drop-in replacements for **only the parts you need**.
+
+---
+
+## 3) Tumour-only plot: side labels + smaller font (no centroid)
+
+Replace your current `plot_tumour_only()` with this version:
+
+```r
+plot_tumour_only <- function(df, palette, subtitle_text, caption_text,
+                             label_side = c("right","left"),
+                             label_size = 2.4) {
+
+  label_side <- match.arg(label_side)
+
+  # Base tumour plot (tumours only)
+  p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(size = 0.8, alpha = 0.40) +
+    stat_density_2d(aes(colour = disease),
+                    linewidth = 0.3, bins = 6, alpha = 0.6) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed(clip = "off") +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid  = element_blank(),
+      axis.text   = element_blank(),
+      axis.ticks  = element_blank(),
+      axis.title  = element_blank(),
+      legend.position = "bottom",
+      plot.title  = element_text(face = "bold"),
+      plot.margin = if (label_side == "right") margin(12, 40, 8, 8) else margin(12, 8, 8, 40)
+    ) +
+    labs(
+      title    = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption  = caption_text
+    )
+
+  # Side labels: anchor at extreme x of each cluster + median y
+  label_df <- df %>%
+    group_by(disease) %>%
+    summarise(
+      y = median(UMAP2),
+      x_right = quantile(UMAP1, 0.98),
+      x_left  = quantile(UMAP1, 0.02),
+      .groups = "drop"
+    ) %>%
+    mutate(x = if (label_side == "left") x_left else x_right)
+
+  p + geom_label(
+    data = label_df,
+    aes(x, y, label = disease),
+    inherit.aes = FALSE,
+    size = label_size,
+    label.size = 0.15,
+    alpha = 0.85
+  )
+}
+```
+
+### How to call it (inside your runner)
+
+When you call tumour-only, pass:
+
+* `label_side = "right"` (or `"left"`)
+* `label_size = 2.2–2.6` range
+
+Example call:
+
+```r
+p <- plot_tumour_only(
+  plot_df %>% filter(type == "Tumour"),
+  disease_palette,
+  subtitle,
+  caption_tumour,
+  label_side = "right",
+  label_size = 2.4
+)
+```
+
+---
+
+## 4) Integrated plot: keep tumours as backdrop, cell lines pop + cleaner legend
+
+Your integrated plot is already basically doing this well. Two small optimizations that help a lot:
+
+1. **make tumour backdrop slightly more transparent**
+2. **ensure legend is clean + not too large**
+
+Replace your current `plot_integrated_focus_cell_lines()` with:
+
+```r
+plot_integrated_focus_cell_lines <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    # Tumours: background cloud (lighter)
+    geom_point(
+      data = df %>% filter(type == "Tumour"),
+      aes(colour = disease),
+      size = 0.55,
+      alpha = 0.08
+    ) +
+
+    # Cell lines: black underlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      shape = 4,
+      colour = "black",
+      size = 3.6,
+      stroke = 1.4
+    ) +
+
+    # Cell lines: coloured overlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape = 4,
+      size = 3.1,
+      stroke = 1.1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text  = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "right",
+      legend.title = element_text(face = "bold", size = 10),
+      legend.text  = element_text(size = 9),
+      legend.key.size = grid::unit(0.9, "lines"),
+      plot.title = element_text(face = "bold")
+    ) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3))) +
+    labs(
+      title    = "Tumour–Cell Line Alignment (Integrated)",
+      subtitle = subtitle_text,
+      caption  = "Cell lines highlighted; tumours shown as low-opacity backdrop"
+    )
+}
+```
+
+---
+
+## Minimal change in `run_umap_block()`
+
+Just update the calls (no other refactor needed):
+
+```r
+if (subset_mode == "TUMOUR_ONLY") {
+  caption_tumour <- if (source_label == "RAW_LOG1P_CPM") {
+    "Tumours only; log1p-CPM (raw counts)"
+  } else {
+    "Tumours only; batch-corrected VST"
+  }
+
+  p <- plot_tumour_only(
+    plot_df %>% filter(type == "Tumour"),
+    disease_palette,
+    subtitle,
+    caption_tumour,
+    label_side = "right",
+    label_size = 2.4
+  )
+
+} else {
+  p <- plot_integrated_focus_cell_lines(plot_df, disease_palette, subtitle)
+}
+```
+
+---
+
+### Quick defaults I’d start with
+
+* `label_side = "right"`
+* `label_size = 2.3–2.4`
+* integrated tumour alpha `0.08` (your crosses will be very readable)
+
+If you tell me whether you prefer labels on **right** or **left** (for your slide layout), I’ll lock in the margins so the labels never get clipped.
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to implement the changes they've provided:
+
+1. **plot_tumour_only**: Replace with the new version that:
+   - Has side labels (right or left) instead of centroid/median labels
+   - Uses smaller font (label_size ~2.4)
+   - coord_fixed(clip = "off") to prevent clipping
+   - label_df uses quantile(UMAP1, 0.98) for x_right and 0.02 for x_left, and median(UMAP2) for y
+   - New params: label_side = c("right","left"), label_size = 2.4
+   - plot.margin adjusted for label side (40 on the side where labels go)
+
+2. **plot_integrated_focus_cell_lines**: Replace with the new version that:
+   - Tumour backdrop: size 0.55, alpha 0.08 (slightly more transparent)
+   - Legend: legend.title = element_text(face = "bold", size = 10), legend.text = element_text(size = 9), legend.key.size = grid::unit(0.9, "lines")
+   - guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3)))
+   - caption: "Cell lines highlighted; tumours shown as low-opacity backdrop"
+
+3. **run_umap_block**: Update the call to plot_tumour_only to pass label_side = "right", label_size = 2.4
+
+Let me read the current file to get exact strings for replacement.
+</think>
+Implementing the tumour-only side labels, integrated plot tweaks, and updated runner call.
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 258
+  limit: 120
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 408
+  limit: 35
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I need to fix the tumour-only label_df: in the user's code they use `mutate(x = if (label_side == "left") x_left else x_right)` - but in R, `if` is not vectorized in that way when used inside mutate. We need `ifelse(label_side == "left", x_left, x_right)` since label_side is a single value. Actually label_side is a single value (match.arg returns one value), so `if (label_side == "left") x_left else x_right` works in R - but inside mutate, the condition is evaluated once and x_left/x_right are columns (vectors). So we need ifelse to get a vector: mutate(x = ifelse(label_side == "left", x_left, x_right)). I'll use that.
+
+Implementing.
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Tumour-only: density + contours, no axes, median labels (slide-ready)
+plot_tumour_only <- function(df, palette, subtitle_text, caption_text) {
+  p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(
+      size = 0.8,
+      alpha = 0.4
+    ) +
+    stat_density_2d(
+      aes(colour = disease),
+      linewidth = 0.3,
+      bins = 6,
+      alpha = 0.6
+    ) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption = caption_text
+    )
+
+  # Direct cluster labels at medians (slide readability)
+  label_df <- df %>%
+    filter(type == "Tumour") %>%
+    group_by(disease) %>%
+    summarise(
+      UMAP1 = median(UMAP1),
+      UMAP2 = median(UMAP2),
+      .groups = "drop"
+    )
+  p + geom_label(
+    data = label_df,
+    aes(UMAP1, UMAP2, label = disease),
+    inherit.aes = FALSE,
+    size = 3,
+    label.size = 0.2,
+    alpha = 0.9
+  )
+}
+  new_string: # Tumour-only: density + contours, no axes, side labels (smaller font, no clipping)
+plot_tumour_only <- function(df, palette, subtitle_text, caption_text,
+                             label_side = c("right", "left"),
+                             label_size = 2.4) {
+
+  label_side <- match.arg(label_side)
+
+  # Base tumour plot (tumours only)
+  p <- ggplot(df, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(size = 0.8, alpha = 0.40) +
+    stat_density_2d(aes(colour = disease),
+                    linewidth = 0.3, bins = 6, alpha = 0.6) +
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed(clip = "off") +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid  = element_blank(),
+      axis.text   = element_blank(),
+      axis.ticks  = element_blank(),
+      axis.title  = element_blank(),
+      legend.position = "bottom",
+      plot.title  = element_text(face = "bold"),
+      plot.margin = if (label_side == "right") margin(12, 40, 8, 8) else margin(12, 8, 8, 40)
+    ) +
+    labs(
+      title    = "Pan-Cancer Tumour Landscape",
+      subtitle = subtitle_text,
+      caption  = caption_text
+    )
+
+  # Side labels: anchor at extreme x of each cluster + median y
+  label_df <- df %>%
+    group_by(disease) %>%
+    summarise(
+      y = median(UMAP2),
+      x_right = quantile(UMAP1, 0.98),
+      x_left  = quantile(UMAP1, 0.02),
+      .groups = "drop"
+    ) %>%
+    mutate(x = ifelse(label_side == "left", x_left, x_right))
+
+  p + geom_label(
+    data = label_df,
+    aes(x, y, label = disease),
+    inherit.aes = FALSE,
+    size = label_size,
+    label.size = 0.15,
+    alpha = 0.85
+  )
+}
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Integrated: cell lines highlighted, tumours as transparent backdrop
+plot_integrated_focus_cell_lines <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    # Tumours: background cloud
+    geom_point(
+      data = df %>% filter(type == "Tumour"),
+      aes(colour = disease),
+      size = 0.6,
+      alpha = 0.12
+    ) +
+
+    # Cell lines: black underlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      shape = 4,
+      colour = "black",
+      size = 3.6,
+      stroke = 1.4
+    ) +
+
+    # Cell lines: coloured overlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape = 4,
+      size = 3.1,
+      stroke = 1.1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "right",
+      plot.title = element_text(face = "bold")
+    ) +
+    labs(
+      title = "Tumour–Cell Line Alignment (Integrated)",
+      subtitle = subtitle_text,
+      caption = "Cell lines highlighted; tumours shown as density backdrop"
+    )
+}
+  new_string: # Integrated: tumours as light backdrop, cell lines pop; clean legend
+plot_integrated_focus_cell_lines <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    # Tumours: background cloud (lighter)
+    geom_point(
+      data = df %>% filter(type == "Tumour"),
+      aes(colour = disease),
+      size = 0.55,
+      alpha = 0.08
+    ) +
+
+    # Cell lines: black underlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      shape = 4,
+      colour = "black",
+      size = 3.6,
+      stroke = 1.4
+    ) +
+
+    # Cell lines: coloured overlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape = 4,
+      size = 3.1,
+      stroke = 1.1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text  = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "right",
+      legend.title = element_text(face = "bold", size = 10),
+      legend.text  = element_text(size = 9),
+      legend.key.size = grid::unit(0.9, "lines"),
+      plot.title = element_text(face = "bold")
+    ) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3))) +
+    labs(
+      title    = "Tumour–Cell Line Alignment (Integrated)",
+      subtitle = subtitle_text,
+      caption  = "Cell lines highlighted; tumours shown as low-opacity backdrop"
+    )
+}
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       if (subset_mode == "TUMOUR_ONLY") {
+        caption_tumour <- if (source_label == "RAW_LOG1P_CPM") {
+          "Tumours only; log1p-CPM (raw counts)"
+        } else {
+          "Tumours only; batch-corrected VST"
+        }
+        p <- plot_tumour_only(plot_df %>% filter(type == "Tumour"),
+                              disease_palette, subtitle, caption_tumour)
+      } else {
+        p <- plot_integrated_focus_cell_lines(plot_df, disease_palette, subtitle)
+      }
+  new_string:       if (subset_mode == "TUMOUR_ONLY") {
+        caption_tumour <- if (source_label == "RAW_LOG1P_CPM") {
+          "Tumours only; log1p-CPM (raw counts)"
+        } else {
+          "Tumours only; batch-corrected VST"
+        }
+        p <- plot_tumour_only(
+          plot_df %>% filter(type == "Tumour"),
+          disease_palette,
+          subtitle,
+          caption_tumour,
+          label_side = "right",
+          label_size = 2.4
+        )
+      } else {
+        p <- plot_integrated_focus_cell_lines(plot_df, disease_palette, subtitle)
+      }
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+All three replacements done. I used ifelse(label_side == "left", x_left, x_right) in mutate because inside a dplyr mutate, we need a vectorised function when operating on columns. Actually in this case label_side is a scalar (single value), so if (label_side == "left") x_left else x_right would give one of the columns x_left or x_right (whole column). So we'd get a vector. So the original `if (label_side == "left") x_left else x_right` would work - but in R, when you do mutate(x = if (...)), the if is evaluated once and returns one of the columns. So that's correct. Let me double-check: in the user's code they wrote `mutate(x = if (label_side == "left") x_left else x_right)`. In R, inside mutate, label_side is from the outer scope (one value), so the if returns either the vector x_left or the vector x_right. So that works. I used ifelse which is redundant but also works (ifelse with a scalar condition and two vector arguments returns a vector of the same length as the first vector). So we're good.
+
+Read lints.
+</think>
+
+
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+All good. Summarize for the user.
+</think>
+Summary of changes:
+
+**3) Tumour-only plot — side labels, no centroid**
+- **`plot_tumour_only()`** now takes `label_side = c("right", "left")` (default `"right"`) and `label_size = 2.4`.
+- **Labels**: Placed at the side using `quantile(UMAP1, 0.98)` or `0.02` and `median(UMAP2)` per disease (no centroid labels on the manifold).
+- **`coord_fixed(clip = "off")`** so labels are not clipped.
+- **`plot.margin`**: `margin(12, 40, 8, 8)` for labels on the right, `margin(12, 8, 8, 40)` for the left.
+- **Label style**: `size = label_size`, `label.size = 0.15`, `alpha = 0.85`.
+
+**4) Integrated plot — lighter backdrop, clearer legend**
+- **Tumours**: `size = 0.55`, `alpha = 0.08` (lighter backdrop so cell lines stand out).
+- **Legend**: `legend.title = element_text(face = "bold", size = 10)`, `legend.text = element_text(size = 9)`, `legend.key.size = grid::unit(0.9, "lines")`, and `guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3)))`.
+- **Caption**: “Cell lines highlighted; tumours shown as low-opacity backdrop”.
+
+**Runner**
+- Tumour-only call now uses `label_side = "right"` and `label_size = 2.4`.
+
+To put labels on the **left** (e.g. for slide layout), change the call to `label_side = "left"`; margins are already set so labels on either side are kept in the plot region.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+don't use celligner in the variable name or anywhere in the script, refactor appropriately
+
+Got you. The “exact Celligner feel” comes from **three very specific choices**:
+
+1. **Same marker for tumours + cell lines:** filled circles (`shape = 21`)
+2. **Fill encodes lineage/cancer type** (your `disease`)
+3. **Outline encodes sample type:** tumour outline = **white**, cell line outline = **black**
+   …and cell lines are **slightly larger** and drawn **on top**.
+
+Yes: in Celligner, **cell lines are filled circles too** (not crosses). The distinction is the **outline colour** (and a small size difference).
+
+Below is the version I’d use as your “final” (very close to their Figure 2 style), with sensible defaults and minimal refactor.
+
+---
+
+## Celligner-style integrated plot (near-identical look)
+
+```r
+plot_integrated_celligner <- function(df, palette, subtitle_text) {
+
+  # Celligner naming: type = tumour vs CL
+  df2 <- df %>%
+    mutate(
+      type = ifelse(sample_type == "Cell Line", "CL", "tumour"),
+      type = factor(type, levels = c("tumour", "CL"))
+    )
+
+  ggplot(df2, aes(UMAP1, UMAP2)) +
+
+    # Tumours first (white outline)
+    geom_point(
+      data  = df2 %>% filter(type == "tumour"),
+      aes(fill = disease, colour = type, size = type),
+      shape = 21,
+      alpha = 0.70,
+      stroke = 0.45
+    ) +
+
+    # Cell lines on top (black outline, slightly thicker)
+    geom_point(
+      data  = df2 %>% filter(type == "CL"),
+      aes(fill = disease, colour = type, size = type),
+      shape = 21,
+      alpha = 0.70,
+      stroke = 0.70
+    ) +
+
+    # Fill = cancer type
+    scale_fill_manual(values = palette, name = "Cancer type") +
+
+    # Outline = sample type (Celligner trick)
+    scale_colour_manual(values = c("CL" = "black", "tumour" = "white"), guide = "none") +
+
+    # Size = sample type (Celligner trick)
+    scale_size_manual(values = c("CL" = 1.10, "tumour" = 0.85), guide = "none") +
+
+    theme_classic(base_size = 11) +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_text(face = "plain", size = 9),
+      legend.text  = element_text(size = 8),
+      legend.margin = margin(0, 0, 0, 0)
+    ) +
+    guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +
+    labs(
+      title = NULL,
+      subtitle = subtitle_text,
+      x = "UMAP 1",
+      y = "UMAP 2"
+    )
+}
+```
+
+### Why this matches Celligner
+
+* `shape = 21` + `fill = disease` is the “colour blob” look.
+* `colour = type` with **tumour = white**, **CL = black** gives the crisp ring effect.
+* `size = type` makes CLs pop without needing a different shape.
+* Drawing tumours first and CLs second is essential.
+
+---
+
+## Micro-tuning (so it really *feels* like Celligner)
+
+If you want it even closer, these are the only knobs that matter:
+
+### If tumours are too dim / CLs too dominant
+
+* Increase tumour visibility **without changing CL**:
+
+  * tumour `alpha`: `0.70 → 0.80`
+  * tumour `size`: `0.85 → 0.95`
+
+### If CL outlines don’t pop enough
+
+* Increase CL `stroke`: `0.70 → 0.85`
+
+### If you get “washed out” white outlines on bright backgrounds
+
+* Slightly reduce tumour stroke: `0.45 → 0.35`
+  (keeps ring effect but less glare)
+
+---
+
+## Hook into your script
+
+In `run_umap_block()`, replace:
+
+```r
+p <- plot_integrated_focus_cell_lines(plot_df, disease_palette, subtitle)
+```
+
+with:
+
+```r
+p <- plot_integrated_celligner(plot_df, disease_palette, subtitle)
+```
+
+---
+
+If you upload the *new* integrated PNG after this change, I can tell you exactly which of the three parameters (tumour alpha, tumour size, CL stroke) is the one that’s still “off” relative to Celligner.
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to:
+1. Add the new integrated plot style (filled circles, fill = disease, outline = white for tumour / black for cell line, size difference) - but **without** using "celligner" in any variable name or anywhere in the script. So I need to refactor: rename `plot_integrated_celligner` to something like `plot_integrated_filled_circles` or `plot_integrated_outline_style` or similar. And remove any references to "Celligner" in comments.
+2. Replace the call in run_umap_block from `plot_integrated_focus_cell_lines` to the new function.
+
+Let me pick a neutral name: `plot_integrated_filled_circles` or `plot_integrated_outline_encoding` - something that describes the visual (filled circles, outline encodes sample type). I'll use `plot_integrated_filled_circles` and describe it in comments as "filled circles, fill = disease, outline = sample type (white tumour, black cell line)".
+
+I need to:
+1. Replace `plot_integrated_focus_cell_lines` with the new implementation but with refactored names and no "celligner" anywhere. I'll name the function `plot_integrated_filled_circles` and use neutral comments like "outline encodes sample type", "tumour outline white, cell line outline black".
+2. Update the runner to call `plot_integrated_filled_circles` instead of `plot_integrated_focus_cell_lines`.
+
+Let me read the current integrated plot function to replace it.
+</think>
+Adding the new integrated plot style and renaming it to avoid "celligner" in names and comments.
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 318
+  limit: 110
+
+[Tool result] Read
+
+assistant:
+<think>
+I need to:
+1. Replace `plot_integrated_focus_cell_lines` with a new function that uses filled circles (shape 21), fill = disease, outline = white for tumour / black for cell line, size by type. Name it something like `plot_integrated_filled_circles` and use no "celligner" in comments. The user's code uses "CL" for cell line and "tumour" for tumour in the type factor - I'll keep that internal naming (CL is standard abbreviation). Comments: "Outline encodes sample type (tumour = white, CL = black)" etc.
+2. Update the runner to call the new function. The user said "replace plot_integrated_focus_cell_lines with plot_integrated_celligner" but also "don't use celligner in the variable name" - so I'll name the new function `plot_integrated_filled_circles` and call that from the runner. So we have two options: (a) replace the existing `plot_integrated_focus_cell_lines` in place with the new implementation (same name) or (b) add a new function `plot_integrated_filled_circles` and change the runner to call it. The user said "replace ... with plot_integrated_celligner" and "refactor appropriately" to not use celligner - so they want the *style* but not the name. I'll add the new function with a neutral name and remove the old one (or replace the old one's body). Cleanest: replace the body of `plot_integrated_focus_cell_lines` with the new style, and use neutral comments. That way the runner doesn't need to change (still calls plot_integrated_focus_cell_lines). But then the *style* changes from "transparent backdrop + cross" to "filled circles + outline". So we're replacing the integrated plot entirely. I'll define a new function `plot_integrated_filled_circles` (no "celligner") and in the runner call that instead of `plot_integrated_focus_cell_lines`. I can remove the old `plot_integrated_focus_cell_lines` function. Let me do that.
+
+Fix in the user's code: they have `guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +` with an extra `)` - it should be `guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +` - actually looking at it again, the user wrote `))) +` at the end of the guides line - so there's a typo: `list(shape = 21, size = 3, alpha = 1)))` has one extra `)`. It should be `list(shape = 21, size = 3, alpha = 1)))` for the guides(...) call. So: guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +  - that's correct. The user had `))) +` which might mean `)) ) +` - let me look. "guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +" - that's list( ..., then override.aes = list(...) closes with ), then guide_legend( closes with ), then guides( closes with ). So guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +  - correct. I'll use that.
+
+Also theme_classic - we need to add coord_fixed() for consistency. The user's snippet doesn't have coord_fixed() - I'll add it. And we might want to keep axis.text etc. blank for consistency with tumour-only - the user's snippet has x = "UMAP 1", y = "UMAP 2" so they're showing axes. I'll keep the user's theme_classic and axes for this style.
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Integrated: tumours as light backdrop, cell lines pop; clean legend
+plot_integrated_focus_cell_lines <- function(df, palette, subtitle_text) {
+  ggplot(df, aes(UMAP1, UMAP2)) +
+
+    # Tumours: background cloud (lighter)
+    geom_point(
+      data = df %>% filter(type == "Tumour"),
+      aes(colour = disease),
+      size = 0.55,
+      alpha = 0.08
+    ) +
+
+    # Cell lines: black underlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      shape = 4,
+      colour = "black",
+      size = 3.6,
+      stroke = 1.4
+    ) +
+
+    # Cell lines: coloured overlay
+    geom_point(
+      data = df %>% filter(type == "Cell Line"),
+      aes(colour = disease),
+      shape = 4,
+      size = 3.1,
+      stroke = 1.1
+    ) +
+
+    scale_colour_manual(values = palette, name = "Cancer type") +
+    coord_fixed() +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text  = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "right",
+      legend.title = element_text(face = "bold", size = 10),
+      legend.text  = element_text(size = 9),
+      legend.key.size = grid::unit(0.9, "lines"),
+      plot.title = element_text(face = "bold")
+    ) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 3))) +
+    labs(
+      title    = "Tumour–Cell Line Alignment (Integrated)",
+      subtitle = subtitle_text,
+      caption  = "Cell lines highlighted; tumours shown as low-opacity backdrop"
+    )
+}
+  new_string: # Integrated: filled circles; fill = disease, outline = sample type (tumour = white, CL = black)
+plot_integrated_filled_circles <- function(df, palette, subtitle_text) {
+
+  df2 <- df %>%
+    mutate(
+      type_outline = if_else(sample_type == "Cell Line", "CL", "tumour"),
+      type_outline = factor(type_outline, levels = c("tumour", "CL"))
+    )
+
+  ggplot(df2, aes(UMAP1, UMAP2)) +
+
+    # Tumours first (white outline)
+    geom_point(
+      data  = df2 %>% filter(type_outline == "tumour"),
+      aes(fill = disease, colour = type_outline, size = type_outline),
+      shape = 21,
+      alpha = 0.70,
+      stroke = 0.45
+    ) +
+
+    # Cell lines on top (black outline, slightly larger)
+    geom_point(
+      data  = df2 %>% filter(type_outline == "CL"),
+      aes(fill = disease, colour = type_outline, size = type_outline),
+      shape = 21,
+      alpha = 0.70,
+      stroke = 0.70
+    ) +
+
+    scale_fill_manual(values = palette, name = "Cancer type") +
+    scale_colour_manual(values = c("CL" = "black", "tumour" = "white"), guide = "none") +
+    scale_size_manual(values = c("CL" = 1.10, "tumour" = 0.85), guide = "none") +
+
+    coord_fixed() +
+    theme_classic(base_size = 11) +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_text(face = "plain", size = 9),
+      legend.text  = element_text(size = 8),
+      legend.margin = margin(0, 0, 0, 0)
+    ) +
+    guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +
+    labs(
+      title = NULL,
+      subtitle = subtitle_text,
+      x = "UMAP 1",
+      y = "UMAP 2"
+    )
+}
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       } else {
+        p <- plot_integrated_focus_cell_lines(plot_df, disease_palette, subtitle)
+      }
+  new_string:       } else {
+        p <- plot_integrated_filled_circles(plot_df, disease_palette, subtitle)
+      }
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+I used `type_outline` instead of `type` so we don't overwrite the existing `type` column in plot_df (which is "Tumour" vs "Cell Line" from prepare_plot_data). That way we avoid any conflict. Let me check - prepare_plot_data sets `type = factor(type, levels = c("Tumour", "Cell Line"))`. So df has "Tumour" and "Cell Line". In the new function we need a factor for outline/size that's "tumour" vs "CL". I used type_outline. Good.
+
+Fix: the user's code had `type` with levels c("tumour", "CL") - and filter(type == "tumour") and filter(type == "CL"). I used type_outline and filter(type_outline == "tumour") etc. Good.
+
+Check for extra parenthesis in guides: guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) +  - that has list( shape, size, alpha ) then ) for list, then ) for override.aes, then ) for guide_legend, then ) for guides. So 4 closing parens. I have "))) +" which is 3. So I need one more: "))) +" -> actually guides(fill = guide_legend(override.aes = list(shape = 21, size = 3, alpha = 1))) has - list( - 3 closes for list, guide_legend, guides. So ) ) ) = 3. So "))) +" is correct. Good.
+
+Read lints.
+</think>
+
+
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+All good. No "celligner" anywhere - I used plot_integrated_filled_circles, type_outline, and neutral comments. Summarize for the user.
+</think>
+Summary of changes:
+
+**Refactor (no “celligner” in names or comments)**  
+- Integrated plot function is now **`plot_integrated_filled_circles`**.  
+- Internal factor for outline/size is **`type_outline`** (levels `"tumour"`, `"CL"`) so it doesn’t overwrite the existing `type` from `prepare_plot_data`.  
+- Comments describe the encoding only: “fill = disease”, “outline = sample type (tumour = white, CL = black)”.
+
+**Integrated plot behaviour**  
+- **Same marker for both:** filled circles (`shape = 21`).  
+- **Fill:** cancer type (`disease`) via `scale_fill_manual(palette)`.  
+- **Outline:** sample type — tumour = white, cell line = black (`scale_colour_manual(..., guide = "none")`).  
+- **Size:** tumour = 0.85, cell line = 1.10 (`scale_size_manual(..., guide = "none")`).  
+- Tumours drawn first, then cell lines (so cell lines sit on top).  
+- **Theme:** `theme_classic`, legend at bottom, horizontal; `coord_fixed()` kept.
+
+**Runner**  
+- Integrated branch now calls **`plot_integrated_filled_circles(plot_df, disease_palette, subtitle)`** instead of `plot_integrated_focus_cell_lines`.
+
+Tuning options (as in your notes): tumour `alpha`/`size`, or CL `stroke`, can be adjusted inside `plot_integrated_filled_circles` if you want to tweak visibility.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+remove any reference to DEG, it's a distraction for now
+</user_query>
+
+assistant:
+<think>
+The user wants me to remove any reference to DEG from the pan_cancer_umap_main.R script. Let me search for "DEG" in the file.
+</think>
+
+
+[Tool call] Grep
+  pattern: DEG|deg
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+
+[Tool result] Grep
+
+assistant:
+<think>
+I need to remove or rephrase these references:
+1. Line 4: "# PAN-CANCER UMAP VISUALISATION (NO DEG)" -> "# PAN-CANCER UMAP VISUALISATION" or similar
+2. Line 6: "# Mirrors plotting + output conventions of: plot_pan_cancer_umap_deg_set.R" -> remove or rephrase to something generic like "Pan-cancer UMAP visualisation"
+3. Line 56: "# SECTION 2: CLI (same style as DEG script)" -> "# SECTION 2: CLI" or "# SECTION 2: CLI OPTIONS"
+4. Line 197: "# SECTION 6: PLOTTING FUNCTIONS (REUSE YOUR DEG SCRIPT FUNCTIONS)" -> "# SECTION 6: PLOTTING FUNCTIONS"
+5. Line 245: "# prepare_plot_data (same logic as DEG script)" -> "# prepare_plot_data" or "# prepare_plot_data (disease + sample type)"
+6. Line 506: "summary_umap_MAIN_NO_DEG.tsv" -> "summary_umap_main.tsv" or "summary_umap_pan_cancer.tsv"
+
+Let me make these replacements.
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # PAN-CANCER UMAP VISUALISATION (NO DEG)
+# ==============================================================================
+# Mirrors plotting + output conventions of: plot_pan_cancer_umap_deg_set.R
+  new_string: # PAN-CANCER UMAP VISUALISATION
+# ==============================================================================
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # ==============================================================================
+# SECTION 2: CLI (same style as DEG script)
+# ==============================================================================
+  new_string: # ==============================================================================
+# SECTION 2: CLI
+# ==============================================================================
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # ==============================================================================
+# SECTION 6: PLOTTING FUNCTIONS (REUSE YOUR DEG SCRIPT FUNCTIONS)
+# ==============================================================================
+  new_string: # ==============================================================================
+# SECTION 6: PLOTTING FUNCTIONS
+# ==============================================================================
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # prepare_plot_data (same logic as DEG script)
+prepare_plot_data <- function(df) {
+  new_string: # prepare_plot_data (disease + sample type for plotting)
+prepare_plot_data <- function(df) {
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: summary_path <- file.path(outdir, "summary_umap_MAIN_NO_DEG.tsv")
+  new_string: summary_path <- file.path(outdir, "summary_umap_main.tsv")
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Let me also check for "1) theme_umap_main" comment that might reference DEG - and any other comment like "PASTE YOUR EXACT FUNCTION" that might be DEG-related. I'll grep again to be sure.
+</think>
+
+
+[Tool call] Grep
+  pattern: DEG|deg
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+
+[Tool result] Grep
+
+assistant:
+<think>
+All DEG references are removed. Done.
+</think>
+Summary of edits:
+
+1. **Header** – Title set to "PAN-CANCER UMAP VISUALISATION" and the line referencing `plot_pan_cancer_umap_deg_set.R` removed.
+2. **SECTION 2** – Comment changed from "CLI (same style as DEG script)" to "CLI".
+3. **SECTION 6** – Comment changed from "PLOTTING FUNCTIONS (REUSE YOUR DEG SCRIPT FUNCTIONS)" to "PLOTTING FUNCTIONS".
+4. **prepare_plot_data** – Comment changed from "same logic as DEG script" to "disease + sample type for plotting".
+5. **Output file** – Summary filename changed from `summary_umap_MAIN_NO_DEG.tsv` to `summary_umap_main.tsv`.
+
+There are no remaining references to DEG in the script.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+Perfect — what you pasted **does implement “2, 3, and 4” correctly**, and it’s consistent with your “Celligner feel” target.
+
+Here’s a quick checklist against the three items:
+
+## 2) Caption logic fixed ✅
+
+* Integrated plots now get `caption_text <- NULL`
+* Tumour-only plots get the correct caption depending on `RAW_LOG1P_CPM` vs `BATCH_CORR_VST`
+* No more “Tumours only” caption accidentally attached to integrated.
+
+## 3) Tumour-only no longer uses tumour-vs-CL outline encoding ✅
+
+* You now render tumour-only as **fill only** (`colour = NA`) with `pch=21`, which avoids the white ring washing out colours.
+* That will also remove the “some cancers look dimmer” artefact that came from white outline + density.
+
+## 4) Legend strategy (only for BATCH) ✅
+
+* `show_legend <- (source_label == "BATCH_CORR_VST")`
+* And tumour-only always shows the legend (via the tumour-only plot block), which is fine because that’s the plot you’ll actually present.
+
+---
+
+# One tiny bug to fix (important)
+
+In your tumour-only plotting block, you hard-coded:
+
+```r
+scale_fill_manual(values = disease_palette)
+```
+
+…but you should use the function argument consistently (or at least the same palette object used elsewhere). Since you pass `disease_palette` anyway, this is OK, but to avoid future mistakes when you change palettes, do:
+
+```r
+scale_fill_manual(values = disease_palette)
+```
+
+✅ You already do this. Good.
+
+---
+
+# One small clean-up (not required, but reduces confusion)
+
+You currently filter tumour-only twice:
+
+1. earlier:
+
+```r
+if (subset_mode == "TUMOUR_ONLY") {
+  plot_df <- plot_df %>% filter(type == "tumor")
+}
+```
+
+2. and then you enter a tumour-only plot branch that again assumes tumour-only.
+
+This is harmless, but you can delete the first filter block to keep logic cleaner. Not required.
+
+---
+
+# Bottom line
+
+Yes — **this version is better**, because:
+
+* tumour-only is now “pure lineage map” (no type encoding artefacts),
+* integrated keeps the Celligner encoding,
+* legends are shown only where you actually want them (batch corrected).
+
+If you run this and send the **BATCH_CORR_VST_INTEGRATED_euclidean** PNG, I can tell you whether the CL outline thickness and sizes look *as close as possible* to the Celligner panel at slide viewing distance.
+
+</user_query>
+
+assistant:
+<think>
+The user is sharing feedback about the script. They're saying:
+
+1. **2) Caption logic** - Integrated plots should get `caption_text <- NULL` (or no caption / caption only where appropriate). Currently I need to check if integrated plots are getting a caption - the user says "Integrated plots now get caption_text <- NULL" as something that should be the case. Let me check the current script - do we pass a caption to plot_integrated_filled_circles? That function doesn't take a caption - it has labs(subtitle = subtitle_text) and no caption. So integrated doesn't show a "Tumours only" caption. So we're good there unless the user wants me to explicitly set something.
+
+2. **3) Tumour-only** - They say "You now render tumour-only as **fill only** (`colour = NA`) with `pch=21`" - so the tumour-only plot should use filled circles (shape 21) with fill = disease and colour = NA (no outline) to avoid the white ring washing out colours. I need to check the current plot_tumour_only - it uses geom_point with colour = disease (and stat_density_2d with colour = disease). So it's not using shape 21 and fill. The user is saying the *target* state is: tumour-only as fill only, shape 21, colour = NA. So I need to update plot_tumour_only to use shape = 21, fill = disease, colour = NA (and scale_fill_manual instead of scale_colour_manual for the points). We'd still have stat_density_2d - that could stay with colour = disease or we use fill for contours - actually contours are typically drawn with colour. So: geom_point(shape = 21, aes(fill = disease), colour = NA), scale_fill_manual(...), and stat_density_2d can keep aes(colour = disease) so we need both scale_fill_manual and scale_colour_manual for the same palette. Let me read the current plot_tumour_only to implement this.
+
+3. **4) Legend strategy** - `show_legend <- (source_label == "BATCH_CORR_VST")` - so we should only show the legend for BATCH_CORR_VST. That might mean: for RAW_LOG1P_CPM we hide the legend on some plots? The user says "tumour-only always shows the legend" and "integrated" - so maybe the logic is: for integrated plots, only show legend when source_label == "BATCH_CORR_VST". For tumour-only, always show legend. So I need to pass a flag to plot_integrated_filled_circles like show_legend = (source_label == "BATCH_CORR_VST") and when FALSE hide the legend. And the user said "You already do this" for the scale_fill_manual - so they're saying we don't need to change that. And the "delete the first filter block" - they said not required. So the main things to implement: (1) Tumour-only: use shape 21, fill = disease, colour = NA, and scale_fill_manual for points; (2) Integrated: show legend only when source_label == "BATCH_CORR_VST". Let me re-read. "Integrated plots now get caption_text <- NULL" - so integrated plot caption should be NULL or not show. Our plot_integrated_filled_circles doesn't have a caption in labs() - so we're good. "Tumour-only plots get the correct caption" - we already pass caption_tumour. So 2 is OK. For 3, they want tumour-only to be fill only with pch=21 and colour=NA. For 4, show_legend only for BATCH in integrated. I'll implement 3 and 4. For the "filter twice" clean-up they said "Not required" so I'll skip that unless easy. Let me read the current script to implement.
+</think>
+Implementing (3) tumour-only as fill-only with shape 21 and colour = NA, and (4) showing the integrated legend only when source is BATCH_CORR_VST.
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 260
+  limit: 130
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 428
+  limit: 25
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I see - the script has been modified from what I last saw. There's now:
+- `pan_cancer_alignment_plot` (with "Celligner" in the comment - user said remove celligner references, but they said "Adapted from Celligner_alignment_plot" - I'll leave that comment for now since the user's message is about implementing 2,3,4 and the checklist)
+- Tumour-only block: plot_df filtered to type == "tumor" (but prepare_plot_data uses "Tumour" not "tumor" - so filter(type == "tumor") might be wrong! We have type = factor(type, levels = c("Tumour", "Cell Line")) in prepare_plot_data, so type values are "Tumour" and "Cell Line", not "tumor" and "CL". So filter(type == "tumor") would filter out everything! That's a bug. It should be filter(type == "Tumour").)
+- Tumour-only plot: ggplot with fill = disease, geom_point(pch = 21, colour = NA), scale_fill_manual(values = disease_palette) - they're using disease_palette directly which is fine (user said "You already do this. Good."). So the palette is passed - but actually they're using disease_palette in the scale_fill_manual - the function could take palette as argument for consistency. The user said "use the function argument consistently" and "You already do this. Good." so they're saying it's OK. So we need to:
+  1. Fix show_legend: for integrated, only show legend when source_label == "BATCH_CORR_VST". So when we call pan_cancer_alignment_plot for integrated we pass show_legend = (source_label == "BATCH_CORR_VST"). Let me see the rest of the runner.
+  2. Fix the filter: plot_df %>% filter(type == "tumor") - should be type == "Tumour" to match prepare_plot_data which uses "Tumour" and "Cell Line".
+
+Let me read more of the file to see the full flow - tumour-only vs integrated and where pan_cancer_alignment_plot is called.
+</think>
+Checking the full runner block and `prepare_plot_data` type values:
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 378
+  limit: 55
+[Tool call] Grep
+  pattern: type == \"tumor\"|type == \"Tumour\"
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 238
+  limit: 28
+
+[Tool result] Read
+
+[Tool result] Grep
+
+[Tool result] Read
+
+assistant:
+<think>
+I see - prepare_plot_data now sets type = "tumor" and "CL" (not "Tumour" and "Cell Line"). So filter(type == "tumor") is correct for tumour-only. Good.
+
+The user's message is a checklist saying "what you pasted does implement 2, 3, and 4 correctly" - so they're confirming the current state is good. Then they mention:
+
+1. **One tiny bug** - "you hard-coded scale_fill_manual(values = disease_palette)" but "you should use the function argument" - then they say "You already do this. Good." So no change needed.
+
+2. **One small clean-up (not required)** - "You currently filter tumour-only twice" - they show:
+   - if (subset_mode == "TUMOUR_ONLY") { plot_df <- plot_df %>% filter(type == "tumor") }
+   - and then tumour-only plot branch. They say "you can delete the first filter block to keep logic cleaner. Not required." So I could remove the first filter (lines 360-362) so we don't filter plot_df there, and the tumour-only ggplot uses plot_df - but then plot_df would still have CL rows for tumour-only! So we do need to filter to tumour only before the tumour-only plot. The only redundancy is that in the tumour-only branch we're already assuming we only have tumour points - and we've already filtered plot_df to type == "tumor" earlier. So the flow is: for TUMOUR_ONLY we filter plot_df to tumor; then we build subtitle, caption_text, show_legend; then if TUMOUR_ONLY we do the inline tumour-only ggplot(plot_df, ...) - and plot_df is already filtered. So the "first filter" is the one inside `if (subset_mode == "TUMOUR_ONLY") { plot_df <- plot_df %>% filter(type == "tumor") }`. If we remove it, then in the tumour-only branch plot_df would have both tumor and CL - and we'd be plotting both with fill = disease and pch = 21, colour = NA - so we'd see cell lines too on the tumour-only plot! So we must keep the filter. The user said "you can delete the first filter block" - maybe they mean we could instead filter only inside the tumour-only branch when we build the plot, e.g. ggplot(plot_df %>% filter(type == "tumor"), ...) and not modify plot_df earlier. That would remove the "two places" - we'd only filter in one place (inside the tumour-only ggplot). So the clean-up would be: remove the block that does plot_df <- plot_df %>% filter(type == "tumor") when subset_mode == "TUMOUR_ONLY", and in the tumour-only ggplot use plot_df %>% filter(type == "tumor") so the filter happens in one place. Let me do that - it's cleaner.
+
+3. **Remove "Celligner" reference** - The user said earlier "don't use celligner in the variable name or anywhere in the script". There's still "# Adapted from Celligner_alignment_plot to match style exactly" - I should remove that reference: e.g. "# Integrated alignment plot: fill = disease, outline = sample type (tumor = white, CL = black)".
+
+Implementing:
+1. Use palette argument in tumour-only scale_fill_manual for consistency - currently it's scale_fill_manual(values = disease_palette). The tumour-only block doesn't receive palette as a variable - it's inline. We could pass disease_palette... we're already using it. The user said "You already do this. Good." so no change.
+
+2. Optional clean-up: remove the early filter and do filter only in the tumour-only ggplot: change to ggplot(plot_df %>% filter(type == "tumor"), ...). And remove the block:
+   if (subset_mode == "TUMOUR_ONLY") {
+     plot_df <- plot_df %>% filter(type == "tumor")
+   }
+
+3. Remove Celligner from the comment for pan_cancer_alignment_plot.
+
+Let me do 2 and 3.
+</think>
+Applying two small clean-ups: removing the redundant tumour-only filter (filter only in the tumour-only ggplot) and removing the "Celligner" comment.
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       plot_df <- prepare_plot_data(coords)
+
+      if (subset_mode == "TUMOUR_ONLY") {
+        plot_df <- plot_df %>% filter(type == "tumor")
+      }
+
+      subtitle <- sprintf(
+  new_string:       plot_df <- prepare_plot_data(coords)
+
+      subtitle <- sprintf(
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- ggplot(plot_df, aes(UMAP1, UMAP2, fill = disease)) +
+          geom_point(pch = 21, alpha = 0.7, size = 0.8, colour = NA) +
+          scale_fill_manual(values = disease_palette) +
+  new_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- ggplot(plot_df %>% filter(type == "tumor"), aes(UMAP1, UMAP2, fill = disease)) +
+          geom_point(pch = 21, alpha = 0.7, size = 0.8, colour = NA) +
+          scale_fill_manual(values = palette, name = "Cancer type") +
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- ggplot(plot_df %>% filter(type == "tumor"), aes(UMAP1, UMAP2, fill = disease)) +
+          geom_point(pch = 21, alpha = 0.7, size = 0.8, colour = NA) +
+          scale_fill_manual(values = palette, name = "Cancer type") +
+          theme_classic() +
+          theme(
+            legend.position = "bottom",
+            text = element_text(size = 8),
+            legend.margin = margin(0, 0, 0, 0)
+          ) +
+          guides(fill = guide_legend(title = "Cancer type")) +
+  new_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- ggplot(plot_df %>% filter(type == "tumor"), aes(UMAP1, UMAP2, fill = disease)) +
+          geom_point(pch = 21, alpha = 0.7, size = 0.8, colour = NA) +
+          scale_fill_manual(values = disease_palette, name = "Cancer type") +
+          theme_classic() +
+          theme(
+            legend.position = "bottom",
+            text = element_text(size = 8),
+            legend.margin = margin(0, 0, 0, 0)
+          ) +
+          guides(fill = guide_legend(title = "Cancer type")) +
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+I reverted the scale_fill_manual back to disease_palette because in the tumour-only block we don't have a `palette` variable in scope - we're inside run_umap_block and the only palette there is disease_palette. So using `palette` would be wrong (undefined). I'll keep scale_fill_manual(values = disease_palette). The user said "use the function argument consistently" - but the tumour-only plot is inline, not a separate function, so we only have disease_palette. So the third replace I did was to put back disease_palette and remove the duplicate "Cancer type" from guides (we have it in scale_fill_manual name = "Cancer type"). Actually I had set values = palette - but palette isn't defined in that scope! So that would be a bug. I fixed it back to disease_palette. Good.
+
+Now remove the Celligner comment from pan_cancer_alignment_plot.
+</think>
+Reverting the tumour-only `scale_fill_manual` to `disease_palette` — `palette` isn't in scope in that block. Removing the Celligner comment.
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Adapted from Celligner_alignment_plot to match style exactly
+pan_cancer_alignment_plot <- function(alignment, palette, subtitle_text,
+  new_string: # Integrated alignment: fill = disease, outline = sample type (tumor = white, CL = black)
+pan_cancer_alignment_plot <- function(alignment, palette, subtitle_text,
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+The tumour-only block still has scale_fill_manual(values = disease_palette) after my last replace - I reverted to disease_palette. Good. Let me verify the file doesn't have "palette" in the tumour-only block (which would be undefined).
+</think>
+
+
+[Tool call] Grep
+  pattern: scale_fill_manual|values = palette|values = disease_palette
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  -n: true
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] Grep
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+Tumour-only uses disease_palette (line 379) - correct. pan_cancer_alignment_plot uses palette (line 289) which is the function argument - correct. All good.
+</think>
+Summary of changes:
+
+**1. Redundant tumour-only filter**
+- Removed the early `if (subset_mode == "TUMOUR_ONLY") { plot_df <- plot_df %>% filter(type == "tumor") }`.
+- Tumour-only plot now filters in one place: `ggplot(plot_df %>% filter(type == "tumor"), ...)`.
+
+**2. Tumour-only plot**
+- Left tumour-only as fill-only: `geom_point(pch = 21, colour = NA)` and `scale_fill_manual(values = disease_palette, name = "Cancer type")` (no outline, no hard-coded palette bug).
+- Kept caption logic: tumour-only gets the correct caption; integrated gets `caption_text = NULL` via `pan_cancer_alignment_plot`.
+
+**3. Legend**
+- `show_legend <- (source_label == "BATCH_CORR_VST")` is already passed into `pan_cancer_alignment_plot`, so the integrated legend is shown only for BATCH.
+
+**4. Comment**
+- Replaced the “Adapted from Celligner_alignment_plot” comment with: “Integrated alignment: fill = disease, outline = sample type (tumor = white, CL = black)”.
+
+No other edits. Tumour-only uses `disease_palette` in the inline block (no `palette` argument there); `pan_cancer_alignment_plot` continues to use its `palette` argument.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+ensure british spelling
+</user_query>
+
+assistant:
+<think>
+The user wants me to ensure British spelling throughout the pan_cancer_umap_main.R script. Common American vs British spelling differences:
+- color → colour (already used in many places)
+- visualize/visualization → visualise/visualisation
+- center → centre
+- behavior → behaviour
+- normalize/normalization → normalise/normalisation
+- organize → organise
+- etc.
+
+Let me search for American spellings in the file.
+</think>
+
+
+[Tool call] Grep
+  pattern: color|Color|visualiz|Visualiz|center|Center|behavior|Behavior|normaliz|Normaliz|organiz|Organiz|labeled|Labeled|favor|Favor|analyze|Analyze|customize|Customize
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  -i: true
+[Tool call] Grep
+  pattern: colour|visualis|centre|behaviour|normalis|organis|labelled|favour|analyse|customise
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  -i: true
+
+[Tool result] Grep
+
+[Tool result] Grep
+
+assistant:
+<think>
+The file already uses British "colour" and "visualisation" in most places. The only American spelling I found is `normalizePath` - but that's an R function name (base R), so we cannot change it. Let me search for other American spellings that might be in comments or strings:
+- "color" (as a word in comments)
+- "visualization"
+- "normalization"
+- "behavior"
+- "labeled"
+- "center"
+- "favor"
+- "analyze"
+- "customize"
+</think>
+
+
+[Tool call] Grep
+  pattern: \bcolor\b|\bColor\b|visualization|normalization|behavior|labeled|center\b|favor\b|analyze|customize
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  limit: 30
+
+[Tool result] Grep
+
+[Tool result] Read
+
+assistant:
+<think>
+The file starts with "```r" - that looks like a markdown code fence that shouldn't be there. Let me check - the user might have that at the start. I'll fix that too if present. Let me search for any American spellings in the whole file more broadly.
+</think>
+
+
+[Tool call] Grep
+  pattern: color|Color|tumor|Tumor
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 1
+  limit: 5
+
+[Tool result] Grep
+
+[Tool result] Read
+
+assistant:
+<think>
+British spelling for "tumor" is "tumour". So I need to change:
+- "tumor" → "tumour" (in type levels, filter, comments, scale_colour_manual keys)
+
+But wait - if I change the type levels from "tumor" to "tumour", I need to change everywhere: prepare_plot_data (type = "tumour"), pan_cancer_alignment_plot (filter type == "tumour", scale_colour_manual "tumour" = "white"), and the tumour-only ggplot filter(type == "tumour"). So:
+1. prepare_plot_data: "tumor" → "tumour" in ifelse and levels
+2. pan_cancer_alignment_plot: type == "tumor" → type == "tumour", and scale_colour_manual `tumor` → `tumour`
+3. Comment: "tumor = white" → "tumour = white"
+4. Tumour-only block: filter(type == "tumor") → filter(type == "tumour")
+
+Also remove the leading "```r" from line 1 if it's really there - that would break the script. Let me check - the read_file shows line 1 as "```r". So the file literally starts with backticks. I'll remove that.
+
+Let me do all British spelling fixes:
+- tumor → tumour (throughout)
+- Remove ```r at start if present
+</think>
+Converting "tumor" to "tumour" throughout and removing a leading markdown fence if present.
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: ```r
+#!/usr/bin/env Rscript
+  new_string: #!/usr/bin/env Rscript
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       type = ifelse(sample_type == "Cell Line", "CL", "tumor"),
+      type = factor(type, levels = c("tumor", "CL")),
+  new_string:       type = ifelse(sample_type == "Cell Line", "CL", "tumour"),
+      type = factor(type, levels = c("tumour", "CL")),
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string: # Integrated alignment: fill = disease, outline = sample type (tumor = white, CL = black)
+pan_cancer_alignment_plot <- function(alignment, palette, subtitle_text,
+                                      caption_text = NULL, show_legend = FALSE,
+                                      point_alpha = 0.7,
+                                      stroke_tumour = 0.35, stroke_cl = 0.55,
+                                      size_tumour = 0.85, size_cl = 1.15) {
+
+  df <- alignment %>%
+    mutate(type = factor(type, levels = c("tumor", "CL")))
+
+  gg <- ggplot(df, aes(UMAP1, UMAP2, fill = disease)) +
+
+    # Tumours (white outline)
+    geom_point(
+      data = df %>% filter(type == "tumor"),
+  new_string: # Integrated alignment: fill = disease, outline = sample type (tumour = white, CL = black)
+pan_cancer_alignment_plot <- function(alignment, palette, subtitle_text,
+                                      caption_text = NULL, show_legend = FALSE,
+                                      point_alpha = 0.7,
+                                      stroke_tumour = 0.35, stroke_cl = 0.55,
+                                      size_tumour = 0.85, size_cl = 1.15) {
+
+  df <- alignment %>%
+    mutate(type = factor(type, levels = c("tumour", "CL")))
+
+  gg <- ggplot(df, aes(UMAP1, UMAP2, fill = disease)) +
+
+    # Tumours (white outline)
+    geom_point(
+      data = df %>% filter(type == "tumour"),
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:     scale_colour_manual(values = c(`CL` = "black", `tumor` = "white"), guide = "none") +
+  new_string:     scale_colour_manual(values = c(`CL` = "black", `tumour` = "white"), guide = "none") +
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:         p <- ggplot(plot_df %>% filter(type == "tumor"), aes(UMAP1, UMAP2, fill = disease)) +
+  new_string:         p <- ggplot(plot_df %>% filter(type == "tumour"), aes(UMAP1, UMAP2, fill = disease)) +
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Let me check if there are any other American spellings - e.g. "normalize" in comments (we can't change normalizePath as it's an R function). Let me also verify the file no longer starts with ```r - maybe the read_file was showing something else. Let me grep for any remaining "tumor" and "color" (American).
+</think>
+
+
+[Tool call] Grep
+  pattern: tumor|color\b
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  limit: 5
+
+[Tool result] Grep
+
+[Tool result] Read
+
+assistant:
+<think>
+Good - no more "tumor" or "color", and the file now starts with #!/usr/bin/env Rscript. The leading ```r was removed. All British spelling is in place. Note: normalizePath is an R base function name - we cannot change that to "normalisePath" as it doesn't exist in R. So that stays American.
+</think>
+Summary of British spelling updates:
+
+**1. tumour (not tumor)**  
+- **prepare_plot_data**: `"tumor"` → `"tumour"` in `ifelse` and in `levels = c("tumour", "CL")`.  
+- **pan_cancer_alignment_plot**: comment `tumor = white` → `tumour = white`; `levels = c("tumor", "CL")` → `levels = c("tumour", "CL")`; `filter(type == "tumor")` → `filter(type == "tumour")`; `scale_colour_manual(..., tumour = "white")`.  
+- **Tumour-only plot**: `filter(type == "tumor")` → `filter(type == "tumour")`.
+
+**2. File header**  
+- Removed the stray leading `` ```r `` so the script starts with `#!/usr/bin/env Rscript`.
+
+**Already British**  
+- "colour" (e.g. `colour = NA`, `scale_colour_manual`, "colour-blind"), "visualisation", "Tumour" in comments/labels. No other American spellings were found in comments or strings.
+
+**Unchanged**  
+- `normalizePath()` is left as-is; it is the name of the R base function and cannot be renamed.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+1) Minimal patch for PAN_Cancer_umap_main.R tumour-only block
+
+Replace your tumour-only branch with this (British spelling kept):
+
+if (subset_mode == "TUMOUR_ONLY") {
+
+  df_t <- plot_df %>% filter(type == "tumour")
+
+  p <- ggplot(df_t, aes(UMAP1, UMAP2, colour = disease)) +
+    geom_point(shape = 16, alpha = 0.70, size = 0.85) +
+    scale_colour_manual(values = disease_palette, name = "Cancer type") +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      text = element_text(size = 8),
+      legend.margin = margin(0, 0, 0, 0)
+    ) +
+    guides(colour = guide_legend(title = "Cancer type")) +
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    labs(subtitle = subtitle, caption = caption_text)
+
+} else {
+  p <- pan_cancer_alignment_plot(plot_df, disease_palette, subtitle, caption_text, show_legend)
+}
+
+This will immediately make the tumour-only plots visible.
+</user_query>
+
+assistant:
+<think>
+The user wants me to replace the tumour-only branch in pan_cancer_umap_main.R with the provided minimal patch. I need to find the current tumour-only block and replace it with this new version. The new version uses colour (not fill), shape = 16 (solid circle), and filters to df_t first.
+</think>
+
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 368
+  limit: 55
+
+[Tool result] Read
+
+assistant:
+<think>
+I need to replace the tumour-only block (lines 375-390) with the user's version. The user's version uses:
+- df_t <- plot_df %>% filter(type == "tumour")
+- ggplot(df_t, aes(UMAP1, UMAP2, colour = disease))
+- geom_point(shape = 16, alpha = 0.70, size = 0.85)
+- scale_colour_manual
+- guides(colour = guide_legend(...))
+
+And the else branch stays the same: p <- pan_cancer_alignment_plot(...)
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       if (subset_mode == "TUMOUR_ONLY") {
+        p <- ggplot(plot_df %>% filter(type == "tumour"), aes(UMAP1, UMAP2, fill = disease)) +
+          geom_point(pch = 21, alpha = 0.7, size = 0.8, colour = NA) +
+          scale_fill_manual(values = disease_palette, name = "Cancer type") +
+          theme_classic() +
+          theme(
+            legend.position = "bottom",
+            text = element_text(size = 8),
+            legend.margin = margin(0, 0, 0, 0)
+          ) +
+          guides(fill = guide_legend(title = "Cancer type")) +
+          xlab("UMAP 1") + ylab("UMAP 2") +
+          labs(subtitle = subtitle, caption = caption_text)
+      } else {
+        p <- pan_cancer_alignment_plot(plot_df, disease_palette, subtitle, caption_text, show_legend)
+      }
+  new_string:       if (subset_mode == "TUMOUR_ONLY") {
+
+        df_t <- plot_df %>% filter(type == "tumour")
+
+        p <- ggplot(df_t, aes(UMAP1, UMAP2, colour = disease)) +
+          geom_point(shape = 16, alpha = 0.70, size = 0.85) +
+          scale_colour_manual(values = disease_palette, name = "Cancer type") +
+          theme_classic() +
+          theme(
+            legend.position = "bottom",
+            text = element_text(size = 8),
+            legend.margin = margin(0, 0, 0, 0)
+          ) +
+          guides(colour = guide_legend(title = "Cancer type")) +
+          xlab("UMAP 1") + ylab("UMAP 2") +
+          labs(subtitle = subtitle, caption = caption_text)
+
+      } else {
+        p <- pan_cancer_alignment_plot(plot_df, disease_palette, subtitle, caption_text, show_legend)
+      }
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Done. The tumour-only block now uses solid circles (shape = 16) with colour = disease, which should make the points clearly visible. British spelling kept (colour, tumour).
+</think>
+Update applied. The tumour-only block now:
+
+- Filters once into `df_t` with `plot_df %>% filter(type == "tumour")`
+- Uses **colour** for disease: `aes(UMAP1, UMAP2, colour = disease)` and `scale_colour_manual`
+- Uses solid circles: `geom_point(shape = 16, alpha = 0.70, size = 0.85)`
+- Keeps British spelling and the same theme/labels/caption
+
+Tumour-only plots should now show clearly with coloured points.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+Two separate things happened in that run:
+
+1. **UMAP itself did *not* fail** — it finished all four embeddings (you can see “Optimization finished” four times).
+2. The script then crashed **right after the 4th embedding**, while doing the **post-UMAP bookkeeping** (coords/join/write/plot/summary). The error you got:
+
+> `Error: attempt to use zero-length variable name`
+
+is an R error that almost always means:
+
+* you have a **column name that is `""` (empty string)**, or
+* you have a **name that is `NA`**, or
+* somewhere a function tried to create/use a variable with an empty name (typically triggered by the above).
+
+That also explains why your **tumour-only plots were empty**: your plotting data likely ended up with **no valid tumour rows after your metadata join**, so ggplot drew axes but no points.
+
+---
+
+## Why tumour-only became empty
+
+Your tumour-only plot uses:
+
+```r
+df_t <- plot_df %>% filter(type == "tumour")
+```
+
+and `type` is created as:
+
+```r
+type = ifelse(sample_type == "Cell Line", "CL", "tumour")
+```
+
+If `sample_type` is **NA** (because the `left_join()` failed for those samples), then:
+
+* `ifelse(NA == "Cell Line", "CL", "tumour")` returns **NA**, not `"tumour"`
+* so `filter(type == "tumour")` gives **0 rows**
+* result: an “empty” UMAP plot (axes only)
+
+So the real question is: **why did `sample_type` become NA?**
+
+### The usual reason in your script
+
+This join depends on exact string matching:
+
+```r
+coords$sample_id <- rownames(X_use)
+
+coords <- coords %>%
+  left_join(
+    annot_use %>% transmute(sample_id = sample, cancer_type, sample_type, dataset_id),
+    by = "sample_id"
+  )
+```
+
+If even **one** of these is true, your join can fail partially or entirely:
+
+* `rownames(X_use)` contains sample IDs that differ from `annot_use$sample`
+
+  * extra whitespace
+  * duplicated names
+  * hidden characters
+  * some names are `""`
+  * some names are `NA`
+* `annot_use$sample` contains `""` or `NA`
+* rownames get lost / changed earlier (less likely here because you set them)
+
+---
+
+## Why the script crashed at the end
+
+The error “attempt to use zero-length variable name” most plausibly occurred in one of these steps:
+
+* `write_tsv(coords, coords_path)` (readr/vroom can choke on empty/NA column names)
+* `ggplot(...)` if a mapped column has an invalid name internally (rare)
+* `bind_rows(summaries)` if one of the tibbles ends up with a weird name (rare)
+
+Given your log stops right after the 4th optimization and shows **no** `[SAVED] ...` line after that last run, the crash likely happened **before** the “SAVED” prints — i.e. at:
+
+* creating `coords` (names),
+* joining metadata (introducing weird names),
+* or writing coords TSV.
+
+---
+
+## The fastest way to confirm (add these checks)
+
+Drop these checks **immediately after the join** inside `run_umap_block()`:
+
+```r
+# After coords <- coords %>% left_join(...)
+# 1) Check if join worked
+n_missing <- sum(is.na(coords$sample_type) | is.na(coords$cancer_type))
+if (n_missing > 0) {
+  bad <- coords %>%
+    filter(is.na(sample_type) | is.na(cancer_type)) %>%
+    select(sample_id) %>%
+    distinct()
+  cat("[ERROR] Metadata join failed for", nrow(bad), "samples. Examples:\n")
+  print(head(bad, 20))
+  stop("Aborting: missing sample_type/cancer_type after join.")
+}
+
+# 2) Check for empty/NA sample IDs
+if (any(!nzchar(coords$sample_id)) || any(is.na(coords$sample_id))) {
+  stop("Aborting: coords has empty/NA sample_id values.")
+}
+
+# 3) Check for empty/NA column names (this triggers your exact error downstream)
+cn_bad <- which(is.na(colnames(coords)) | !nzchar(colnames(coords)))
+if (length(cn_bad) > 0) {
+  stop("Aborting: coords has empty/NA column names at positions: ",
+       paste(cn_bad, collapse=", "))
+}
+```
+
+This will tell you **immediately** whether (a) the join failed (causing empty tumour plots) and/or (b) you have invalid names (causing the crash).
+
+---
+
+## The one-line hardening fixes I would apply
+
+### 1) Enforce clean, non-empty sample IDs at the source
+
+In `merge_by_common_genes()` right after building `merged`:
+
+```r
+if (is.null(colnames(merged)) || any(is.na(colnames(merged))) || any(!nzchar(colnames(merged)))) {
+  stop("Merged matrix has NA/empty sample column names. Fix upstream RDS colnames.")
+}
+if (any(duplicated(colnames(merged)))) {
+  stop("Merged matrix has duplicated sample column names. Fix upstream.")
+}
+```
+
+### 2) Normalise sample IDs before joining
+
+Inside `run_umap_block()` before the join:
+
+```r
+coords$sample_id <- trimws(coords$sample_id)
+annot_use <- annot_use %>% mutate(sample = trimws(sample))
+```
+
+This solves the common “invisible whitespace” mismatch.
+
+---
+
+## Why the error happened *after* 4 UMAP runs
+
+Because your UMAP loop runs multiple blocks (RAW/BATCH × tumour-only/integrated). If the **last block** happens to contain:
+
+* a sample with an empty name, or
+* a join mismatch,
+  then the failure will only appear at the end — exactly like your log.
+
+---
+
+## If you want: I can point to the exact failing line
+
+If you paste the **last 30–50 lines of `pan_cancer_umap_27417093.out`** (stdout, not err), we can see the last printed `[INFO] Running UMAP: ...` tag, and I can tell you precisely which of the four blocks died (RAW/BATCH × tumour-only/integrated) and where to put the stop/check.
+
+But even without that, the fixes above (join validation + name validation) will both:
+
+* explain the empty tumour-only plots, and
+* prevent the “zero-length variable name” crash with a much clearer error message.
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to add the diagnostic checks and hardening fixes described in their message to pan_cancer_umap_main.R:
+
+1. **After the join in run_umap_block()**: Add three checks:
+   - Check if join worked (NA in sample_type/cancer_type)
+   - Check for empty/NA sample_id in coords
+   - Check for empty/NA column names in coords
+
+2. **In merge_by_common_genes()**: After building merged, add:
+   - Check for NA/empty colnames(merged)
+   - Check for duplicated colnames(merged)
+
+3. **Before the join in run_umap_block()**: Normalise sample IDs with trimws:
+   - coords$sample_id <- trimws(coords$sample_id)
+   - annot_use <- annot_use %>% mutate(sample = trimws(sample))
+
+I need to find the exact locations in the script and add these.
+</think>
+Adding join-validation checks, column-name checks, and trimws hardening to the script.
+
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 178
+  limit: 35
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 333
+  limit: 55
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I need to:
+
+1. In merge_by_common_genes(), after `merged <- do.call(cbind, mats)` and before building annot, add the check for colnames(merged). Actually the user said "right after building merged" - so after the line `merged <- do.call(cbind, mats)  # genes x samples` we add the two stop() checks. But we need to do it after we have merged - and before we use it. The annot is built from mats (colnames from each mat), not from merged directly. So the colnames(merged) come from the cbind - they're the colnames of each mat. So we can add the check right after `merged <- do.call(cbind, mats)`.
+
+2. In run_umap_block(), before the join:
+   - coords$sample_id <- trimws(coords$sample_id)
+   - annot_use <- annot_use %>% mutate(sample = trimws(sample))
+   But annot_use is the annot for this subset - we don't want to modify the original annot. So we do: annot_use <- annot_use %>% mutate(sample = trimws(sample)) - that creates a modified copy for the join. Good.
+
+3. After the join, add the three validation blocks (n_missing, sample_id empty/NA, column names).
+
+Let me implement.
+</think>
+
+
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:   mats <- purrr::map(mats, ~ .x[common_genes, , drop=FALSE])
+  merged <- do.call(cbind, mats)  # genes x samples
+
+  annot <- purrr::imap_dfr(mats, function(mat, nm) {
+  new_string:   mats <- purrr::map(mats, ~ .x[common_genes, , drop=FALSE])
+  merged <- do.call(cbind, mats)  # genes x samples
+
+  if (is.null(colnames(merged)) || any(is.na(colnames(merged))) || any(!nzchar(colnames(merged)))) {
+    stop("Merged matrix has NA/empty sample column names. Fix upstream RDS colnames.")
+  }
+  if (any(duplicated(colnames(merged)))) {
+    stop("Merged matrix has duplicated sample column names. Fix upstream.")
+  }
+
+  annot <- purrr::imap_dfr(mats, function(mat, nm) {
+[Tool call] StrReplace
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  old_string:       coords <- as.data.frame(emb)
+      colnames(coords) <- c("UMAP1","UMAP2")
+      coords$sample_id <- rownames(X_use)
+
+      coords <- coords %>%
+        left_join(
+          annot_use %>% transmute(sample_id = sample, cancer_type, sample_type, dataset_id),
+          by = "sample_id"
+        )
+
+      coords_path <- file.path(outdir, paste0("coords_", tag, ".tsv"))
+  new_string:       coords <- as.data.frame(emb)
+      colnames(coords) <- c("UMAP1","UMAP2")
+      coords$sample_id <- rownames(X_use)
+
+      coords$sample_id <- trimws(coords$sample_id)
+      annot_use <- annot_use %>% mutate(sample = trimws(sample))
+
+      coords <- coords %>%
+        left_join(
+          annot_use %>% transmute(sample_id = sample, cancer_type, sample_type, dataset_id),
+          by = "sample_id"
+        )
+
+      n_missing <- sum(is.na(coords$sample_type) | is.na(coords$cancer_type))
+      if (n_missing > 0) {
+        bad <- coords %>%
+          filter(is.na(sample_type) | is.na(cancer_type)) %>%
+          select(sample_id) %>%
+          distinct()
+        cat("[ERROR] Metadata join failed for", nrow(bad), "samples. Examples:\n")
+        print(head(bad, 20))
+        stop("Aborting: missing sample_type/cancer_type after join.")
+      }
+      if (any(!nzchar(coords$sample_id)) || any(is.na(coords$sample_id))) {
+        stop("Aborting: coords has empty/NA sample_id values.")
+      }
+      cn_bad <- which(is.na(colnames(coords)) | !nzchar(colnames(coords)))
+      if (length(cn_bad) > 0) {
+        stop("Aborting: coords has empty/NA column names at positions: ",
+             paste(cn_bad, collapse = ", "))
+      }
+
+      coords_path <- file.path(outdir, paste0("coords_", tag, ".tsv"))
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+One issue: we're mutating annot_use inside the inner loop (for each dm). So the first time we do annot_use <- annot_use %>% mutate(sample = trimws(sample)), we're modifying the copy. But annot_use is reused in the next iteration - and we're overwriting it each time. Actually annot_use is set at the start of each subset_mode iteration (if TUMOUR_ONLY we subset, else we use full annot). So for each subset_mode we have an annot_use. Then for each dm we do the join. The problem is we're overwriting annot_use with annot_use %>% mutate(sample = trimws(sample)). So in the second dm iteration, we're using the already-trimmed annot_use from the previous iteration. That's actually fine - we're not modifying the original annot. But wait - annot_use is the same for all dm in the same subset_mode. So the first time we run (e.g. TUMOUR_ONLY, cosine), we do annot_use <- annot_use %>% mutate(sample = trimws(sample)). So now annot_use has trimmed sample. For the next dm (e.g. euclidean), we use the same annot_use (already trimmed). So we're trimming multiple times (trimws is idempotent) - no problem. But we're modifying the loop variable annot_use. So after the first dm, annot_use has trimmed samples. When we go to the next subset_mode (INTEGRATED), we get a fresh annot_use from the top of the loop (X_use <- X_sxg; annot_use <- annot). So we're good. When we're in INTEGRATED and first dm, we trim annot_use. Second dm we use already-trimmed. So all good. Actually wait - for TUMOUR_ONLY we have annot_use <- annot[keep, ]. So that's a subset. Then we trim. For the second metric we use the same annot_use (trimmed). So the trim is applied once per subset_mode. Good.
+
+Let me double-check: we need to trim annot_use but we must not affect the next subset_mode. For TUMOUR_ONLY, annot_use = annot[keep,]. Then we do annot_use <- annot_use %>% mutate(...). So we're reassigning the local variable. When we switch to INTEGRATED, we do annot_use <- annot (full). So we get the original annot again. So we're good.
+
+Read lints.
+</think>
+
+
+[Tool call] ReadLints
+  paths: ["/home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R"]
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+All good. Summarize for the user.
+</think>
+Summary of changes:
+
+**1. Hardening in `merge_by_common_genes()` (after building `merged`)**
+- **NA/empty colnames:** `stop()` if `colnames(merged)` is NULL, contains NA, or any empty string.
+- **Duplicated colnames:** `stop()` if any sample (column) name is duplicated.
+
+**2. Normalising sample IDs before the join in `run_umap_block()`**
+- `coords$sample_id <- trimws(coords$sample_id)`
+- `annot_use <- annot_use %>% mutate(sample = trimws(sample))`  
+  so the join uses trimmed IDs and avoids invisible whitespace mismatches.
+
+**3. Validation immediately after the join in `run_umap_block()`**
+- **Join success:** If any row has `is.na(sample_type) | is.na(cancer_type)`, print the number of failed samples, show up to 20 `sample_id` examples, then `stop("Aborting: missing sample_type/cancer_type after join.")`.
+- **Sample IDs in coords:** `stop("Aborting: coords has empty/NA sample_id values.")` if any `coords$sample_id` is NA or empty.
+- **Column names:** If any column name of `coords` is NA or empty, `stop("Aborting: coords has empty/NA column names at positions: ...")` with the indices.
+
+Effects:
+- Join or name problems are caught with explicit errors instead of “attempt to use zero-length variable name”.
+- Empty tumour-only plots from join failures are caught by the metadata-join check.
+- Merged matrices with bad or duplicated sample names fail early in `merge_by_common_genes()`.
+
+user:
+<user_query>
+@\home\chu25\colDataAnnData\scripts\pan_cancer_umap_main.R 
+
+Nice — your script is already *almost* metric-agnostic. To support **both euclidean and cosine**, you mainly need to:
+
+1. allow `--dist_metrics "euclidean,cosine"` (already supported),
+2. **validate** that each metric is supported by `uwot`,
+3. set sane defaults (cosine is usually great for expression),
+4. (optional but recommended) set `pca = 0` for cosine in high-D if you want cosine computed in the original space (see note).
+
+Below is a clean patch you can paste into your script.
+
+---
+
+## 1) Change the CLI default to include both metrics
+
+Replace:
+
+```r
+make_option("--dist_metrics", type="character",
+            default="euclidean",
+            help="Comma-separated uwot metrics [default: %default]"),
+```
+
+with:
+
+```r
+make_option("--dist_metrics", type="character",
+            default="euclidean,cosine",
+            help="Comma-separated uwot metrics [default: %default]"),
+```
+
+Now running with no args will do both.
+
+---
+
+## 2) Add a metric validation block (prevents silent weirdness)
+
+Right after you parse `dist_metrics`:
+
+```r
+dist_metrics <- strsplit(opt$dist_metrics, ",")[[1]] %>% trimws()
+dist_metrics <- dist_metrics[nzchar(dist_metrics)]
+dist_metrics <- unique(dist_metrics)
+
+# Validate metrics (uwot supports many, but fail fast on typos)
+supported <- uwot::umap.defaults()$metric
+bad <- setdiff(dist_metrics, supported)
+if (length(bad) > 0) {
+  stop("Unsupported uwot metric(s): ", paste(bad, collapse=", "),
+       "\nSupported metrics include: ", paste(head(supported, 20), collapse=", "),
+       " ...")
+}
+```
+
+This is important because `"cosine "` (with trailing space) or `"cos"` etc can lead to confusing errors.
+
+---
+
+## 3) (Recommended) Metric-aware tweak: disable PCA for cosine (optional)
+
+`uwot` often uses PCA internally for initialization and sometimes for speed. With **cosine distance**, doing PCA first can slightly change the geometry you intend (not always bad, but it’s a choice). If you want cosine similarity in the **original gene space**, set `pca = 0`.
+
+Modify your `uwot::umap()` call inside `run_umap_block()` from:
+
+```r
+emb <- uwot::umap(
+  X           = X_use,
+  n_neighbors = opt$n_neighbors,
+  min_dist    = opt$min_dist,
+  metric      = dm,
+  n_threads   = n_threads,
+  scale       = FALSE,
+  verbose     = TRUE
+)
+```
+
+to:
+
+```r
+use_pca <- if (dm == "cosine") 0 else NA  # NA = uwot default behavior
+
+emb <- uwot::umap(
+  X           = X_use,
+  n_neighbors = opt$n_neighbors,
+  min_dist    = opt$min_dist,
+  metric      = dm,
+  n_threads   = n_threads,
+  scale       = FALSE,
+  pca         = use_pca,
+  verbose     = TRUE
+)
+```
+
+If you prefer to keep uwot defaults for everything, you can skip this.
+
+---
+
+## 4) Output naming already works
+
+You already include `dm` in:
+
+```r
+tag <- paste(source_label, subset_mode, dm, sep = "_")
+```
+
+So you’ll get four plots per source (RAW/BATCH × tumour-only/integrated) **per metric**.
+
+---
+
+## 5) Example run
+
+```bash
+Rscript pan_cancer_umap_main.R \
+  --dist_metrics "euclidean,cosine" \
+  --n_neighbors 15 \
+  --min_dist 0.3
+```
+
+---
+
+## Quick note: what “cosine” changes here
+
+* **Euclidean** cares about absolute differences in expression values.
+* **Cosine** cares more about **pattern similarity** (direction of the vector), and is often more stable when overall scale varies between samples (common in expression).
+
+For tumour–cell-line alignment, cosine is often a good sanity check.
+
+---
+
+If you want, I can also add a **summary line** to the log per run like:
+
+* number of tumours / cell lines used
+* min/max UMAP1/UMAP2
+* ensure tumour-only is non-empty *before plotting*
+
+…but what you already added (join validation) is the big one.
+
+</user_query>
+
+assistant:
+<think>
+The user wants me to implement the patches they described:
+
+1. Change CLI default for --dist_metrics from "cosine" (or whatever it is now) to "euclidean,cosine"
+2. Add metric validation block after parsing dist_metrics (unique, then check against uwot::umap.defaults()$metric)
+3. Optionally add pca = use_pca in uwot::umap() call: use_pca <- if (dm == "cosine") 0 else NA, and pass pca = use_pca
+
+Let me check the current script for the exact strings.
+</think>
+
+
+[Tool call] Grep
+  pattern: dist_metrics|uwot::umap\(
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  -n: true
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 63
+  limit: 60
+[Tool call] Read
+  path: /home/chu25/colDataAnnData/scripts/pan_cancer_umap_main.R
+  offset: 338
+  limit: 35
+
+[Tool result] Grep
+
+[Tool result] Read
+
+[Tool result] Read
