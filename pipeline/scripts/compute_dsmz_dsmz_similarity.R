@@ -55,7 +55,7 @@ option_list <- list(
   make_option("--profile", type = "character", default = NULL,
               help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
   make_option("--direction", type = "character", default = NULL,
-              help = "Direction identifier (e.g. pam50_euc, hvg_corr, Entropy_euclidean, Variance_cosine)"),
+              help = "Direction identifier (e.g. pam50_euc, hvg_corr, Entropy_euclidean, Variance_corr)"),
   make_option("--meta_tsv", type = "character", default = NULL,
               help = "Pan-cancer joint metadata TSV (required for pan-cancer graphs)"),
   make_option("--mode", type = "character", default = "global",
@@ -99,12 +99,12 @@ direction <- opt$direction
 # DIRECTION VALIDATION
 # ------------------------------------------------------------------------------
 # Accept both legacy disease-specific directions (_euc/_corr)
-# and pan-cancer directions (_euclidean/_cosine)
-if (!grepl("_(euc|corr|euclidean|cosine)$", direction)) {
+# and pan-cancer directions (_euclidean)
+if (!grepl("_(euc|corr|euclidean)$", direction)) {
   stop(
     "Invalid --direction: ", direction, "\n",
-    "Expected a direction ending in one of: _euc, _corr, _euclidean, _cosine.\n",
-    "Examples: hvg_euc, pam50_corr, Entropy_euclidean, Variance_cosine.",
+    "Expected a direction ending in one of: _euc, _corr, _euclidean.\n",
+    "Examples: hvg_euc, pam50_corr, Entropy_euclidean, Variance_corr.",
     call. = FALSE
   )
 }
@@ -159,6 +159,10 @@ if (!is.null(opt$pan_outdir) && nzchar(opt$pan_outdir)) {
   cat("[INFO]   Output base: ", out_base, "\n", sep = "")
 }
 
+# Plots go into a subfolder to keep TSV/RDS/graphml separate
+plot_dir <- file.path(out_base, "plots")
+dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
+
 cat("=== DSMZ-DSMZ similarity from p_consensus ===\n")
 cat("Using config file:\n  ", opt$config, "\n")
 cat("Direction: ", direction, "\n", sep = "")
@@ -174,16 +178,20 @@ if (!file.exists(in_rds)) {
 # Helper: strip CELL:/TUMOUR:/TUMOR: prefixes from IDs
 strip_prefix <- function(x) sub("^(CELL:|TUMOUR:|TUMOR:)", "", x)
 
-# Load the consensus data (cell_tech_id, tumor_id, p_consensus triplets)
-# Option B: Use cell_tech_id if present, fallback to cell_line for backward compatibility
+# Load the consensus data (cell_tech_id, tumor_id, p_consensus triplets).
+# Preserve short cell_line for plots; do not overwrite with cell_tech_id.
 consensus_pairs <- readRDS(in_rds) %>%
   {
     df <- .
-    # Option B: Prefer cell_tech_id, but create cell_line for backward compatibility
-    if ("cell_tech_id" %in% colnames(df)) {
-      df <- df %>% mutate(cell_line = cell_tech_id)
-    } else if (!"cell_line" %in% colnames(df)) {
+    has_long  <- "cell_tech_id" %in% colnames(df)
+    has_short <- "cell_line" %in% colnames(df)
+    if (!has_long && !has_short) {
       stop("Consensus data must have either cell_tech_id or cell_line column")
+    }
+    if (has_long)  df <- df %>% mutate(cell_tech_id = as.character(cell_tech_id))
+    if (has_short) df <- df %>% mutate(cell_line    = as.character(cell_line))
+    if (!has_short && has_long) {
+      df <- df %>% mutate(cell_line = cell_tech_id)
     }
     df
   } %>%
@@ -191,6 +199,10 @@ consensus_pairs <- readRDS(in_rds) %>%
     cell_line = strip_prefix(as.character(cell_line)),
     tumor_id  = strip_prefix(as.character(tumor_id))
   )
+if ("cell_tech_id" %in% colnames(consensus_pairs)) {
+  consensus_pairs <- consensus_pairs %>%
+    mutate(cell_tech_id = strip_prefix(as.character(cell_tech_id)))
+}
 
 cat("Summary of consensus_pairs:\n")
 print(dplyr::glimpse(consensus_pairs))
@@ -356,7 +368,7 @@ cat("\nData-driven edge threshold (90th percentile):", edge_threshold, "\n")
 #   - The appropriateness of the chosen edge threshold
 #   - Potential outliers or bimodal structure
 
-hist_pdf <- file.path(out_base, sprintf("Fig_DSMZ_DSMZ_similarity_histogram_%s.pdf", direction))
+hist_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_similarity_histogram_%s.pdf", direction))
 
 p_hist <- ggplot(sim_long, aes(x = similarity)) +
   # geom_histogram() creates the histogram
@@ -385,7 +397,7 @@ cat("\nHistogram saved to:\n  ", hist_pdf, "\n")
 # tumour space. Cell lines in the upper-right quadrant have both strong
 # maximum consensus and many strongly-anchored neighbours.
 
-scatter_pdf <- file.path(out_base, sprintf("Fig_DSMZ_p_consensus_cell_scatter_%s.pdf", direction))
+scatter_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_p_consensus_cell_scatter_%s.pdf", direction))
 
 # Compute summary statistics per cell line
 per_cell <- consensus_pairs %>%
@@ -642,6 +654,10 @@ nodes_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_node_summary_%s.tsv", 
 readr::write_tsv(node_summary, nodes_tsv)
 cat("Node summary saved to:\n  ", nodes_tsv, "\n")
 
+isolates_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_isolates_%s.tsv", direction))
+readr::write_tsv(node_summary %>% filter(degree == 0) %>% arrange(cell_line), isolates_tsv)
+cat("[INFO] Isolates saved to:\n  ", isolates_tsv, "\n", sep = "")
+
 # ------------------------------------------------------------------------------
 # SECTION 6: GRAPH CONSTRUCTION WITH COMMUNITY DETECTION
 # ------------------------------------------------------------------------------
@@ -742,6 +758,15 @@ node_annotations <- graph_tbl %>%
 readr::write_tsv(node_annotations, nodes_annot_tsv)
 cat("Node annotations saved to:\n  ", nodes_annot_tsv, "\n")
 
+# Label only top nodes by degree/betweenness (avoids clutter in HEME with many isolates)
+top_n_labels <- 12
+label_nodes <- node_annotations %>%
+  arrange(desc(degree), desc(betweenness)) %>%
+  slice(1:min(top_n_labels, n())) %>%
+  pull(cell_line)
+graph_tbl <- graph_tbl %>%
+  mutate(label = if_else(name %in% label_nodes, name, NA_character_))
+
 # Export community-level summary
 community_summary <- node_annotations %>%
   group_by(community_leid) %>%
@@ -781,7 +806,7 @@ cat("Louvain vs Leiden contingency table saved to:\n  ", comm_table_tsv, "\n")
 
 # Create heatmap of community overlap
 comm_mat <- as.matrix(comm_table)
-heatmap_pdf <- file.path(out_base,
+heatmap_pdf <- file.path(plot_dir,
   sprintf("Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_%s.pdf", direction))
 
 if (all(dim(comm_mat) > 0)) {
@@ -803,9 +828,17 @@ if (all(dim(comm_mat) > 0)) {
 # layout ("fr") positions nodes to minimise edge crossings while keeping
 # connected nodes close together.
 
-graph_leiden_pdf <- file.path(out_base, sprintf("Fig_DSMZ_DSMZ_graph_Leiden_%s.pdf", direction))
-graph_louvain_pdf <- file.path(out_base, sprintf("Fig_DSMZ_DSMZ_graph_Louvain_%s.pdf", direction))
-graph_minimal_pdf <- file.path(out_base, sprintf("Fig_DSMZ_DSMZ_graph_minimal_%s.pdf", direction))
+n_nodes <- igraph::gorder(ig)
+n_edges <- igraph::gsize(ig)
+n_iso   <- sum(node_summary$degree == 0)
+subtitle_txt <- sprintf(
+  "Edges: Pearson r >= %.3f (90th pct). Nodes=%d, edges=%d, isolates=%d (%.1f%%).",
+  edge_threshold, n_nodes, n_edges, n_iso, 100 * n_iso / n_nodes
+)
+
+graph_leiden_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_graph_Leiden_%s.pdf", direction))
+graph_louvain_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_graph_Louvain_%s.pdf", direction))
+graph_minimal_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_graph_minimal_%s.pdf", direction))
 
 # Set seed for reproducible layout
 set.seed(123)
@@ -825,13 +858,12 @@ p_graph_leiden <- ggraph(graph_tbl, layout = "fr") +
   scale_size_continuous(name = "Degree", range = c(2.5, 8)) +
   # viridis colour scale is colourblind-friendly
   scale_colour_viridis_d(name = "Leiden community", option = "D") +
-  # geom_node_text() with repel = TRUE avoids label overlaps
-  geom_node_text(aes(label = name), size = 2.8, repel = TRUE, colour = "black") +
+  geom_node_text(aes(label = label), size = 2.8, repel = TRUE, colour = "black", na.rm = TRUE) +
   theme_void(base_size = 14) +
   theme(legend.position = "right", plot.title = element_text(face = "bold")) +
   labs(
     title = sprintf("DSMZ-DSMZ similarity graph (Leiden, %s)", direction),
-    subtitle = "Edges connect cell lines with similar tumour neighbourhood profiles"
+    subtitle = subtitle_txt
   )
 
 ggsave(graph_leiden_pdf, p_graph_leiden, width = 8, height = 6)
@@ -847,12 +879,12 @@ p_graph_louvain <- ggraph(graph_tbl, layout = "fr") +
   scale_shape_manual(name = "Outlier (no edges)", values = c(`FALSE` = 19, `TRUE` = 17)) +
   scale_size_continuous(name = "Degree", range = c(2.5, 8)) +
   scale_colour_viridis_d(name = "Louvain community", option = "D") +
-  geom_node_text(aes(label = name), size = 2.8, repel = TRUE, colour = "black") +
+  geom_node_text(aes(label = label), size = 2.8, repel = TRUE, colour = "black", na.rm = TRUE) +
   theme_void(base_size = 14) +
   theme(legend.position = "right", plot.title = element_text(face = "bold")) +
   labs(
     title = sprintf("DSMZ-DSMZ similarity graph (Louvain, %s)", direction),
-    subtitle = "Edges connect cell lines with similar tumour neighbourhood profiles"
+    subtitle = subtitle_txt
   )
 
 ggsave(graph_louvain_pdf, p_graph_louvain, width = 8, height = 6)
@@ -864,14 +896,14 @@ cat("\nLouvain graph saved to:\n  ", graph_louvain_pdf, "\n")
 p_graph_minimal <- ggraph(graph_tbl, layout = "fr") +
   geom_edge_link(aes(edge_alpha = similarity), show.legend = FALSE) +
   geom_node_point(aes(size = degree, colour = community_leid), alpha = 0.9) +
-  geom_node_text(aes(label = name), size = 2.5, repel = TRUE, colour = "black") +
+  geom_node_text(aes(label = label), size = 2.5, repel = TRUE, colour = "black", na.rm = TRUE) +
   scale_size_continuous(range = c(2.5, 8)) +
   scale_colour_viridis_d() +
   scale_edge_alpha(range = c(0.2, 0.9)) +
   theme_void(base_size = 12) +
   labs(
     title = sprintf("DSMZ-DSMZ similarity graph (minimal, %s)", direction),
-    subtitle = "Edge alpha proportional to Pearson r"
+    subtitle = subtitle_txt
   )
 
 ggsave(graph_minimal_pdf, p_graph_minimal, width = 8, height = 6)

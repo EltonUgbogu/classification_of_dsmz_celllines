@@ -103,14 +103,40 @@ profiles:
       final_top: 500
     feature_sets:
       distances: [euc, corr]
-      methods: [Variance, MAD, Entropy]
+      methods:
+        - Variance
+        - MAD
+        - MeanAbsDev
+        - Entropy
+        - PCA
+        - Spearman
+        - MX
+        - kTotal
     paths:
       unsup_root: results/unsupervised/heme
       vst_joint_rds: results/unsupervised/heme/integrated/heme_joint_expr_vst_batch_corrected.rds
-      tumour_vst_rds: data/heam/laml_cll_tumour_vst_batch_corrected.rds
-      cell_vst_rds: data/heam/dsmz_ll100_cellline_vst_batch_corrected.rds
+      tumour_vst_rds: data/heme/laml_cll_tumour_vst_batch_corrected.rds
+      cell_vst_rds: data/heme/dsmz_ll100_cellline_vst_batch_corrected.rds
       meta_tsv: results/unsupervised/heme/inputs/heme_joint_metadata.tsv
       dsmz_meta_csv: results/unsupervised/heme/inputs/heme_joint_metadata.tsv
+    tumour_neighbourhoods:
+      directions:
+        - Entropy_euc
+        - Entropy_corr
+        - MAD_euc
+        - MAD_corr
+        - MeanAbsDev_euc
+        - MeanAbsDev_corr
+        - MX_euc
+        - MX_corr
+        - PCA_euc
+        - PCA_corr
+        - Spearman_euc
+        - Spearman_corr
+        - Variance_euc
+        - Variance_corr
+        - kTotal_euc
+        - kTotal_corr
     features:
       hvg_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/hvg_joint_scores.tsv
       hvg_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/hvg_final_gene_list.txt

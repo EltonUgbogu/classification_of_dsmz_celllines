@@ -468,6 +468,12 @@ cat("[DEBUG] Example mapping keys (original IDs):\n")
 print(head(original_ids_raw, 5))
 cat("[DEBUG] Example mapping values (cell lines):\n")
 print(head(cell_line_names_raw, 5))
+# First 10 lines of readRDS(mapping_path) as keys + values.
+n_show <- min(10L, length(orig_to_cellline))
+cat("[DEBUG] First ", n_show, " mapping entries (key → value):\n", sep = "")
+for (j in seq_len(n_show)) {
+  cat("  ", original_ids_raw[j], " → ", cell_line_names_raw[j], "\n", sep = "")
+}
 
 current_ids <- rownames(expr_mat)
 cat("[DEBUG] Example expr_mat rownames:\n")
@@ -599,8 +605,12 @@ if (any(dsmz_mask & is.na(cell_line_canonical_raw))) {
        paste(head(bad, 10), collapse = ", "))
 }
 
-# Build collapsed sample IDs (DSMZ -> canonical, tumour -> original)
-sample_id_collapsed <- ifelse(dsmz_mask, cell_line_canonical_raw, current_ids_raw)
+# Build collapsed sample IDs (DSMZ -> CELL:canonical to avoid tumour ID collisions, tumour -> original)
+sample_id_collapsed <- ifelse(
+  dsmz_mask,
+  paste0("CELL:", cell_line_canonical_raw),
+  current_ids_raw
+)
 names(sample_id_collapsed) <- current_ids_raw
 
 # Guard: Tumour IDs should remain unique after collapse
@@ -622,10 +632,10 @@ dsmz_mask <- dataset_vec == "DSMZ"
 id_to_collapsed <- setNames(sample_id_collapsed, current_ids_raw)
 id_to_collapsed_norm <- setNames(sample_id_collapsed, normalize_id(current_ids_raw))
 
-# Canonical and display maps for outputs (DSMZ only)
-cell_line_canonical <- ifelse(dsmz_mask, current_ids, NA_character_)
+# Canonical and display maps for outputs (DSMZ: strip CELL: prefix for clean names)
+cell_line_canonical <- ifelse(dsmz_mask, sub("^CELL:", "", current_ids), NA_character_)
 names(cell_line_canonical) <- current_ids
-cell_line_display <- current_ids
+cell_line_display <- ifelse(dsmz_mask, sub("^CELL:", "", current_ids), current_ids)
 names(cell_line_display) <- current_ids
 
 cat("[INFO] Option A: DSMZ replicates collapsed to canonical IDs.\n")
@@ -857,7 +867,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   # Results are saved in multiple formats:
   #   - RDS: Native R format for efficient programmatic access
   #   - CSV: Human-readable format for inspection and external tools
-  # Add canonical labels to long_df (DSMZ collapsed to canonical IDs)
+  # TARGET-style output: minimal schema (method, cell_line, tumor_id, rank, distance, in_top, cluster).
 
   # Ensure long_df has a cell identifier column
   if (!"cell_tech_id" %in% colnames(res$long_df)) {
@@ -867,22 +877,27 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
       stop("res$long_df missing cell identifier column (expected cell_tech_id or cell_line).")
     }
   }
-  
-  # Add canonical and display labels (collapsed IDs)
-  res$long_df <- res$long_df %>%
+
+  # Sanity check: if orig_to_cell keys don't match cell_tech_id, canonical mapping will be NA.
+  cat("[DEBUG] Example cell_tech_id values:\n")
+  print(head(res$long_df$cell_tech_id, 5))
+  cat("[DEBUG] Example mapped canonical values (orig_to_cell):\n")
+  print(head(orig_to_cell[head(res$long_df$cell_tech_id, 5)], 5))
+
+  # TARGET-style final table: single cell_line column (use orig_to_cell when keys match, else strip CELL: for DSMZ, else tech ID).
+  out_long <- res$long_df %>%
     dplyr::mutate(
-      cell_line_canonical = cell_line_canonical[cell_tech_id],
-      cell_line_display   = cell_line_display[cell_tech_id],
-      cell_line           = cell_tech_id
-    )
+      cell_line = dplyr::coalesce(orig_to_cell[cell_tech_id], sub("^CELL:", "", cell_tech_id), cell_tech_id)
+    ) %>%
+    dplyr::select(method, cell_line, tumor_id, rank, distance, in_top, cluster)
 
   nh_rds   <- file.path(outdir, paste0("Top_m_neighbourhoods_", method_id, ".rds"))
   long_rds <- file.path(outdir, paste0("Top_m_long_", method_id, ".rds"))
   long_csv <- file.path(outdir, paste0("Top_m_long_", method_id, ".csv"))
 
   saveRDS(res$neighbourhoods, nh_rds)
-  saveRDS(res$long_df,       long_rds)
-  write_csv(res$long_df,     long_csv)
+  saveRDS(out_long,          long_rds)
+  write_csv(out_long,        long_csv)
 
   # --------------------------------------------------------------------------
   # STEP 6: RESULT SUMMARY LOGGING
@@ -891,25 +906,15 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   cat("\nTumour neighbourhoods computed successfully!\n")
   cat("Method      :", res$method_id, "\n")
   cat("Cell lines  :", length(res$neighbourhoods), "\n")
-  cat("Total pairs :", nrow(res$long_df), "\n\n")
+  cat("Total pairs :", nrow(out_long), "\n\n")
 
-  # Display neighbourhood membership summary by collapsed cell line ID.
+  # Display neighbourhood membership summary by cell line.
   cat("\nSummary by cell line ID:\n")
   print(
-    res$long_df %>%
-      count(cell_line, in_top) %>%
-      arrange(desc(in_top), cell_line)
+    out_long %>%
+      dplyr::count(cell_line, in_top) %>%
+      dplyr::arrange(dplyr::desc(in_top), cell_line)
   )
-  
-  # Also show summary by canonical cell line (biological grouping).
-  if ("cell_line_canonical" %in% colnames(res$long_df)) {
-    cat("\nSummary by canonical cell line:\n")
-    print(
-      res$long_df %>%
-        count(cell_line_canonical, in_top) %>%
-        arrange(desc(in_top), cell_line_canonical)
-    )
-  }
 
   cat("\nAll results saved to:", outdir, "\n")
   
