@@ -1,0 +1,241 @@
+\section{Discussion}
+
+\subsection{Reframing model representativeness: a tumour-centric argument}
+
+This thesis advances the argument that cancer cell line representativeness cannot be reliably inferred from tissue labels or intra-panel similarity alone, but instead must be defined through tumour-centric, purity-aware, and consensus-based transcriptomic alignment. 
+
+While cell lines are routinely selected based on historical usage or nominal tissue origin, the results presented here demonstrate that such criteria are insufficient and can be misleading. In particular, we show that (i) preprocessing decisions fundamentally reshape similarity space, (ii) tumour purity substantially alters model–tumour alignment, and (iii) network centrality within a cell line panel does not necessarily predict clinical representativeness. 
+
+This position challenges the implicit assumption that transcriptomic proximity in uncorrected or single-feature analyses is sufficient for model prioritisation. Instead, we argue that robust model selection requires a multi-layered consensus framework integrating feature heterogeneity, patient-level ranking, and structural network interpretation.
+
+By demonstrating tumour-entity–specific differences in achievable model fidelity, this work further contends that model suitability is not universal but context-dependent. This claim is inherently debatable, as alternative perspectives might argue that simpler similarity metrics suffice or that transcriptomic concordance alone is inadequate for model validation. The framework presented here provides empirical evidence supporting the necessity of structured, tumour-centric evaluation.
+
+\subsection{Preprocessing is critical for tumour--cell line integration}
+
+The UMAP embedding derived from the unnormalised expression matrix (Figure~\ref{fig:umap_raw_CT}) showed strong separation between cell lines and tumours. This separation was largely technical and compositional, reflecting differences in sequencing platforms, library preparation, and biological context (in vitro monoculture versus heterogeneous tumour tissue). Such effects are well documented in cross-cohort RNA-seq integration \cite{Leek2010, Johnson2007}.
+
+Following variance-stabilising transformation using DESeq2 \cite{Love2014} and batch correction, the separation was substantially reduced (Figure~\ref{fig:umap_NB_CT}). Importantly, lineage structure was preserved, suggesting that correction removed unwanted variation without eliminating biologically meaningful signal.
+
+The embedding based on the curated 258-gene feature space (Figure~\ref{fig:umap_featureSet_CT}) further enhanced lineage separation while maintaining tumour–cell line proximity. This demonstrates that feature selection can sharpen biologically relevant structure in high-dimensional transcriptomic space \cite{Ringner2008}.
+
+These findings reinforce that preprocessing is not merely technical housekeeping but fundamentally shapes similarity space and downstream model prioritisation.
+
+\subsection{Evaluating preprocessing impact on similarity space and model prioritisation}
+
+A central objective of this thesis was not only to apply preprocessing steps, but to evaluate how these decisions reshape similarity space and alter downstream model prioritisation. Preprocessing is not neutral; it actively defines which biological signals are amplified or suppressed.
+
+\paragraph{Unnormalised expression space: preservation of magnitude, inflation of technical bias.}
+
+The raw embedding (Figure~\ref{fig:umap_raw_CT}) preserved absolute expression magnitude and extreme gene variability. However, it exhibited strong separation between cell lines and tumours driven by platform and compositional differences. 
+
+\textbf{Strength:}
+Raw data maintain full dynamic range and avoid assumptions introduced by transformation.
+
+\textbf{Weakness:}
+Similarity structure becomes dominated by sequencing depth, compositional bias, and tumour microenvironment effects, leading to artificial divergence between in vitro and in vivo samples.
+
+\textbf{Impact on model prioritisation:}
+In raw space, cell lines tend to cluster away from tumours, which would systematically penalise otherwise biologically relevant models and distort ranking results.
+
+\paragraph{Variance-stabilising transformation (VST): variance equalisation with potential signal compression.}
+
+VST reduced heteroscedasticity and stabilised variance across genes (Figure~\ref{fig:umap_NB_CT}), improving tumour--cell line overlap.
+
+\textbf{Strength:}
+Improves comparability across samples and reduces dominance of highly expressed genes.
+
+\textbf{Weakness:}
+May compress extreme oncogene expression differences that are biologically meaningful.
+
+\textbf{Impact on prioritisation:}
+VST increased tumour--cell line proximity, leading to higher consensus neighbourhood agreement across entities. However, it may attenuate models defined by extreme expression signatures.
+
+\paragraph{Batch correction: harmonisation versus overcorrection risk.}
+
+Batch correction further reduced non-biological separation between cohorts.
+
+\textbf{Strength:}
+Removes systematic technical effects that would otherwise dominate similarity metrics.
+
+\textbf{Weakness:}
+Assumes batch effects are orthogonal to biological signal. If violated, biologically relevant variation may be partially removed.
+
+\textbf{Impact on prioritisation:}
+Batch correction increased stability of ECDF-based rankings (Figures~\ref{fig:brca_ecdf_model_selection}--\ref{fig:rbl_ecdf_model_selection}). However, overcorrection could artificially inflate similarity by enforcing alignment.
+
+The preservation of subtype structure in breast cancer suggests that overcorrection was limited, but this remains a conceptual vulnerability.
+
+\paragraph{Feature reduction: signal enrichment versus information loss.}
+
+The 258-gene feature space sharpened lineage separation (Figure~\ref{fig:umap_featureSet_CT}) and improved consensus agreement.
+
+\textbf{Strength:}
+Enhances signal-to-noise ratio by focusing on informative genes.
+
+\textbf{Weakness:}
+Excludes potentially relevant but less variable genes, possibly biasing similarity toward dominant biological axes.
+
+\textbf{Impact on prioritisation:}
+Feature reduction altered ranking distributions by increasing contrast between high- and low-performing models. In heterogeneous entities such as BRCA, this improved subtype discrimination; in more homogeneous entities such as RBL, the effect was less pronounced.
+
+\paragraph{Distance metric choice: pattern versus magnitude sensitivity.}
+
+Correlation-based metrics prioritise relative expression patterns, whereas Euclidean distance captures magnitude differences.
+
+\textbf{Strength (correlation):}
+Robust to scaling and emphasises regulatory pattern similarity.
+
+\textbf{Weakness (correlation):}
+Insensitive to absolute expression shifts that may reflect oncogenic activation.
+
+\textbf{Strength (Euclidean):}
+Sensitive to magnitude differences.
+
+\textbf{Weakness (Euclidean):}
+Sensitive to scaling and residual batch effects.
+
+The absence of a universally optimal metric across tumour entities (Figures~\ref{fig:feature_distance_brca}--\ref{fig:feature_distance_RBL}) demonstrates that preprocessing and distance definition materially alter which models emerge as top-ranked.
+
+\paragraph{Synthesis: preprocessing decisions reshape model hierarchies.}
+
+Across tumour entities, preprocessing steps systematically reshaped similarity topology, neighbourhood consensus, and ECDF ranking curves. In breast cancer, feature reduction and batch correction improved subtype-aware prioritisation. In neuroblastoma and retinoblastoma, preprocessing primarily stabilised already strong tumour--cell line concordance.
+
+Therefore, preprocessing choices are not merely preparatory steps but determinants of model hierarchy. A key conclusion of this thesis is that robust model prioritisation requires explicit evaluation of preprocessing trade-offs rather than implicit acceptance of a single analytical pipeline.
+
+\subsection{Critical evaluation of preprocessing choices}
+
+Preprocessing decisions substantially influenced transcriptomic embedding and similarity structure. While variance-stabilising transformation and batch correction improved tumour–cell line alignment, these steps introduce their own assumptions and potential distortions.
+
+\paragraph{Variance-stabilising transformation (VST).}
+VST reduces heteroscedasticity inherent to count data \cite{Love2014}. However, transformation may attenuate biologically meaningful high-variance genes, particularly those reflecting oncogene amplification or extreme expression states. An alternative approach such as log-CPM normalisation or TPM scaling might preserve certain dynamic ranges differently. The choice of VST therefore shapes downstream similarity metrics.
+
+A counterargument is that over-normalisation may artificially increase tumour–cell line similarity by compressing variance. To address this, raw and corrected embeddings were explicitly compared (Figures~\ref{fig:umap_raw_CT}–\ref{fig:umap_NB_CT}), demonstrating that correction reduced technical separation without eliminating lineage structure.
+
+\paragraph{Batch correction assumptions.}
+Batch correction methods assume that batch effects are orthogonal to biological variation \cite{Johnson2007}. If biological signal correlates with batch, correction may remove genuine tumour-specific features. In cross-cohort integration, especially when combining TCGA, GEO, and DSMZ data, complete disentanglement of batch and biology is theoretically impossible.
+
+A sceptical perspective might argue that observed tumour–cell line proximity after correction reflects methodological artefact rather than biological concordance. However, the preservation of subtype structure in breast cancer and entity-specific heterogeneity argues against global overcorrection.
+
+\paragraph{Feature space reduction.}
+The curated 258-gene feature set enhanced lineage separation (Figure~\ref{fig:umap_featureSet_CT}), yet dimensionality reduction inevitably excludes potentially informative genes. Feature selection biases the similarity space toward dominant axes of variation and may underrepresent rare but biologically important pathways.
+
+Nevertheless, full-transcriptome similarity is vulnerable to noise inflation and compositional bias. The improved consensus stability across feature methods suggests that reduction increased signal-to-noise ratio rather than distorting structure.
+
+\paragraph{Distance metrics.}
+Correlation-based metrics capture relative expression patterns but ignore absolute magnitude differences. Euclidean distance incorporates magnitude but is sensitive to scaling. Neither metric is universally optimal. The absence of a single best-performing feature–distance combination across tumour entities supports the need for consensus integration rather than metric absolutism.
+
+In summary, preprocessing and similarity modelling are not neutral technical steps but active modelling decisions that shape biological interpretation. A central contribution of this thesis is making these assumptions explicit and empirically evaluating their impact.
+
+\subsection{Tumour purity as a biological confounder}
+
+Tumour purity diagnostics revealed substantial heterogeneity across cohorts (Supplementary Figures~\ref{fig:brca_purity_analysis}–\ref{fig:dlbc_purity_diagnostics}).
+
+\paragraph{Interpretation of inverse purity–immune associations.}
+
+Across BRCA, NBL, LAML, and CLL, tumour purity exhibited strong inverse correlations with ESTIMATE immune and stromal scores (Supplementary Figures~\ref{fig:brca_purity_analysis}–\ref{fig:cll_purity_diagnostics}). These associations confirm that lower purity reflects increased non-malignant cellular contribution.
+
+From a model selection perspective, this has direct implications. Cell lines, lacking immune and stromal compartments, inherently represent tumour-intrinsic transcriptional programs. When low-purity tumours are included, similarity metrics partially reflect immune infiltration rather than cancer cell–intrinsic biology. This artificially penalises cell lines for lacking microenvironmental signals.
+
+Therefore, the observed inverse correlations justify purity filtering as a methodological step to align biological comparability. At the same time, they reveal that transcriptomic similarity metrics are sensitive not only to tumour subtype but also to microenvironmental composition. This sensitivity must be explicitly considered when interpreting model fidelity.
+
+The purity threshold ($\geq 0.7$) therefore acted as a biological harmonisation step rather than a purely technical filter.
+
+Interestingly, while BRCA and NBL retained the majority of samples, BL, MPN, and DLBC datasets showed uniformly low purity. This highlights that tumour entity and sample preparation strongly influence integrative modelling feasibility.
+
+\paragraph{Consequences of tumour purity filtering.}
+
+Tumour purity filtering materially altered cohort composition in several entities. In Burkitt lymphoma (Figure~\ref{fig:bl_purity_analysis}), all eight samples fell below the $\geq 0.7$ threshold and were excluded. Similarly, in TCGA-DLBC (Figure~\ref{fig:dlbc_purity_diagnostics}), 48 of 48 samples were removed. In contrast, breast cancer retained 914 of 1,231 samples, and retinoblastoma retained all 66 samples.
+
+These differences illustrate that purity filtering does not operate uniformly across tumour types. In immune-rich malignancies such as DLBC, exclusion removed the entire dataset, precluding transcriptomic alignment. Consequently, model prioritisation for these entities could not be performed within the present framework.
+
+This demonstrates that purity filtering improves tumour-intrinsic alignment at the cost of excluding tumours in which immune composition is a defining biological feature. Therefore, while purity-aware modelling enhances comparability with monoculture cell lines, it may systematically underrepresent tumour–microenvironment interactions.
+
+\subsection{Ensemble feature selection improves neighbourhood robustness}
+
+No single feature–distance combination universally maximised neighbourhood consensus across tumour entities (Figures~\ref{fig:feature_distance_brca}–\ref{fig:per_cellline_feature_distance_rbl}).
+
+\paragraph{Mechanistic interpretation of feature heterogeneity.}
+
+The observation that no single feature–distance combination universally maximised neighbourhood agreement across tumour entities (Figures~\ref{fig:feature_distance_brca}–\ref{fig:feature_distance_RBL}) indicates that transcriptomic organisation differs in its dominant axes of structure.
+
+In breast cancer, dispersion-based metrics (variance, MAD) frequently improved subtype discrimination, suggesting that large-scale expression shifts—such as ER signalling in luminal tumours or basal cytokeratin activation—drive similarity structure. In contrast, connectivity-based metrics (Spearman correlation, kTotal) performed more consistently in neuroblastoma, implying that coordinated regulatory programs rather than extreme expression magnitude define its transcriptomic architecture.
+
+Entropy-based selection further highlighted genes with heterogeneous expression distributions, capturing tumours characterised by mixed differentiation states. Principal component loadings emphasised genes contributing most strongly to global variance axes, which in BRCA corresponded to known molecular subtype gradients.
+
+Thus, these feature classes do not merely represent alternative statistical summaries; they capture distinct biological dimensions—magnitude shifts, coordinated regulation, heterogeneity, and global variance structure. The differential performance across tumour entities suggests that model fidelity depends on which biological dimension dominates tumour organisation.
+
+By integrating dispersion-based metrics, PCA loadings, connectivity scores, and WGCNA kTotal \cite{Langfelder2008}, the ensemble approach reduced dependence on any single representation of transcriptomic structure. Consensus neighbourhood probability ($p_{\text{consensus}}$) required cross-method agreement, increasing robustness against feature-specific artefacts.
+
+This strategy parallels ensemble learning principles in machine learning, where combining weak learners increases stability and generalisability.
+
+\subsection{Consensus networks reveal transcriptomic substructure}
+
+DSMZ--DSMZ consensus similarity networks revealed biologically meaningful organisation within model panels.
+
+In breast cancer (Figures~\ref{fig:brca_consensus_dsmz}–\ref{fig:brca_resolved_components}), components corresponded to known molecular subtypes, including luminal/HER2-like and basal-like groups \cite{Perou2000}. This recapitulation supports the biological validity of the framework.
+
+Neuroblastoma displayed a dominant component encompassing most models, reflecting its comparatively homogeneous developmental origin. Retinoblastoma exhibited a structured yet compact network with several singleton models, suggesting specialised transcriptional programs.
+
+Notably, network centrality did not always equate to tumour representativeness. For example, RBL-14 appeared peripheral in the consensus graph yet ranked highly across clinical tumours (Figure~\ref{fig:rbl_ecdf_model_selection}). This distinction emphasises that tumour-driven evaluation is essential and cannot be replaced by intra-panel similarity alone.
+
+\subsection{Patient-level model prioritisation reveals entity-specific heterogeneity}
+
+ECDF-based ranking analysis provided a clinically interpretable measure of model fidelity (Figures~\ref{fig:brca_ecdf_model_selection}–\ref{fig:rbl_ecdf_model_selection}).
+
+Breast cancer models achieved Top-10 similarity in approximately 55–62\% of tumours, reflecting substantial heterogeneity. This aligns with known molecular diversity within BRCA \cite{TCGA_BRCA2012}.
+
+In contrast, neuroblastoma models achieved Top-10 similarity in over 85\% of tumours, indicating stronger global concordance. Retinoblastoma models showed near-universal high-ranking performance, likely reflecting both smaller cohort size and high tumour purity.
+
+These differences demonstrate that achievable model fidelity is tumour-specific and shaped by intrinsic biological heterogeneity.
+
+\subsection{Strengths of the framework}
+
+The framework developed here offers several advantages:
+
+\begin{itemize}
+    \item Tumour-centric rather than panel-centric evaluation
+    \item Explicit tumour purity control
+    \item Ensemble feature integration
+    \item Graph-based structural interpretation
+    \item Patient-level ranking for clinical interpretability
+    \item Reproducible implementation across tumour entities
+\end{itemize}
+
+The integration of network science concepts (betweenness centrality, component resolution, anchor selection) adds structural insight beyond pairwise similarity measures \cite{Newman2010}.
+
+\subsection{Methodological limitations and their impact on interpretation}
+
+Although the proposed framework improves robustness relative to single-metric approaches, several methodological limitations warrant careful consideration.
+
+\paragraph{Bulk RNA-seq constraints.}
+All analyses were based on bulk RNA sequencing data, which averages transcriptomic signals across heterogeneous cellular populations. While tumour purity filtering mitigates immune and stromal admixture, it does not resolve intratumour heterogeneity at the subclonal level. Consequently, a cell line may align well with the dominant transcriptional program while failing to capture minority subpopulations that influence clinical behaviour. This limitation may partially explain why breast cancer models exhibited moderate rather than universal high-ranking performance.
+
+Future research should incorporate single-cell RNA-seq references to disentangle tumour-intrinsic programs from microenvironmental and subclonal variation.
+
+\paragraph{Dependence on transcriptomic similarity.}
+Transcriptomic proximity does not guarantee functional equivalence. Drug response, epigenetic state, copy number variation, and mutational burden contribute to phenotypic behaviour. A model that is transcriptionally similar may still differ in pathway activation or therapeutic sensitivity. Therefore, the present framework should be interpreted as defining transcriptomic representativeness rather than comprehensive biological fidelity.
+
+Future extensions should integrate multi-omics layers and pharmacogenomic datasets (e.g., DepMap) to assess concordance beyond expression space.
+
+\paragraph{Purity threshold selection.}
+The choice of a $\geq 0.7$ tumour purity threshold, while biologically motivated, is inherently arbitrary. Stricter thresholds increase tumour-intrinsic signal but reduce cohort size, potentially introducing sampling bias. Conversely, more permissive thresholds may dilute tumour-specific programs. Sensitivity analyses across multiple thresholds would provide a more granular understanding of stability.
+
+\paragraph{Cohort size imbalance.}
+Entities such as retinoblastoma contained relatively small patient cohorts, potentially inflating apparent concordance metrics. ECDF curves in small cohorts may exhibit stronger consistency simply due to reduced heterogeneity. Larger validation cohorts would strengthen confidence in these findings.
+
+\paragraph{Consensus aggregation assumptions.}
+The consensus framework assumes that agreement across feature selection methods indicates biological robustness. However, correlated feature selection methods may artificially reinforce shared biases. Although dispersion, connectivity, and PCA-based metrics were intentionally diversified, full independence cannot be guaranteed.
+
+\subsection{Conclusion}
+
+This study establishes a reproducible and consensus-driven framework for aligning cancer cell lines with clinical tumours at the transcriptomic level. By integrating purity diagnostics, ensemble feature selection, network analysis, and patient-level ranking, we demonstrate that model representativeness varies substantially across tumour entities and molecular subtypes.
+
+\paragraph{Operationalising tumour-specific model selection.}
+
+The principles derived from this study can be operationalised into a structured model selection workflow. First, tumour cohorts should undergo purity diagnostics to define tumour-intrinsic expression space. Second, similarity analysis should be performed across multiple feature representations to assess stability of ranking. Third, consensus networks can identify subtype-resolved anchor models rather than assuming global representativeness.
+
+For example, in breast cancer, subtype-aware network resolution identified luminal and basal anchor models rather than a single universal representative. In contrast, neuroblastoma exhibited strong global concordance, permitting broader model prioritisation.
+
+Thus, tumour-specificity does not imply arbitrary selection but structured stratification based on transcriptomic organisation. Purity-awareness ensures biological comparability, while methodological robustness ensures that model hierarchies are not artefacts of a single analytical choice.
+
+The framework presented here provides a principled foundation for improving translational relevance in preclinical cancer research.

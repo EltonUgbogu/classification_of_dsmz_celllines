@@ -1,7 +1,6 @@
 #!/usr/bin/env snakemake
 
 # Unsupervised Clustering and Tumour Neighbourhood Analysis Pipeline
-# Fixed: Separate map_rds files for PAM50 and HVG directions
 
 import os
 import re
@@ -12,8 +11,9 @@ from snakemake.io import expand
 # -----------------------------------------------------------------------------
 # PATHS / PROFILE SETUP (MUST BE DEFINED BEFORE RULES)
 # -----------------------------------------------------------------------------
-# Anchor to the main Snakefile so paths are never resolved relative to
-# Snakemake's install dir (site-packages) when --directory or CWD differs.
+# Anchor path resolution to the main Snakefile to ensure that paths are not
+# inadvertently resolved relative to Snakemake's installation directory
+# (site-packages) when `--directory` or the working directory differ.
 _snakefile_path = getattr(workflow, "main_snakefile", None) or __file__
 BASE = os.path.dirname(os.path.abspath(os.path.realpath(_snakefile_path)))
 SCRIPTS_DIR = os.path.join(BASE, "scripts")
@@ -865,8 +865,6 @@ rule build_tumour_neighbourhood_input_hvg:
         mkdir -p $(dirname {output.expr_rds})
         Rscript {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R \
           --config {input.cfg} \
-          --profile "{profile_name}" \
-          --scripts_dir "{SCRIPTS_DIR}" \
           --vst {input.vst} \
           --gene-list {input.gene_list} \
           --dsmz-meta {input.dsmz_meta} \
@@ -902,8 +900,6 @@ rule build_tumour_neighbourhood_input_featureset:
         ls -lh {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R >> {log} 2>&1
         "${{CONDA_PREFIX}}/bin/Rscript" --vanilla {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R \
           --config {input.cfg} \
-          --profile "{profile_name}" \
-          --scripts_dir "{SCRIPTS_DIR}" \
           --vst {input.vst} \
           --gene-list {input.gene_list} \
           --dsmz-meta {input.dsmz_meta} \

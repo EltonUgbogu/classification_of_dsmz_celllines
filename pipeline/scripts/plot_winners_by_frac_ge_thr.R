@@ -113,7 +113,8 @@ winners <- winners %>%
   )
 
 # Create feature family mapping (one color per feature family)
-feature_families <- list(
+# Use a named character vector so indexing returns characters, not lists.
+feature_families <- c(
   "Variance" = "Variance",
   "MAD" = "MAD",
   "MeanAbsDev" = "MAD",
