@@ -6,7 +6,7 @@
 # PURPOSE:
 # This script performs unsupervised feature selection to identify highly
 # variable genes (HVGs) from a joint VST-normalised expression matrix.
-# The goal is to select genes that capture the most biological variation
+# The goal is to select genes that represent the most biological variation
 # across samples, which are subsequently used for downstream clustering
 # and dimensionality reduction analyses.
 #
@@ -29,7 +29,7 @@
 # highly variable AND well-connected in the co-expression network.
 #
 # WHY ENSEMBLE FEATURE SELECTION?
-# Different methods capture different aspects of gene importance:
+# Different methods characterise different aspects of gene importance:
 #   - Variance/MAD: Identify genes with high expression spread
 #   - Entropy: Capture genes with complex, multi-modal distributions
 #   - PCA: Find genes explaining major axes of variation
@@ -235,9 +235,9 @@ run_unsupervised_feature_selection <- function(
   #       does not exist.
   #
   #   top_n_method : integer, default = 3000
-  #       Number of top genes to select from each individual method.
-  #       These genes form the candidate pool for network-based refinement.
-  #       A value of 3000 typically captures ~15-20% of expressed genes.
+#       Number of top genes to select from each individual method.
+#       These genes form the candidate pool for network-based refinement.
+#       A value of 3000 typically includes ~15-20% of expressed genes.
   #
   #   final_top : integer, default = 500
   #       Final number of genes to select after network-based ranking.
@@ -452,13 +452,13 @@ run_unsupervised_feature_selection <- function(
   }
   
   # ===========================================================================
-  # SECTION 3: INDIVIDUAL FEATURE SELECTION METHODS (METHODS 1-5)
-  # ===========================================================================
-  # Each method captures different aspects of gene variability:
+# SECTION 3: INDIVIDUAL FEATURE SELECTION METHODS (METHODS 1-5)
+# ===========================================================================
+# Each method characterises different aspects of gene variability:
   #   - Some methods are sensitive to outliers (variance)
   #   - Some methods are robust to outliers (MAD)
-  #   - Some methods capture distributional complexity (entropy)
-  #   - Some methods capture multivariate structure (PCA)
+#   - Some methods describe distributional complexity (entropy)
+#   - Some methods summarise multivariate structure (PCA)
   #
   # By using multiple methods, the script ensures that genes important for
   # different reasons are all considered as candidates.
@@ -549,8 +549,8 @@ run_unsupervised_feature_selection <- function(
   #   - H = 0: All values in one bin (constant expression)
   #   - H = log₂(20) ≈ 4.32: Uniform distribution across all bins
   #
-  # WHY USE ENTROPY?
-  # High-entropy genes may capture more nuanced biological variation.
+# WHY USE ENTROPY?
+# High-entropy genes may reflect more nuanced biological variation.
   # For example, a gene expressed at three distinct levels (low/medium/high)
   # corresponding to three cell states would have higher entropy than a
   # gene with only two states.
@@ -594,9 +594,9 @@ run_unsupervised_feature_selection <- function(
   # 3. Extract loadings (gene contributions) for top 5 PCs
   # 4. Sum absolute loadings across PCs as the gene importance score
   #
-  # WHY SUM ABSOLUTE LOADINGS?
-  # A gene might load heavily on PC2 but not PC1. By summing across multiple
-  # PCs, genes important for any major axis of variation are captured.
+# WHY SUM ABSOLUTE LOADINGS?
+# A gene might load heavily on PC2 but not PC1. By summing across multiple
+# PCs, genes important for any major axis of variation are included.
   # Absolute values are used because the sign of a loading is arbitrary
   # (PC directions can be flipped).
   #
@@ -628,11 +628,11 @@ run_unsupervised_feature_selection <- function(
   top_pca <- names(sort(gene_scores, decreasing = TRUE))[1:top_n_method]
   
   # ===========================================================================
-  # SECTION 4: COMBINE CANDIDATES FROM ALL METHODS
-  # ===========================================================================
-  # The union of genes selected by any method forms the candidate pool for
-  # network-based refinement. This ensures that genes captured by only one
-  # method are not missed.
+# SECTION 4: COMBINE CANDIDATES FROM ALL METHODS
+# ===========================================================================
+# The union of genes selected by any method forms the candidate pool for
+# network-based refinement. This ensures that genes identified by only one
+# method are not missed.
   #
   # EXAMPLE:
   # If each method selects 3000 genes with 50% pairwise overlap, the union
