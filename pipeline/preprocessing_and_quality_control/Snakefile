@@ -1,0 +1,438 @@
+#!/usr/bin/env snakemake
+# =============================================================================
+# Retinoblastoma (Rb) RNA-seq pipeline for paired-end public datasets
+# Datasets: GSE111168, GSE196420, GSE268136
+#
+# Bioinformatics goal:
+#   The workflow performs read-level QC, alignment to a reference genome,
+#   extraction of gene-level counts, alignment QC metrics, and project-level
+#   summarisation reports. Outputs are suitable for downstream analyses such as
+#   differential expression, sample QC, and cohort comparison.
+#
+# Intent:
+#   - Validate that the input data are truly paired-end before analysis.
+#   - Ensure sample identity is derived from observed files, not assumed metadata.
+#   - Produce a consistent, auditable set of alignment and QC artefacts per sample.
+# ==============================================================================
+
+import os
+import glob
+
+WORKFLOW_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ------------------------------------------------------------------------------
+# Paths and study identifiers
+# ------------------------------------------------------------------------------
+# A configuration file is used to hold stable reference and tool paths.
+# This prevents hard-coding genome resources and improves reproducibility.
+configfile: "config/config.yaml"
+
+# Project-relative defaults keep the workflow portable across machines.
+DATA_ROOT = config.get("data_root") or os.path.abspath(os.path.join(WORKFLOW_DIR, "..", "..", "data", "rbl"))
+PROJECTS = config.get("projects", ["GSE111168", "GSE196420", "GSE268136"])
+ENV_DIR = config.get("env_dir") or os.path.abspath(os.path.join(WORKFLOW_DIR, "envs"))
+
+# ------------------------------------------------------------------------------
+# Reference resources and tool paths
+# ------------------------------------------------------------------------------
+# REF_INDEX: STAR genome index directory (built from the reference FASTA + annotation)
+# GTF: gene annotation used by aligner/counting tools and downstream interpretation
+# REF_FASTA: reference genome FASTA (required for alignment QC checks)
+# PICARD_JAR: Picard toolkit used for alignment-level QC metrics
+# THREADS: compute threads; defaults to 12 if not specified in config
+REF_INDEX   = config["genome"]["star_index"]
+GTF         = config["genome"]["gtf"]
+REF_FASTA   = config["genome"]["fasta"]
+PICARD_JAR  = config["tools"]["picard_jar"]
+THREADS     = config.get("threads", 12)
+
+missing_required = {
+    "genome.star_index": REF_INDEX,
+    "genome.gtf": GTF,
+    "genome.fasta": REF_FASTA,
+    "tools.picard_jar": PICARD_JAR,
+}
+missing_required = [name for name, value in missing_required.items() if not value]
+if missing_required:
+    raise ValueError(
+        "Missing required configuration values: "
+        + ", ".join(missing_required)
+        + ". Provide local paths in preprocessing_and_quality_control/config/config.yaml."
+    )
+
+# ------------------------------------------------------------------------------
+# Sample discovery: paired-end validation by filesystem scanning
+# ------------------------------------------------------------------------------
+# This section implements a robust sample registration strategy:
+# - It scans each project's fastq/ directory for read 1 files.
+# - It validates the existence of the matching read 2 file.
+# - It registers only samples that are confirmed as paired-end.
+#
+# Bioinformatics rationale:
+#   Public repositories and downloads can contain incomplete pairs or naming
+#   inconsistencies. Enforcing paired-end integrity prevents alignment failures
+#   and avoids silent sample dropouts later in analysis.
+SAMPLES = {}
+ALL_SAMPLES_BY_PROJECT = {}
+
+for project_id in PROJECTS:
+    fastq_dir = f"{DATA_ROOT}/{project_id}/fastq"
+    if not os.path.exists(fastq_dir):
+        # Projects without FASTQ data are skipped to avoid hard pipeline failure.
+        print(f"[SKIP] No fastq directory: {fastq_dir}")
+        continue
+
+    # STAR requires correct pairing; this script assumes filenames use _1/_2 suffixing.
+    r1_pattern = f"{fastq_dir}/*_1.fastq.gz"
+    r1_files = glob.glob(r1_pattern)
+
+    paired_count = 0
+    for r1_path in r1_files:
+        # A paired-end sample is only accepted if the expected read 2 exists.
+        r2_path = r1_path.replace("_1.fastq.gz", "_2.fastq.gz")
+
+        if os.path.exists(r2_path):
+            # Sample IDs are derived from SRR-style filenames, typical for SRA downloads.
+            basename = os.path.basename(r1_path)
+            srr = basename.replace("_1.fastq.gz", "")
+
+            # A per-sample record stores read paths and project provenance.
+            # Project provenance is important for tracking batch effects across studies.
+            sample_info = {
+                "sample": srr,
+                "r1": r1_path,
+                "r2": r2_path,
+                "project": project_id
+            }
+            SAMPLES[(project_id, srr)] = sample_info
+            ALL_SAMPLES_BY_PROJECT.setdefault(project_id, []).append(srr)
+            paired_count += 1
+        else:
+            # Incomplete pairs are excluded because they can bias QC summaries and
+            # disrupt consistent downstream matrices.
+            print(f"[WARN] Missing R2 (skipping): {os.path.basename(r1_path)}")
+
+    print(f"[SUCCESS] {project_id}: Found {paired_count} real paired-end samples")
+
+# ------------------------------------------------------------------------------
+# Global run list construction and validation
+# ------------------------------------------------------------------------------
+# ALL_RUNS is a concrete list of (project, sample) pairs that actually exist.
+# This avoids accidental sample cross-pairing across projects and ensures
+# targets are created only for valid samples.
+ALL_RUNS = [(p, s) for p in PROJECTS for s in ALL_SAMPLES_BY_PROJECT.get(p, [])]
+
+if not ALL_RUNS:
+    # Failing early here prevents misleading downstream execution with empty targets.
+    raise ValueError("No paired-end samples found in fastq/ directories! Check file names and paths.")
+else:
+    # Reporting sample counts supports auditability and quick verification
+    # against expected cohort sizes from GEO/SRA metadata.
+    print(f"\n[FINAL] TOTAL PAIRED-END SAMPLES: {len(ALL_RUNS)}")
+    for p in PROJECTS:
+        n = len(ALL_SAMPLES_BY_PROJECT.get(p, []))
+        print(f"[SUMMARY] {p}: {n} paired-end samples")
+    for p, s in ALL_RUNS[:10]:
+        print(f"  → {p}/{s}")
+    if len(ALL_RUNS) > 10:
+        print(f"  ... and {len(ALL_RUNS)-10} more")
+
+# ------------------------------------------------------------------------------
+# Optional cleanup: remove stale temporary STAR directories
+# ------------------------------------------------------------------------------
+# Bioinformatics rationale:
+#   Interrupted alignments can leave partial temporary directories that may
+#   confuse re-runs or waste disk space. Removing them helps maintain a clean
+#   analysis state, especially on shared compute systems.
+for project_id in PROJECTS:
+    star_tmp_pattern = f"{DATA_ROOT}/{project_id}/results/star/tmp_*"
+    for tmp_dir in glob.glob(star_tmp_pattern):
+        try:
+            if os.path.isdir(tmp_dir):
+                os.system(f"rm -rf {tmp_dir} 2>/dev/null || true")
+        except Exception as e:
+            print(f"[WARN] Failed to clean {tmp_dir}: {e}")
+
+# ------------------------------------------------------------------------------
+# FastQC planning: one QC job per FASTQ file (R1 and R2 separately)
+# ------------------------------------------------------------------------------
+# FastQC is applied to each read file to evaluate:
+# - base quality score profiles
+# - adapter contamination signals
+# - sequence duplication and overrepresented sequences
+# - GC content distribution
+#
+# Treating R1 and R2 separately is important because read quality often differs
+# between mates in paired-end sequencing.
+def get_fastqc_reads():
+    reads = []
+    seen = set()
+    for (proj, sample), info in SAMPLES.items():
+        for read, path in [("1", info["r1"]), ("2", info["r2"])]:
+            read_id = os.path.basename(path).replace(".fastq.gz", "")
+            key = (proj, read_id)
+            if key not in seen:
+                seen.add(key)
+                reads.append({"project": proj, "sample_read": read_id, "path": path})
+    return reads
+
+ALL_FASTQC_READS = get_fastqc_reads()
+
+# ------------------------------------------------------------------------------
+# Input resolver functions
+# ------------------------------------------------------------------------------
+# These functions map a project/sample label to the correct FASTQ paths.
+# They also provide explicit error messages if a sample is requested under
+# the wrong project, which helps diagnose naming collisions across studies.
+def get_r1(wc):
+    key = (wc.project, wc.sample)
+    if key not in SAMPLES:
+        candidates = sorted({p for (p, s) in SAMPLES.keys() if s == wc.sample})
+        raise ValueError(
+            f"[INPUT] Sample {wc.sample} is not registered under project {wc.project}. "
+            f"It exists under: {candidates or 'NONE'}."
+        )
+    return SAMPLES[key]["r1"]
+
+def get_r2(wc):
+    key = (wc.project, wc.sample)
+    if key not in SAMPLES:
+        candidates = sorted({p for (p, s) in SAMPLES.keys() if s == wc.sample})
+        raise ValueError(
+            f"[INPUT] Sample {wc.sample} is not registered under project {wc.project}. "
+            f"Exists under: {candidates or 'NONE'}."
+        )
+    return SAMPLES[key]["r2"]
+
+# ------------------------------------------------------------------------------
+# Concrete target file lists
+# ------------------------------------------------------------------------------
+# Targets are enumerated explicitly from ALL_RUNS to guarantee that each
+# sample produces only its own outputs and is never cross-associated with
+# another project's samples.
+STAR_BAMS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam"       for p, s in ALL_RUNS]
+STAR_BAIS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam.bai"   for p, s in ALL_RUNS]
+
+# STAR gene count output is separated into a dedicated directory to make it
+# easier to build expression matrices later.
+STAR_COUNTS = [f"{DATA_ROOT}/{p}/results/star/valid_count/{s}.tab"                      for p, s in ALL_RUNS]
+
+# Picard provides complementary alignment-level QC metrics beyond STAR logs:
+# - ValidateSamFile detects structural BAM issues.
+# - CollectAlignmentSummaryMetrics reports mapping and pairing statistics.
+# - CollectQualityYieldMetrics summarises base-level yield and quality.
+# - CollectInsertSizeMetrics estimates the library insert size distribution, a key
+#   property in paired-end RNA-seq.
+PICARD_TXT  = [f"{DATA_ROOT}/{p}/results/picard/{s}_{m}.txt"
+               for p, s in ALL_RUNS for m in ["validate_samfile", "alignment_summary_metrics",
+                                             "quality_yield_metrics", "insert_size_metrics"]]
+PICARD_HIST = [f"{DATA_ROOT}/{p}/results/picard/{s}_insert_size_histogram.pdf"          for p, s in ALL_RUNS]
+
+# FastQC HTML summaries are used for per-read QC review and for aggregation.
+FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fastqc.html"
+               for r in ALL_FASTQC_READS]
+
+# MultiQC creates a per-project report integrating FastQC, STAR, and Picard metrics.
+# Project-level reporting is often preferred when projects represent distinct studies.
+MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in PROJECTS]
+
+# ------------------------------------------------------------------------------
+# Final pipeline outputs
+# ------------------------------------------------------------------------------
+# This target definition ensures that successful completion implies:
+# - all samples were QC-checked
+# - all samples were aligned and indexed
+# - gene-level counts were collected
+# - alignment QC metrics were generated
+# - MultiQC reports were built per project
+rule all:
+    input:
+        STAR_BAMS,
+        STAR_BAIS,
+        STAR_COUNTS,
+        PICARD_TXT,
+        PICARD_HIST,
+        FASTQC_HTML,
+        MULTIQC_HTML
+
+# ------------------------------------------------------------------------------
+# Rule: FastQC on each FASTQ file
+# ------------------------------------------------------------------------------
+
+rule fastqc:
+    input:
+        lambda wc: next(
+            r["path"] for r in ALL_FASTQC_READS
+            if r["project"] == wc.project and r["sample_read"] == wc.sample_read
+        )
+    output:
+        # FastQC produces both an HTML report and a zipped directory of raw results.
+        html = f"{DATA_ROOT}/{{project}}/results/fastqc/{{sample_read}}_fastqc.html",
+        zip  = f"{DATA_ROOT}/{{project}}/results/fastqc/{{sample_read}}_fastqc.zip",
+    log:     f"{DATA_ROOT}/{{project}}/logs/fastqc/{{sample_read}}.log"
+    conda:   f"{ENV_DIR}/fastqc.yaml"
+    threads: 2
+    shell:
+        "fastqc --threads {threads} --outdir $(dirname {output.html}) {input} > {log} 2>&1"
+
+# ------------------------------------------------------------------------------
+# Rule: STAR alignment with two-pass mode and gene-level counting
+# ------------------------------------------------------------------------------
+# Bioinformatics intent:
+#   - Align paired-end RNA-seq reads to a reference genome with STAR.
+#   - Use two-pass mode to improve splice junction detection in RNA-seq.
+#   - Produce a coordinate-sorted BAM for downstream QC 
+#   - Produce gene-level counts suitable for DESeq2/edgeR-style workflows.
+#
+# Note on quantMode GeneCounts:
+#   STAR generates a per-gene count table; downstream scripts typically select
+#   the appropriate strandedness column based on library prep inference.
+rule star_2pass:
+    input:
+        index = REF_INDEX,
+        r1 = get_r1,
+        r2 = get_r2
+    output:
+        bam    = f"{DATA_ROOT}/{{project}}/results/star/{{sample}}.Aligned.sortedByCoord.out.bam",
+        bai    = f"{DATA_ROOT}/{{project}}/results/star/{{sample}}.Aligned.sortedByCoord.out.bam.bai",
+        counts = f"{DATA_ROOT}/{{project}}/results/star/valid_count/{{sample}}.tab",
+        logf   = f"{DATA_ROOT}/{{project}}/results/star/{{sample}}.Log.final.out",
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/star/{{sample}}.log"
+    benchmark:
+        # Benchmarking captures runtime and resource usage; this supports auditability
+        # and helps scale the workflow to larger cohorts.
+        f"{DATA_ROOT}/{{project}}/logs/benchmarks/star/{{sample}}.tsv"
+    conda:
+        f"{ENV_DIR}/star.yaml"
+    threads: THREADS
+    resources:
+        # Memory allocation is important for STAR sorting and large transcriptomes.
+        mem_mb = 42000
+    params:
+        # Prefix is used so STAR writes all its output files into the sample folder.
+        prefix = lambda wc: f"{DATA_ROOT}/{wc.project}/results/star/{wc.sample}."
+    shell:
+        r"""
+        set -euo pipefail
+
+        # Ensure output and log directories exist before starting alignment.
+        mkdir -p "$(dirname "{output.bam}")" "$(dirname "{output.counts}")" "$(dirname "{log}")"
+
+        # STAR alignment:
+        # - BAM output is sorted by genomic coordinate for downstream processing.
+        # - Two-pass mode improves detection of splice junctions across reads.
+        # - GeneCounts produces a simple per-gene count table.
+        STAR --genomeDir "{input.index}" \
+             --readFilesIn "{input.r1}" "{input.r2}" \
+             --readFilesCommand zcat \
+             --outFileNamePrefix "{params.prefix}" \
+             --outSAMtype BAM SortedByCoordinate \
+             --quantMode GeneCounts \
+             --twopassMode Basic \
+             --runThreadN {threads} \
+             --limitBAMsortRAM 32000000000 \
+             > "{log}" 2>&1
+
+        # Indexing enables fast random access for QC and visual inspection in genome browsers.
+        samtools index "{output.bam}"
+
+        # The STAR gene count table is moved into a dedicated counts directory
+        # to simplify downstream matrix assembly.
+        mv -f "{params.prefix}ReadsPerGene.out.tab" "{output.counts}"
+
+        # STAR writes Log.final.out automatically using the chosen prefix; the
+        # expected location is already tracked via output.logf.
+        """
+
+# ------------------------------------------------------------------------------
+# Picard QC rules: alignment integrity and library metrics
+# ------------------------------------------------------------------------------
+# These steps provide additional QC metrics that complement STAR logs and FastQC.
+# They are commonly used to detect:
+# - BAM structural issues (ValidateSamFile)
+# - mapping and pairing statistics (AlignmentSummaryMetrics)
+# - yield and read quality summaries (QualityYieldMetrics)
+# - insert size distributions, indicating library prep consistency (InsertSizeMetrics)
+
+rule picard_validate_samfile:
+    input: bam = rules.star_2pass.output.bam, ref = REF_FASTA
+    output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_validate_samfile.txt"
+    log:    f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_validate_samfile.log"
+    params: jar = PICARD_JAR
+    conda:  f"{ENV_DIR}/picard.yaml"
+    shell:
+        # A non-zero exit can occur even when the BAM is usable; the output report
+        # still provides useful diagnostics, so the command is tolerated if it warns.
+        "java -Xmx8g -jar {params.jar} ValidateSamFile I={input.bam} O={output} MODE=SUMMARY "
+        "REFERENCE_SEQUENCE={input.ref} > {log} 2>&1 || true"
+
+rule picard_alignment_summary_metrics:
+    input: bam = rules.star_2pass.output.bam, ref = REF_FASTA
+    output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_alignment_summary_metrics.txt"
+    shell:
+        "java -jar {PICARD_JAR} CollectAlignmentSummaryMetrics R={input.ref} I={input.bam} O={output}"
+
+rule picard_quality_yield_metrics:
+    input:  bam = rules.star_2pass.output.bam
+    output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_quality_yield_metrics.txt"
+    shell:
+        "java -jar {PICARD_JAR} CollectQualityYieldMetrics I={input.bam} O={output}"
+
+rule picard_insert_size_metrics:
+    input: bam = rules.star_2pass.output.bam
+    output:
+        metrics = f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_insert_size_metrics.txt",
+        hist    = f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_insert_size_histogram.pdf"
+    shell:
+        # Insert size distributions are informative for paired-end RNA-seq libraries:
+        # shifts or multimodal patterns can indicate technical issues or sample differences.
+        "java -jar {PICARD_JAR} CollectInsertSizeMetrics I={input.bam} O={output.metrics} H={output.hist} M=0.5"
+
+# ------------------------------------------------------------------------------
+# MultiQC: per-project aggregation of QC and alignment metrics
+# ------------------------------------------------------------------------------
+# Bioinformatics intent:
+#   MultiQC consolidates FastQC, STAR, and Picard outputs into a single report.
+def multiqc_inputs_for_project(project):
+    samples = ALL_SAMPLES_BY_PROJECT.get(project, [])
+
+    # FastQC zip archives contain the raw statistics MultiQC parses.
+    fq = [f"{DATA_ROOT}/{project}/results/fastqc/{r['sample_read']}_fastqc.zip"
+          for r in ALL_FASTQC_READS if r["project"] == project]
+
+    # STAR alignment outputs: BAMs for completeness and Log.final.out for summary metrics.
+    star = (
+        [f"{DATA_ROOT}/{project}/results/star/{s}.Aligned.sortedByCoord.out.bam" for s in samples] +
+        [f"{DATA_ROOT}/{project}/results/star/{s}.Log.final.out" for s in samples]
+    )
+
+    # Picard metrics and insert size histogram PDFs.
+    metrics = ["validate_samfile", "alignment_summary_metrics",
+               "quality_yield_metrics", "insert_size_metrics"]
+    pic = ([f"{DATA_ROOT}/{project}/results/picard/{s}_{m}.txt" for s in samples for m in metrics] +
+           [f"{DATA_ROOT}/{project}/results/picard/{s}_insert_size_histogram.pdf" for s in samples])
+
+    return fq + star + pic
+
+rule multiqc:
+    input:
+        lambda wc: multiqc_inputs_for_project(wc.project)
+    output:
+        html = f"{DATA_ROOT}/{{project}}/results/multiqc/multiqc_report.html"
+    params:
+        # Reports are written into a dedicated directory for the project.
+        outdir = lambda wc: f"{DATA_ROOT}/{wc.project}/results/multiqc",
+        indir  = lambda wc: f"{DATA_ROOT}/{wc.project}/results"
+    log:   f"{DATA_ROOT}/{{project}}/logs/multiqc.log"
+    conda: f"{ENV_DIR}/multiqc.yaml"
+    threads: 2
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {params.outdir}
+
+        # MultiQC scans the results directory and generates an integrated HTML report.
+        # The report summarises QC across all samples within the project.
+        multiqc {params.indir} -o {params.outdir} -n multiqc_report.html > {log} 2>&1
+    """

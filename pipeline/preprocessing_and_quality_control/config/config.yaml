@@ -1,0 +1,44 @@
+# Generic configuration for the preprocessing and quality control workflow
+# Usage:
+#   snakemake -s preprocessing_and_quality_control/Snakefile --configfile preprocessing_and_quality_control/config/config.yaml --cores 12 --use-conda
+
+# Root folder containing one subfolder per project, each with:
+#   {project}/fastq/*.fastq.gz
+# and where results/logs will be written:
+#   {project}/results/, {project}/logs/
+# If omitted, the Snakefile falls back to a project-relative data directory.
+data_root: null
+
+# Project identifiers to include in this run
+projects:
+  - GSE111168
+  - GSE196420
+  - GSE268136
+
+# Global compute defaults
+threads: 12
+
+# Reference assets
+# STAR index should be pre-built from the same fasta+gtf below.
+genome:
+  star_index: null
+  gtf: null
+  fasta: null
+
+# External tools
+tools:
+  picard_jar: null
+
+# Optional conda environment directory.
+# If omitted, the workflow uses preprocessing_and_quality_control/envs.
+env_dir: null
+
+# Optional tuning knobs (kept for future-proofing; current Snakefile may not use all fields)
+resources:
+  star_mem_mb: 42000
+  star_bamsort_ram_bytes: 32000000000
+
+# Optional naming settings (for future generic filename parsing)
+# fastq_naming:
+#   r1_suffix: "_1.fastq.gz"
+#   r2_suffix: "_2.fastq.gz"
