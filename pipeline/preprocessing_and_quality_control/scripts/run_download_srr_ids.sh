@@ -12,7 +12,7 @@ set -euo pipefail
 echo "== $(date) :: START =="
 echo "Host: $(hostname)"
 
-SCRIPT=/work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/download_tumour_sample_srr_ids.py
+SCRIPT=/work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/download_rbl_tumour_sample_srr_ids.py
 
 source /home/ugbogu/miniforge3/etc/profile.d/conda.sh
 conda activate sra3 || true
