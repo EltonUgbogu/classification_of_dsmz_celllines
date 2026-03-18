@@ -7,38 +7,26 @@
 # and where results/logs will be written:
 #   {project}/results/, {project}/logs/
 # If omitted, the Snakefile falls back to a project-relative data directory.
-data_root: null
+data_root: "/work/ugbogu/pipeline/data"
+env_dir: "/work/ugbogu/pipeline/preprocessing_and_quality_control/envs"
 
-# Project identifiers to include in this run
 projects:
   - GSE111168
   - GSE196420
   - GSE268136
 
-# Global compute defaults
 threads: 12
 
-# Reference assets
-# STAR index should be pre-built from the same fasta+gtf below.
 genome:
-  star_index: null
-  gtf: null
-  fasta: null
+  star_index: "/work/ugbogu/pipeline/data/reference/star_gencode_v44"
+  gtf: "/work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf"
+  fasta: "/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa"
 
-# External tools
 tools:
   picard_jar: null
 
-# Optional conda environment directory.
-# If omitted, the workflow uses preprocessing_and_quality_control/envs.
-env_dir: null
 
-# Optional tuning knobs (kept for future-proofing; current Snakefile may not use all fields)
+
 resources:
   star_mem_mb: 42000
   star_bamsort_ram_bytes: 32000000000
-
-# Optional naming settings (for future generic filename parsing)
-# fastq_naming:
-#   r1_suffix: "_1.fastq.gz"
-#   r2_suffix: "_2.fastq.gz"
