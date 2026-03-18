@@ -94,10 +94,13 @@ if [[ ! -f "$RSYNC_EXCLUDE_FILE" ]]; then
 .snakemake/
 **/.snakemake/
 
-# Big / generated directories inside pipeline
-results/
-logs/
-data/
+
+*_family.soft.gz
+*_gsms.tsv
+*SraRunInfo.csv
+*SraRunInfo_primary.csv  
+*SraRunInfo_primary_PE.csv
+
 
 # Generated conda cache/env internals — exclude these, but keep env spec files
 envs/.conda/
@@ -111,14 +114,14 @@ __pycache__/
 *.rds
 *.Rds
 *.bak
+*.sra
+*/work/ugbogu/pipeline/data/reference
 
 # Reports / artifacts
-*.pdf
+
 *.html
 *.parquet
-*.png
-*.jpg
-*.jpeg
+
 
 # Annotations (too big for GitHub)
 *.gtf
