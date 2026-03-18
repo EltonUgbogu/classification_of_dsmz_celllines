@@ -1,0 +1,11 @@
+name: rnaseq-star
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - star=2.7.10b
+  - samtools=1.17
+  - rseqc=5.0.1
+  - python=3.10
+  - pysam=0.21.0
