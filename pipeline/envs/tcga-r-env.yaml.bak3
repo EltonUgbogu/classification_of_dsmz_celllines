@@ -1,0 +1,43 @@
+name: tcga-r-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3
+  - r-dplyr
+  - r-readr
+  - r-tidyr
+  - r-ggplot2
+  - r-ggrepel
+  - r-yaml
+  - r-optparse
+  - r-igraph
+  - r-purrr
+  - r-matrix
+  - r-umap
+  - r-dbscan
+  - r-fpc
+  - r-cluster
+  - r-factoextra
+  - r-pheatmap
+  - r-reshape2
+  - r-viridis
+  - r-rcolorbrewer
+  - r-scales
+  - r-ggthemes
+  - r-cowplot
+  - r-devtools
+  - r-biocmanager
+  - bioconductor-biobase
+  - bioconductor-biocgenerics
+  - bioconductor-s4vectors
+  - bioconductor-iranges
+  - bioconductor-genomicranges
+  - bioconductor-summarizedexperiment
+  - bioconductor-deseq2
+  - bioconductor-edger
+  - bioconductor-limma
+  - bioconductor-complexheatmap
+  - bioconductor-annotationdbi
+  - bioconductor-org.hs.eg.db
