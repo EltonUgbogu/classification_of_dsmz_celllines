@@ -1,0 +1,33 @@
+# Snakemake runtime (huge)
+.snakemake/
+**/.snakemake/
+
+# Big / generated directories inside pipeline
+results/
+logs/
+data/
+
+# Exclude generated conda payloads, but keep env spec files
+envs/.conda/
+**/envs/.conda/
+
+# Python / R junk
+__pycache__/
+*.pyc
+.Rhistory
+.RData
+*.rds
+*.Rds
+*.bak
+
+# Reports / artifacts
+*.pdf
+*.html
+*.parquet
+*.png
+*.jpg
+*.jpeg
+
+# Annotations (too big for GitHub)
+*.gtf
+*.gtf.gz

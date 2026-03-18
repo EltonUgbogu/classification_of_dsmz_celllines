@@ -1,69 +1,47 @@
-<<<<<<< HEAD
-# Large outputs
+# Large data and analysis outputs
 *.rds
 *.Rds
-
+*.fastq.gz
+*.fq.gz
+*.bam
+*.bai
+*.sam
+*.parquet
+*.gtf
+*.zip
+*.tar.gz
 
 # R / analysis artifacts
 .Rhistory
 .RData
-*.rds
+.Rproj.user/
+.Rcache/
+*.Rcheck/
 *.bak
+R/x86_64-redhat-linux-gnu-library/
+R/x86_64-conda-linux-gnu-library/
+R/x86_64-conda-linux-gnu-library/4.4/org.Hs.eg.db/extdata/org.Hs.eg.sqlite
 
-# snakemake internals
+# Snakemake working directories and runtime internals
 .snakemake/
-
-# Snakemake working dir / runtime artifacts
 **/.snakemake/
-.snakemake/
-
-# Conda env dirs created inside .snakemake (should never be versioned)
 **/.snakemake/conda/
 **/.snakemake/conda-*/
 **/.snakemake/shadow/
 **/.snakemake/tmp*/
-
-# Logs / job artifacts
 **/.snakemake/log/
 **/.snakemake/metadata/
-=======
-# Raw sequencing data
-*.fastq.gz
-*.fq.gz
 
-# Alignment files
-*.bam
-*.bai
-*.sam
-*.rds
-*.log
-
+# Generated Conda environments and package metadata
 miniconda3/
-*.json
+**/envs/.conda/
 *.dist-info/
+*.egg-info/
 
-# Compressed archives
-*.zip
-*.tar.gz
-*.parquet
-
-# Conda environments (regenerable)
+# Large generated data and tool directories
 benchmarks/
-.snakemake/conda/
-
-# Intermediate Snakefile metadata
-.snakemake/
-
-# HISAT2 genome index files
 HISAT2/genome/
-
-# OS-specific junk
-.DS_Store
-
-# Ignore large files that exceed GitHub's 100 MB limit
 snakemake/Miniconda3-latest-Linux-x86_64.sh
-*.gtf
-ccle/snakemakeccle/Dockerfile
 Trimmomatic-0.39/
 data/HISAT2/genome/grch38/
 data/HISAT2/genome/
@@ -72,35 +50,19 @@ bin/
 tmp/
 illumina/
 snap/
-R/x86_64-redhat-linux-gnu-library/
-R/x86_64-conda-linux-gnu-library/
-R/x86_64-conda-linux-gnu-library/4.4/org.Hs.eg.db/extdata/org.Hs.eg.sqlite 
+actions-runner/
 
-# ignor R and Conda package folders
-.Rhistory
-.RData
-.Rproj.user/
-.Rcache/
-.Rcache/
-*.Rcheck/
-
-# Conda environment and Python caches
-envs/
-*.egg-info/
+# Python caches
 __pycache__/
 *.pyc
 *.pyo
 
-# VSCode anf other IDE metadata
-.vscode
+# OS / IDE metadata
+.DS_Store
+.vscode/
 .idea/
 
 # Temporary and swap files
 *~
 *.swp
 *.tmp
-
-#github action
-actions-runner/
-
->>>>>>> 3dea327 (Initial commit of HPC scripts and Snakemake workflows)
