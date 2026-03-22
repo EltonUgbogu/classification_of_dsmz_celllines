@@ -4,3 +4,5 @@
 .ipython/** linguist-vendored
 .java/** linguist-vendored
 .config/** linguist-vendored
+*.py linguist-detectable=true
+*.sh linguist-detectable=true
