@@ -1,0 +1,6 @@
+.conda/** linguist-vendored
+.cache/** linguist-vendored
+.jupyter/** linguist-vendored
+.ipython/** linguist-vendored
+.java/** linguist-vendored
+.config/** linguist-vendored
