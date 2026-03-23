@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 # =============================================================================
-# download_rbl_tumour_sample_srr_ids.py
+# download_nbl_tumour_sample_srr_ids.py
 #
-# SRR accession lists for retinoblastoma (RBL) RNA-seq cohorts (NCBI SRA / GEO).
+# This script retrieves SRR accession lists for neuroblastoma (NBL) tumour
+# RNA-seq datasets from NCBI SRA / GEO.
 #
 # Supported targets:
-#   GSE111168  — primary tumour samples identified from GEO titles (tumor1–3)
-#   GSE196420  — bulk primary retinoblastoma RNA-seq (title filter)
-#   GSE268136  — primary tumour RB_* sample titles from GEO
+#   GSE100148  — patient tumour RNA-seq only (identified from GEO titles)
+#   GSE189367  — all paired-end Homo sapiens RNA-seq runs
+#   SRP409177  — all paired-end Homo sapiens RNA-seq runs
 #
-# Outputs per dataset include all_primary_tumour_srr.txt, all_primary_tumour_pe.txt,
-# metadata/SraRunInfo*.csv, and GEO gsm/primary GSM tables where applicable.
+# Outputs written per dataset:
+#   all_primary_tumour_srr.txt
+#   all_primary_tumour_pe.txt
+#   metadata/SraRunInfo.csv
+#   metadata/SraRunInfo_primary.csv
+#   metadata/SraRunInfo_primary_PE.csv
+#   metadata/gsm_titles.tsv              (GEO-backed datasets only)
+#   metadata/primary_gsms.tsv            (GEO-backed datasets only)
 #
 # Usage:
-#   python download_rbl_tumour_sample_srr_ids.py GSE111168|GSE196420|GSE268136|all
+#   python download_nbl_tumour_sample_srr_ids.py GSE100148|GSE189367|SRP409177|all
 # =============================================================================
 
 import csv
@@ -47,27 +54,22 @@ class DatasetConfig:
 
 
 DATASETS: dict[str, DatasetConfig] = {
-    "GSE111168": DatasetConfig(
-        query="PRJNA436090",
-        outdir=Path("/work/ugbogu/pipeline/data/rbl/GSE111168_primary_tumours"),
+    "GSE100148": DatasetConfig(
+        query="SRP109627",
+        outdir=Path("/work/ugbogu/pipeline/data/nbl/GSE100148"),
         mode="geo_title_filter",
-        # GEO uses American spelling (tumor1, tumor2, tumor3), not tumour*.
-        title_pattern=r"^tumor[123]$",
+        title_pattern=r".*patient.*RNA-seq$",
         runinfo_gsm_fields=("LibraryName", "SampleName"),
     ),
-    "GSE196420": DatasetConfig(
-        query="PRJNA804875",
-        outdir=Path("/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours"),
-        mode="geo_title_filter",
-        title_pattern=r"Primary Retinoblastoma - RNA-Seq",
-        runinfo_gsm_fields=("LibraryName", "SampleName"),
+    "GSE189367": DatasetConfig(
+        query="SRP347311",
+        outdir=Path("/work/ugbogu/pipeline/data/nbl/GSE189367"),
+        mode="runinfo_filter",
     ),
-    "GSE268136": DatasetConfig(
-        query="PRJNA1114744",
-        outdir=Path("/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours"),
-        mode="geo_title_filter",
-        title_pattern=r"^RB_\d+$",
-        runinfo_gsm_fields=("LibraryName", "SampleName"),
+    "SRP409177": DatasetConfig(
+        query="SRP409177",
+        outdir=Path("/work/ugbogu/pipeline/data/nbl/SRP409177"),
+        mode="runinfo_filter",
     ),
 }
 
