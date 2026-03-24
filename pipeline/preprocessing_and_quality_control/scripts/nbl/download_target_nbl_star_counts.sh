@@ -16,12 +16,16 @@ echo "Host: $(hostname)"
 echo "Job ID: ${SLURM_JOB_ID:-NA}"
 
 BASE=/work/ugbogu/pipeline/data/nbl/target_nbl
-LOG_DIR=/work/ugbogu/pipeline/data/nbl/target_nbl/logs
+COUNT_DIR="${BASE}/count_data"
+META_DIR="${BASE}/metadata"
+MANIFEST_DIR="${BASE}/manifests"
+LOG_DIR="${BASE}/logs"
+
 PROJECT_ID="TARGET-NBL"
 DATA_TYPE="Gene Expression Quantification"
 WORKFLOW_TYPE="STAR - Counts"
 
-mkdir -p "${BASE}" "${LOG_DIR}"
+mkdir -p "${BASE}" "${COUNT_DIR}" "${META_DIR}" "${MANIFEST_DIR}" "${LOG_DIR}"
 cd "${BASE}"
 
 echo "Working directory: ${BASE}"
@@ -42,7 +46,7 @@ for cmd in curl python gdc-client; do
   fi
 done
 
-cat > payload_counts.json <<JSON
+cat > "${META_DIR}/payload_counts.json" <<JSON
 {
   "filters": {
     "op": "and",
@@ -80,16 +84,16 @@ echo "== $(date) :: Querying GDC metadata table =="
 curl --fail --silent --show-error \
   --request POST \
   --header "Content-Type: application/json" \
-  --data @payload_counts.json \
+  --data @"${META_DIR}/payload_counts.json" \
   "https://api.gdc.cancer.gov/files" \
-  > target_nbl_star_counts_mapping.tsv
+  > "${META_DIR}/target_nbl_star_counts_mapping.tsv"
 
-if [[ ! -s target_nbl_star_counts_mapping.tsv ]]; then
-  echo "ERROR: target_nbl_star_counts_mapping.tsv is missing or empty." >&2
+if [[ ! -s "${META_DIR}/target_nbl_star_counts_mapping.tsv" ]]; then
+  echo "ERROR: metadata mapping TSV is missing or empty." >&2
   exit 1
 fi
 
-cat > payload_counts_manifest.json <<JSON
+cat > "${MANIFEST_DIR}/payload_counts_manifest.json" <<JSON
 {
   "filters": {
     "op": "and",
@@ -126,12 +130,12 @@ echo "== $(date) :: Querying GDC manifest =="
 curl --fail --silent --show-error \
   --request POST \
   --header "Content-Type: application/json" \
-  --data @payload_counts_manifest.json \
+  --data @"${MANIFEST_DIR}/payload_counts_manifest.json" \
   "https://api.gdc.cancer.gov/files?return_type=manifest" \
-  > gdc_manifest_target_nbl_star_counts.txt
+  > "${MANIFEST_DIR}/gdc_manifest_target_nbl_star_counts.txt"
 
-if [[ ! -s gdc_manifest_target_nbl_star_counts.txt ]]; then
-  echo "ERROR: gdc_manifest_target_nbl_star_counts.txt is missing or empty." >&2
+if [[ ! -s "${MANIFEST_DIR}/gdc_manifest_target_nbl_star_counts.txt" ]]; then
+  echo "ERROR: manifest file is missing or empty." >&2
   exit 1
 fi
 
@@ -139,11 +143,15 @@ echo "== $(date) :: Building file-to-aliquot mapping =="
 python - <<'PY'
 import csv
 import sys
+from pathlib import Path
 
-inp = "target_nbl_star_counts_mapping.tsv"
-out = "target_nbl_file_to_aliquot.tsv"
-aliquot_list = "target_nbl_aliquot_ids.txt"
-aliquot_unique = "target_nbl_aliquot_ids_unique.txt"
+base = Path("/work/ugbogu/pipeline/data/nbl/target_nbl")
+meta = base / "metadata"
+
+inp = meta / "target_nbl_star_counts_mapping.tsv"
+out = meta / "target_nbl_file_to_aliquot.tsv"
+aliquot_list = meta / "target_nbl_aliquot_ids.txt"
+aliquot_unique = meta / "target_nbl_aliquot_ids_unique.txt"
 
 with open(inp, newline="") as f:
     reader = csv.DictReader(f, delimiter="\t")
@@ -203,16 +211,20 @@ print(f"unique_aliquot_ids={len(set(aliquots))}")
 PY
 
 echo "== $(date) :: Summary =="
-echo "Mapping rows      : $(tail -n +2 target_nbl_file_to_aliquot.tsv | wc -l)"
-echo "Unique aliquots   : $(wc -l < target_nbl_aliquot_ids_unique.txt)"
-echo "Manifest entries  : $(tail -n +2 gdc_manifest_target_nbl_star_counts.txt | wc -l)"
-head -n 5 target_nbl_file_to_aliquot.tsv || true
+echo "Mapping rows      : $(tail -n +2 "${META_DIR}/target_nbl_file_to_aliquot.tsv" | wc -l)"
+echo "Unique aliquots   : $(wc -l < "${META_DIR}/target_nbl_aliquot_ids_unique.txt")"
+echo "Manifest entries  : $(tail -n +2 "${MANIFEST_DIR}/gdc_manifest_target_nbl_star_counts.txt" | wc -l)"
+head -n 5 "${META_DIR}/target_nbl_file_to_aliquot.tsv" || true
 
 echo "== $(date) :: Downloading TARGET-NBL STAR counts =="
 gdc-client download \
   -n 1 \
-  --log-file download.log \
-  -m gdc_manifest_target_nbl_star_counts.txt
+  -d "${COUNT_DIR}" \
+  --log-file "${BASE}/download.log" \
+  -m "${MANIFEST_DIR}/gdc_manifest_target_nbl_star_counts.txt"
 
 echo "== $(date) :: DONE =="
-echo "Outputs in: ${BASE}"
+echo "Count data : ${COUNT_DIR}"
+echo "Metadata   : ${META_DIR}"
+echo "Manifest   : ${MANIFEST_DIR}"
+echo "Logs       : ${LOG_DIR}"
