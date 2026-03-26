@@ -7,13 +7,13 @@
 # and where results/logs will be written:
 #   {project}/results/, {project}/logs/
 # If omitted, the Snakefile falls back to a project-relative data directory.
-data_root: "/work/ugbogu/pipeline/data"
+data_root: "/work/ugbogu/pipeline/data/nbl"
 env_dir: "/work/ugbogu/pipeline/preprocessing_and_quality_control/envs"
 
 projects:
-  - GSE111168
-  - GSE196420
-  - GSE268136
+  - GSE100148
+  - GSE189367
+  - SRP409177
 
 threads: 12
 

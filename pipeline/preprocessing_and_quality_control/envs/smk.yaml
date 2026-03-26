@@ -1,0 +1,11 @@
+name: smk
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - snakemake-minimal
+  - r-base
+  - r-dplyr
+  - r-matrixstats  
+  - r-ggplot2      
+ 

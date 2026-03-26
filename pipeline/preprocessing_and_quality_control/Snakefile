@@ -1,7 +1,7 @@
 #!/usr/bin/env snakemake
 # =============================================================================
-# Retinoblastoma (Rb) RNA-seq pipeline for paired-end public datasets
-# Datasets: GSE111168, GSE196420, GSE268136
+# RNA-seq pipeline for paired-end public datasets
+# 
 #
 # Bioinformatics goal:
 #   The workflow performs read-level QC, alignment to a reference genome,
