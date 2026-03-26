@@ -1,0 +1,504 @@
+STAR version=2.7.10b
+STAR compilation time,server,dir=2023-05-25T06:56:23+0000 :/opt/conda/conda-bld/star_1684997536154/work/source
+##### Command Line:
+/work/ugbogu/.conda/envs/rnaseq-star/bin/STAR-avx2 --runMode genomeGenerate --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44 --genomeFastaFiles /work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa --sjdbGTFfile /work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf --sjdbOverhang 100 --runThreadN 12
+##### Initial USER parameters from Command Line:
+###### All USER parameters from Command Line:
+runMode                       genomeGenerate        ~RE-DEFINED
+genomeDir                     /work/ugbogu/pipeline/data/reference/star_gencode_v44     ~RE-DEFINED
+genomeFastaFiles              /work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa        ~RE-DEFINED
+sjdbGTFfile                   /work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf     ~RE-DEFINED
+sjdbOverhang                  100     ~RE-DEFINED
+runThreadN                    12     ~RE-DEFINED
+##### Finished reading parameters from all sources
+
+##### Final user re-defined parameters-----------------:
+runMode                           genomeGenerate   
+runThreadN                        12
+genomeDir                         /work/ugbogu/pipeline/data/reference/star_gencode_v44
+genomeFastaFiles                  /work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa   
+sjdbGTFfile                       /work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf
+sjdbOverhang                      100
+
+-------------------------------
+##### Final effective command line:
+/work/ugbogu/.conda/envs/rnaseq-star/bin/STAR-avx2   --runMode genomeGenerate      --runThreadN 12   --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44   --genomeFastaFiles /work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa      --sjdbGTFfile /work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf   --sjdbOverhang 100
+----------------------------------------
+
+Number of fastq files for each mate = 1
+ParametersSolo: --soloCellFilterType CellRanger2.2 filtering parameters:  3000 0.99 10
+Finished loading and checking parameters
+--genomeDir directory exists and will be overwritten: /work/ugbogu/pipeline/data/reference/star_gencode_v44/
+Mar 18 04:33:38 ... starting to generate Genome files
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 0  "chr1" chrStart: 0
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 1  "chr2" chrStart: 249036800
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 2  "chr3" chrStart: 491257856
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 3  "chr4" chrStart: 689700864
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 4  "chr5" chrStart: 880017408
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 5  "chr6" chrStart: 1061683200
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 6  "chr7" chrStart: 1232601088
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 7  "chr8" chrStart: 1391984640
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 8  "chr9" chrStart: 1537212416
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 9  "chr10" chrStart: 1675624448
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 10  "chr11" chrStart: 1809580032
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 11  "chr12" chrStart: 1944846336
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 12  "chr13" chrStart: 2078277632
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 13  "chr14" chrStart: 2192834560
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 14  "chr15" chrStart: 2300051456
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 15  "chr16" chrStart: 2402287616
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 16  "chr17" chrStart: 2492727296
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 17  "chr18" chrStart: 2576089088
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 18  "chr19" chrStart: 2656567296
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 19  "chr20" chrStart: 2715287552
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 20  "chr21" chrStart: 2779774976
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 21  "chr22" chrStart: 2826698752
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 22  "chrX" chrStart: 2877554688
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 23  "chrY" chrStart: 3033792512
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 24  "chrM" chrStart: 3091202048
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 25  "GL000008.2" chrStart: 3091464192
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 26  "GL000009.2" chrStart: 3091726336
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 27  "GL000194.1" chrStart: 3091988480
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 28  "GL000195.1" chrStart: 3092250624
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 29  "GL000205.2" chrStart: 3092512768
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 30  "GL000208.1" chrStart: 3092774912
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 31  "GL000213.1" chrStart: 3093037056
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 32  "GL000214.1" chrStart: 3093299200
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 33  "GL000216.2" chrStart: 3093561344
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 34  "GL000218.1" chrStart: 3093823488
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 35  "GL000219.1" chrStart: 3094085632
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 36  "GL000220.1" chrStart: 3094347776
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 37  "GL000221.1" chrStart: 3094609920
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 38  "GL000224.1" chrStart: 3094872064
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 39  "GL000225.1" chrStart: 3095134208
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 40  "GL000226.1" chrStart: 3095396352
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 41  "KI270302.1" chrStart: 3095658496
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 42  "KI270303.1" chrStart: 3095920640
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 43  "KI270304.1" chrStart: 3096182784
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 44  "KI270305.1" chrStart: 3096444928
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 45  "KI270310.1" chrStart: 3096707072
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 46  "KI270311.1" chrStart: 3096969216
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 47  "KI270312.1" chrStart: 3097231360
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 48  "KI270315.1" chrStart: 3097493504
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 49  "KI270316.1" chrStart: 3097755648
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 50  "KI270317.1" chrStart: 3098017792
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 51  "KI270320.1" chrStart: 3098279936
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 52  "KI270322.1" chrStart: 3098542080
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 53  "KI270329.1" chrStart: 3098804224
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 54  "KI270330.1" chrStart: 3099066368
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 55  "KI270333.1" chrStart: 3099328512
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 56  "KI270334.1" chrStart: 3099590656
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 57  "KI270335.1" chrStart: 3099852800
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 58  "KI270336.1" chrStart: 3100114944
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 59  "KI270337.1" chrStart: 3100377088
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 60  "KI270338.1" chrStart: 3100639232
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 61  "KI270340.1" chrStart: 3100901376
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 62  "KI270362.1" chrStart: 3101163520
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 63  "KI270363.1" chrStart: 3101425664
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 64  "KI270364.1" chrStart: 3101687808
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 65  "KI270366.1" chrStart: 3101949952
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 66  "KI270371.1" chrStart: 3102212096
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 67  "KI270372.1" chrStart: 3102474240
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 68  "KI270373.1" chrStart: 3102736384
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 69  "KI270374.1" chrStart: 3102998528
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 70  "KI270375.1" chrStart: 3103260672
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 71  "KI270376.1" chrStart: 3103522816
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 72  "KI270378.1" chrStart: 3103784960
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 73  "KI270379.1" chrStart: 3104047104
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 74  "KI270381.1" chrStart: 3104309248
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 75  "KI270382.1" chrStart: 3104571392
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 76  "KI270383.1" chrStart: 3104833536
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 77  "KI270384.1" chrStart: 3105095680
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 78  "KI270385.1" chrStart: 3105357824
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 79  "KI270386.1" chrStart: 3105619968
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 80  "KI270387.1" chrStart: 3105882112
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 81  "KI270388.1" chrStart: 3106144256
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 82  "KI270389.1" chrStart: 3106406400
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 83  "KI270390.1" chrStart: 3106668544
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 84  "KI270391.1" chrStart: 3106930688
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 85  "KI270392.1" chrStart: 3107192832
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 86  "KI270393.1" chrStart: 3107454976
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 87  "KI270394.1" chrStart: 3107717120
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 88  "KI270395.1" chrStart: 3107979264
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 89  "KI270396.1" chrStart: 3108241408
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 90  "KI270411.1" chrStart: 3108503552
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 91  "KI270412.1" chrStart: 3108765696
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 92  "KI270414.1" chrStart: 3109027840
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 93  "KI270417.1" chrStart: 3109289984
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 94  "KI270418.1" chrStart: 3109552128
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 95  "KI270419.1" chrStart: 3109814272
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 96  "KI270420.1" chrStart: 3110076416
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 97  "KI270422.1" chrStart: 3110338560
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 98  "KI270423.1" chrStart: 3110600704
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 99  "KI270424.1" chrStart: 3110862848
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 100  "KI270425.1" chrStart: 3111124992
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 101  "KI270429.1" chrStart: 3111387136
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 102  "KI270435.1" chrStart: 3111649280
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 103  "KI270438.1" chrStart: 3111911424
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 104  "KI270442.1" chrStart: 3112173568
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 105  "KI270448.1" chrStart: 3112697856
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 106  "KI270465.1" chrStart: 3112960000
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 107  "KI270466.1" chrStart: 3113222144
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 108  "KI270467.1" chrStart: 3113484288
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 109  "KI270468.1" chrStart: 3113746432
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 110  "KI270507.1" chrStart: 3114008576
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 111  "KI270508.1" chrStart: 3114270720
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 112  "KI270509.1" chrStart: 3114532864
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 113  "KI270510.1" chrStart: 3114795008
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 114  "KI270511.1" chrStart: 3115057152
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 115  "KI270512.1" chrStart: 3115319296
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 116  "KI270515.1" chrStart: 3115581440
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 117  "KI270516.1" chrStart: 3115843584
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 118  "KI270517.1" chrStart: 3116105728
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 119  "KI270518.1" chrStart: 3116367872
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 120  "KI270519.1" chrStart: 3116630016
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 121  "KI270521.1" chrStart: 3116892160
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 122  "KI270522.1" chrStart: 3117154304
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 123  "KI270528.1" chrStart: 3117416448
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 124  "KI270529.1" chrStart: 3117678592
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 125  "KI270530.1" chrStart: 3117940736
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 126  "KI270538.1" chrStart: 3118202880
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 127  "KI270539.1" chrStart: 3118465024
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 128  "KI270544.1" chrStart: 3118727168
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 129  "KI270548.1" chrStart: 3118989312
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 130  "KI270579.1" chrStart: 3119251456
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 131  "KI270580.1" chrStart: 3119513600
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 132  "KI270581.1" chrStart: 3119775744
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 133  "KI270582.1" chrStart: 3120037888
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 134  "KI270583.1" chrStart: 3120300032
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 135  "KI270584.1" chrStart: 3120562176
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 136  "KI270587.1" chrStart: 3120824320
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 137  "KI270588.1" chrStart: 3121086464
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 138  "KI270589.1" chrStart: 3121348608
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 139  "KI270590.1" chrStart: 3121610752
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 140  "KI270591.1" chrStart: 3121872896
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 141  "KI270593.1" chrStart: 3122135040
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 142  "KI270706.1" chrStart: 3122397184
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 143  "KI270707.1" chrStart: 3122659328
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 144  "KI270708.1" chrStart: 3122921472
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 145  "KI270709.1" chrStart: 3123183616
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 146  "KI270710.1" chrStart: 3123445760
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 147  "KI270711.1" chrStart: 3123707904
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 148  "KI270712.1" chrStart: 3123970048
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 149  "KI270713.1" chrStart: 3124232192
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 150  "KI270714.1" chrStart: 3124494336
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 151  "KI270715.1" chrStart: 3124756480
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 152  "KI270716.1" chrStart: 3125018624
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 153  "KI270717.1" chrStart: 3125280768
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 154  "KI270718.1" chrStart: 3125542912
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 155  "KI270719.1" chrStart: 3125805056
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 156  "KI270720.1" chrStart: 3126067200
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 157  "KI270721.1" chrStart: 3126329344
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 158  "KI270722.1" chrStart: 3126591488
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 159  "KI270723.1" chrStart: 3126853632
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 160  "KI270724.1" chrStart: 3127115776
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 161  "KI270725.1" chrStart: 3127377920
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 162  "KI270726.1" chrStart: 3127640064
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 163  "KI270727.1" chrStart: 3127902208
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 164  "KI270728.1" chrStart: 3128426496
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 165  "KI270729.1" chrStart: 3130523648
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 166  "KI270730.1" chrStart: 3131047936
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 167  "KI270731.1" chrStart: 3131310080
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 168  "KI270732.1" chrStart: 3131572224
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 169  "KI270733.1" chrStart: 3131834368
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 170  "KI270734.1" chrStart: 3132096512
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 171  "KI270735.1" chrStart: 3132358656
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 172  "KI270736.1" chrStart: 3132620800
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 173  "KI270737.1" chrStart: 3132882944
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 174  "KI270738.1" chrStart: 3133145088
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 175  "KI270739.1" chrStart: 3133407232
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 176  "KI270740.1" chrStart: 3133669376
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 177  "KI270741.1" chrStart: 3133931520
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 178  "KI270742.1" chrStart: 3134193664
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 179  "KI270743.1" chrStart: 3134455808
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 180  "KI270744.1" chrStart: 3134717952
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 181  "KI270745.1" chrStart: 3134980096
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 182  "KI270746.1" chrStart: 3135242240
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 183  "KI270747.1" chrStart: 3135504384
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 184  "KI270748.1" chrStart: 3135766528
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 185  "KI270749.1" chrStart: 3136028672
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 186  "KI270750.1" chrStart: 3136290816
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 187  "KI270751.1" chrStart: 3136552960
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 188  "KI270752.1" chrStart: 3136815104
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 189  "KI270753.1" chrStart: 3137077248
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 190  "KI270754.1" chrStart: 3137339392
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 191  "KI270755.1" chrStart: 3137601536
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 192  "KI270756.1" chrStart: 3137863680
+/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa : chr # 193  "KI270757.1" chrStart: 3138125824
+Chromosome sequence lengths: 
+chr1	248956422
+chr2	242193529
+chr3	198295559
+chr4	190214555
+chr5	181538259
+chr6	170805979
+chr7	159345973
+chr8	145138636
+chr9	138394717
+chr10	133797422
+chr11	135086622
+chr12	133275309
+chr13	114364328
+chr14	107043718
+chr15	101991189
+chr16	90338345
+chr17	83257441
+chr18	80373285
+chr19	58617616
+chr20	64444167
+chr21	46709983
+chr22	50818468
+chrX	156040895
+chrY	57227415
+chrM	16569
+GL000008.2	209709
+GL000009.2	201709
+GL000194.1	191469
+GL000195.1	182896
+GL000205.2	185591
+GL000208.1	92689
+GL000213.1	164239
+GL000214.1	137718
+GL000216.2	176608
+GL000218.1	161147
+GL000219.1	179198
+GL000220.1	161802
+GL000221.1	155397
+GL000224.1	179693
+GL000225.1	211173
+GL000226.1	15008
+KI270302.1	2274
+KI270303.1	1942
+KI270304.1	2165
+KI270305.1	1472
+KI270310.1	1201
+KI270311.1	12399
+KI270312.1	998
+KI270315.1	2276
+KI270316.1	1444
+KI270317.1	37690
+KI270320.1	4416
+KI270322.1	21476
+KI270329.1	1040
+KI270330.1	1652
+KI270333.1	2699
+KI270334.1	1368
+KI270335.1	1048
+KI270336.1	1026
+KI270337.1	1121
+KI270338.1	1428
+KI270340.1	1428
+KI270362.1	3530
+KI270363.1	1803
+KI270364.1	2855
+KI270366.1	8320
+KI270371.1	2805
+KI270372.1	1650
+KI270373.1	1451
+KI270374.1	2656
+KI270375.1	2378
+KI270376.1	1136
+KI270378.1	1048
+KI270379.1	1045
+KI270381.1	1930
+KI270382.1	4215
+KI270383.1	1750
+KI270384.1	1658
+KI270385.1	990
+KI270386.1	1788
+KI270387.1	1537
+KI270388.1	1216
+KI270389.1	1298
+KI270390.1	2387
+KI270391.1	1484
+KI270392.1	971
+KI270393.1	1308
+KI270394.1	970
+KI270395.1	1143
+KI270396.1	1880
+KI270411.1	2646
+KI270412.1	1179
+KI270414.1	2489
+KI270417.1	2043
+KI270418.1	2145
+KI270419.1	1029
+KI270420.1	2321
+KI270422.1	1445
+KI270423.1	981
+KI270424.1	2140
+KI270425.1	1884
+KI270429.1	1361
+KI270435.1	92983
+KI270438.1	112505
+KI270442.1	392061
+KI270448.1	7992
+KI270465.1	1774
+KI270466.1	1233
+KI270467.1	3920
+KI270468.1	4055
+KI270507.1	5353
+KI270508.1	1951
+KI270509.1	2318
+KI270510.1	2415
+KI270511.1	8127
+KI270512.1	22689
+KI270515.1	6361
+KI270516.1	1300
+KI270517.1	3253
+KI270518.1	2186
+KI270519.1	138126
+KI270521.1	7642
+KI270522.1	5674
+KI270528.1	2983
+KI270529.1	1899
+KI270530.1	2168
+KI270538.1	91309
+KI270539.1	993
+KI270544.1	1202
+KI270548.1	1599
+KI270579.1	31033
+KI270580.1	1553
+KI270581.1	7046
+KI270582.1	6504
+KI270583.1	1400
+KI270584.1	4513
+KI270587.1	2969
+KI270588.1	6158
+KI270589.1	44474
+KI270590.1	4685
+KI270591.1	5796
+KI270593.1	3041
+KI270706.1	175055
+KI270707.1	32032
+KI270708.1	127682
+KI270709.1	66860
+KI270710.1	40176
+KI270711.1	42210
+KI270712.1	176043
+KI270713.1	40745
+KI270714.1	41717
+KI270715.1	161471
+KI270716.1	153799
+KI270717.1	40062
+KI270718.1	38054
+KI270719.1	176845
+KI270720.1	39050
+KI270721.1	100316
+KI270722.1	194050
+KI270723.1	38115
+KI270724.1	39555
+KI270725.1	172810
+KI270726.1	43739
+KI270727.1	448248
+KI270728.1	1872759
+KI270729.1	280839
+KI270730.1	112551
+KI270731.1	150754
+KI270732.1	41543
+KI270733.1	179772
+KI270734.1	165050
+KI270735.1	42811
+KI270736.1	181920
+KI270737.1	103838
+KI270738.1	99375
+KI270739.1	73985
+KI270740.1	37240
+KI270741.1	157432
+KI270742.1	186739
+KI270743.1	210658
+KI270744.1	168472
+KI270745.1	41891
+KI270746.1	66486
+KI270747.1	198735
+KI270748.1	93321
+KI270749.1	158759
+KI270750.1	148850
+KI270751.1	150742
+KI270752.1	27745
+KI270753.1	62944
+KI270754.1	40191
+KI270755.1	36723
+KI270756.1	79590
+KI270757.1	71251
+Genome sequence total length = 3099750718
+Genome size with padding = 3138387968
+Mar 18 04:34:10 ..... processing annotations GTF
+Processing pGe.sjdbGTFfile=/work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf, found:
+		117688 transcripts
+		853744 exons (non-collapsed)
+		298703 collapsed junctions
+Total junctions: 298703
+Mar 18 04:34:15 ..... finished GTF processing
+
+Estimated genome size with padding and SJs: total=genome+SJ=3339387968 = 3138387968 + 201000000
+GstrandBit=32
+Number of SA indices: 5897255510
+Mar 18 04:34:19 ... starting to sort Suffix Array. This may take a long time...
+Number of chunks: 43;   chunks size limit: 1236161184 bytes
+Mar 18 04:34:30 ... sorting Suffix Array chunks and saving them to disk...
+Writing 996845264 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_0 ; empty space on disk = 524074388504576 bytes ... done
+Writing 1071211128 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_5 ; empty space on disk = 524073249746944 bytes ...Writing 1055549768 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_3 ; empty space on disk = 524073249746944 bytes ... done
+ done
+Writing 1119807288 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_11 ; empty space on disk = 524073249746944 bytes ... done
+Writing 1108374536 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_1 ; empty space on disk = 524069938106368 bytes ... done
+Writing 1148140024 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_8 ; empty space on disk = 524068544217088 bytes ... done
+Writing 1156703800 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_7 ; empty space on disk = 524066181763072 bytes ... done
+Writing 1052969536 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_4 ; empty space on disk = 524064835624960 bytes ... done
+Writing 1084240064 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_9 ; empty space on disk = 524063994589184 bytes ... done
+Writing 1203970040 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_10 ; empty space on disk = 524062242709504 bytes ... done
+Writing 1120570920 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_2 ; empty space on disk = 524061534814208 bytes ... done
+Writing 1158824320 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_6 ; empty space on disk = 524060270792704 bytes ... done
+Writing 1169864680 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_12 ; empty space on disk = 524056770519040 bytes ... done
+Writing 1111974344 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_13 ; empty space on disk = 524055279529984 bytes ... done
+Writing 1206401216 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_16 ; empty space on disk = 524053300244480 bytes ... done
+Writing 1072006000 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_15 ; empty space on disk = 524051649572864 bytes ... done
+Writing 1231086800 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_23 ; empty space on disk = 524049957482496 bytes ... done
+Writing 1227913712 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_17 ; empty space on disk = 524049389207552 bytes ... done
+Writing 945487584 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_20 ; empty space on disk = 524047773638656 bytes ... done
+Writing 1145432264 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_14 ; empty space on disk = 524046204702720 bytes ... done
+Writing 1210809136 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_18 ; empty space on disk = 524046204702720 bytes ... done
+Writing 1227365960 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_22 ; empty space on disk = 524043041894400 bytes ... done
+Writing 1221926416 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_19 ; empty space on disk = 524040236896256 bytes ... done
+Writing 1225613336 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_21 ; empty space on disk = 524035560767488 bytes ... done
+Writing 1136242128 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_24 ; empty space on disk = 524035569479680 bytes ... done
+Writing 1097134256 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_25 ; empty space on disk = 524033481510912 bytes ... done
+Writing 962865880 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_29 ; empty space on disk = 524032452161536 bytes ... done
+Writing 1124985856 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_30 ; empty space on disk = 524016619941888 bytes ... done
+Writing 1189944072 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_26 ; empty space on disk = 524010357723136 bytes ... done
+Writing 906245640 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_31 ; empty space on disk = 524009527242752 bytes ... done
+Writing 1125442096 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_27 ; empty space on disk = 524008033456128 bytes ... done
+Writing 1137023232 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_28 ; empty space on disk = 524006834130944 bytes ... done
+Writing 1033211528 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_32 ; empty space on disk = 524005536567296 bytes ... done
+Writing 1107823144 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_36 ; empty space on disk = 524005536567296 bytes ... done
+Writing 1052221144 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_34 ; empty space on disk = 524003280850944 bytes ... done
+Writing 1081161072 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_33 ; empty space on disk = 524001106128896 bytes ... done
+Writing 1153584232 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_37 ; empty space on disk = 524001106128896 bytes ... done
+Writing 1166294904 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_35 ; empty space on disk = 523999865561088 bytes ... done
+Writing 966945312 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_38 ; empty space on disk = 523998521577472 bytes ... done
+Writing 726121360 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_42 ; empty space on disk = 523997638635520 bytes ... done
+Writing 707534240 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_41 ; empty space on disk = 523996567068672 bytes ... done
+Writing 1035495448 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_40 ; empty space on disk = 523996567068672 bytes ... done
+Writing 1194680400 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA_39 ; empty space on disk = 523994341441536 bytes ... done
+Mar 18 04:51:02 ... loading chunks from disk, packing SA...
+Mar 18 04:52:47 ... finished generating suffix array
+Mar 18 04:52:47 ... generating Suffix Array index
+Mar 18 04:55:41 ... completed Suffix Array index
+Mar 18 04:55:41   Finished preparing junctions
+Mar 18 04:55:41 ..... inserting junctions into the genome indices
+Mar 18 04:56:19   Finished SA search: number of new junctions=298691, old junctions=0
+Mar 18 04:56:45   Finished sorting SA indicesL nInd=119476400
+Genome size with junctions=3198424859  3138387968   60036891
+GstrandBit1=32   GstrandBit=32
+Mar 18 04:57:36   Finished inserting junction indices
+Mar 18 04:57:53   Finished SAi
+Mar 18 04:57:53 ..... finished inserting junctions into genome
+Mar 18 04:57:53 ... writing Genome to disk ...
+Writing 3198424859 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//Genome ; empty space on disk = 524038753792000 bytes ... done
+SA size in bytes: 24819019132
+Mar 18 04:57:56 ... writing Suffix Array to disk ...
+Writing 24819019132 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SA ; empty space on disk = 524037496639488 bytes ... done
+Mar 18 04:58:25 ... writing SAindex to disk
+Writing 8 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SAindex ; empty space on disk = 524013948657664 bytes ... done
+Writing 120 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SAindex ; empty space on disk = 524013948657664 bytes ... done
+Writing 1565873491 bytes into /work/ugbogu/pipeline/data/reference/star_gencode_v44//SAindex ; empty space on disk = 524013948657664 bytes ... done
+Mar 18 04:58:29 ..... finished successfully
+DONE: Genome generation, EXITING

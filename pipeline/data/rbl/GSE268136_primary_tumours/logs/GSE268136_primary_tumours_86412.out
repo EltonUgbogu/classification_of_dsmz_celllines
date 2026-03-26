@@ -1,0 +1,140 @@
+== Sun Mar 22 18:45:19 UTC 2026 :: START ==
+Host: hcc13
+[INFO] ROOT=/work/ugbogu/pipeline/data/rbl
+[INFO] DATASET=GSE268136_primary_tumours
+[INFO] BASE=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours
+[INFO] LIST=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/all_primary_tumour_pe.txt
+[INFO] SRA_DIR=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/sra
+[INFO] FASTQ_DIR=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/fastq
+[INFO] LOG_DIR=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/logs
+[INFO] TMPDIR=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/tmp/86412
+[INFO] THREADS=8
+[INFO] REMOVED_FILE=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/removed_rbl_srr_id_primary_tumour_pe.txt
+[INFO] JOB_STDOUT=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/logs/GSE268136_primary_tumours_86412.out
+[INFO] JOB_STDERR=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/logs/GSE268136_primary_tumours_86412.err
+[INFO] TOTAL SRRs TO PROCESS: 49
+[SEQ] (1/49) SRR29131293
+[skip] SRR29131293: paired FASTQs already exist
+[SEQ] (2/49) SRR29131292
+[skip] SRR29131292: paired FASTQs already exist
+[SEQ] (3/49) SRR29131291
+[skip] SRR29131291: paired FASTQs already exist
+[SEQ] (4/49) SRR29131290
+[skip] SRR29131290: paired FASTQs already exist
+[SEQ] (5/49) SRR29131289
+[skip] SRR29131289: paired FASTQs already exist
+[SEQ] (6/49) SRR29131288
+[skip] SRR29131288: paired FASTQs already exist
+[SEQ] (7/49) SRR29131287
+[skip] SRR29131287: paired FASTQs already exist
+[SEQ] (8/49) SRR29131286
+[skip] SRR29131286: paired FASTQs already exist
+[SEQ] (9/49) SRR29131285
+[skip] SRR29131285: paired FASTQs already exist
+[SEQ] (10/49) SRR29131284
+[skip] SRR29131284: paired FASTQs already exist
+[SEQ] (11/49) SRR29131283
+[skip] SRR29131283: paired FASTQs already exist
+[SEQ] (12/49) SRR29131282
+[skip] SRR29131282: paired FASTQs already exist
+[SEQ] (13/49) SRR29131281
+[skip] SRR29131281: paired FASTQs already exist
+[SEQ] (14/49) SRR29131280
+[skip] SRR29131280: paired FASTQs already exist
+[SEQ] (15/49) SRR29131279
+[skip] SRR29131279: paired FASTQs already exist
+[SEQ] (16/49) SRR29131278
+[skip] SRR29131278: paired FASTQs already exist
+[SEQ] (17/49) SRR29131277
+[skip] SRR29131277: paired FASTQs already exist
+[SEQ] (18/49) SRR29131276
+[skip] SRR29131276: paired FASTQs already exist
+[SEQ] (19/49) SRR29131275
+[skip] SRR29131275: paired FASTQs already exist
+[SEQ] (20/49) SRR29131274
+[skip] SRR29131274: paired FASTQs already exist
+[SEQ] (21/49) SRR29131272
+[skip] SRR29131272: paired FASTQs already exist
+[SEQ] (22/49) SRR29131271
+---- Sun Mar 22 18:45:20 UTC 2026 :: START SRR29131271 ----
+[prefetch] skip: SRR29131271 already present
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/sra/SRR29131271
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/tmp/86412
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/fastq
+[pigz] compressing SRR29131271_1.fastq and SRR29131271_2.fastq
+---- Sun Mar 22 18:56:42 UTC 2026 :: DONE SRR29131271 ----
+[SEQ] (23/49) SRR29131270
+---- Sun Mar 22 18:56:42 UTC 2026 :: START SRR29131270 ----
+[prefetch] downloading SRR29131270 -> /work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/sra
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/sra/SRR29131270
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/tmp/86412
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/fastq
+[pigz] compressing SRR29131270_1.fastq and SRR29131270_2.fastq
+---- Sun Mar 22 19:11:40 UTC 2026 :: DONE SRR29131270 ----
+[SEQ] (24/49) SRR29131269
+---- Sun Mar 22 19:11:40 UTC 2026 :: START SRR29131269 ----
+[prefetch] downloading SRR29131269 -> /work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/sra
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/sra/SRR29131269
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/tmp/86412
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/fastq
+[pigz] compressing SRR29131269_1.fastq and SRR29131269_2.fastq
+---- Sun Mar 22 19:37:10 UTC 2026 :: DONE SRR29131269 ----
+[SEQ] (25/49) SRR29131268
+[skip] SRR29131268: paired FASTQs already exist
+[SEQ] (26/49) SRR29131267
+[skip] SRR29131267: paired FASTQs already exist
+[SEQ] (27/49) SRR29131266
+[skip] SRR29131266: paired FASTQs already exist
+[SEQ] (28/49) SRR29131265
+[skip] SRR29131265: paired FASTQs already exist
+[SEQ] (29/49) SRR29131264
+[skip] SRR29131264: paired FASTQs already exist
+[SEQ] (30/49) SRR29131263
+[skip] SRR29131263: paired FASTQs already exist
+[SEQ] (31/49) SRR29131262
+[skip] SRR29131262: paired FASTQs already exist
+[SEQ] (32/49) SRR29131261
+[skip] SRR29131261: paired FASTQs already exist
+[SEQ] (33/49) SRR29131260
+[skip] SRR29131260: paired FASTQs already exist
+[SEQ] (34/49) SRR29131259
+[skip] SRR29131259: paired FASTQs already exist
+[SEQ] (35/49) SRR29131258
+[skip] SRR29131258: paired FASTQs already exist
+[SEQ] (36/49) SRR29131257
+[skip] SRR29131257: paired FASTQs already exist
+[SEQ] (37/49) SRR29131256
+[skip] SRR29131256: paired FASTQs already exist
+[SEQ] (38/49) SRR29131255
+[skip] SRR29131255: paired FASTQs already exist
+[SEQ] (39/49) SRR29131254
+[skip] SRR29131254: paired FASTQs already exist
+[SEQ] (40/49) SRR29131253
+[skip] SRR29131253: paired FASTQs already exist
+[SEQ] (41/49) SRR29131252
+[skip] SRR29131252: paired FASTQs already exist
+[SEQ] (42/49) SRR29131251
+[skip] SRR29131251: paired FASTQs already exist
+[SEQ] (43/49) SRR29131250
+[skip] SRR29131250: paired FASTQs already exist
+[SEQ] (44/49) SRR29131249
+[skip] SRR29131249: paired FASTQs already exist
+[SEQ] (45/49) SRR29131248
+[skip] SRR29131248: paired FASTQs already exist
+[SEQ] (46/49) SRR29131247
+[skip] SRR29131247: paired FASTQs already exist
+[SEQ] (47/49) SRR29131246
+[skip] SRR29131246: paired FASTQs already exist
+[SEQ] (48/49) SRR29131245
+[skip] SRR29131245: paired FASTQs already exist
+[SEQ] (49/49) SRR29131244
+[skip] SRR29131244: paired FASTQs already exist
+== Sun Mar 22 19:37:10 UTC 2026 :: ALL DONE ==
+[SUMMARY] total=49
+[SUMMARY] success=3
+[SUMMARY] skipped=46
+[SUMMARY] failed=0
+[SUMMARY] removed_file=/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/removed_rbl_srr_id_primary_tumour_pe.txt

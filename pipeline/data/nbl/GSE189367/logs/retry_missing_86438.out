@@ -1,0 +1,147 @@
+== Tue Mar 24 10:55:33 UTC 2026 :: START ==
+Host: hcc07
+[INFO] THREADS=8
+== Retrying SRR17010972 ==
+2026-03-24T10:55:33 prefetch.3.2.1: 1) Resolving 'SRR17010972'...
+2026-03-24T10:55:36 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T10:55:36 prefetch.3.2.1: 1) Downloading 'SRR17010972'...
+2026-03-24T10:55:36 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T10:55:36 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T10:58:15 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T10:58:23 prefetch.3.2.1:  'SRR17010972' is valid: 4806460097 bytes were streamed from 4806447951
+2026-03-24T10:58:23 prefetch.3.2.1: 1) 'SRR17010972' was downloaded successfully
+2026-03-24T10:58:23 prefetch.3.2.1: 1) Resolving 'SRR17010972's dependencies...
+2026-03-24T10:58:23 prefetch.3.2.1: 'SRR17010972' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 3.2G Mar 24 10:59 fastq/SRR17010972_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 3.4G Mar 24 10:59 fastq/SRR17010972_2.fastq.gz
+== Retrying SRR17010974 ==
+2026-03-24T11:06:21 prefetch.3.2.1: 1) Resolving 'SRR17010974'...
+2026-03-24T11:06:24 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T11:06:24 prefetch.3.2.1: 1) Downloading 'SRR17010974'...
+2026-03-24T11:06:24 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T11:06:24 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T11:09:22 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T11:09:27 prefetch.3.2.1:  'SRR17010974' is valid: 3555327810 bytes were streamed from 3555319355
+2026-03-24T11:09:27 prefetch.3.2.1: 1) 'SRR17010974' was downloaded successfully
+2026-03-24T11:09:27 prefetch.3.2.1: 1) Resolving 'SRR17010974's dependencies...
+2026-03-24T11:09:27 prefetch.3.2.1: 'SRR17010974' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 2.4G Mar 24 11:10 fastq/SRR17010974_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2.5G Mar 24 11:10 fastq/SRR17010974_2.fastq.gz
+== Retrying SRR17010977 ==
+2026-03-24T11:15:22 prefetch.3.2.1: 1) Resolving 'SRR17010977'...
+2026-03-24T11:15:25 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T11:15:25 prefetch.3.2.1: 1) Downloading 'SRR17010977'...
+2026-03-24T11:15:25 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T11:15:25 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T11:21:19 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T11:21:24 prefetch.3.2.1:  'SRR17010977' is valid: 2885258258 bytes were streamed from 2885246453
+2026-03-24T11:21:24 prefetch.3.2.1: 1) 'SRR17010977' was downloaded successfully
+2026-03-24T11:21:24 prefetch.3.2.1: 1) Resolving 'SRR17010977's dependencies...
+2026-03-24T11:21:24 prefetch.3.2.1: 'SRR17010977' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 1.9G Mar 24 11:21 fastq/SRR17010977_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2.1G Mar 24 11:21 fastq/SRR17010977_2.fastq.gz
+== Retrying SRR17010979 ==
+2026-03-24T11:26:12 prefetch.3.2.1: 1) Resolving 'SRR17010979'...
+2026-03-24T11:26:15 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T11:26:16 prefetch.3.2.1: 1) Downloading 'SRR17010979'...
+2026-03-24T11:26:16 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T11:26:16 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T11:51:47 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T11:51:59 prefetch.3.2.1:  'SRR17010979' is valid: 7532443521 bytes were streamed from 7532441579
+2026-03-24T11:51:59 prefetch.3.2.1: 1) 'SRR17010979' was downloaded successfully
+2026-03-24T11:51:59 prefetch.3.2.1: 1) Resolving 'SRR17010979's dependencies...
+2026-03-24T11:51:59 prefetch.3.2.1: 'SRR17010979' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 4.9G Mar 24 11:53 fastq/SRR17010979_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 5.1G Mar 24 11:53 fastq/SRR17010979_2.fastq.gz
+== Retrying SRR17010980 ==
+2026-03-24T12:04:13 prefetch.3.2.1: 1) Resolving 'SRR17010980'...
+2026-03-24T12:04:16 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T12:04:16 prefetch.3.2.1: 1) Downloading 'SRR17010980'...
+2026-03-24T12:04:16 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T12:04:16 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T12:18:59 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T12:19:03 prefetch.3.2.1:  'SRR17010980' is valid: 2728786848 bytes were streamed from 2728782357
+2026-03-24T12:19:03 prefetch.3.2.1: 1) 'SRR17010980' was downloaded successfully
+2026-03-24T12:19:03 prefetch.3.2.1: 1) Resolving 'SRR17010980's dependencies...
+2026-03-24T12:19:03 prefetch.3.2.1: 'SRR17010980' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 1.8G Mar 24 12:19 fastq/SRR17010980_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 1.9G Mar 24 12:19 fastq/SRR17010980_2.fastq.gz
+== Retrying SRR17010981 ==
+2026-03-24T12:23:37 prefetch.3.2.1: 1) Resolving 'SRR17010981'...
+2026-03-24T12:23:40 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T12:23:40 prefetch.3.2.1: 1) Downloading 'SRR17010981'...
+2026-03-24T12:23:40 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T12:23:40 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T12:51:45 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T12:51:49 prefetch.3.2.1:  'SRR17010981' is valid: 2992838425 bytes were streamed from 2992827905
+2026-03-24T12:51:49 prefetch.3.2.1: 1) 'SRR17010981' was downloaded successfully
+2026-03-24T12:51:49 prefetch.3.2.1: 1) Resolving 'SRR17010981's dependencies...
+2026-03-24T12:51:49 prefetch.3.2.1: 'SRR17010981' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 2.0G Mar 24 12:52 fastq/SRR17010981_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2.1G Mar 24 12:52 fastq/SRR17010981_2.fastq.gz
+== Retrying SRR17010983 ==
+2026-03-24T12:56:41 prefetch.3.2.1: 1) Resolving 'SRR17010983'...
+2026-03-24T12:56:45 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T12:56:46 prefetch.3.2.1: 1) Downloading 'SRR17010983'...
+2026-03-24T12:56:46 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T12:56:46 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T13:15:12 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T13:15:20 prefetch.3.2.1:  'SRR17010983' is valid: 4565561236 bytes were streamed from 4565552991
+2026-03-24T13:15:20 prefetch.3.2.1: 1) 'SRR17010983' was downloaded successfully
+2026-03-24T13:15:20 prefetch.3.2.1: 1) Resolving 'SRR17010983's dependencies...
+2026-03-24T13:15:20 prefetch.3.2.1: 'SRR17010983' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 3.0G Mar 24 13:16 fastq/SRR17010983_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 3.2G Mar 24 13:16 fastq/SRR17010983_2.fastq.gz
+== Retrying SRR17010984 ==
+2026-03-24T13:24:12 prefetch.3.2.1: 1) Resolving 'SRR17010984'...
+2026-03-24T13:24:15 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T13:24:15 prefetch.3.2.1: 1) Downloading 'SRR17010984'...
+2026-03-24T13:24:15 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T13:24:15 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T13:26:32 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T13:26:39 prefetch.3.2.1:  'SRR17010984' is valid: 4115248700 bytes were streamed from 4115241155
+2026-03-24T13:26:39 prefetch.3.2.1: 1) 'SRR17010984' was downloaded successfully
+2026-03-24T13:26:39 prefetch.3.2.1: 1) Resolving 'SRR17010984's dependencies...
+2026-03-24T13:26:39 prefetch.3.2.1: 'SRR17010984' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 2.7G Mar 24 13:27 fastq/SRR17010984_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2.9G Mar 24 13:27 fastq/SRR17010984_2.fastq.gz
+== Retrying SRR17010985 ==
+2026-03-24T13:34:36 prefetch.3.2.1: 1) Resolving 'SRR17010985'...
+2026-03-24T13:34:39 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T13:34:39 prefetch.3.2.1: 1) Downloading 'SRR17010985'...
+2026-03-24T13:34:39 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T13:34:39 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T13:37:29 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T13:37:39 prefetch.3.2.1:  'SRR17010985' is valid: 5282735057 bytes were streamed from 5282724035
+2026-03-24T13:37:39 prefetch.3.2.1: 1) 'SRR17010985' was downloaded successfully
+2026-03-24T13:37:39 prefetch.3.2.1: 1) Resolving 'SRR17010985's dependencies...
+2026-03-24T13:37:39 prefetch.3.2.1: 'SRR17010985' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 3.4G Mar 24 13:38 fastq/SRR17010985_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 3.6G Mar 24 13:38 fastq/SRR17010985_2.fastq.gz
+== Retrying SRR17010986 ==
+2026-03-24T13:47:35 prefetch.3.2.1: 1) Resolving 'SRR17010986'...
+2026-03-24T13:47:38 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T13:47:38 prefetch.3.2.1: 1) Downloading 'SRR17010986'...
+2026-03-24T13:47:38 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T13:47:38 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T13:49:24 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T13:49:29 prefetch.3.2.1:  'SRR17010986' is valid: 3116366764 bytes were streamed from 3116365333
+2026-03-24T13:49:29 prefetch.3.2.1: 1) 'SRR17010986' was downloaded successfully
+2026-03-24T13:49:29 prefetch.3.2.1: 1) Resolving 'SRR17010986's dependencies...
+2026-03-24T13:49:30 prefetch.3.2.1: 'SRR17010986' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 2.1G Mar 24 13:50 fastq/SRR17010986_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2.2G Mar 24 13:50 fastq/SRR17010986_2.fastq.gz
+== Retrying SRR17010990 ==
+2026-03-24T13:55:31 prefetch.3.2.1: 1) Resolving 'SRR17010990'...
+2026-03-24T13:55:34 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-24T13:55:34 prefetch.3.2.1: 1) Downloading 'SRR17010990'...
+2026-03-24T13:55:34 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-24T13:55:34 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-24T13:59:44 prefetch.3.2.1:  HTTPS download succeed
+2026-03-24T13:59:56 prefetch.3.2.1:  'SRR17010990' is valid: 6776415332 bytes were streamed from 6776406683
+2026-03-24T13:59:56 prefetch.3.2.1: 1) 'SRR17010990' was downloaded successfully
+2026-03-24T13:59:56 prefetch.3.2.1: 1) Resolving 'SRR17010990's dependencies...
+2026-03-24T13:59:56 prefetch.3.2.1: 'SRR17010990' has 0 unresolved dependencies
+-rw-r--r-- 1 ugbogu users 4.5G Mar 24 14:01 fastq/SRR17010990_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 4.7G Mar 24 14:01 fastq/SRR17010990_2.fastq.gz
+== Tue Mar 24 14:13:03 UTC 2026 :: DONE ==

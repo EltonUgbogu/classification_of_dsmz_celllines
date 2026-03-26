@@ -1,0 +1,35 @@
+[ERROR] fasterq-dump failed for SRR17010990; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010990.fasterq_dump.log
+[ERROR] fasterq-dump failed for SRR17010991; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010991.fasterq_dump.log
+[ERROR] fasterq-dump failed for SRR17010982; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010982.fasterq_dump.log
+[ERROR] fasterq-dump failed for SRR17010983; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010983.fasterq_dump.log
+grep: write error: Disk quota exceeded
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded
+[ERROR] fasterq-dump failed for SRR17010984; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010984.fasterq_dump.log
+[ERROR] fasterq-dump failed for SRR17010985; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010985.fasterq_dump.log
+[ERROR] fasterq-dump failed for SRR17010986; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010986.fasterq_dump.log
+[ERROR] fasterq-dump failed for SRR17010977; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/fasterq_dump/SRR17010977.fasterq_dump.log
+/var/spool/slurmd/job86424/slurm_script: line 172: echo: write error: Disk quota exceeded
+[ERROR] prefetch failed for SRR17010978; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010978.prefetch.log
+[ERROR] prefetch failed for SRR17010979; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010979.prefetch.log
+grep: write error: Disk quota exceeded
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded
+[ERROR] prefetch failed for SRR17010980; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010980.prefetch.log
+[ERROR] prefetch failed for SRR17010981; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010981.prefetch.log
+[ERROR] prefetch failed for SRR17010972; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010972.prefetch.log
+grep: write error: Disk quota exceeded
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded
+[ERROR] prefetch failed for SRR17010973; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010973.prefetch.log
+[ERROR] prefetch failed for SRR17010974; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010974.prefetch.log
+grep: write error: Disk quota exceeded
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded
+[ERROR] prefetch failed for SRR17010975; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010975.prefetch.log
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded
+[ERROR] prefetch failed for SRR17010976; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010976.prefetch.log
+[ERROR] prefetch failed for SRR17010968; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010968.prefetch.log
+[ERROR] prefetch failed for SRR17010969; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010969.prefetch.log
+grep: write error: Disk quota exceeded
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded
+[ERROR] prefetch failed for SRR17010970; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010970.prefetch.log
+[ERROR] prefetch failed for SRR17010971; see /work/ugbogu/pipeline/data/nbl/GSE189367/logs/prefetch/SRR17010971.prefetch.log
+grep: write error: Disk quota exceeded
+/var/spool/slurmd/job86424/slurm_script: line 151: printf: write error: Disk quota exceeded

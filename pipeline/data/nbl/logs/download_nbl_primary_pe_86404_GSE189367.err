@@ -1,0 +1,157 @@
+spots read      : 41,277,105
+reads read      : 82,554,210
+reads written   : 82,554,210
+spots read      : 70,905,984
+reads read      : 141,811,968
+reads written   : 141,811,968
+spots read      : 51,734,595
+reads read      : 103,469,190
+reads written   : 103,469,190
+spots read      : 48,666,516
+reads read      : 97,333,032
+reads written   : 97,333,032
+spots read      : 72,228,234
+reads read      : 144,456,468
+reads written   : 144,456,468
+spots read      : 27,668,199
+reads read      : 55,336,398
+reads written   : 55,336,398
+spots read      : 26,567,778
+reads read      : 53,135,556
+reads written   : 53,135,556
+spots read      : 60,700,341
+reads read      : 121,400,682
+reads written   : 121,400,682
+spots read      : 35,097,638
+reads read      : 70,195,276
+reads written   : 70,195,276
+spots read      : 67,244,816
+reads read      : 134,489,632
+reads written   : 134,489,632
+spots read      : 27,650,898
+reads read      : 55,301,796
+reads written   : 55,301,796
+spots read      : 55,160,534
+reads read      : 110,321,068
+reads written   : 110,321,068
+spots read      : 28,210,246
+reads read      : 56,420,492
+reads written   : 56,420,492
+spots read      : 40,999,944
+reads read      : 81,999,888
+reads written   : 81,999,888
+spots read      : 26,910,800
+reads read      : 53,821,600
+reads written   : 53,821,600
+spots read      : 43,355,002
+reads read      : 86,710,004
+reads written   : 86,710,004
+spots read      : 54,717,994
+reads read      : 109,435,988
+reads written   : 109,435,988
+spots read      : 42,081,384
+reads read      : 84,162,768
+reads written   : 84,162,768
+spots read      : 45,628,058
+reads read      : 91,256,116
+reads written   : 91,256,116
+spots read      : 68,616,795
+reads read      : 137,233,590
+reads written   : 137,233,590
+spots read      : 40,686,294
+reads read      : 81,372,588
+reads written   : 81,372,588
+spots read      : 27,874,313
+reads read      : 55,748,626
+reads written   : 55,748,626
+spots read      : 28,505,999
+reads read      : 57,011,998
+reads written   : 57,011,998
+spots read      : 38,429,802
+reads read      : 76,859,604
+reads written   : 76,859,604
+spots read      : 64,581,542
+reads read      : 129,163,084
+reads written   : 129,163,084
+spots read      : 28,793,514
+reads read      : 57,587,028
+reads written   : 57,587,028
+spots read      : 26,395,564
+reads read      : 52,791,128
+reads written   : 52,791,128
+spots read      : 25,533,186
+reads read      : 51,066,372
+reads written   : 51,066,372
+spots read      : 33,524,247
+reads read      : 67,048,494
+reads written   : 67,048,494
+spots read      : 30,566,102
+reads read      : 61,132,204
+reads written   : 61,132,204
+spots read      : 54,251,450
+reads read      : 108,502,900
+reads written   : 108,502,900
+spots read      : 36,601,751
+reads read      : 73,203,502
+reads written   : 73,203,502
+spots read      : 54,623,050
+reads read      : 109,246,100
+reads written   : 109,246,100
+spots read      : 56,199,297
+reads read      : 112,398,594
+reads written   : 112,398,594
+spots read      : 27,732,343
+reads read      : 55,464,686
+reads written   : 55,464,686
+spots read      : 66,878,076
+reads read      : 133,756,152
+reads written   : 133,756,152
+spots read      : 47,486,549
+reads read      : 94,973,098
+reads written   : 94,973,098
+spots read      : 62,599,263
+reads read      : 125,198,526
+reads written   : 125,198,526
+spots read      : 47,014,242
+reads read      : 94,028,484
+reads written   : 94,028,484
+spots read      : 54,256,567
+reads read      : 108,513,134
+reads written   : 108,513,134
+spots read      : 34,952,415
+reads read      : 69,904,830
+reads written   : 69,904,830
+spots read      : 34,909,986
+reads read      : 69,819,972
+reads written   : 69,819,972
+spots read      : 26,786,527
+reads read      : 53,573,054
+reads written   : 53,573,054
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - unknown system error errno='Disk quota exceeded(122)'
+2026-03-22T23:35:38 fasterq-dump.3.2.1 err: unknown while writing file within file system module - flp_release_fwrap() . KFileRelease()
+spots read      : 37,235,122
+reads read      : 74,470,244
+
+=============================================================
+An error occurred during processing.
+A report was generated into the file '/home/ugbogu/ncbi_error_report.txt'.
+If the problem persists, you may consider sending the file
+to 'sra-tools@ncbi.nlm.nih.gov' for assistance.
+=============================================================
+
+fasterq-dump quit with error code 3

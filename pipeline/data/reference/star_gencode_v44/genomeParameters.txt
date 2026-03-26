@@ -1,0 +1,19 @@
+### /work/ugbogu/.conda/envs/rnaseq-star/bin/STAR-avx2   --runMode genomeGenerate      --runThreadN 12   --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44   --genomeFastaFiles /work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa      --sjdbGTFfile /work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf   --sjdbOverhang 100
+### GstrandBit 32
+versionGenome	2.7.4a
+genomeType	Full
+genomeFastaFiles	/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa 
+genomeSAindexNbases	14
+genomeChrBinNbits	18
+genomeSAsparseD	1
+genomeTransformType	None
+genomeTransformVCF	-
+sjdbOverhang	100
+sjdbFileChrStartEnd	- 
+sjdbGTFfile	/work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf
+sjdbGTFchrPrefix	-
+sjdbGTFfeatureExon	exon
+sjdbGTFtagExonParentTranscript	transcript_id
+sjdbGTFtagExonParentGene	gene_id
+sjdbInsertSave	Basic
+genomeFileSizes	3198424859 24819019132

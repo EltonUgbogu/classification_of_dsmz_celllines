@@ -1,0 +1,317 @@
+== Thu Mar 19 23:16:18 UTC 2026 :: START ==
+Host: hcc31
+[INFO] ROOT=/work/ugbogu/pipeline/data/rbl
+[INFO] DATASET=GSE196420_primary_tumours
+[INFO] BASE=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours
+[INFO] LIST=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/all_primary_tumour_pe.txt
+[INFO] SRA_DIR=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+[INFO] FASTQ_DIR=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[INFO] LOG_DIR=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/logs
+[INFO] TMPDIR=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[INFO] THREADS=8
+[INFO] TOTAL SRRs TO PROCESS: 16
+[SEQ] (1/16) SRR17960512
+---- Thu Mar 19 23:16:19 UTC 2026 :: START SRR17960512 ----
+[prefetch] downloading SRR17960512 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-19T23:16:19 prefetch.3.2.1: 1) Resolving 'SRR17960512'...
+2026-03-19T23:16:22 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-19T23:16:22 prefetch.3.2.1: 1) Downloading 'SRR17960512'...
+2026-03-19T23:16:22 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-19T23:16:22 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-19T23:27:50 prefetch.3.2.1:  HTTPS download succeed
+2026-03-19T23:27:55 prefetch.3.2.1:  'SRR17960512' is valid: 2911923092 bytes were streamed from 2911907225
+2026-03-19T23:27:55 prefetch.3.2.1: 1) 'SRR17960512' was downloaded successfully
+2026-03-19T23:27:55 prefetch.3.2.1: 1) Resolving 'SRR17960512's dependencies...
+2026-03-19T23:27:55 prefetch.3.2.1: 'SRR17960512' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960512
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960512_1.fastq and SRR17960512_2.fastq
+---- Thu Mar 19 23:33:30 UTC 2026 :: DONE SRR17960512 ----
+[SEQ] (2/16) SRR17960511
+---- Thu Mar 19 23:33:30 UTC 2026 :: START SRR17960511 ----
+[prefetch] downloading SRR17960511 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-19T23:33:30 prefetch.3.2.1: 1) Resolving 'SRR17960511'...
+2026-03-19T23:33:33 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-19T23:33:33 prefetch.3.2.1: 1) Downloading 'SRR17960511'...
+2026-03-19T23:33:33 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-19T23:33:33 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-19T23:43:14 prefetch.3.2.1:  HTTPS download succeed
+2026-03-19T23:43:20 prefetch.3.2.1:  'SRR17960511' is valid: 3437045690 bytes were streamed from 3437040157
+2026-03-19T23:43:20 prefetch.3.2.1: 1) 'SRR17960511' was downloaded successfully
+2026-03-19T23:43:20 prefetch.3.2.1: 1) Resolving 'SRR17960511's dependencies...
+2026-03-19T23:43:20 prefetch.3.2.1: 'SRR17960511' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960511
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960511_1.fastq and SRR17960511_2.fastq
+---- Thu Mar 19 23:49:44 UTC 2026 :: DONE SRR17960511 ----
+[SEQ] (3/16) SRR17960510
+---- Thu Mar 19 23:49:44 UTC 2026 :: START SRR17960510 ----
+[prefetch] downloading SRR17960510 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-19T23:49:44 prefetch.3.2.1: 1) Resolving 'SRR17960510'...
+2026-03-19T23:49:46 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-19T23:49:47 prefetch.3.2.1: 1) Downloading 'SRR17960510'...
+2026-03-19T23:49:47 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-19T23:49:47 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-19T23:51:30 prefetch.3.2.1:  HTTPS download succeed
+2026-03-19T23:51:35 prefetch.3.2.1:  'SRR17960510' is valid: 3105068764 bytes were streamed from 3105054267
+2026-03-19T23:51:35 prefetch.3.2.1: 1) 'SRR17960510' was downloaded successfully
+2026-03-19T23:51:35 prefetch.3.2.1: 1) Resolving 'SRR17960510's dependencies...
+2026-03-19T23:51:35 prefetch.3.2.1: 'SRR17960510' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960510
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960510_1.fastq and SRR17960510_2.fastq
+---- Thu Mar 19 23:57:28 UTC 2026 :: DONE SRR17960510 ----
+[SEQ] (4/16) SRR17960509
+---- Thu Mar 19 23:57:28 UTC 2026 :: START SRR17960509 ----
+[prefetch] downloading SRR17960509 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-19T23:57:28 prefetch.3.2.1: 1) Resolving 'SRR17960509'...
+2026-03-19T23:57:31 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-19T23:57:31 prefetch.3.2.1: 1) Downloading 'SRR17960509'...
+2026-03-19T23:57:31 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-19T23:57:31 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-19T23:59:27 prefetch.3.2.1:  HTTPS download succeed
+2026-03-19T23:59:33 prefetch.3.2.1:  'SRR17960509' is valid: 3436974539 bytes were streamed from 3436973649
+2026-03-19T23:59:33 prefetch.3.2.1: 1) 'SRR17960509' was downloaded successfully
+2026-03-19T23:59:33 prefetch.3.2.1: 1) Resolving 'SRR17960509's dependencies...
+2026-03-19T23:59:33 prefetch.3.2.1: 'SRR17960509' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960509
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960509_1.fastq and SRR17960509_2.fastq
+---- Fri Mar 20 00:06:03 UTC 2026 :: DONE SRR17960509 ----
+[SEQ] (5/16) SRR17960508
+---- Fri Mar 20 00:06:03 UTC 2026 :: START SRR17960508 ----
+[prefetch] downloading SRR17960508 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T00:06:03 prefetch.3.2.1: 1) Resolving 'SRR17960508'...
+2026-03-20T00:06:06 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T00:06:06 prefetch.3.2.1: 1) Downloading 'SRR17960508'...
+2026-03-20T00:06:06 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T00:06:06 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T00:25:39 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T00:25:43 prefetch.3.2.1:  'SRR17960508' is valid: 2584116179 bytes were streamed from 2584110631
+2026-03-20T00:25:43 prefetch.3.2.1: 1) 'SRR17960508' was downloaded successfully
+2026-03-20T00:25:43 prefetch.3.2.1: 1) Resolving 'SRR17960508's dependencies...
+2026-03-20T00:25:43 prefetch.3.2.1: 'SRR17960508' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960508
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960508_1.fastq and SRR17960508_2.fastq
+---- Fri Mar 20 00:30:31 UTC 2026 :: DONE SRR17960508 ----
+[SEQ] (6/16) SRR17960507
+---- Fri Mar 20 00:30:31 UTC 2026 :: START SRR17960507 ----
+[prefetch] downloading SRR17960507 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T00:30:31 prefetch.3.2.1: 1) Resolving 'SRR17960507'...
+2026-03-20T00:30:34 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T00:30:34 prefetch.3.2.1: 1) Downloading 'SRR17960507'...
+2026-03-20T00:30:34 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T00:30:34 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T00:43:24 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T00:43:30 prefetch.3.2.1:  'SRR17960507' is valid: 3465034380 bytes were streamed from 3465029159
+2026-03-20T00:43:30 prefetch.3.2.1: 1) 'SRR17960507' was downloaded successfully
+2026-03-20T00:43:30 prefetch.3.2.1: 1) Resolving 'SRR17960507's dependencies...
+2026-03-20T00:43:30 prefetch.3.2.1: 'SRR17960507' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960507
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960507_1.fastq and SRR17960507_2.fastq
+---- Fri Mar 20 00:49:59 UTC 2026 :: DONE SRR17960507 ----
+[SEQ] (7/16) SRR17960506
+---- Fri Mar 20 00:49:59 UTC 2026 :: START SRR17960506 ----
+[prefetch] downloading SRR17960506 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T00:49:59 prefetch.3.2.1: 1) Resolving 'SRR17960506'...
+2026-03-20T00:50:03 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T00:50:03 prefetch.3.2.1: 1) Downloading 'SRR17960506'...
+2026-03-20T00:50:03 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T00:50:03 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T00:52:23 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T00:52:29 prefetch.3.2.1:  'SRR17960506' is valid: 3226146211 bytes were streamed from 3226144433
+2026-03-20T00:52:29 prefetch.3.2.1: 1) 'SRR17960506' was downloaded successfully
+2026-03-20T00:52:29 prefetch.3.2.1: 1) Resolving 'SRR17960506's dependencies...
+2026-03-20T00:52:29 prefetch.3.2.1: 'SRR17960506' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960506
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960506_1.fastq and SRR17960506_2.fastq
+---- Fri Mar 20 00:58:33 UTC 2026 :: DONE SRR17960506 ----
+[SEQ] (8/16) SRR17960505
+---- Fri Mar 20 00:58:33 UTC 2026 :: START SRR17960505 ----
+[prefetch] downloading SRR17960505 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T00:58:33 prefetch.3.2.1: 1) Resolving 'SRR17960505'...
+2026-03-20T00:58:37 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T00:58:37 prefetch.3.2.1: 1) Downloading 'SRR17960505'...
+2026-03-20T00:58:37 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T00:58:37 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T01:00:03 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T01:00:07 prefetch.3.2.1:  'SRR17960505' is valid: 2625315216 bytes were streamed from 2625309773
+2026-03-20T01:00:07 prefetch.3.2.1: 1) 'SRR17960505' was downloaded successfully
+2026-03-20T01:00:07 prefetch.3.2.1: 1) Resolving 'SRR17960505's dependencies...
+2026-03-20T01:00:07 prefetch.3.2.1: 'SRR17960505' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960505
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960505_1.fastq and SRR17960505_2.fastq
+---- Fri Mar 20 01:05:02 UTC 2026 :: DONE SRR17960505 ----
+[SEQ] (9/16) SRR17960504
+---- Fri Mar 20 01:05:02 UTC 2026 :: START SRR17960504 ----
+[prefetch] downloading SRR17960504 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T01:05:02 prefetch.3.2.1: 1) Resolving 'SRR17960504'...
+2026-03-20T01:05:05 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T01:05:05 prefetch.3.2.1: 1) Downloading 'SRR17960504'...
+2026-03-20T01:05:05 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T01:05:05 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T01:07:14 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T01:07:20 prefetch.3.2.1:  'SRR17960504' is valid: 3484500619 bytes were streamed from 3484487525
+2026-03-20T01:07:20 prefetch.3.2.1: 1) 'SRR17960504' was downloaded successfully
+2026-03-20T01:07:20 prefetch.3.2.1: 1) Resolving 'SRR17960504's dependencies...
+2026-03-20T01:07:20 prefetch.3.2.1: 'SRR17960504' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960504
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960504_1.fastq and SRR17960504_2.fastq
+---- Fri Mar 20 01:13:20 UTC 2026 :: DONE SRR17960504 ----
+[SEQ] (10/16) SRR17960503
+---- Fri Mar 20 01:13:20 UTC 2026 :: START SRR17960503 ----
+[prefetch] downloading SRR17960503 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T01:13:20 prefetch.3.2.1: 1) Resolving 'SRR17960503'...
+2026-03-20T01:13:23 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T01:13:23 prefetch.3.2.1: 1) Downloading 'SRR17960503'...
+2026-03-20T01:13:23 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T01:13:23 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T01:19:49 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T01:19:54 prefetch.3.2.1:  'SRR17960503' is valid: 3178997360 bytes were streamed from 3178983905
+2026-03-20T01:19:54 prefetch.3.2.1: 1) 'SRR17960503' was downloaded successfully
+2026-03-20T01:19:54 prefetch.3.2.1: 1) Resolving 'SRR17960503's dependencies...
+2026-03-20T01:19:54 prefetch.3.2.1: 'SRR17960503' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960503
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960503_1.fastq and SRR17960503_2.fastq
+---- Fri Mar 20 01:25:57 UTC 2026 :: DONE SRR17960503 ----
+[SEQ] (11/16) SRR17960502
+---- Fri Mar 20 01:25:57 UTC 2026 :: START SRR17960502 ----
+[prefetch] downloading SRR17960502 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T01:25:57 prefetch.3.2.1: 1) Resolving 'SRR17960502'...
+2026-03-20T01:26:04 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T01:26:05 prefetch.3.2.1: 1) Downloading 'SRR17960502'...
+2026-03-20T01:26:05 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T01:26:05 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T01:36:37 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T01:36:46 prefetch.3.2.1:  'SRR17960502' is valid: 5468456211 bytes were streamed from 5468451597
+2026-03-20T01:36:46 prefetch.3.2.1: 1) 'SRR17960502' was downloaded successfully
+2026-03-20T01:36:46 prefetch.3.2.1: 1) Resolving 'SRR17960502's dependencies...
+2026-03-20T01:36:46 prefetch.3.2.1: 'SRR17960502' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960502
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960502_1.fastq and SRR17960502_2.fastq
+---- Fri Mar 20 01:46:55 UTC 2026 :: DONE SRR17960502 ----
+[SEQ] (12/16) SRR17960501
+---- Fri Mar 20 01:46:55 UTC 2026 :: START SRR17960501 ----
+[prefetch] downloading SRR17960501 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T01:46:55 prefetch.3.2.1: 1) Resolving 'SRR17960501'...
+2026-03-20T01:46:58 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T01:46:58 prefetch.3.2.1: 1) Downloading 'SRR17960501'...
+2026-03-20T01:46:58 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T01:46:58 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T01:49:39 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T01:49:46 prefetch.3.2.1:  'SRR17960501' is valid: 3875336118 bytes were streamed from 3875332721
+2026-03-20T01:49:46 prefetch.3.2.1: 1) 'SRR17960501' was downloaded successfully
+2026-03-20T01:49:46 prefetch.3.2.1: 1) Resolving 'SRR17960501's dependencies...
+2026-03-20T01:49:46 prefetch.3.2.1: 'SRR17960501' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960501
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960501_1.fastq and SRR17960501_2.fastq
+---- Fri Mar 20 01:57:01 UTC 2026 :: DONE SRR17960501 ----
+[SEQ] (13/16) SRR17960500
+---- Fri Mar 20 01:57:01 UTC 2026 :: START SRR17960500 ----
+[prefetch] downloading SRR17960500 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T01:57:01 prefetch.3.2.1: 1) Resolving 'SRR17960500'...
+2026-03-20T01:57:05 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T01:57:05 prefetch.3.2.1: 1) Downloading 'SRR17960500'...
+2026-03-20T01:57:05 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T01:57:05 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T02:00:24 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T02:00:29 prefetch.3.2.1:  'SRR17960500' is valid: 2889882401 bytes were streamed from 2889872489
+2026-03-20T02:00:29 prefetch.3.2.1: 1) 'SRR17960500' was downloaded successfully
+2026-03-20T02:00:29 prefetch.3.2.1: 1) Resolving 'SRR17960500's dependencies...
+2026-03-20T02:00:29 prefetch.3.2.1: 'SRR17960500' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960500
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960500_1.fastq and SRR17960500_2.fastq
+---- Fri Mar 20 02:05:56 UTC 2026 :: DONE SRR17960500 ----
+[SEQ] (14/16) SRR17960499
+---- Fri Mar 20 02:05:56 UTC 2026 :: START SRR17960499 ----
+[prefetch] downloading SRR17960499 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T02:05:56 prefetch.3.2.1: 1) Resolving 'SRR17960499'...
+2026-03-20T02:05:58 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T02:05:58 prefetch.3.2.1: 1) Downloading 'SRR17960499'...
+2026-03-20T02:05:58 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T02:05:58 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T02:07:50 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T02:07:56 prefetch.3.2.1:  'SRR17960499' is valid: 3350217441 bytes were streamed from 3350203873
+2026-03-20T02:07:56 prefetch.3.2.1: 1) 'SRR17960499' was downloaded successfully
+2026-03-20T02:07:56 prefetch.3.2.1: 1) Resolving 'SRR17960499's dependencies...
+2026-03-20T02:07:56 prefetch.3.2.1: 'SRR17960499' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960499
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960499_1.fastq and SRR17960499_2.fastq
+---- Fri Mar 20 02:14:11 UTC 2026 :: DONE SRR17960499 ----
+[SEQ] (15/16) SRR17960498
+---- Fri Mar 20 02:14:11 UTC 2026 :: START SRR17960498 ----
+[prefetch] downloading SRR17960498 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T02:14:11 prefetch.3.2.1: 1) Resolving 'SRR17960498'...
+2026-03-20T02:14:15 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T02:14:15 prefetch.3.2.1: 1) Downloading 'SRR17960498'...
+2026-03-20T02:14:15 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T02:14:15 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T02:16:18 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T02:16:24 prefetch.3.2.1:  'SRR17960498' is valid: 3437680628 bytes were streamed from 3437675793
+2026-03-20T02:16:24 prefetch.3.2.1: 1) 'SRR17960498' was downloaded successfully
+2026-03-20T02:16:24 prefetch.3.2.1: 1) Resolving 'SRR17960498's dependencies...
+2026-03-20T02:16:24 prefetch.3.2.1: 'SRR17960498' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960498
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960498_1.fastq and SRR17960498_2.fastq
+---- Fri Mar 20 02:22:51 UTC 2026 :: DONE SRR17960498 ----
+[SEQ] (16/16) SRR17960497
+---- Fri Mar 20 02:22:51 UTC 2026 :: START SRR17960497 ----
+[prefetch] downloading SRR17960497 -> /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra
+2026-03-20T02:22:51 prefetch.3.2.1: 1) Resolving 'SRR17960497'...
+2026-03-20T02:22:54 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-20T02:22:55 prefetch.3.2.1: 1) Downloading 'SRR17960497'...
+2026-03-20T02:22:55 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-20T02:22:55 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-20T02:24:48 prefetch.3.2.1:  HTTPS download succeed
+2026-03-20T02:24:52 prefetch.3.2.1:  'SRR17960497' is valid: 2480386232 bytes were streamed from 2480373233
+2026-03-20T02:24:52 prefetch.3.2.1: 1) 'SRR17960497' was downloaded successfully
+2026-03-20T02:24:52 prefetch.3.2.1: 1) Resolving 'SRR17960497's dependencies...
+2026-03-20T02:24:52 prefetch.3.2.1: 'SRR17960497' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/sra/SRR17960497
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/tmp/85692
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/fastq
+[pigz] compressing SRR17960497_1.fastq and SRR17960497_2.fastq
+---- Fri Mar 20 02:29:33 UTC 2026 :: DONE SRR17960497 ----
+== Fri Mar 20 02:29:33 UTC 2026 :: ALL DONE ==

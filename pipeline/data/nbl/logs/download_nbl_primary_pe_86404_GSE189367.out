@@ -1,0 +1,846 @@
+== Sun Mar 22 13:22:07 UTC 2026 :: START ==
+Host: hcc05
+[INFO] ROOT=/work/ugbogu/pipeline/data/nbl
+[INFO] DATASET=GSE189367
+[INFO] BASE=/work/ugbogu/pipeline/data/nbl/GSE189367
+[INFO] LIST=/work/ugbogu/pipeline/data/nbl/GSE189367/all_primary_tumour_pe.txt
+[INFO] SRA_DIR=/work/ugbogu/pipeline/data/nbl/GSE189367/sra
+[INFO] FASTQ_DIR=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[INFO] LOG_DIR=/work/ugbogu/pipeline/data/nbl/GSE189367/logs
+[INFO] TMPDIR=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[INFO] THREADS=8
+[INFO] TOTAL SRRs TO PROCESS: 64
+[SEQ] (1/64) SRR17011027
+---- Sun Mar 22 13:22:08 UTC 2026 :: START SRR17011027 ----
+[prefetch] downloading SRR17011027 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T13:22:08 prefetch.3.2.1: 1) Resolving 'SRR17011027'...
+2026-03-22T13:22:14 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T13:22:15 prefetch.3.2.1: 1) Downloading 'SRR17011027'...
+2026-03-22T13:22:15 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T13:22:15 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T13:25:06 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T13:25:14 prefetch.3.2.1:  'SRR17011027' is valid: 5295811108 bytes were streamed from 5295802901
+2026-03-22T13:25:14 prefetch.3.2.1: 1) 'SRR17011027' was downloaded successfully
+2026-03-22T13:25:14 prefetch.3.2.1: 1) Resolving 'SRR17011027's dependencies...
+2026-03-22T13:25:14 prefetch.3.2.1: 'SRR17011027' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011027
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011027_1.fastq and SRR17011027_2.fastq
+---- Sun Mar 22 13:33:45 UTC 2026 :: DONE SRR17011027 ----
+[SEQ] (2/64) SRR17011028
+---- Sun Mar 22 13:33:45 UTC 2026 :: START SRR17011028 ----
+[prefetch] downloading SRR17011028 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T13:33:45 prefetch.3.2.1: 1) Resolving 'SRR17011028'...
+2026-03-22T13:33:47 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T13:33:48 prefetch.3.2.1: 1) Downloading 'SRR17011028'...
+2026-03-22T13:33:48 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T13:33:48 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T13:38:55 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T13:39:09 prefetch.3.2.1:  'SRR17011028' is valid: 9111025882 bytes were streamed from 9111020032
+2026-03-22T13:39:09 prefetch.3.2.1: 1) 'SRR17011028' was downloaded successfully
+2026-03-22T13:39:09 prefetch.3.2.1: 1) Resolving 'SRR17011028's dependencies...
+2026-03-22T13:39:09 prefetch.3.2.1: 'SRR17011028' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011028
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011028_1.fastq and SRR17011028_2.fastq
+---- Sun Mar 22 13:54:05 UTC 2026 :: DONE SRR17011028 ----
+[SEQ] (3/64) SRR17011029
+---- Sun Mar 22 13:54:05 UTC 2026 :: START SRR17011029 ----
+[prefetch] downloading SRR17011029 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T13:54:05 prefetch.3.2.1: 1) Resolving 'SRR17011029'...
+2026-03-22T13:54:07 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T13:54:08 prefetch.3.2.1: 1) Downloading 'SRR17011029'...
+2026-03-22T13:54:08 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T13:54:08 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T13:57:58 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T13:58:08 prefetch.3.2.1:  'SRR17011029' is valid: 6774565134 bytes were streamed from 6774549013
+2026-03-22T13:58:08 prefetch.3.2.1: 1) 'SRR17011029' was downloaded successfully
+2026-03-22T13:58:08 prefetch.3.2.1: 1) Resolving 'SRR17011029's dependencies...
+2026-03-22T13:58:09 prefetch.3.2.1: 'SRR17011029' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011029
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011029_1.fastq and SRR17011029_2.fastq
+---- Sun Mar 22 14:09:16 UTC 2026 :: DONE SRR17011029 ----
+[SEQ] (4/64) SRR17011030
+---- Sun Mar 22 14:09:16 UTC 2026 :: START SRR17011030 ----
+[prefetch] downloading SRR17011030 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T14:09:17 prefetch.3.2.1: 1) Resolving 'SRR17011030'...
+2026-03-22T14:09:19 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T14:09:20 prefetch.3.2.1: 1) Downloading 'SRR17011030'...
+2026-03-22T14:09:20 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T14:09:20 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T14:14:40 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T14:14:50 prefetch.3.2.1:  'SRR17011030' is valid: 6263130892 bytes were streamed from 6263115631
+2026-03-22T14:14:50 prefetch.3.2.1: 1) 'SRR17011030' was downloaded successfully
+2026-03-22T14:14:50 prefetch.3.2.1: 1) Resolving 'SRR17011030's dependencies...
+2026-03-22T14:14:50 prefetch.3.2.1: 'SRR17011030' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011030
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011030_1.fastq and SRR17011030_2.fastq
+---- Sun Mar 22 14:25:08 UTC 2026 :: DONE SRR17011030 ----
+[SEQ] (5/64) SRR17011031
+---- Sun Mar 22 14:25:08 UTC 2026 :: START SRR17011031 ----
+[prefetch] downloading SRR17011031 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T14:25:08 prefetch.3.2.1: 1) Resolving 'SRR17011031'...
+2026-03-22T14:25:10 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T14:25:11 prefetch.3.2.1: 1) Downloading 'SRR17011031'...
+2026-03-22T14:25:11 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T14:25:11 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T14:30:16 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T14:30:31 prefetch.3.2.1:  'SRR17011031' is valid: 9338283185 bytes were streamed from 9338280462
+2026-03-22T14:30:31 prefetch.3.2.1: 1) 'SRR17011031' was downloaded successfully
+2026-03-22T14:30:31 prefetch.3.2.1: 1) Resolving 'SRR17011031's dependencies...
+2026-03-22T14:30:31 prefetch.3.2.1: 'SRR17011031' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011031
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011031_1.fastq and SRR17011031_2.fastq
+---- Sun Mar 22 14:45:54 UTC 2026 :: DONE SRR17011031 ----
+[SEQ] (6/64) SRR17011022
+---- Sun Mar 22 14:45:54 UTC 2026 :: START SRR17011022 ----
+[prefetch] downloading SRR17011022 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T14:45:54 prefetch.3.2.1: 1) Resolving 'SRR17011022'...
+2026-03-22T14:45:56 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T14:45:57 prefetch.3.2.1: 1) Downloading 'SRR17011022'...
+2026-03-22T14:45:57 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T14:45:57 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T14:48:30 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T14:48:35 prefetch.3.2.1:  'SRR17011022' is valid: 3326104629 bytes were streamed from 3326097239
+2026-03-22T14:48:35 prefetch.3.2.1: 1) 'SRR17011022' was downloaded successfully
+2026-03-22T14:48:35 prefetch.3.2.1: 1) Resolving 'SRR17011022's dependencies...
+2026-03-22T14:48:35 prefetch.3.2.1: 'SRR17011022' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011022
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011022_1.fastq and SRR17011022_2.fastq
+---- Sun Mar 22 14:54:02 UTC 2026 :: DONE SRR17011022 ----
+[SEQ] (7/64) SRR17011023
+---- Sun Mar 22 14:54:02 UTC 2026 :: START SRR17011023 ----
+[prefetch] downloading SRR17011023 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T14:54:02 prefetch.3.2.1: 1) Resolving 'SRR17011023'...
+2026-03-22T14:54:04 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T14:54:05 prefetch.3.2.1: 1) Downloading 'SRR17011023'...
+2026-03-22T14:54:05 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T14:54:05 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T14:55:56 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T14:56:01 prefetch.3.2.1:  'SRR17011023' is valid: 3101590941 bytes were streamed from 3101586719
+2026-03-22T14:56:01 prefetch.3.2.1: 1) 'SRR17011023' was downloaded successfully
+2026-03-22T14:56:01 prefetch.3.2.1: 1) Resolving 'SRR17011023's dependencies...
+2026-03-22T14:56:01 prefetch.3.2.1: 'SRR17011023' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011023
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011023_1.fastq and SRR17011023_2.fastq
+---- Sun Mar 22 15:01:05 UTC 2026 :: DONE SRR17011023 ----
+[SEQ] (8/64) SRR17011024
+---- Sun Mar 22 15:01:05 UTC 2026 :: START SRR17011024 ----
+[prefetch] downloading SRR17011024 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T15:01:05 prefetch.3.2.1: 1) Resolving 'SRR17011024'...
+2026-03-22T15:01:07 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T15:01:08 prefetch.3.2.1: 1) Downloading 'SRR17011024'...
+2026-03-22T15:01:08 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T15:01:08 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T15:08:13 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T15:08:25 prefetch.3.2.1:  'SRR17011024' is valid: 7794599892 bytes were streamed from 7794594835
+2026-03-22T15:08:25 prefetch.3.2.1: 1) 'SRR17011024' was downloaded successfully
+2026-03-22T15:08:25 prefetch.3.2.1: 1) Resolving 'SRR17011024's dependencies...
+2026-03-22T15:08:25 prefetch.3.2.1: 'SRR17011024' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011024
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011024_1.fastq and SRR17011024_2.fastq
+---- Sun Mar 22 15:21:05 UTC 2026 :: DONE SRR17011024 ----
+[SEQ] (9/64) SRR17011025
+---- Sun Mar 22 15:21:05 UTC 2026 :: START SRR17011025 ----
+[prefetch] downloading SRR17011025 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T15:21:05 prefetch.3.2.1: 1) Resolving 'SRR17011025'...
+2026-03-22T15:21:09 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T15:21:09 prefetch.3.2.1: 1) Downloading 'SRR17011025'...
+2026-03-22T15:21:09 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T15:21:09 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T15:25:24 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T15:25:31 prefetch.3.2.1:  'SRR17011025' is valid: 4500164120 bytes were streamed from 4500151063
+2026-03-22T15:25:31 prefetch.3.2.1: 1) 'SRR17011025' was downloaded successfully
+2026-03-22T15:25:31 prefetch.3.2.1: 1) Resolving 'SRR17011025's dependencies...
+2026-03-22T15:25:31 prefetch.3.2.1: 'SRR17011025' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011025
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011025_1.fastq and SRR17011025_2.fastq
+---- Sun Mar 22 15:32:53 UTC 2026 :: DONE SRR17011025 ----
+[SEQ] (10/64) SRR17011026
+---- Sun Mar 22 15:32:53 UTC 2026 :: START SRR17011026 ----
+[prefetch] downloading SRR17011026 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T15:32:54 prefetch.3.2.1: 1) Resolving 'SRR17011026'...
+2026-03-22T15:32:56 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T15:32:56 prefetch.3.2.1: 1) Downloading 'SRR17011026'...
+2026-03-22T15:32:56 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T15:32:56 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T15:38:16 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T15:38:30 prefetch.3.2.1:  'SRR17011026' is valid: 9123500937 bytes were streamed from 9123498558
+2026-03-22T15:38:30 prefetch.3.2.1: 1) 'SRR17011026' was downloaded successfully
+2026-03-22T15:38:30 prefetch.3.2.1: 1) Resolving 'SRR17011026's dependencies...
+2026-03-22T15:38:30 prefetch.3.2.1: 'SRR17011026' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011026
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011026_1.fastq and SRR17011026_2.fastq
+---- Sun Mar 22 15:53:14 UTC 2026 :: DONE SRR17011026 ----
+[SEQ] (11/64) SRR17011017
+---- Sun Mar 22 15:53:14 UTC 2026 :: START SRR17011017 ----
+[prefetch] downloading SRR17011017 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T15:53:14 prefetch.3.2.1: 1) Resolving 'SRR17011017'...
+2026-03-22T15:53:17 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T15:53:17 prefetch.3.2.1: 1) Downloading 'SRR17011017'...
+2026-03-22T15:53:17 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T15:53:17 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T15:55:17 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T15:55:23 prefetch.3.2.1:  'SRR17011017' is valid: 3727969433 bytes were streamed from 3727967753
+2026-03-22T15:55:23 prefetch.3.2.1: 1) 'SRR17011017' was downloaded successfully
+2026-03-22T15:55:23 prefetch.3.2.1: 1) Resolving 'SRR17011017's dependencies...
+2026-03-22T15:55:23 prefetch.3.2.1: 'SRR17011017' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011017
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011017_1.fastq and SRR17011017_2.fastq
+---- Sun Mar 22 16:01:26 UTC 2026 :: DONE SRR17011017 ----
+[SEQ] (12/64) SRR17011018
+---- Sun Mar 22 16:01:26 UTC 2026 :: START SRR17011018 ----
+[prefetch] downloading SRR17011018 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T16:01:26 prefetch.3.2.1: 1) Resolving 'SRR17011018'...
+2026-03-22T16:01:28 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T16:01:28 prefetch.3.2.1: 1) Downloading 'SRR17011018'...
+2026-03-22T16:01:28 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T16:01:28 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T16:06:52 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T16:07:03 prefetch.3.2.1:  'SRR17011018' is valid: 7107855448 bytes were streamed from 7107842527
+2026-03-22T16:07:03 prefetch.3.2.1: 1) 'SRR17011018' was downloaded successfully
+2026-03-22T16:07:03 prefetch.3.2.1: 1) Resolving 'SRR17011018's dependencies...
+2026-03-22T16:07:03 prefetch.3.2.1: 'SRR17011018' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011018
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011018_1.fastq and SRR17011018_2.fastq
+---- Sun Mar 22 16:18:45 UTC 2026 :: DONE SRR17011018 ----
+[SEQ] (13/64) SRR17011019
+---- Sun Mar 22 16:18:45 UTC 2026 :: START SRR17011019 ----
+[prefetch] downloading SRR17011019 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T16:18:45 prefetch.3.2.1: 1) Resolving 'SRR17011019'...
+2026-03-22T16:18:47 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T16:18:48 prefetch.3.2.1: 1) Downloading 'SRR17011019'...
+2026-03-22T16:18:48 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T16:18:48 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T16:20:55 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T16:21:00 prefetch.3.2.1:  'SRR17011019' is valid: 3365207218 bytes were streamed from 3365198311
+2026-03-22T16:21:00 prefetch.3.2.1: 1) 'SRR17011019' was downloaded successfully
+2026-03-22T16:21:00 prefetch.3.2.1: 1) Resolving 'SRR17011019's dependencies...
+2026-03-22T16:21:01 prefetch.3.2.1: 'SRR17011019' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011019
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011019_1.fastq and SRR17011019_2.fastq
+---- Sun Mar 22 16:26:24 UTC 2026 :: DONE SRR17011019 ----
+[SEQ] (14/64) SRR17011020
+---- Sun Mar 22 16:26:24 UTC 2026 :: START SRR17011020 ----
+[prefetch] downloading SRR17011020 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T16:26:24 prefetch.3.2.1: 1) Resolving 'SRR17011020'...
+2026-03-22T16:26:27 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T16:26:27 prefetch.3.2.1: 1) Downloading 'SRR17011020'...
+2026-03-22T16:26:27 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T16:26:27 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T16:43:54 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T16:44:02 prefetch.3.2.1:  'SRR17011020' is valid: 5027022028 bytes were streamed from 5027011915
+2026-03-22T16:44:02 prefetch.3.2.1: 1) 'SRR17011020' was downloaded successfully
+2026-03-22T16:44:02 prefetch.3.2.1: 1) Resolving 'SRR17011020's dependencies...
+2026-03-22T16:44:02 prefetch.3.2.1: 'SRR17011020' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011020
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011020_1.fastq and SRR17011020_2.fastq
+---- Sun Mar 22 16:51:53 UTC 2026 :: DONE SRR17011020 ----
+[SEQ] (15/64) SRR17011021
+---- Sun Mar 22 16:51:53 UTC 2026 :: START SRR17011021 ----
+[prefetch] downloading SRR17011021 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T16:51:53 prefetch.3.2.1: 1) Resolving 'SRR17011021'...
+2026-03-22T16:51:56 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T16:51:56 prefetch.3.2.1: 1) Downloading 'SRR17011021'...
+2026-03-22T16:51:56 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T16:51:56 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T16:54:07 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T16:54:12 prefetch.3.2.1:  'SRR17011021' is valid: 3132292859 bytes were streamed from 3132279267
+2026-03-22T16:54:12 prefetch.3.2.1: 1) 'SRR17011021' was downloaded successfully
+2026-03-22T16:54:12 prefetch.3.2.1: 1) Resolving 'SRR17011021's dependencies...
+2026-03-22T16:54:12 prefetch.3.2.1: 'SRR17011021' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011021
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011021_1.fastq and SRR17011021_2.fastq
+---- Sun Mar 22 16:59:21 UTC 2026 :: DONE SRR17011021 ----
+[SEQ] (16/64) SRR17011012
+---- Sun Mar 22 16:59:21 UTC 2026 :: START SRR17011012 ----
+[prefetch] downloading SRR17011012 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T16:59:21 prefetch.3.2.1: 1) Resolving 'SRR17011012'...
+2026-03-22T16:59:24 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T16:59:24 prefetch.3.2.1: 1) Downloading 'SRR17011012'...
+2026-03-22T16:59:24 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T16:59:24 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T17:03:04 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T17:03:13 prefetch.3.2.1:  'SRR17011012' is valid: 6002188695 bytes were streamed from 6002181783
+2026-03-22T17:03:13 prefetch.3.2.1: 1) 'SRR17011012' was downloaded successfully
+2026-03-22T17:03:13 prefetch.3.2.1: 1) Resolving 'SRR17011012's dependencies...
+2026-03-22T17:03:13 prefetch.3.2.1: 'SRR17011012' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011012
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011012_1.fastq and SRR17011012_2.fastq
+---- Sun Mar 22 17:12:46 UTC 2026 :: DONE SRR17011012 ----
+[SEQ] (17/64) SRR17011013
+---- Sun Mar 22 17:12:46 UTC 2026 :: START SRR17011013 ----
+[prefetch] downloading SRR17011013 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T17:12:46 prefetch.3.2.1: 1) Resolving 'SRR17011013'...
+2026-03-22T17:12:49 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T17:12:49 prefetch.3.2.1: 1) Downloading 'SRR17011013'...
+2026-03-22T17:12:49 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T17:12:49 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T17:17:10 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T17:17:22 prefetch.3.2.1:  'SRR17011013' is valid: 7601619462 bytes were streamed from 7601603747
+2026-03-22T17:17:22 prefetch.3.2.1: 1) 'SRR17011013' was downloaded successfully
+2026-03-22T17:17:22 prefetch.3.2.1: 1) Resolving 'SRR17011013's dependencies...
+2026-03-22T17:17:22 prefetch.3.2.1: 'SRR17011013' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011013
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011013_1.fastq and SRR17011013_2.fastq
+---- Sun Mar 22 17:29:38 UTC 2026 :: DONE SRR17011013 ----
+[SEQ] (18/64) SRR17011014
+---- Sun Mar 22 17:29:38 UTC 2026 :: START SRR17011014 ----
+[prefetch] downloading SRR17011014 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T17:29:38 prefetch.3.2.1: 1) Resolving 'SRR17011014'...
+2026-03-22T17:29:40 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T17:29:41 prefetch.3.2.1: 1) Downloading 'SRR17011014'...
+2026-03-22T17:29:41 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T17:29:41 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T17:33:00 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T17:33:09 prefetch.3.2.1:  'SRR17011014' is valid: 5809756127 bytes were streamed from 5809749783
+2026-03-22T17:33:09 prefetch.3.2.1: 1) 'SRR17011014' was downloaded successfully
+2026-03-22T17:33:09 prefetch.3.2.1: 1) Resolving 'SRR17011014's dependencies...
+2026-03-22T17:33:09 prefetch.3.2.1: 'SRR17011014' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011014
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011014_1.fastq and SRR17011014_2.fastq
+---- Sun Mar 22 17:42:40 UTC 2026 :: DONE SRR17011014 ----
+[SEQ] (19/64) SRR17011015
+---- Sun Mar 22 17:42:40 UTC 2026 :: START SRR17011015 ----
+[prefetch] downloading SRR17011015 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T17:42:40 prefetch.3.2.1: 1) Resolving 'SRR17011015'...
+2026-03-22T17:42:45 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T17:42:46 prefetch.3.2.1: 1) Downloading 'SRR17011015'...
+2026-03-22T17:42:46 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T17:42:46 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T17:47:12 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T17:47:22 prefetch.3.2.1:  'SRR17011015' is valid: 6223706897 bytes were streamed from 6223695063
+2026-03-22T17:47:22 prefetch.3.2.1: 1) 'SRR17011015' was downloaded successfully
+2026-03-22T17:47:22 prefetch.3.2.1: 1) Resolving 'SRR17011015's dependencies...
+2026-03-22T17:47:22 prefetch.3.2.1: 'SRR17011015' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011015
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011015_1.fastq and SRR17011015_2.fastq
+---- Sun Mar 22 17:57:21 UTC 2026 :: DONE SRR17011015 ----
+[SEQ] (20/64) SRR17011016
+---- Sun Mar 22 17:57:21 UTC 2026 :: START SRR17011016 ----
+[prefetch] downloading SRR17011016 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T17:57:21 prefetch.3.2.1: 1) Resolving 'SRR17011016'...
+2026-03-22T17:57:23 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T17:57:24 prefetch.3.2.1: 1) Downloading 'SRR17011016'...
+2026-03-22T17:57:24 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T17:57:24 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T18:02:23 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T18:02:37 prefetch.3.2.1:  'SRR17011016' is valid: 9299430417 bytes were streamed from 9299426522
+2026-03-22T18:02:37 prefetch.3.2.1: 1) 'SRR17011016' was downloaded successfully
+2026-03-22T18:02:37 prefetch.3.2.1: 1) Resolving 'SRR17011016's dependencies...
+2026-03-22T18:02:37 prefetch.3.2.1: 'SRR17011016' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011016
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011016_1.fastq and SRR17011016_2.fastq
+---- Sun Mar 22 18:17:58 UTC 2026 :: DONE SRR17011016 ----
+[SEQ] (21/64) SRR17011007
+---- Sun Mar 22 18:17:58 UTC 2026 :: START SRR17011007 ----
+[prefetch] downloading SRR17011007 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T18:17:58 prefetch.3.2.1: 1) Resolving 'SRR17011007'...
+2026-03-22T18:18:05 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T18:18:05 prefetch.3.2.1: 1) Downloading 'SRR17011007'...
+2026-03-22T18:18:05 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T18:18:05 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T18:20:41 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T18:20:49 prefetch.3.2.1:  'SRR17011007' is valid: 4773967963 bytes were streamed from 4773960143
+2026-03-22T18:20:49 prefetch.3.2.1: 1) 'SRR17011007' was downloaded successfully
+2026-03-22T18:20:49 prefetch.3.2.1: 1) Resolving 'SRR17011007's dependencies...
+2026-03-22T18:20:49 prefetch.3.2.1: 'SRR17011007' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011007
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011007_1.fastq and SRR17011007_2.fastq
+---- Sun Mar 22 18:28:42 UTC 2026 :: DONE SRR17011007 ----
+[SEQ] (22/64) SRR17011008
+---- Sun Mar 22 18:28:42 UTC 2026 :: START SRR17011008 ----
+[prefetch] downloading SRR17011008 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T18:28:42 prefetch.3.2.1: 1) Resolving 'SRR17011008'...
+2026-03-22T18:28:45 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T18:28:45 prefetch.3.2.1: 1) Downloading 'SRR17011008'...
+2026-03-22T18:28:45 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T18:28:45 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T18:31:35 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T18:31:40 prefetch.3.2.1:  'SRR17011008' is valid: 3283833218 bytes were streamed from 3283818005
+2026-03-22T18:31:40 prefetch.3.2.1: 1) 'SRR17011008' was downloaded successfully
+2026-03-22T18:31:40 prefetch.3.2.1: 1) Resolving 'SRR17011008's dependencies...
+2026-03-22T18:31:40 prefetch.3.2.1: 'SRR17011008' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011008
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011008_1.fastq and SRR17011008_2.fastq
+---- Sun Mar 22 18:37:04 UTC 2026 :: DONE SRR17011008 ----
+[SEQ] (23/64) SRR17011009
+---- Sun Mar 22 18:37:04 UTC 2026 :: START SRR17011009 ----
+[prefetch] downloading SRR17011009 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T18:37:04 prefetch.3.2.1: 1) Resolving 'SRR17011009'...
+2026-03-22T18:37:06 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T18:37:07 prefetch.3.2.1: 1) Downloading 'SRR17011009'...
+2026-03-22T18:37:07 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T18:37:07 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T18:39:27 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T18:39:32 prefetch.3.2.1:  'SRR17011009' is valid: 3308167040 bytes were streamed from 3308166645
+2026-03-22T18:39:32 prefetch.3.2.1: 1) 'SRR17011009' was downloaded successfully
+2026-03-22T18:39:32 prefetch.3.2.1: 1) Resolving 'SRR17011009's dependencies...
+2026-03-22T18:39:32 prefetch.3.2.1: 'SRR17011009' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011009
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011009_1.fastq and SRR17011009_2.fastq
+---- Sun Mar 22 18:44:59 UTC 2026 :: DONE SRR17011009 ----
+[SEQ] (24/64) SRR17011010
+---- Sun Mar 22 18:44:59 UTC 2026 :: START SRR17011010 ----
+[prefetch] downloading SRR17011010 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T18:44:59 prefetch.3.2.1: 1) Resolving 'SRR17011010'...
+2026-03-22T18:45:02 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T18:45:02 prefetch.3.2.1: 1) Downloading 'SRR17011010'...
+2026-03-22T18:45:02 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T18:45:02 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T18:47:38 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T18:47:45 prefetch.3.2.1:  'SRR17011010' is valid: 4524253106 bytes were streamed from 4524238639
+2026-03-22T18:47:45 prefetch.3.2.1: 1) 'SRR17011010' was downloaded successfully
+2026-03-22T18:47:45 prefetch.3.2.1: 1) Resolving 'SRR17011010's dependencies...
+2026-03-22T18:47:45 prefetch.3.2.1: 'SRR17011010' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011010
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011010_1.fastq and SRR17011010_2.fastq
+---- Sun Mar 22 18:55:15 UTC 2026 :: DONE SRR17011010 ----
+[SEQ] (25/64) SRR17011011
+---- Sun Mar 22 18:55:15 UTC 2026 :: START SRR17011011 ----
+[prefetch] downloading SRR17011011 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T18:55:15 prefetch.3.2.1: 1) Resolving 'SRR17011011'...
+2026-03-22T18:55:20 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T18:55:21 prefetch.3.2.1: 1) Downloading 'SRR17011011'...
+2026-03-22T18:55:21 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T18:55:21 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T19:00:39 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T19:00:53 prefetch.3.2.1:  'SRR17011011' is valid: 8766034018 bytes were streamed from 8766033454
+2026-03-22T19:00:53 prefetch.3.2.1: 1) 'SRR17011011' was downloaded successfully
+2026-03-22T19:00:53 prefetch.3.2.1: 1) Resolving 'SRR17011011's dependencies...
+2026-03-22T19:00:53 prefetch.3.2.1: 'SRR17011011' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011011
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011011_1.fastq and SRR17011011_2.fastq
+---- Sun Mar 22 19:15:29 UTC 2026 :: DONE SRR17011011 ----
+[SEQ] (26/64) SRR17011002
+---- Sun Mar 22 19:15:29 UTC 2026 :: START SRR17011002 ----
+[prefetch] downloading SRR17011002 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T19:15:29 prefetch.3.2.1: 1) Resolving 'SRR17011002'...
+2026-03-22T19:15:32 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T19:15:32 prefetch.3.2.1: 1) Downloading 'SRR17011002'...
+2026-03-22T19:15:32 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T19:15:32 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T19:23:06 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T19:23:11 prefetch.3.2.1:  'SRR17011002' is valid: 3286614685 bytes were streamed from 3286606357
+2026-03-22T19:23:11 prefetch.3.2.1: 1) 'SRR17011002' was downloaded successfully
+2026-03-22T19:23:11 prefetch.3.2.1: 1) Resolving 'SRR17011002's dependencies...
+2026-03-22T19:23:12 prefetch.3.2.1: 'SRR17011002' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011002
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011002_1.fastq and SRR17011002_2.fastq
+---- Sun Mar 22 19:28:40 UTC 2026 :: DONE SRR17011002 ----
+[SEQ] (27/64) SRR17011003
+---- Sun Mar 22 19:28:40 UTC 2026 :: START SRR17011003 ----
+[prefetch] downloading SRR17011003 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T19:28:40 prefetch.3.2.1: 1) Resolving 'SRR17011003'...
+2026-03-22T19:28:42 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T19:28:43 prefetch.3.2.1: 1) Downloading 'SRR17011003'...
+2026-03-22T19:28:43 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T19:28:43 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T19:31:03 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T19:31:08 prefetch.3.2.1:  'SRR17011003' is valid: 3024882522 bytes were streamed from 3024871667
+2026-03-22T19:31:08 prefetch.3.2.1: 1) 'SRR17011003' was downloaded successfully
+2026-03-22T19:31:08 prefetch.3.2.1: 1) Resolving 'SRR17011003's dependencies...
+2026-03-22T19:31:08 prefetch.3.2.1: 'SRR17011003' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011003
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011003_1.fastq and SRR17011003_2.fastq
+---- Sun Mar 22 19:36:09 UTC 2026 :: DONE SRR17011003 ----
+[SEQ] (28/64) SRR17011004
+---- Sun Mar 22 19:36:09 UTC 2026 :: START SRR17011004 ----
+[prefetch] downloading SRR17011004 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T19:36:09 prefetch.3.2.1: 1) Resolving 'SRR17011004'...
+2026-03-22T19:36:12 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T19:36:12 prefetch.3.2.1: 1) Downloading 'SRR17011004'...
+2026-03-22T19:36:12 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T19:36:12 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T19:38:04 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T19:38:08 prefetch.3.2.1:  'SRR17011004' is valid: 2945273132 bytes were streamed from 2945266197
+2026-03-22T19:38:08 prefetch.3.2.1: 1) 'SRR17011004' was downloaded successfully
+2026-03-22T19:38:08 prefetch.3.2.1: 1) Resolving 'SRR17011004's dependencies...
+2026-03-22T19:38:09 prefetch.3.2.1: 'SRR17011004' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011004
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011004_1.fastq and SRR17011004_2.fastq
+---- Sun Mar 22 19:43:01 UTC 2026 :: DONE SRR17011004 ----
+[SEQ] (29/64) SRR17011005
+---- Sun Mar 22 19:43:01 UTC 2026 :: START SRR17011005 ----
+[prefetch] downloading SRR17011005 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T19:43:01 prefetch.3.2.1: 1) Resolving 'SRR17011005'...
+2026-03-22T19:43:03 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T19:43:04 prefetch.3.2.1: 1) Downloading 'SRR17011005'...
+2026-03-22T19:43:04 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T19:43:04 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T19:45:48 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T19:45:54 prefetch.3.2.1:  'SRR17011005' is valid: 3861062041 bytes were streamed from 3861060927
+2026-03-22T19:45:54 prefetch.3.2.1: 1) 'SRR17011005' was downloaded successfully
+2026-03-22T19:45:54 prefetch.3.2.1: 1) Resolving 'SRR17011005's dependencies...
+2026-03-22T19:45:54 prefetch.3.2.1: 'SRR17011005' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011005
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011005_1.fastq and SRR17011005_2.fastq
+---- Sun Mar 22 19:52:19 UTC 2026 :: DONE SRR17011005 ----
+[SEQ] (30/64) SRR17011006
+---- Sun Mar 22 19:52:19 UTC 2026 :: START SRR17011006 ----
+[prefetch] downloading SRR17011006 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T19:52:19 prefetch.3.2.1: 1) Resolving 'SRR17011006'...
+2026-03-22T19:52:28 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T19:52:28 prefetch.3.2.1: 1) Downloading 'SRR17011006'...
+2026-03-22T19:52:28 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T19:52:28 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T19:57:30 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T19:57:36 prefetch.3.2.1:  'SRR17011006' is valid: 3615528886 bytes were streamed from 3615519927
+2026-03-22T19:57:36 prefetch.3.2.1: 1) 'SRR17011006' was downloaded successfully
+2026-03-22T19:57:36 prefetch.3.2.1: 1) Resolving 'SRR17011006's dependencies...
+2026-03-22T19:57:36 prefetch.3.2.1: 'SRR17011006' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011006
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011006_1.fastq and SRR17011006_2.fastq
+---- Sun Mar 22 20:03:32 UTC 2026 :: DONE SRR17011006 ----
+[SEQ] (31/64) SRR17010997
+---- Sun Mar 22 20:03:32 UTC 2026 :: START SRR17010997 ----
+[prefetch] downloading SRR17010997 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T20:03:32 prefetch.3.2.1: 1) Resolving 'SRR17010997'...
+2026-03-22T20:03:35 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T20:03:35 prefetch.3.2.1: 1) Downloading 'SRR17010997'...
+2026-03-22T20:03:35 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T20:03:35 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T20:07:39 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T20:07:49 prefetch.3.2.1:  'SRR17010997' is valid: 6717802977 bytes were streamed from 6717789367
+2026-03-22T20:07:50 prefetch.3.2.1: 1) 'SRR17010997' was downloaded successfully
+2026-03-22T20:07:50 prefetch.3.2.1: 1) Resolving 'SRR17010997's dependencies...
+2026-03-22T20:07:50 prefetch.3.2.1: 'SRR17010997' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010997
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010997_1.fastq and SRR17010997_2.fastq
+---- Sun Mar 22 20:18:44 UTC 2026 :: DONE SRR17010997 ----
+[SEQ] (32/64) SRR17010998
+---- Sun Mar 22 20:18:44 UTC 2026 :: START SRR17010998 ----
+[prefetch] downloading SRR17010998 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T20:18:44 prefetch.3.2.1: 1) Resolving 'SRR17010998'...
+2026-03-22T20:18:46 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T20:18:47 prefetch.3.2.1: 1) Downloading 'SRR17010998'...
+2026-03-22T20:18:47 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T20:18:47 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T20:24:25 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T20:24:32 prefetch.3.2.1:  'SRR17010998' is valid: 4529125270 bytes were streamed from 4529117705
+2026-03-22T20:24:32 prefetch.3.2.1: 1) 'SRR17010998' was downloaded successfully
+2026-03-22T20:24:32 prefetch.3.2.1: 1) Resolving 'SRR17010998's dependencies...
+2026-03-22T20:24:32 prefetch.3.2.1: 'SRR17010998' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010998
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010998_1.fastq and SRR17010998_2.fastq
+---- Sun Mar 22 20:31:47 UTC 2026 :: DONE SRR17010998 ----
+[SEQ] (33/64) SRR17010999
+---- Sun Mar 22 20:31:47 UTC 2026 :: START SRR17010999 ----
+[prefetch] downloading SRR17010999 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T20:31:47 prefetch.3.2.1: 1) Resolving 'SRR17010999'...
+2026-03-22T20:31:50 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T20:31:51 prefetch.3.2.1: 1) Downloading 'SRR17010999'...
+2026-03-22T20:31:51 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T20:31:51 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T20:43:07 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T20:43:17 prefetch.3.2.1:  'SRR17010999' is valid: 6864600305 bytes were streamed from 6864590563
+2026-03-22T20:43:17 prefetch.3.2.1: 1) 'SRR17010999' was downloaded successfully
+2026-03-22T20:43:17 prefetch.3.2.1: 1) Resolving 'SRR17010999's dependencies...
+2026-03-22T20:43:17 prefetch.3.2.1: 'SRR17010999' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010999
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010999_1.fastq and SRR17010999_2.fastq
+---- Sun Mar 22 20:54:10 UTC 2026 :: DONE SRR17010999 ----
+[SEQ] (34/64) SRR17011000
+---- Sun Mar 22 20:54:10 UTC 2026 :: START SRR17011000 ----
+[prefetch] downloading SRR17011000 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T20:54:10 prefetch.3.2.1: 1) Resolving 'SRR17011000'...
+2026-03-22T20:54:14 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T20:54:15 prefetch.3.2.1: 1) Downloading 'SRR17011000'...
+2026-03-22T20:54:15 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T20:54:15 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T20:59:34 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T20:59:45 prefetch.3.2.1:  'SRR17011000' is valid: 6993698897 bytes were streamed from 6993682933
+2026-03-22T20:59:45 prefetch.3.2.1: 1) 'SRR17011000' was downloaded successfully
+2026-03-22T20:59:45 prefetch.3.2.1: 1) Resolving 'SRR17011000's dependencies...
+2026-03-22T20:59:45 prefetch.3.2.1: 'SRR17011000' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011000
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011000_1.fastq and SRR17011000_2.fastq
+---- Sun Mar 22 21:10:55 UTC 2026 :: DONE SRR17011000 ----
+[SEQ] (35/64) SRR17011001
+---- Sun Mar 22 21:10:55 UTC 2026 :: START SRR17011001 ----
+[prefetch] downloading SRR17011001 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T21:10:55 prefetch.3.2.1: 1) Resolving 'SRR17011001'...
+2026-03-22T21:10:58 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T21:10:58 prefetch.3.2.1: 1) Downloading 'SRR17011001'...
+2026-03-22T21:10:58 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T21:10:58 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T21:15:41 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T21:15:46 prefetch.3.2.1:  'SRR17011001' is valid: 3191937836 bytes were streamed from 3191933735
+2026-03-22T21:15:46 prefetch.3.2.1: 1) 'SRR17011001' was downloaded successfully
+2026-03-22T21:15:46 prefetch.3.2.1: 1) Resolving 'SRR17011001's dependencies...
+2026-03-22T21:15:46 prefetch.3.2.1: 'SRR17011001' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17011001
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17011001_1.fastq and SRR17011001_2.fastq
+---- Sun Mar 22 21:21:04 UTC 2026 :: DONE SRR17011001 ----
+[SEQ] (36/64) SRR17010992
+---- Sun Mar 22 21:21:04 UTC 2026 :: START SRR17010992 ----
+[prefetch] downloading SRR17010992 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T21:21:04 prefetch.3.2.1: 1) Resolving 'SRR17010992'...
+2026-03-22T21:21:06 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T21:21:07 prefetch.3.2.1: 1) Downloading 'SRR17010992'...
+2026-03-22T21:21:07 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T21:21:07 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T21:26:12 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T21:26:25 prefetch.3.2.1:  'SRR17010992' is valid: 8287613543 bytes were streamed from 8287605015
+2026-03-22T21:26:25 prefetch.3.2.1: 1) 'SRR17010992' was downloaded successfully
+2026-03-22T21:26:25 prefetch.3.2.1: 1) Resolving 'SRR17010992's dependencies...
+2026-03-22T21:26:25 prefetch.3.2.1: 'SRR17010992' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010992
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010992_1.fastq and SRR17010992_2.fastq
+---- Sun Mar 22 21:39:59 UTC 2026 :: DONE SRR17010992 ----
+[SEQ] (37/64) SRR17010993
+---- Sun Mar 22 21:39:59 UTC 2026 :: START SRR17010993 ----
+[prefetch] downloading SRR17010993 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T21:39:59 prefetch.3.2.1: 1) Resolving 'SRR17010993'...
+2026-03-22T21:40:01 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T21:40:02 prefetch.3.2.1: 1) Downloading 'SRR17010993'...
+2026-03-22T21:40:02 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T21:40:02 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T21:43:31 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T21:43:40 prefetch.3.2.1:  'SRR17010993' is valid: 5859686877 bytes were streamed from 5859683759
+2026-03-22T21:43:40 prefetch.3.2.1: 1) 'SRR17010993' was downloaded successfully
+2026-03-22T21:43:40 prefetch.3.2.1: 1) Resolving 'SRR17010993's dependencies...
+2026-03-22T21:43:40 prefetch.3.2.1: 'SRR17010993' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010993
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010993_1.fastq and SRR17010993_2.fastq
+---- Sun Mar 22 21:53:08 UTC 2026 :: DONE SRR17010993 ----
+[SEQ] (38/64) SRR17010994
+---- Sun Mar 22 21:53:08 UTC 2026 :: START SRR17010994 ----
+[prefetch] downloading SRR17010994 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T21:53:08 prefetch.3.2.1: 1) Resolving 'SRR17010994'...
+2026-03-22T21:53:12 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T21:53:12 prefetch.3.2.1: 1) Downloading 'SRR17010994'...
+2026-03-22T21:53:12 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T21:53:12 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T21:58:26 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T21:58:38 prefetch.3.2.1:  'SRR17010994' is valid: 7923611296 bytes were streamed from 7923600803
+2026-03-22T21:58:38 prefetch.3.2.1: 1) 'SRR17010994' was downloaded successfully
+2026-03-22T21:58:38 prefetch.3.2.1: 1) Resolving 'SRR17010994's dependencies...
+2026-03-22T21:58:38 prefetch.3.2.1: 'SRR17010994' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010994
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010994_1.fastq and SRR17010994_2.fastq
+---- Sun Mar 22 22:11:25 UTC 2026 :: DONE SRR17010994 ----
+[SEQ] (39/64) SRR17010995
+---- Sun Mar 22 22:11:25 UTC 2026 :: START SRR17010995 ----
+[prefetch] downloading SRR17010995 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T22:11:25 prefetch.3.2.1: 1) Resolving 'SRR17010995'...
+2026-03-22T22:11:29 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T22:11:29 prefetch.3.2.1: 1) Downloading 'SRR17010995'...
+2026-03-22T22:11:29 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T22:11:29 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T22:17:15 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T22:17:25 prefetch.3.2.1:  'SRR17010995' is valid: 5921530792 bytes were streamed from 5921524551
+2026-03-22T22:17:25 prefetch.3.2.1: 1) 'SRR17010995' was downloaded successfully
+2026-03-22T22:17:25 prefetch.3.2.1: 1) Resolving 'SRR17010995's dependencies...
+2026-03-22T22:17:25 prefetch.3.2.1: 'SRR17010995' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010995
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010995_1.fastq and SRR17010995_2.fastq
+---- Sun Mar 22 22:26:47 UTC 2026 :: DONE SRR17010995 ----
+[SEQ] (40/64) SRR17010996
+---- Sun Mar 22 22:26:47 UTC 2026 :: START SRR17010996 ----
+[prefetch] downloading SRR17010996 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T22:26:47 prefetch.3.2.1: 1) Resolving 'SRR17010996'...
+2026-03-22T22:26:50 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T22:26:50 prefetch.3.2.1: 1) Downloading 'SRR17010996'...
+2026-03-22T22:26:50 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T22:26:50 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T22:31:42 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T22:31:52 prefetch.3.2.1:  'SRR17010996' is valid: 6835888633 bytes were streamed from 6835884863
+2026-03-22T22:31:52 prefetch.3.2.1: 1) 'SRR17010996' was downloaded successfully
+2026-03-22T22:31:52 prefetch.3.2.1: 1) Resolving 'SRR17010996's dependencies...
+2026-03-22T22:31:52 prefetch.3.2.1: 'SRR17010996' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010996
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010996_1.fastq and SRR17010996_2.fastq
+---- Sun Mar 22 22:42:57 UTC 2026 :: DONE SRR17010996 ----
+[SEQ] (41/64) SRR17010987
+---- Sun Mar 22 22:42:57 UTC 2026 :: START SRR17010987 ----
+[prefetch] downloading SRR17010987 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T22:42:57 prefetch.3.2.1: 1) Resolving 'SRR17010987'...
+2026-03-22T22:43:05 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T22:43:06 prefetch.3.2.1: 1) Downloading 'SRR17010987'...
+2026-03-22T22:43:06 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T22:43:06 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T22:45:46 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T22:45:52 prefetch.3.2.1:  'SRR17010987' is valid: 4142753982 bytes were streamed from 4142744855
+2026-03-22T22:45:52 prefetch.3.2.1: 1) 'SRR17010987' was downloaded successfully
+2026-03-22T22:45:52 prefetch.3.2.1: 1) Resolving 'SRR17010987's dependencies...
+2026-03-22T22:45:52 prefetch.3.2.1: 'SRR17010987' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010987
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010987_1.fastq and SRR17010987_2.fastq
+---- Sun Mar 22 22:52:41 UTC 2026 :: DONE SRR17010987 ----
+[SEQ] (42/64) SRR17010988
+---- Sun Mar 22 22:52:41 UTC 2026 :: START SRR17010988 ----
+[prefetch] downloading SRR17010988 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T22:52:41 prefetch.3.2.1: 1) Resolving 'SRR17010988'...
+2026-03-22T22:52:46 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T22:52:46 prefetch.3.2.1: 1) Downloading 'SRR17010988'...
+2026-03-22T22:52:46 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T22:52:46 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T23:02:53 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T23:03:00 prefetch.3.2.1:  'SRR17010988' is valid: 4215204573 bytes were streamed from 4215204039
+2026-03-22T23:03:00 prefetch.3.2.1: 1) 'SRR17010988' was downloaded successfully
+2026-03-22T23:03:00 prefetch.3.2.1: 1) Resolving 'SRR17010988's dependencies...
+2026-03-22T23:03:00 prefetch.3.2.1: 'SRR17010988' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010988
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010988_1.fastq and SRR17010988_2.fastq
+---- Sun Mar 22 23:09:57 UTC 2026 :: DONE SRR17010988 ----
+[SEQ] (43/64) SRR17010989
+---- Sun Mar 22 23:09:57 UTC 2026 :: START SRR17010989 ----
+[prefetch] downloading SRR17010989 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T23:09:57 prefetch.3.2.1: 1) Resolving 'SRR17010989'...
+2026-03-22T23:10:00 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T23:10:01 prefetch.3.2.1: 1) Downloading 'SRR17010989'...
+2026-03-22T23:10:01 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T23:10:01 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T23:12:54 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T23:12:59 prefetch.3.2.1:  'SRR17010989' is valid: 3185922084 bytes were streamed from 3185906975
+2026-03-22T23:12:59 prefetch.3.2.1: 1) 'SRR17010989' was downloaded successfully
+2026-03-22T23:12:59 prefetch.3.2.1: 1) Resolving 'SRR17010989's dependencies...
+2026-03-22T23:12:59 prefetch.3.2.1: 'SRR17010989' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010989
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+[pigz] compressing SRR17010989_1.fastq and SRR17010989_2.fastq
+---- Sun Mar 22 23:18:26 UTC 2026 :: DONE SRR17010989 ----
+[SEQ] (44/64) SRR17010990
+---- Sun Mar 22 23:18:26 UTC 2026 :: START SRR17010990 ----
+[prefetch] downloading SRR17010990 -> /work/ugbogu/pipeline/data/nbl/GSE189367/sra
+2026-03-22T23:18:26 prefetch.3.2.1: 1) Resolving 'SRR17010990'...
+2026-03-22T23:18:32 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-03-22T23:18:33 prefetch.3.2.1: 1) Downloading 'SRR17010990'...
+2026-03-22T23:18:33 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-03-22T23:18:33 prefetch.3.2.1:  Downloading via HTTPS...
+2026-03-22T23:34:55 prefetch.3.2.1:  HTTPS download succeed
+2026-03-22T23:35:05 prefetch.3.2.1:  'SRR17010990' is valid: 6776415332 bytes were streamed from 6776399381
+2026-03-22T23:35:05 prefetch.3.2.1: 1) 'SRR17010990' was downloaded successfully
+2026-03-22T23:35:05 prefetch.3.2.1: 1) Resolving 'SRR17010990's dependencies...
+2026-03-22T23:35:05 prefetch.3.2.1: 'SRR17010990' has 0 unresolved dependencies
+[fasterq-dump] SRC=/work/ugbogu/pipeline/data/nbl/GSE189367/sra/SRR17010990
+[fasterq-dump] threads=8
+[fasterq-dump] tmp=/work/ugbogu/pipeline/data/nbl/GSE189367/tmp/86404
+[fasterq-dump] outdir=/work/ugbogu/pipeline/data/nbl/GSE189367/fastq

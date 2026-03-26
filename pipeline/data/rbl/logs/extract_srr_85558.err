@@ -1,0 +1,33 @@
+--2026-03-18 09:02:53--  https://ftp.ncbi.nlm.nih.gov/geo/series/GSE111nnn/GSE111168/soft/GSE111168_family.soft.gz
+Resolving proxy2.uni-potsdam.de (proxy2.uni-potsdam.de)... 141.89.251.245
+Connecting to proxy2.uni-potsdam.de (proxy2.uni-potsdam.de)|141.89.251.245|:3128... connected.
+Proxy request sent, awaiting response... 200 OK
+Length: 2314 (2.3K) [application/x-gzip]
+Saving to: '/work/ugbogu/pipeline/data/rbl/GSE111168_primary_tumours/GSE111168_family.soft.gz'
+
+     0K ..                                                    100% 5.00G=0s
+
+2026-03-18 09:02:54 (5.00 GB/s) - '/work/ugbogu/pipeline/data/rbl/GSE111168_primary_tumours/GSE111168_family.soft.gz' saved [2314/2314]
+
+--2026-03-18 09:02:59--  https://ftp.ncbi.nlm.nih.gov/geo/series/GSE196nnn/GSE196420/soft/GSE196420_family.soft.gz
+Resolving proxy2.uni-potsdam.de (proxy2.uni-potsdam.de)... 141.89.251.245
+Connecting to proxy2.uni-potsdam.de (proxy2.uni-potsdam.de)|141.89.251.245|:3128... connected.
+Proxy request sent, awaiting response... 200 OK
+Length: 7214 (7.0K) [application/x-gzip]
+Saving to: '/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/GSE196420_family.soft.gz'
+
+     0K .......                                               100% 10.2G=0s
+
+2026-03-18 09:02:59 (10.2 GB/s) - '/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours/GSE196420_family.soft.gz' saved [7214/7214]
+
+--2026-03-18 09:03:07--  https://ftp.ncbi.nlm.nih.gov/geo/series/GSE268nnn/GSE268136/soft/GSE268136_family.soft.gz
+Resolving proxy2.uni-potsdam.de (proxy2.uni-potsdam.de)... 141.89.251.245
+Connecting to proxy2.uni-potsdam.de (proxy2.uni-potsdam.de)|141.89.251.245|:3128... connected.
+Proxy request sent, awaiting response... 200 OK
+Length: 7155 (7.0K) [application/x-gzip]
+Saving to: '/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/GSE268136_family.soft.gz'
+
+     0K ......                                                100% 12.3G=0s
+
+2026-03-18 09:03:08 (12.3 GB/s) - '/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours/GSE268136_family.soft.gz' saved [7155/7155]
+
