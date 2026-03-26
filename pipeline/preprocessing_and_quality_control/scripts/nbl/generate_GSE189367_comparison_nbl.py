@@ -27,22 +27,10 @@ DEFAULT_SAMPLE_LIST = Path(
 DEFAULT_FASTQ_DIR = Path(
     "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq"
 )
-DEFAULT_OUTPUT_DIR = Path("/work/ugbogu/pipeline/data/nbl")
+DEFAULT_OUTPUT_DIR = Path("/work/ugbogu/pipeline/data/nbl/GSE189367")
 
 
 def extract_srr_from_sample_export(path: Path) -> set[str]:
-    """
-    Read sample export lines such as:
-        sample_id
-        GSE189367_SRR17011027
-    or:
-        SRP409177_SRR22373268
-    or:
-        SRR17011027
-
-    Return:
-        {"SRR17011027", ...}
-    """
     ids: set[str] = set()
 
     for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -61,13 +49,6 @@ def extract_srr_from_sample_export(path: Path) -> set[str]:
 
 
 def load_srr_ids_from_fastq_dir(path: Path) -> set[str]:
-    """
-    Extract SRR IDs from FASTQ filenames in a directory.
-
-    Only count an SRR as present if both paired files exist:
-      SRRxxxxxxx_1.fastq.gz
-      SRRxxxxxxx_2.fastq.gz
-    """
     read1: set[str] = set()
     read2: set[str] = set()
 
@@ -97,8 +78,8 @@ def build_report(
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     lines: list[str] = []
-    lines.append("GSE189367_sample_ids.tsv-Centered SRR Comparison Report")
-    lines.append("========================================================")
+    lines.append("GSE189367 Sample Export vs FASTQ Report")
+    lines.append("=======================================")
     lines.append(f"Generated: {stamp}")
     lines.append("")
     lines.append("Input files")
@@ -126,14 +107,14 @@ def build_report(
     lines.append("Interpretation")
     lines.append("--------------")
     lines.append(
-        "- IDs only in sample export are expected by the sample list but missing from the current paired FASTQ set."
+        "- IDs only in sample export are expected by the retained downstream sample set but are missing from the current paired FASTQ directory."
     )
     lines.append(
-        "- IDs only in FASTQ are present on disk but absent from the sample export."
+        "- IDs only in FASTQ are present on disk but absent from the sample export, which may reflect later downstream filtering such as tumour-purity or other analysis-subset selection."
     )
     lines.append("")
-    lines.append("IDs only in sample export (missing in FASTQ)")
-    lines.append("---------------------------------------------")
+    lines.append("IDs only in sample export")
+    lines.append("-------------------------")
     if only_sample:
         lines.extend(f"- {x}" for x in only_sample)
     else:
@@ -146,10 +127,17 @@ def build_report(
     else:
         lines.append("- none")
     lines.append("")
+    lines.append("IDs in both")
+    lines.append("-----------")
+    if in_both:
+        lines.extend(f"- {x}" for x in in_both)
+    else:
+        lines.append("- none")
+    lines.append("")
     lines.append("Conclusion")
     lines.append("----------")
     lines.append(
-        "- This report identifies which SRR IDs from the GSE189367 sample export are represented in the current paired FASTQ directory and which are missing."
+        "- This report compares the retained GSE189367 sample export against the currently available paired FASTQ files on disk."
     )
 
     return "\n".join(lines) + "\n"
@@ -184,6 +172,7 @@ def main() -> int:
     write_lines(in_both_path, in_both)
     write_lines(only_sample_path, only_sample)
     write_lines(only_fastq_path, only_fastq)
+
     report_path.write_text(
         build_report(
             sample_path=args.sample_list,
