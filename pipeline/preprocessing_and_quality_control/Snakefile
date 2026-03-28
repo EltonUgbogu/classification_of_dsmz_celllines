@@ -28,8 +28,8 @@ WORKFLOW_DIR = os.path.dirname(os.path.abspath(__file__))
 configfile: "config/config.yaml"
 
 # Project-relative defaults keep the workflow portable across machines.
-DATA_ROOT = config.get("data_root") or os.path.abspath(os.path.join(WORKFLOW_DIR, "..", "..", "data", "rbl"))
-PROJECTS = config.get("projects", ["GSE111168", "GSE196420", "GSE268136"])
+DATA_ROOT = config.get("data_root") or os.path.abspath(os.path.join(WORKFLOW_DIR, "..", "..", "data", "nbl"))
+PROJECTS = config.get("projects", ["GSE100148", "GSE189367", "SRP409177"])
 ENV_DIR = config.get("env_dir") or os.path.abspath(os.path.join(WORKFLOW_DIR, "envs"))
 
 # ------------------------------------------------------------------------------
@@ -38,19 +38,16 @@ ENV_DIR = config.get("env_dir") or os.path.abspath(os.path.join(WORKFLOW_DIR, "e
 # REF_INDEX: STAR genome index directory (built from the reference FASTA + annotation)
 # GTF: gene annotation used by aligner/counting tools and downstream interpretation
 # REF_FASTA: reference genome FASTA (required for alignment QC checks)
-# PICARD_JAR: Picard toolkit used for alignment-level QC metrics
 # THREADS: compute threads; defaults to 12 if not specified in config
 REF_INDEX   = config["genome"]["star_index"]
 GTF         = config["genome"]["gtf"]
 REF_FASTA   = config["genome"]["fasta"]
-PICARD_JAR  = config["tools"]["picard_jar"]
 THREADS     = config.get("threads", 12)
 
 missing_required = {
     "genome.star_index": REF_INDEX,
     "genome.gtf": GTF,
     "genome.fasta": REF_FASTA,
-    "tools.picard_jar": PICARD_JAR,
 }
 missing_required = [name for name, value in missing_required.items() if not value]
 if missing_required:
@@ -359,25 +356,24 @@ rule picard_validate_samfile:
     input: bam = rules.star_2pass.output.bam, ref = REF_FASTA
     output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_validate_samfile.txt"
     log:    f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_validate_samfile.log"
-    params: jar = PICARD_JAR
     conda:  f"{ENV_DIR}/picard.yaml"
     shell:
         # A non-zero exit can occur even when the BAM is usable; the output report
         # still provides useful diagnostics, so the command is tolerated if it warns.
-        "java -Xmx8g -jar {params.jar} ValidateSamFile I={input.bam} O={output} MODE=SUMMARY "
+        "picard ValidateSamFile I={input.bam} O={output} MODE=SUMMARY "
         "REFERENCE_SEQUENCE={input.ref} > {log} 2>&1 || true"
 
 rule picard_alignment_summary_metrics:
     input: bam = rules.star_2pass.output.bam, ref = REF_FASTA
     output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_alignment_summary_metrics.txt"
     shell:
-        "java -jar {PICARD_JAR} CollectAlignmentSummaryMetrics R={input.ref} I={input.bam} O={output}"
+        "picard CollectAlignmentSummaryMetrics R={input.ref} I={input.bam} O={output}"
 
 rule picard_quality_yield_metrics:
     input:  bam = rules.star_2pass.output.bam
     output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_quality_yield_metrics.txt"
     shell:
-        "java -jar {PICARD_JAR} CollectQualityYieldMetrics I={input.bam} O={output}"
+        "picard CollectQualityYieldMetrics I={input.bam} O={output}"
 
 rule picard_insert_size_metrics:
     input: bam = rules.star_2pass.output.bam
@@ -387,7 +383,7 @@ rule picard_insert_size_metrics:
     shell:
         # Insert size distributions are informative for paired-end RNA-seq libraries:
         # shifts or multimodal patterns can indicate technical issues or sample differences.
-        "java -jar {PICARD_JAR} CollectInsertSizeMetrics I={input.bam} O={output.metrics} H={output.hist} M=0.5"
+        "picard CollectInsertSizeMetrics I={input.bam} O={output.metrics} H={output.hist} M=0.5"
 
 # ------------------------------------------------------------------------------
 # MultiQC: per-project aggregation of QC and alignment metrics
