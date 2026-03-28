@@ -22,11 +22,6 @@ genome:
   gtf: "/work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf"
   fasta: "/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa"
 
-tools:
-  picard_jar: null
-
-
-
 resources:
   star_mem_mb: 42000
   star_bamsort_ram_bytes: 32000000000

@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=08:00:00
+#SBATCH --time=24:00:00
 #SBATCH --requeue
 # Note: --output and --error can be overridden at submission:
 #   sbatch --output=/path/to/logs/%j.out --error=/path/to/logs/%j.err preprocessing_snakefile.sh
@@ -82,10 +82,6 @@ if [ ! -d "$SMK_ENV_PATH" ]; then
   conda env create -f "$SMK_ENV_YAML" -p "$SMK_ENV_PATH"
 else
   echo "[INFO] Snakemake env exists: $SMK_ENV_PATH"
-  echo "[INFO] Updating env from: $SMK_ENV_YAML"
-  conda env update -f "$SMK_ENV_YAML" -p "$SMK_ENV_PATH" || {
-    echo "[WARNING] Env update failed; continuing with existing env."
-  }
 fi
 
 echo "[INFO] Activating Snakemake env: $SMK_ENV_PATH"
@@ -108,6 +104,7 @@ echo "[INFO] Unlocking Snakemake working directory (if locked)..."
 "$SNAKEMAKE_BIN" \
   --snakefile "$SNAKEFILE" \
   --configfile "$CONFIGFILE" \
+  --use-conda \
   --unlock || true
 
 # ------------------------------------------------------------------
@@ -121,6 +118,7 @@ set +e
   --snakefile "$SNAKEFILE" \
   --configfile "$CONFIGFILE" \
   --cores "$N_CORES" \
+  --use-conda \
   --printshellcmds -p \
   --rerun-incomplete \
   --latency-wait 300 \
