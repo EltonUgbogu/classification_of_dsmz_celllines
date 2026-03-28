@@ -298,3 +298,110 @@ Created thread # 4
 Created thread # 5
 Created thread # 6
 Created thread # 7
+Thread #0 end of input stream, nextChar=-1
+Completed: thread #5
+Completed: thread #2
+Completed: thread #6
+Completed: thread #4
+Completed: thread #7
+Completed: thread #3
+Completed: thread #1
+Completed: thread #0
+Joined thread # 1
+Joined thread # 2
+Joined thread # 3
+Joined thread # 4
+Joined thread # 5
+Joined thread # 6
+Joined thread # 7
+Mar 28 13:33:03   Loaded database junctions from the generated genome /work/ugbogu/pipeline/data/reference/star_gencode_v44//sjdbList.out.tab: 298691 total junctions
+
+Mar 28 13:33:03   Loaded database junctions from the 1st pass file: /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARpass1//SJ.out.tab: 560774 total junctions
+
+Mar 28 13:33:03   Finished preparing junctions
+Mar 28 13:33:03 ..... inserting junctions into the genome indices
+Mar 28 13:33:19   Finished SA search: number of new junctions=81659, old junctions=298691
+Mar 28 13:33:26   Finished sorting SA indicesL nInd=32663288
+Genome size with junctions=3214838318  3138387968   76450350
+GstrandBit1=32   GstrandBit=32
+Mar 28 13:34:22   Finished inserting junction indices
+Mar 28 13:34:29   Finished SAi
+Mar 28 13:34:29 ..... finished inserting junctions into genome
+
+   Input read files for mate 1 :
+-rw-r--r-- 1 ugbogu users 4118088711 Mar 22 21:44 /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz
+
+   readsCommandsFile:
+exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARtmp/tmp.fifo.read1"
+echo FILE 0
+zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz"
+
+
+   Input read files for mate 2 :
+-rw-r--r-- 1 ugbogu users 4260029605 Mar 22 21:44 /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz
+
+   readsCommandsFile:
+exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARtmp/tmp.fifo.read2"
+echo FILE 0
+zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz"
+
+Created thread # 1
+Starting to map file # 0
+mate 1:   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz
+mate 2:   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz
+Created thread # 2
+Created thread # 3
+Created thread # 4
+Created thread # 5
+Created thread # 6
+Created thread # 7
+BAM sorting: 161496 mapped reads
+BAM sorting bins genomic start loci:
+1	0	28508601
+2	0	120439576
+3	0	165401194
+4	0	244855906
+5	1	86987725
+6	1	159219263
+7	1	231713247
+8	2	52746777
+9	3	6824519
+10	3	185162912
+11	4	112168767
+12	5	3153903
+13	5	31356247
+14	5	44250082
+15	5	154810043
+16	6	38742058
+17	6	100328985
+18	7	30658120
+19	8	33900177
+20	8	132329205
+21	9	73807393
+22	10	33286951
+23	10	65585503
+24	11	6510330
+25	11	56257299
+26	11	124913567
+27	13	55142706
+28	14	22539223
+29	14	76728622
+30	15	14951666
+31	15	22532046
+32	15	72795001
+33	16	19063921
+34	16	19064018
+35	16	19112474
+36	16	42568933
+37	16	77402377
+38	18	5041167
+39	18	42248695
+40	19	25676755
+41	20	8215630
+42	20	8398761
+43	20	26112115
+44	21	39966002
+45	22	73823592
+46	24	2524
+47	36	117914
+48	169	130461
