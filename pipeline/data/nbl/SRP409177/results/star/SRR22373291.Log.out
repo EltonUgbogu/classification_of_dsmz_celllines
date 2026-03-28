@@ -270,7 +270,7 @@ Number of real (reference) chromosomes= 194
 193	KI270756.1	79590	3137863680
 194	KI270757.1	71251	3138125824
 --sjdbOverhang = 100 taken from the generated genome
-Started loading the genome: Thu Mar 26 14:37:19 2026
+Started loading the genome: Sat Mar 28 14:22:05 2026
 
 Genome: size given as a parameter = 3198424859
 SA: size given as a parameter = 24819019132
@@ -284,17 +284,148 @@ Loading Genome ... done! state: good=1 eof=0 fail=0 bad=0; loaded 3198424859 byt
 SA file size: 24819019132 bytes; state: good=1 eof=0 fail=0 bad=0
 Loading SA ... done! state: good=1 eof=0 fail=0 bad=0; loaded 24819019132 bytes
 Loading SAindex ... done: 1565873619 bytes
-Finished loading the genome: Thu Mar 26 14:37:51 2026
+Finished loading the genome: Sat Mar 28 14:22:24 2026
 
 Processing splice junctions database sjdbN=298691,   pGe.sjdbOverhang=100 
 alignIntronMax=alignMatesGapMax=0, the max intron size will be approximately determined by (2^winBinNbits)*winAnchorDistNbins=589824
 Created thread # 1
+Starting to map file # 0
+mate 1:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_1.fastq.gz
+mate 2:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_2.fastq.gz
 Created thread # 2
 Created thread # 3
 Created thread # 4
 Created thread # 5
 Created thread # 6
 Created thread # 7
+Thread #7 end of input stream, nextChar=-1
+Completed: thread #7
+Completed: thread #2
+Completed: thread #5
+Completed: thread #3
+Completed: thread #4
+Completed: thread #1
+Completed: thread #6
+Completed: thread #0
+Joined thread # 1
+Joined thread # 2
+Joined thread # 3
+Joined thread # 4
+Joined thread # 5
+Joined thread # 6
+Joined thread # 7
+Mar 28 14:27:20   Loaded database junctions from the generated genome /work/ugbogu/pipeline/data/reference/star_gencode_v44//sjdbList.out.tab: 298691 total junctions
+
+Mar 28 14:27:21   Loaded database junctions from the 1st pass file: /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373291._STARpass1//SJ.out.tab: 518945 total junctions
+
+Mar 28 14:27:21   Finished preparing junctions
+Mar 28 14:27:21 ..... inserting junctions into the genome indices
+Mar 28 14:27:31   Finished SA search: number of new junctions=56498, old junctions=298691
+Mar 28 14:27:36   Finished sorting SA indicesL nInd=22598862
+Genome size with junctions=3209780957  3138387968   71392989
+GstrandBit1=32   GstrandBit=32
+Mar 28 14:28:29   Finished inserting junction indices
+Mar 28 14:28:35   Finished SAi
+Mar 28 14:28:35 ..... finished inserting junctions into genome
+
+   Input read files for mate 1 :
+-rw-r--r-- 1 ugbogu users 1481755860 Mar 22 15:13 /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_1.fastq.gz
+
+   readsCommandsFile:
+exec > "/work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373291._STARtmp/tmp.fifo.read1"
+echo FILE 0
+zcat      "/work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_1.fastq.gz"
+
+
+   Input read files for mate 2 :
+-rw-r--r-- 1 ugbogu users 1572503585 Mar 22 15:13 /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_2.fastq.gz
+
+   readsCommandsFile:
+exec > "/work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373291._STARtmp/tmp.fifo.read2"
+echo FILE 0
+zcat      "/work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_2.fastq.gz"
+
+Created thread # 1
 Starting to map file # 0
 mate 1:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_1.fastq.gz
 mate 2:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373291_2.fastq.gz
+Created thread # 2
+Created thread # 3
+Created thread # 4
+Created thread # 5
+Created thread # 6
+Created thread # 7
+BAM sorting: 207562 mapped reads
+BAM sorting bins genomic start loci:
+1	0	23774512
+2	0	143729445
+3	0	198268006
+4	1	64637385
+5	1	166307057
+6	2	15738550
+7	2	62014719
+8	3	42598307
+9	4	14207179
+10	4	139412931
+11	5	34287648
+12	5	73197802
+13	6	5527723
+14	6	79300158
+15	6	154062472
+16	8	3390337
+17	8	61883623
+18	9	34648795
+19	9	132202653
+20	10	69641493
+21	11	44836901
+22	12	20432213
+23	12	113204638
+24	13	49586612
+25	13	49586693
+26	13	49853658
+27	13	49862591
+28	13	49862668
+29	13	49862715
+30	13	105219486
+31	14	84249086
+32	15	57097758
+33	16	19112421
+34	16	58091070
+35	18	1878130
+36	19	17361116
+37	20	8214871
+38	20	8397092
+39	20	8443727
+40	21	39483310
+41	24	697
+42	24	1715
+43	24	2133
+44	24	2576
+45	24	2960
+46	24	9688
+47	36	154189
+48	169	131088
+Thread #0 end of input stream, nextChar=-1
+Completed: thread #1
+Completed: thread #0
+Joined thread # 1
+Completed: thread #7
+Completed: thread #6
+Completed: thread #4
+Completed: thread #5
+Completed: thread #3
+Completed: thread #2
+Joined thread # 2
+Joined thread # 3
+Joined thread # 4
+Joined thread # 5
+Joined thread # 6
+Joined thread # 7
+Mar 28 14:35:06 ..... finished mapping
+RAM after mapping:
+VmPeak:	35079928 kB; VmSize:	33955916 kB; VmHWM:	33973032 kB; VmRSS:	32843084 kB; 
+RAM after freeing genome index memory:
+VmPeak:	35079928 kB; VmSize:	 3250276 kB; VmHWM:	33973032 kB; VmRSS:	 2324584 kB; 
+Mar 28 14:35:06 ..... started sorting BAM
+Max memory needed for sorting = 391257596
+ALL DONE!
