@@ -2,6 +2,7 @@
 
 # Unsupervised Clustering and Tumour Neighbourhood Analysis Pipeline
 
+import json
 import os
 import re
 from pathlib import Path
@@ -157,7 +158,29 @@ FEATURE_METHODS = cfg.get("feature_sets", {}).get(
     ),
 )
 DISTANCES = cfg.get("feature_sets", {}).get("distances", ["euc", "corr"])
-TOPN = int(cfg.get("feature_selection", {}).get("final_top", 500))
+
+# Per-method top-N gene counts.
+# Defaults: Variance/MAD/MeanAbsDev/Entropy/PCA → 3000; Spearman/MX/kTotal → 500.
+# Override per-method in config under feature_selection.method_topn.<method>.
+_TOPN_DEFAULTS = {
+    "Variance":   3000,
+    "MAD":        3000,
+    "MeanAbsDev": 3000,
+    "Entropy":    3000,
+    "PCA":        3000,
+    "Spearman":   500,
+    "MX":         500,
+    "kTotal":     500,
+}
+_topn_cfg = cfg.get("feature_selection", {}).get("method_topn", {})
+METHOD_TOPN = {m: int(_topn_cfg.get(m, _TOPN_DEFAULTS.get(m, 500))) for m in FEATURE_METHODS}
+
+def method_topn(m):
+    """Return the top-N gene count for feature method m."""
+    return METHOD_TOPN.get(m, 500)
+
+# Legacy alias: MX defines the canonical HVG set size used by consensus and tumour-NH rules.
+TOPN = method_topn("MX")
 
 
 def build_directions():
@@ -274,12 +297,14 @@ VST_JOINT = cfgabs("paths", "vst_joint_rds")
 # Feature list paths.
 # _REL variant → used in rule output: declarations (relative, for portable DAG tracking).
 # Non-suffixed absolute variant → used in rule input:, params:, and shell: references.
-FEATURESETS_DIR_REL = os.path.join(UNSUP_REL, "feature_selection_unsupervised", f"feature_sets_top{TOPN}")
-FEATURESETS_DIR     = os.path.join(UNSUP,     "feature_selection_unsupervised", f"feature_sets_top{TOPN}")
-FEATURELIST_FILES   = expand(
-    os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_{{m}}.txt"),
-    m=FEATURE_METHODS,
-)
+# Directory no longer encodes a single TOPN since each method may use a different value.
+# File naming: genes_top{N}_{method}.txt  (N is method-specific).
+FEATURESETS_DIR_REL = os.path.join(UNSUP_REL, "feature_selection_unsupervised", "feature_sets")
+FEATURESETS_DIR     = os.path.join(UNSUP,     "feature_selection_unsupervised", "feature_sets")
+FEATURELIST_FILES   = [
+    os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(m)}_{m}.txt")
+    for m in FEATURE_METHODS
+]
 
 # Relative roots for rule output: declarations (Snakemake DAG tracks these).
 # Absolute counterparts are derived via os.path.join(PIPE_ROOT, *_REL) where needed in params/shell.
@@ -296,14 +321,14 @@ rule feature_selection_unsupervised:
         vst = VST_JOINT,
         cfg_file = CFGFILE_ABS
     output:
-        # Relative paths (FEATURESETS_DIR_REL) for portable DAG tracking.
-        # The R script writes files via the absolute --outdir param below.
+        # Relative paths for portable DAG tracking; R script writes via absolute --outdir.
         feature_lists = FEATURELIST_FILES,
-        # Canonical HVG gene list (MX method) — declared explicitly so downstream
-        # rules can reference it as rules.feature_selection_unsupervised.output.hvg_list.
-        hvg_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt")
+        # Canonical HVG gene list (MX method, top-500) — named output for downstream rules.
+        hvg_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn('MX')}_MX.txt")
     params:
-        outdir = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised")
+        outdir         = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised"),
+        # Comma-separated method:N pairs so the R script knows each method's top-N.
+        method_topn    = ",".join(f"{m}:{n}" for m, n in METHOD_TOPN.items())
     log: os.path.join(LOGROOT, "feature_selection_unsupervised.log")
     conda: CONDA_ENV_R
     shell:
@@ -315,6 +340,7 @@ rule feature_selection_unsupervised:
           --outdir="{params.outdir}" \
           --vst_rds="{input.vst}" \
           --scripts_dir="{SCRIPTS_DIR}" \
+          --method_topn="{params.method_topn}" \
           > "{log}" 2>&1
         '''
 
@@ -400,13 +426,11 @@ def dir_to_gene_list(direction):
             return cfgabs("pam50", "ensembl_gene_list")  # Input needs absolute
         return cfgabs("features", "pam50_ensembl_gene_list")  # Input needs absolute
     elif feature == "hvg":
-        # Legacy HVG direction: use the MX feature-set gene list as the canonical
-        # HVG500 set, so we depend only on feature_sets_top{TOPN}/genes_top{TOPN}_*.txt.
-        return os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt")
+        # Legacy HVG direction maps to the MX gene list (top-500 canonical HVG set).
+        return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn('MX')}_MX.txt")
     else:
-        # For new feature sets, use the feature_sets_top{TOPN} directory
-        # Use absolute path (FEATURESETS_DIR is already absolute)
-        return os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_{feature}.txt")
+        # Feature-set directions: filename encodes the method-specific top-N.
+        return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(feature)}_{feature}.txt")
 
 def dir_to_geneset(direction):
     """Get human-readable gene set label"""
@@ -414,9 +438,9 @@ def dir_to_geneset(direction):
     if feature == "pam50":
         return "PAM50"
     elif feature == "hvg":
-        return "HVG500"
+        return f"HVG{method_topn('MX')}"
     else:
-        return f"{feature}_top{TOPN}"
+        return f"{feature}_top{method_topn(feature)}"
 
 def agn_outdir_dir(direction, kind):
     return os.path.join(AGN_ROOT_ABS, direction, kind)  # Absolute for params (scripts need it)
@@ -1018,7 +1042,7 @@ rule build_tumour_neighbourhood_input_hvg:
 rule build_tumour_neighbourhood_input_featureset:
     input:
         vst = VST_JOINT,
-        gene_list = lambda wc: os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_{wc.feature}.txt"),
+        gene_list = lambda wc: os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
         dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),  # Input needs absolute
         cfg = CFGFILE_ABS
     output:
