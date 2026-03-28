@@ -4,6 +4,16 @@ defaults:
     agnostic_base_functions_dir: R
   clustering:
     k_grid: [2, 3, 4, 5, 6, 7, 8]
+  feature_selection:
+    method_topn:
+      Variance:   3000
+      MAD:        3000
+      MeanAbsDev: 3000
+      Entropy:    3000
+      PCA:        3000
+      Spearman:   500
+      MX:         500
+      kTotal:     500
 pan_cancer:
   dist_metrics:
   - cosine
@@ -33,8 +43,6 @@ profiles:
     analysis:
       cancer_type: Pan-Cancer
       use_pam50: false
-    feature_selection:
-      final_top: 500
     feature_sets:
       distances:
       - euc
@@ -99,8 +107,6 @@ profiles:
     analysis:
       cancer_type: HEME
       use_pam50: false
-    feature_selection:
-      final_top: 500
     feature_sets:
       distances: [euc, corr]
       methods:
