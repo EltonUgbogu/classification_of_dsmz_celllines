@@ -20,6 +20,11 @@ SCRIPTS_DIR = os.path.join(BASE, "scripts")
 BASE_DIR = os.path.join(BASE, "R")
 PIPE_ROOT = BASE
 
+# Centralized conda env paths (avoid hardcoded absolute strings in rules)
+CONDA_ENV_R = os.path.join(PIPE_ROOT, "envs", "tcga-r-env.yaml")
+CONDA_ENV_PY = os.path.join(PIPE_ROOT, "envs", "python-graph-env.yaml")
+CONDA_ENV_QC = os.path.join(PIPE_ROOT, "envs", "tumour_nh_qc.yaml")
+
 # Absolute config path (so Snakemake works regardless of cwd)
 CFGFILE_ABS = os.path.join(PIPE_ROOT, "config", "config.yaml")
 
@@ -125,7 +130,8 @@ if "profiles" in config:
     
     # Update LOGROOT with validated profile name (overwrites temporary default)
     LOGROOT = os.path.join(PIPE_ROOT, "logs", profile_name)
-    os.makedirs(LOGROOT, exist_ok=True)
+    if not workflow.dryrun:
+        os.makedirs(LOGROOT, exist_ok=True)
     vprint(f"[Snakefile] LOGROOT = {LOGROOT}")
 else:
     cfg = config
@@ -238,34 +244,41 @@ def cfgget_path_abs(default_rel, *keys):
 
 shell.prefix("set -euo pipefail; export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1; ")
 
-# --- UNSUP root (absolute for --directory compatibility) ---
-# Ensure profile is in the path: results/unsupervised/{profile}
-# Normalize to handle trailing slashes and ensure consistent structure
+# --- UNSUP root (REL for outputs, ABS for params/inputs) ---
+# Keep outputs relative for proper Snakemake path handling.
 UNSUP_BASE = os.path.normpath(cfgget_path_rel("results/unsupervised", "paths", "unsup_root"))
 vprint(f"[Snakefile] UNSUP_BASE (from config) = {UNSUP_BASE}")
-# If UNSUP_BASE already ends with the profile, keep it; otherwise append it
+
+# Convert absolute config paths to PIPE_ROOT-relative for output declarations.
+if os.path.isabs(UNSUP_BASE):
+    UNSUP_BASE = os.path.relpath(UNSUP_BASE, PIPE_ROOT)
+
+# Ensure profile suffix exists in the relative output root.
 if os.path.basename(UNSUP_BASE) != profile_name:
     UNSUP_REL = os.path.join(UNSUP_BASE, profile_name)
 else:
     UNSUP_REL = UNSUP_BASE
-# Make absolute by joining with PIPE_ROOT (for --directory compatibility)
-UNSUP = os.path.join(PIPE_ROOT, UNSUP_REL) if not os.path.isabs(UNSUP_REL) else UNSUP_REL
+
+# Absolute pair used only in params/input/script arguments.
+UNSUP = os.path.join(PIPE_ROOT, UNSUP_REL)
+vprint(f"[Snakefile] UNSUP_REL (final, relative) = {UNSUP_REL}")
 vprint(f"[Snakefile] UNSUP (final, absolute) = {UNSUP}")
 
 # Inputs: absolute
 VST_JOINT = cfgabs("paths", "vst_joint_rds")
 
-# Feature list files: absolute (for --directory compatibility)
+# Feature list files: REL for outputs, ABS for params/input usage
+FEATURESETS_DIR_REL = os.path.join(UNSUP_REL, "feature_selection_unsupervised", f"feature_sets_top{TOPN}")
 FEATURESETS_DIR = os.path.join(UNSUP, "feature_selection_unsupervised", f"feature_sets_top{TOPN}")
-FEATURELIST_TEMPLATE = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}" + "_{m}.txt")
+FEATURELIST_TEMPLATE = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}" + "_{m}.txt")
 FEATURELIST_FILES = expand(FEATURELIST_TEMPLATE, m=FEATURE_METHODS)
 
-# Outputs: absolute (for --directory compatibility)
-FEATURE_METHOD_OUTDIR = os.path.join(UNSUP, "feature_selection_unsupervised", "featuresets")
-TUMOUR_NH_INPUT_ROOT = os.path.join(UNSUP, "tumour_neighbourhoods_input")
+# Output roots (REL declarations)
+FEATURE_METHOD_OUTDIR = os.path.join(UNSUP_REL, "feature_selection_unsupervised", "featuresets")
+TUMOUR_NH_INPUT_ROOT = os.path.join(UNSUP_REL, "tumour_neighbourhoods_input")
 
 # Pipeline target is profile-specific (so BRCA/NBL/RBL don't share one file)
-PIPELINE_TARGET = os.path.join(UNSUP, "pipeline_targets.done")
+PIPELINE_TARGET = os.path.join(UNSUP_REL, "pipeline_targets.done")
 
 rule feature_selection_unsupervised:
     input:
@@ -274,13 +287,14 @@ rule feature_selection_unsupervised:
     output:
         # Only the per-method feature set gene lists are required by downstream rules.
         # The joint scores and final HVG list are optional side products.
-        feature_lists = FEATURELIST_FILES  # Already absolute (FEATURESETS_DIR is absolute)
+        feature_lists = FEATURELIST_FILES,
+        hvg_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt")
     params:
         # Use a fixed profile-specific directory under UNSUP for all feature selection
         # outputs to avoid any drift with config-relative paths.
         outdir = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised")
     log: os.path.join(LOGROOT, "feature_selection_unsupervised.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         mkdir -p "{params.outdir}" "{FEATURESETS_DIR}"
@@ -304,7 +318,7 @@ TUMOUR_VST = cfgabs("paths", "tumour_vst_rds")  # Input needs absolute
 AGN_ROOT_REL = cfg["paths"].get("agnostic_cluster_root")
 if AGN_ROOT_REL is None:
     # Default: use profile-specific path
-    AGN_ROOT_REL = os.path.join(UNSUP, "agnostic_clustering")
+    AGN_ROOT_REL = os.path.join(UNSUP_REL, "agnostic_clustering")
 else:
     # If explicitly set, ensure it includes profile if not already present
     # Use path segments, not substring matching
@@ -317,7 +331,7 @@ else:
                 AGN_ROOT_REL = os.path.join("results/unsupervised", profile_name, "agnostic_clustering")
         else:
             # Otherwise, prepend profile-specific base
-            AGN_ROOT_REL = os.path.join(UNSUP, "agnostic_clustering")
+            AGN_ROOT_REL = os.path.join(UNSUP_REL, "agnostic_clustering")
 
 # Use relative for outputs (consistent DAG), absolute only when needed for params/scripts
 # Ensure AGN_ROOT_REL is truly relative (not mixing with absolute UNSUP)
@@ -425,7 +439,7 @@ rule build_agnostic_mats:
         cell_filt = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds"),
         tumour_filt = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
     log: os.path.join(LOGROOT, "build_agnostic_mats_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -447,7 +461,7 @@ rule pca_hc_cell:
         dist = lambda wc: dir_to_dist(wc.direction),
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_pca_hc_cell.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -469,7 +483,7 @@ rule pca_hc_tumour:
         dist = lambda wc: dir_to_dist(wc.direction),
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_pca_hc_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -492,7 +506,7 @@ rule pca_hc_cell_tumour:
         dist = lambda wc: dir_to_dist(wc.direction),
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_pca_hc_cell_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -514,7 +528,7 @@ rule pca_kmeans_cell:
         kmax = AGN_KMAX,
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_pca_kmeans_cell.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -536,7 +550,7 @@ rule pca_kmeans_tumour:
         kmax = AGN_KMAX,
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_pca_kmeans_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -559,7 +573,7 @@ rule pca_kmeans_cell_tumour:
         kmax = AGN_KMAX,
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_pca_kmeans_cell_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -580,7 +594,7 @@ rule hc_cell:
         dist = lambda wc: dir_to_dist(wc.direction),
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_hc_cell.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -601,7 +615,7 @@ rule hc_tumour:
         dist = lambda wc: dir_to_dist(wc.direction),
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_hc_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -623,7 +637,7 @@ rule hc_cell_tumour:
         dist = lambda wc: dir_to_dist(wc.direction),
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_hc_cell_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -644,7 +658,7 @@ rule kmeans_cell:
         kmax = AGN_KMAX,
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_kmeans_cell.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -665,7 +679,7 @@ rule kmeans_tumour:
         kmax = AGN_KMAX,
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_kmeans_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -687,7 +701,7 @@ rule kmeans_cell_tumour:
         kmax = AGN_KMAX,
         seed = AGN_SEED
     log: os.path.join(LOGROOT, "agnostic_{direction}_kmeans_cell_tumour.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -703,7 +717,7 @@ rule agnostic_all_directions:
 
 # STEP 2: Consensus Clustering
 
-CONS_ROOT = os.path.join(UNSUP, "consensus")
+CONS_ROOT = os.path.join(UNSUP_REL, "consensus")
 CONS_KM_KINDS = ["ccp_kmeans_expr_cell_tumour", "ccp_kmeans_pca_cell_tumour", "ccp_kmeans_expr_cell", "ccp_kmeans_pca_cell", "ccp_kmeans_expr_tumour", "ccp_kmeans_pca_tumour"]
 CONS_HC_KINDS = ["ccp_hc_expr_cell_tumour", "ccp_hc_pca_cell_tumour", "ccp_hc_expr_cell", "ccp_hc_pca_cell", "ccp_hc_expr_tumour", "ccp_hc_pca_tumour"]
 
@@ -737,7 +751,7 @@ rule consensus_ccp_cell_tumour:
         mode = lambda wc: kind_to_mode(wc.kind),
         alg = lambda wc: kind_to_alg(wc.kind)
     log: os.path.join(LOGROOT, "consensus_ccp_{direction}_{kind}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=CONS_DIRECTION_PATTERN,
         kind=CONS_KIND_PATTERN
@@ -764,7 +778,7 @@ rule consensus_all_directions:
 # STEP 3: Tumour Neighbourhood Analysis
 # KEY FIX: Separate map_rds files for PAM50 and HVG
 
-TUMOUR_NH_ROOT = os.path.join(UNSUP, "tumour_neighbourhoods")
+TUMOUR_NH_ROOT = os.path.join(UNSUP_REL, "tumour_neighbourhoods")
 
 # Always derive defaults from the profile-specific tumour_nh_input_root
 # (keeps the pipeline portable; config can still override)
@@ -837,7 +851,7 @@ if USE_PAM50:
             expr_rds = TUMOUR_NH_EXPR_PAM50,
             map_rds = TUMOUR_NH_MAP_RDS_PAM50
         log: os.path.join(LOGROOT, "build_tumour_neighbourhood_input_pam50.log")
-        conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        conda: CONDA_ENV_R
         shell:
             r'''
             mkdir -p $(dirname {output.expr_rds}) $(dirname {output.map_rds})
@@ -859,7 +873,7 @@ rule build_tumour_neighbourhood_input_hvg:
     params:
         direction = "hvg"
     log: os.path.join(LOGROOT, "build_tumour_neighbourhood_input_hvg.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         mkdir -p $(dirname {output.expr_rds})
@@ -887,7 +901,7 @@ rule build_tumour_neighbourhood_input_featureset:
         expr_rds = os.path.join(FEATURE_METHOD_OUTDIR, "{feature}", "expr_submatrix.rds"),
         map_rds = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_{feature}.rds")
     log: os.path.join(LOGROOT, "build_tumour_neighbourhood_input_{feature}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         feature="|".join(map(re.escape, FEATURE_METHODS))
     shell:
@@ -922,7 +936,7 @@ rule tumour_neighbourhoods_hc_hvg:
         script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "tumour_neighbourhoods_hc_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
     shell:
@@ -950,7 +964,7 @@ if USE_PAM50:
             script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
             config = os.path.join(BASE, "config", "config.yaml")
         log: os.path.join(LOGROOT, "tumour_neighbourhoods_hc_{direction}.log")
-        conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        conda: CONDA_ENV_R
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
         shell:
@@ -978,7 +992,7 @@ rule tumour_neighbourhoods_hc_featureset:
         script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "tumour_neighbourhoods_hc_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=FEATURE_SET_DIR_PATTERN
     shell:
@@ -1006,7 +1020,7 @@ rule tumour_neighbourhoods_km_any:
         script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "tumour_neighbourhoods_km_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
     shell:
@@ -1033,7 +1047,7 @@ rule tumour_neighbourhood_p_consensus_hvg:
         script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "tumour_neighbourhood_p_consensus_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
     shell:
@@ -1058,7 +1072,7 @@ if USE_PAM50:
             script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
             config = os.path.join(BASE, "config", "config.yaml")
         log: os.path.join(LOGROOT, "tumour_neighbourhood_p_consensus_{direction}.log")
-        conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        conda: CONDA_ENV_R
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
         shell:
@@ -1084,7 +1098,7 @@ rule tumour_neighbourhood_p_consensus_featureset:
         script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "tumour_neighbourhood_p_consensus_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=FEATURE_SET_DIR_PATTERN
     shell:
@@ -1121,7 +1135,7 @@ rule dsmz_dsmz_similarity_graph:
         script = os.path.join(BASE, "scripts", "compute_dsmz_dsmz_similarity.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "dsmz_dsmz_similarity_graph_{direction}.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
     shell:
@@ -1161,7 +1175,7 @@ rule summarize_p_consensus_all:
         config = os.path.join(BASE, "config", "config.yaml"),
         threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
     log: os.path.join(LOGROOT, "summarize_p_consensus_all.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         mkdir -p {P_CONS_ALL_DIR}
@@ -1210,7 +1224,7 @@ rule representativeness_score:
     log:
         os.path.join(LOGROOT, "representativeness_score.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r"""
         set -euo pipefail
@@ -1256,7 +1270,7 @@ rule tumour_neighbourhood_qc_umap_hvg:
     log: os.path.join(LOGROOT, "tumour_neighbourhood_qc_umap_{direction}.log")
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
-    conda: os.path.join(BASE, "envs", "tumour_nh_qc.yaml")
+    conda: CONDA_ENV_QC
     shell:
         r'''
         mkdir -p $(dirname {output.qc_tsv})
@@ -1289,7 +1303,7 @@ if USE_PAM50:
         log: os.path.join(LOGROOT, "tumour_neighbourhood_qc_umap_{direction}.log")
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
-        conda: os.path.join(BASE, "envs", "tumour_nh_qc.yaml")
+        conda: CONDA_ENV_QC
         shell:
             r'''
             mkdir -p $(dirname {output.qc_tsv})
@@ -1322,7 +1336,7 @@ rule tumour_neighbourhood_qc_umap_featureset:
     log: os.path.join(LOGROOT, "tumour_neighbourhood_qc_umap_{direction}.log")
     wildcard_constraints:
         direction=FEATURE_SET_DIR_PATTERN
-    conda: os.path.join(BASE, "envs", "tumour_nh_qc.yaml")
+    conda: CONDA_ENV_QC
     shell:
         r'''
         mkdir -p $(dirname {output.qc_tsv})
@@ -1390,7 +1404,8 @@ rule pipeline_targets:
 
 # Pan-cancer specific log directory (separate from profile logs)
 PAN_LOGROOT = os.path.join(PIPE_ROOT, "logs", "pan_cancer")
-os.makedirs(PAN_LOGROOT, exist_ok=True)
+if not workflow.dryrun:
+    os.makedirs(PAN_LOGROOT, exist_ok=True)
 
 # Respect "disable_pca_everywhere" for pan-cancer
 PAN_DISABLE_PCA = bool(PAN_CFG.get("disable_pca_everywhere", False))
@@ -1433,19 +1448,22 @@ PAN_TNH_ROOT  = os.path.join(PAN_UNSUP, "tumour_neighbourhoods")
 # Pan-cancer graphs (DSMZ-DSMZ similarity)
 PAN_GRAPH_ROOT = os.path.join(PAN_OUTDIR, "graphs", "dsmz_dsmz")
 PAN_GRAPH_LOGROOT = os.path.join(PAN_LOGROOT, "graphs")
-os.makedirs(PAN_GRAPH_LOGROOT, exist_ok=True)
+if not workflow.dryrun:
+    os.makedirs(PAN_GRAPH_LOGROOT, exist_ok=True)
 PAN_GRAPH_MODES = ["global", "within"]
 
 # Pan-cancer ensemble directories
 PAN_ENS_OUTDIR = os.path.join(PAN_OUTDIR, "ensemble")
 PAN_ENS_LOGROOT = os.path.join(PAN_LOGROOT, "ensemble")
-os.makedirs(PAN_ENS_LOGROOT, exist_ok=True)
+if not workflow.dryrun:
+    os.makedirs(PAN_ENS_LOGROOT, exist_ok=True)
 
 # Pan-cancer p-consensus directories
 PAN_CANCERS = list(PAN_CFG.get("cancers", PAN_PROFILES))  # or explicit ["brca","nbl","rbl"]
 PAN_PCONS_OUTDIR = os.path.join(PAN_OUTDIR, "p_consensus")
 PAN_PCONS_LOGROOT = os.path.join(PAN_LOGROOT, "p_consensus")
-os.makedirs(PAN_PCONS_LOGROOT, exist_ok=True)
+if not workflow.dryrun:
+    os.makedirs(PAN_PCONS_LOGROOT, exist_ok=True)
 
 # Cluster kinds and views (mirrors per-disease)
 PAN_CLUSTER_KINDS = ["hc", "kmeans"]
@@ -1532,7 +1550,7 @@ rule pan_cancer_joint_benchmark:
     log:
         os.path.join(PAN_LOGROOT, "pan_cancer_joint_benchmark.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1550,7 +1568,7 @@ rule pan_cancer_joint_benchmark:
           mkdir -p "{params.outdir}/featuresets/${{m}}"
         done
 
-        Rscript "/work/ugbogu/pipeline/scripts/pan_cancer_joint_benchmark.R" \
+        Rscript "{SCRIPTS_DIR}/pan_cancer_joint_benchmark.R" \
           --pipe_root "{PIPE_ROOT}" \
           --outdir "{params.outdir}" \
           --profiles "{params.profiles}" \
@@ -1589,7 +1607,7 @@ rule pan_cancer_joint_benchmark:
 #     log:
 #         os.path.join(PAN_ENS_LOGROOT, "clusterings_{direction}.log")
 #     conda:
-#         "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+#         CONDA_ENV_R
 #     shell:
 #         r'''
 #         set -euo pipefail
@@ -1607,7 +1625,12 @@ rule pan_cancer_joint_benchmark:
 
 rule pan_cancer_ccp_consensus:
     input:
-        clusters_dir = lambda wc: os.path.join(PAN_ENS_OUTDIR, "clusterings", wc.direction),
+        hc_cell = pan_agn_out("{direction}", "hc", "cell"),
+        hc_tumour = pan_agn_out("{direction}", "hc", "tumour"),
+        hc_cell_tumour = pan_agn_out("{direction}", "hc", "cell_tumour"),
+        km_cell = pan_agn_out("{direction}", "kmeans", "cell"),
+        km_tumour = pan_agn_out("{direction}", "kmeans", "tumour"),
+        km_cell_tumour = pan_agn_out("{direction}", "kmeans", "cell_tumour"),
         meta = os.path.join(PAN_OUTDIR, "inputs", "joint_metadata.tsv"),
         cfg  = CFGFILE_ABS
     output:
@@ -1621,14 +1644,19 @@ rule pan_cancer_ccp_consensus:
     log:
         os.path.join(PAN_ENS_LOGROOT, "ccp_consensus_{direction}.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
         mkdir -p "{params.outdir}"
 
         Rscript "{SCRIPTS_DIR}/pan_cancer_ccp_consensus.R" \
-          --clusters_dir "{input.clusters_dir}" \
+          --hc_cell "{input.hc_cell}" \
+          --hc_tumour "{input.hc_tumour}" \
+          --hc_cell_tumour "{input.hc_cell_tumour}" \
+          --km_cell "{input.km_cell}" \
+          --km_tumour "{input.km_tumour}" \
+          --km_cell_tumour "{input.km_cell_tumour}" \
           --meta_tsv "{input.meta}" \
           --direction "{params.direction}" \
           --kinds "{params.kinds}" \
@@ -1656,7 +1684,7 @@ rule pan_cancer_p_consensus_per_cancer:
     log:
         os.path.join(PAN_PCONS_LOGROOT, "pcons_{cancer}_{direction}.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1705,7 +1733,7 @@ rule hc_cell_pan:
     log:
         os.path.join(PAN_LOGROOT, "agnostic_clustering", "{direction}", "hc_cell.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1730,7 +1758,7 @@ rule hc_tumour_pan:
     log:
         os.path.join(PAN_LOGROOT, "agnostic_clustering", "{direction}", "hc_tumour.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1755,7 +1783,7 @@ rule hc_cell_tumour_pan:
     log:
         os.path.join(PAN_LOGROOT, "agnostic_clustering", "{direction}", "hc_cell_tumour.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1780,7 +1808,7 @@ rule kmeans_cell_pan:
     log:
         os.path.join(PAN_LOGROOT, "agnostic_clustering", "{direction}", "kmeans_cell.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1805,7 +1833,7 @@ rule kmeans_tumour_pan:
     log:
         os.path.join(PAN_LOGROOT, "agnostic_clustering", "{direction}", "kmeans_tumour.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1830,7 +1858,7 @@ rule kmeans_cell_tumour_pan:
     log:
         os.path.join(PAN_LOGROOT, "agnostic_clustering", "{direction}", "kmeans_cell_tumour.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1860,7 +1888,7 @@ rule consensus_ccp_cell_tumour_pan:
     log:
         os.path.join(PAN_LOGROOT, "consensus", "{direction}", "consensus_ccp_cell_tumour.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1891,7 +1919,7 @@ rule tumour_neighbourhood_p_consensus_pan_featureset:
     log:
         os.path.join(PAN_LOGROOT, "tumour_neighbourhoods", "{direction}", "p_consensus.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -1942,7 +1970,7 @@ rule pan_cancer_dsmz_dsmz_graph:
     log:
         os.path.join(PAN_GRAPH_LOGROOT, "dsmz_dsmz_{mode}_{direction}.log")
     conda:
-        "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+        CONDA_ENV_R
     shell:
         r"""
         set -euo pipefail
@@ -1994,7 +2022,7 @@ rule pan_summarize_p_consensus_all:
         config = os.path.join(BASE, "config", "config.yaml"),
         threshold = lambda wc: PAN_CFG.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
     log: os.path.join(PAN_LOGROOT, "summarize_p_consensus_all.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -2017,7 +2045,7 @@ rule pan_plot_winners_by_frac_ge_thr:
         script = os.path.join(BASE, "scripts", "plot_winners_by_frac_ge_thr.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(PAN_LOGROOT, "plot_winners_by_frac_ge_thr.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -2050,7 +2078,7 @@ rule pan_resolve_dsmz_graph_neighbors:
         k = 2,  # minimum reps for kofn mode
         graph_root = os.path.join(PAN_GRAPH_ROOT, "within")  # Pan-cancer graphs: use "within" mode for same-cancer-type only
     log: os.path.join(PAN_LOGROOT, "resolve_dsmz_graph_neighbors.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         set -euo pipefail
@@ -2080,7 +2108,7 @@ rule pan_visualize_resolved_dsmz_graph:
         script = os.path.join(BASE, "scripts", "visualize_resolved_dsmz_graph.py"),
         cancer_type = "Pan-Cancer"
     log: os.path.join(PAN_LOGROOT, "visualize_resolved_dsmz_graph.log")
-    conda: os.path.join(BASE, "envs", "python-graph-env.yaml")
+    conda: CONDA_ENV_PY
     shell:
         r'''
         set -euo pipefail
@@ -2155,7 +2183,7 @@ rule pan_cancer_umap_hvg:
         n_neighbors = 15,
         min_dist = 0.1
     log: os.path.join(BASE, "logs", "pan_cancer_umap_hvg.log")
-    conda: "/work/ugbogu/pipeline/envs/tcga-r-env.yaml"
+    conda: CONDA_ENV_R
     shell:
         r'''
         mkdir -p {params.outdir}
