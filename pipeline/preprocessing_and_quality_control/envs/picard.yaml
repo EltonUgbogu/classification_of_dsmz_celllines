@@ -6,3 +6,4 @@ channels:
 dependencies:
   - openjdk=17
   - samtools=1.17
+  - picard
