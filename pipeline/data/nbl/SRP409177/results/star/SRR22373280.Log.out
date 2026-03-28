@@ -1,14 +1,14 @@
 STAR version=2.7.10b
 STAR compilation time,server,dir=2023-05-25T06:56:23+0000 :/opt/conda/conda-bld/star_1684997536154/work/source
 ##### Command Line:
-/work/ugbogu/pipeline/preprocessing_and_quality_control/.snakemake/conda/a90b04e1b67badf607c0af62e4a4e755_/bin/STAR-avx2 --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44 --readFilesIn /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz --readFilesCommand zcat --outFileNamePrefix /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993. --outSAMtype BAM SortedByCoordinate --quantMode GeneCounts --twopassMode Basic --runThreadN 8 --limitBAMsortRAM 32000000000
+/work/ugbogu/pipeline/preprocessing_and_quality_control/.snakemake/conda/a90b04e1b67badf607c0af62e4a4e755_/bin/STAR-avx2 --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44 --readFilesIn /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz --readFilesCommand zcat --outFileNamePrefix /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280. --outSAMtype BAM SortedByCoordinate --quantMode GeneCounts --twopassMode Basic --runThreadN 8 --limitBAMsortRAM 32000000000
 ##### Initial USER parameters from Command Line:
-outFileNamePrefix                 /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993.
+outFileNamePrefix                 /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280.
 ###### All USER parameters from Command Line:
 genomeDir                     /work/ugbogu/pipeline/data/reference/star_gencode_v44     ~RE-DEFINED
-readFilesIn                   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz        ~RE-DEFINED
+readFilesIn                   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz        ~RE-DEFINED
 readFilesCommand              zcat        ~RE-DEFINED
-outFileNamePrefix             /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993.     ~RE-DEFINED
+outFileNamePrefix             /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280.     ~RE-DEFINED
 outSAMtype                    BAM   SortedByCoordinate        ~RE-DEFINED
 quantMode                     GeneCounts        ~RE-DEFINED
 twopassMode                   Basic     ~RE-DEFINED
@@ -19,37 +19,37 @@ limitBAMsortRAM               32000000000     ~RE-DEFINED
 ##### Final user re-defined parameters-----------------:
 runThreadN                        8
 genomeDir                         /work/ugbogu/pipeline/data/reference/star_gencode_v44
-readFilesIn                       /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz   
+readFilesIn                       /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz   
 readFilesCommand                  zcat   
 limitBAMsortRAM                   32000000000
-outFileNamePrefix                 /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993.
+outFileNamePrefix                 /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280.
 outSAMtype                        BAM   SortedByCoordinate   
 quantMode                         GeneCounts   
 twopassMode                       Basic
 
 -------------------------------
 ##### Final effective command line:
-/work/ugbogu/pipeline/preprocessing_and_quality_control/.snakemake/conda/a90b04e1b67badf607c0af62e4a4e755_/bin/STAR-avx2   --runThreadN 8   --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44   --readFilesIn /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz      --readFilesCommand zcat      --limitBAMsortRAM 32000000000   --outFileNamePrefix /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993.   --outSAMtype BAM   SortedByCoordinate      --quantMode GeneCounts      --twopassMode Basic
+/work/ugbogu/pipeline/preprocessing_and_quality_control/.snakemake/conda/a90b04e1b67badf607c0af62e4a4e755_/bin/STAR-avx2   --runThreadN 8   --genomeDir /work/ugbogu/pipeline/data/reference/star_gencode_v44   --readFilesIn /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz      --readFilesCommand zcat      --limitBAMsortRAM 32000000000   --outFileNamePrefix /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280.   --outSAMtype BAM   SortedByCoordinate      --quantMode GeneCounts      --twopassMode Basic
 ----------------------------------------
 
 Number of fastq files for each mate = 1
 
    Input read files for mate 1 :
--rw-r--r-- 1 ugbogu users 4118088711 Mar 22 21:44 /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2230522242 Mar 22 14:25 /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz
 
    readsCommandsFile:
-exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARtmp/tmp.fifo.read1"
+exec > "/work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280._STARtmp/tmp.fifo.read1"
 echo FILE 0
-zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz"
+zcat      "/work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz"
 
 
    Input read files for mate 2 :
--rw-r--r-- 1 ugbogu users 4260029605 Mar 22 21:44 /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz
+-rw-r--r-- 1 ugbogu users 2336248709 Mar 22 14:25 /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz
 
    readsCommandsFile:
-exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARtmp/tmp.fifo.read2"
+exec > "/work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280._STARtmp/tmp.fifo.read2"
 echo FILE 0
-zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz"
+zcat      "/work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz"
 
 ParametersSolo: --soloCellFilterType CellRanger2.2 filtering parameters:  3000 0.99 10
 Finished loading and checking parameters
@@ -270,7 +270,7 @@ Number of real (reference) chromosomes= 194
 193	KI270756.1	79590	3137863680
 194	KI270757.1	71251	3138125824
 --sjdbOverhang = 100 taken from the generated genome
-Started loading the genome: Sat Mar 28 13:05:55 2026
+Started loading the genome: Sat Mar 28 14:40:03 2026
 
 Genome: size given as a parameter = 3198424859
 SA: size given as a parameter = 24819019132
@@ -284,148 +284,148 @@ Loading Genome ... done! state: good=1 eof=0 fail=0 bad=0; loaded 3198424859 byt
 SA file size: 24819019132 bytes; state: good=1 eof=0 fail=0 bad=0
 Loading SA ... done! state: good=1 eof=0 fail=0 bad=0; loaded 24819019132 bytes
 Loading SAindex ... done: 1565873619 bytes
-Finished loading the genome: Sat Mar 28 13:06:06 2026
+Finished loading the genome: Sat Mar 28 14:40:15 2026
 
 Processing splice junctions database sjdbN=298691,   pGe.sjdbOverhang=100 
 alignIntronMax=alignMatesGapMax=0, the max intron size will be approximately determined by (2^winBinNbits)*winAnchorDistNbins=589824
 Created thread # 1
 Starting to map file # 0
-mate 1:   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz
-mate 2:   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz
+mate 1:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz
+mate 2:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz
 Created thread # 2
 Created thread # 3
 Created thread # 4
 Created thread # 5
 Created thread # 6
 Created thread # 7
-Thread #0 end of input stream, nextChar=-1
-Completed: thread #5
-Completed: thread #2
-Completed: thread #6
+Thread #6 end of input stream, nextChar=-1
 Completed: thread #4
-Completed: thread #7
 Completed: thread #3
-Completed: thread #1
+Completed: thread #2
 Completed: thread #0
+Completed: thread #1
 Joined thread # 1
 Joined thread # 2
 Joined thread # 3
 Joined thread # 4
+Completed: thread #5
 Joined thread # 5
+Completed: thread #6
 Joined thread # 6
+Completed: thread #7
 Joined thread # 7
-Mar 28 13:33:03   Loaded database junctions from the generated genome /work/ugbogu/pipeline/data/reference/star_gencode_v44//sjdbList.out.tab: 298691 total junctions
+Mar 28 14:46:17   Loaded database junctions from the generated genome /work/ugbogu/pipeline/data/reference/star_gencode_v44//sjdbList.out.tab: 298691 total junctions
 
-Mar 28 13:33:03   Loaded database junctions from the 1st pass file: /work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARpass1//SJ.out.tab: 560774 total junctions
+Mar 28 14:46:17   Loaded database junctions from the 1st pass file: /work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280._STARpass1//SJ.out.tab: 553046 total junctions
 
-Mar 28 13:33:03   Finished preparing junctions
-Mar 28 13:33:03 ..... inserting junctions into the genome indices
-Mar 28 13:33:19   Finished SA search: number of new junctions=81659, old junctions=298691
-Mar 28 13:33:26   Finished sorting SA indicesL nInd=32663288
-Genome size with junctions=3214838318  3138387968   76450350
+Mar 28 14:46:18   Finished preparing junctions
+Mar 28 14:46:18 ..... inserting junctions into the genome indices
+Mar 28 14:46:33   Finished SA search: number of new junctions=81838, old junctions=298691
+Mar 28 14:46:39   Finished sorting SA indicesL nInd=32734870
+Genome size with junctions=3214874297  3138387968   76486329
 GstrandBit1=32   GstrandBit=32
-Mar 28 13:34:22   Finished inserting junction indices
-Mar 28 13:34:29   Finished SAi
-Mar 28 13:34:29 ..... finished inserting junctions into genome
+Mar 28 14:47:33   Finished inserting junction indices
+Mar 28 14:47:39   Finished SAi
+Mar 28 14:47:39 ..... finished inserting junctions into genome
 
    Input read files for mate 1 :
--rw-r--r-- 1 ugbogu users 4118088711 Mar 22 21:44 /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz
+-rw-r--r-- 1 ugbogu users 2230522242 Mar 22 14:25 /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz
 
    readsCommandsFile:
-exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARtmp/tmp.fifo.read1"
+exec > "/work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280._STARtmp/tmp.fifo.read1"
 echo FILE 0
-zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz"
+zcat      "/work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz"
 
 
    Input read files for mate 2 :
--rw-r--r-- 1 ugbogu users 4260029605 Mar 22 21:44 /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz
+-rw-r--r-- 1 ugbogu users 2336248709 Mar 22 14:25 /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz
 
    readsCommandsFile:
-exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010993._STARtmp/tmp.fifo.read2"
+exec > "/work/ugbogu/pipeline/data/nbl/SRP409177/results/star/SRR22373280._STARtmp/tmp.fifo.read2"
 echo FILE 0
-zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz"
+zcat      "/work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz"
 
 Created thread # 1
 Starting to map file # 0
-mate 1:   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_1.fastq.gz
-mate 2:   /work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010993_2.fastq.gz
+mate 1:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_1.fastq.gz
+mate 2:   /work/ugbogu/pipeline/data/nbl/SRP409177/fastq/SRR22373280_2.fastq.gz
 Created thread # 2
 Created thread # 3
 Created thread # 4
 Created thread # 5
 Created thread # 6
 Created thread # 7
-BAM sorting: 161496 mapped reads
+BAM sorting: 207679 mapped reads
 BAM sorting bins genomic start loci:
-1	0	28508601
-2	0	120439576
-3	0	165401194
-4	0	244855906
-5	1	86987725
-6	1	159219263
-7	1	231713247
-8	2	52746777
-9	3	6824519
-10	3	185162912
-11	4	112168767
-12	5	3153903
-13	5	31356247
-14	5	44250082
-15	5	154810043
-16	6	38742058
-17	6	100328985
-18	7	30658120
-19	8	33900177
-20	8	132329205
-21	9	73807393
-22	10	33286951
-23	10	65585503
-24	11	6510330
-25	11	56257299
-26	11	124913567
-27	13	55142706
-28	14	22539223
-29	14	76728622
-30	15	14951666
-31	15	22532046
-32	15	72795001
-33	16	19063921
-34	16	19064018
-35	16	19112474
-36	16	42568933
-37	16	77402377
-38	18	5041167
-39	18	42248695
-40	19	25676755
-41	20	8215630
-42	20	8398761
-43	20	26112115
-44	21	39966002
-45	22	73823592
-46	24	2524
-47	36	117914
-48	169	130461
-Thread #1 end of input stream, nextChar=-1
-Completed: thread #0
-Completed: thread #2
-Completed: thread #3
-Completed: thread #4
-Completed: thread #5
-Completed: thread #6
+1	0	32334467
+2	0	98348922
+3	0	167965938
+4	1	11578357
+5	1	91631334
+6	1	184774723
+7	2	15738552
+8	2	65879299
+9	2	195255559
+10	3	124632945
+11	4	41493559
+12	4	132298836
+13	5	20902572
+14	5	56584007
+15	5	125915416
+16	6	18869642
+17	6	75339363
+18	6	129834375
+19	7	17345097
+20	7	79665269
+21	8	9442129
+22	8	63013308
+23	8	136727067
+24	9	91995850
+25	10	64650609
+26	11	6563907
+27	11	67297629
+28	12	20087116
+29	12	109424227
+30	13	49586654
+31	13	49862553
+32	13	49862670
+33	13	77453310
+34	14	71283179
+35	15	52492918
+36	16	19112459
+37	16	57510852
+38	17	47107279
+39	18	49098135
+40	20	8209813
+41	20	46411569
+42	22	74222154
+43	24	873
+44	24	1838
+45	24	2260
+46	24	2655
+47	24	2987
+48	24	12830
+Thread #3 end of input stream, nextChar=-1
 Completed: thread #7
 Completed: thread #1
+Completed: thread #0
 Joined thread # 1
+Completed: thread #4
+Completed: thread #2
 Joined thread # 2
+Completed: thread #6
+Completed: thread #3
 Joined thread # 3
 Joined thread # 4
+Completed: thread #5
 Joined thread # 5
 Joined thread # 6
 Joined thread # 7
-Mar 28 14:20:48 ..... finished mapping
+Mar 28 14:54:45 ..... finished mapping
 RAM after mapping:
-VmPeak:	35452484 kB; VmSize:	34011688 kB; VmHWM:	34294216 kB; VmRSS:	33116708 kB; 
+VmPeak:	35450940 kB; VmSize:	34004824 kB; VmHWM:	34163348 kB; VmRSS:	32847224 kB; 
 RAM after freeing genome index memory:
-VmPeak:	35452484 kB; VmSize:	 3306048 kB; VmHWM:	34294216 kB; VmRSS:	 2593124 kB; 
-Mar 28 14:20:49 ..... started sorting BAM
-Max memory needed for sorting = 829141221
+VmPeak:	35450940 kB; VmSize:	 3299184 kB; VmHWM:	34163348 kB; VmRSS:	 2322892 kB; 
+Mar 28 14:54:46 ..... started sorting BAM
+Max memory needed for sorting = 499460576
 ALL DONE!

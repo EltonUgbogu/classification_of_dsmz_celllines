@@ -12,20 +12,20 @@ from snakemake.io import expand
 # -----------------------------------------------------------------------------
 # PATHS / PROFILE SETUP (MUST BE DEFINED BEFORE RULES)
 # -----------------------------------------------------------------------------
-# Anchor path resolution to the main Snakefile to ensure that paths are not
-# inadvertently resolved relative to Snakemake's installation directory
-# (site-packages) when `--directory` or the working directory differ.
+# Anchors all path resolution to the main Snakefile location, preventing
+# inadvertent resolution relative to Snakemake's site-packages directory when
+# --directory or the working directory differs from the pipeline root.
 _snakefile_path = getattr(workflow, "main_snakefile", None) or __file__
 BASE = os.path.dirname(os.path.abspath(os.path.realpath(_snakefile_path)))
 SCRIPTS_DIR = os.path.join(BASE, "scripts")
 PIPE_ROOT = BASE
 
-# Centralized conda env paths (avoid hardcoded absolute strings in rules)
+# Centralises conda environment paths to avoid hardcoded absolute strings in rules.
 CONDA_ENV_R = os.path.join(PIPE_ROOT, "envs", "tcga-r-env.yaml")
 CONDA_ENV_PY = os.path.join(PIPE_ROOT, "envs", "python-graph-env.yaml")
 CONDA_ENV_QC = os.path.join(PIPE_ROOT, "envs", "tumour_nh_qc.yaml")
 
-# Absolute config path (so Snakemake works regardless of cwd)
+# Resolves the config file path once at pipeline load time.
 CFGFILE_ABS = os.path.join(PIPE_ROOT, "config", "config.yaml")
 
 # Conda environments — single source of truth; avoids hardcoded absolute paths in every rule.
@@ -33,26 +33,26 @@ CONDA_ENV_R  = os.path.join(PIPE_ROOT, "envs", "tcga-r-env.yaml")
 CONDA_ENV_PY = os.path.join(PIPE_ROOT, "envs", "python-graph-env.yaml")
 CONDA_ENV_QC = os.path.join(PIPE_ROOT, "envs", "tumour_nh_qc.yaml")
 
-# Tell Snakemake to load config from the absolute path
+# Instructs Snakemake to load configuration from the resolved absolute path.
 configfile: CFGFILE_ABS
 
-# Verbose mode: set --config verbose=1 to enable debug prints
+# Verbose mode: enables debug-level prints when --config verbose=1 is passed.
 VERBOSE = bool(int(config.get("verbose", 0)))
 
 def vprint(*args):
-    """Print only if VERBOSE is enabled."""
+    """Prints debug messages only when verbose mode is active."""
     if VERBOSE:
         print(*args)
 
-# Profile name: prefer CLI --config pipeline_profile=..., fallback to config, then default
-# This is a temporary default - will be overwritten after profile validation
+# Reads the pipeline profile from --config; falls back to config file, then 'default'.
+# This temporary value is overwritten after profile validation below.
 profile_name = config.get("pipeline_profile") or config.get("profile") or "default"
 
-# Log root (profile-scoped) - temporary default
+# Initialises log root under a per-profile subdirectory; overwritten after validation.
 LOGROOT = os.path.join(PIPE_ROOT, "logs", profile_name)
 
-# Define a safe default for PIPELINE_TARGET so parsing never fails.
-# (Later in the Snakefile this will be overwritten with real profile-specific targets.)
+# Defines a safe default for PIPELINE_TARGET so DAG parsing never fails before
+# profile-specific targets are resolved later in the Snakefile.
 PIPELINE_TARGET = []
 
 # -----------------------------------------------------------------------------
@@ -61,21 +61,21 @@ PIPELINE_TARGET = []
 
 rule all:
     input:
-        lambda wc: PIPELINE_TARGET,  # Lazy evaluation - defined after profile setup
+        # Lazily evaluated so the target list is not resolved until after profile
+        # setup and PIPELINE_TARGET is overwritten with profile-specific outputs.
+        lambda wc: PIPELINE_TARGET,
         # Pan-cancer UMAP (optional, can be run independently)
         # Uncomment to include in default target:
         # os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap", "pan_cancer_hvg_umap_coords.tsv")
 
 
-# BASE, SCRIPTS_DIR, PIPE_ROOT, CFGFILE_ABS already defined at top of file
-
-
+# Utility function: converts a config-relative path to an absolute path.
 def abspath(p):
     return p if os.path.isabs(p) else os.path.abspath(os.path.join(BASE, p))
 
 
 def deep_merge(base, override):
-    """Recursively merge two dictionaries without mutating inputs."""
+    """Recursively merges two configuration dictionaries without mutating either input."""
     merged = dict(base)
     for k, v in override.items():
         if isinstance(v, dict) and isinstance(merged.get(k), dict):
@@ -86,7 +86,7 @@ def deep_merge(base, override):
 
 
 def get_profile_cfg(profile):
-    """Get merged config for a specific profile (for pan-cancer cross-profile access)."""
+    """Returns the merged configuration for a named profile, used for cross-profile pan-cancer access."""
     default_cfg = config.get("defaults", {})
     profiles = config.get("profiles", {})
     if profile not in profiles:
@@ -95,7 +95,7 @@ def get_profile_cfg(profile):
 
 
 def profile_vst_joint_abs(profile):
-    """Get absolute path to vst_joint_rds for a specific profile."""
+    """Resolves the absolute path to vst_joint_rds for a given profile."""
     cfgp = get_profile_cfg(profile)
     p = cfgp.get("paths", {}).get("vst_joint_rds")
     if not p:
@@ -105,10 +105,10 @@ def profile_vst_joint_abs(profile):
 
 if "profiles" in config:
     profiles = config.get("profiles", {})
-    # Read pipeline_profile from --config (MANDATORY - no fallbacks)
+    # Reads the mandatory pipeline_profile flag; raises an informative error if absent.
     profile_name = config.get("pipeline_profile")
-    
-    # Strict validation: pipeline_profile is REQUIRED
+
+    # Enforces strict profile selection: pipeline_profile must be supplied via --config.
     if not profile_name:
         available = ", ".join(profiles.keys())
         raise ValueError(
@@ -116,41 +116,47 @@ if "profiles" in config:
             f"Available profiles: {available}. "
             "Example: snakemake --config pipeline_profile=brca"
         )
-    
+
     if profile_name not in profiles:
         available = ", ".join(profiles.keys())
         raise ValueError(
             f"Profile '{profile_name}' not found in config. "
             f"Available profiles: {available}"
         )
-    
+
     vprint(f"[Snakefile] pipeline_profile={profile_name}")
 
+    # Merges default configuration with profile-specific overrides.
     default_cfg = config.get("defaults", {})
     cfg = deep_merge(default_cfg, profiles[profile_name])
     vprint(f"[Snakefile] Using profile: {profile_name}")
     vprint(f"[Snakefile] profile_name={profile_name}")
     vprint(f"[Snakefile] cfg.paths.unsup_root = {cfg.get('paths', {}).get('unsup_root', 'NOT SET')}")
     vprint(f"[Snakefile] cfg.analysis.cancer_type = {cfg.get('analysis', {}).get('cancer_type', 'NOT SET')}")
-    
-    # Update LOGROOT with validated profile name (overwrites temporary default)
+
+    # Updates LOGROOT to the validated, profile-specific log directory.
     LOGROOT = os.path.join(PIPE_ROOT, "logs", profile_name)
     if not workflow.dryrun:
         os.makedirs(LOGROOT, exist_ok=True)
     vprint(f"[Snakefile] LOGROOT = {LOGROOT}")
 else:
+    # Falls back to flat config when no profiles block is present.
     cfg = config
     profile_name = config.get("profile", "default")
 
 
 analysis_cfg = cfg.get("analysis", {})
+# Controls whether PAM50 gene-set directions are included in the analysis.
 USE_PAM50 = analysis_cfg.get("use_pam50", False)
 
-# Pan-cancer PCA disable flag (for cross-profile pan-cancer analysis)
+# Pan-cancer flag that disables PCA pre-processing steps across all profiles
+# to ensure comparability when merging cross-cancer datasets.
 PAN_CFG = config.get("pan_cancer", {})
 DISABLE_PCA_EVERYWHERE = bool(PAN_CFG.get("disable_pca_everywhere", False))
 vprint(f"[Snakefile] DISABLE_PCA_EVERYWHERE = {DISABLE_PCA_EVERYWHERE}")
 
+# Resolves the list of feature selection methods and distance metrics from config,
+# with sensible defaults if neither feature_sets nor features keys are present.
 FEATURE_METHODS = cfg.get("feature_sets", {}).get(
     "methods",
     cfg.get("features", {}).get(
@@ -184,11 +190,16 @@ TOPN = method_topn("MX")
 
 
 def build_directions():
+    """
+    Constructs the full list of analysis directions as method × distance combinations.
+    Appends PAM50 directions only when use_pam50 is enabled. Config-explicit direction
+    lists override the derived product when present.
+    """
     feature_dirs = [f"{m}_{d}" for m in FEATURE_METHODS for d in DISTANCES]
     pam50_dirs = ["pam50_euc", "pam50_corr"] if USE_PAM50 else []
     explicit = cfg.get("tumour_neighbourhoods", {}).get("directions")
     if explicit is not None:
-        # Filter out PAM50 directions if USE_PAM50 is False
+        # Strips PAM50 directions from explicit lists when use_pam50 is disabled.
         if not USE_PAM50:
             explicit = [d for d in explicit if not d.startswith("pam50_")]
         return explicit
@@ -197,17 +208,19 @@ def build_directions():
 
 AGN_DIRECTIONS = build_directions()
 
-# Filter function to remove PAM50 directions when use_pam50 is False
+
 def filter_pam50(directions, use_pam50: bool):
-    """Filter out PAM50 directions if use_pam50 is False"""
+    """Removes PAM50 directions from a direction list when use_pam50 is False."""
     if use_pam50:
         return directions
     return [d for d in directions if not str(d).startswith("pam50_")]
 
-# Filter both direction universes to ensure PAM50 is excluded when use_pam50=False
+
+# Applies PAM50 filter to both direction universes.
 AGN_DIRECTIONS = filter_pam50(AGN_DIRECTIONS, USE_PAM50)
 
-# Config validation: ensure PAM50 directions are only present when use_pam50 is True
+# Validates that PAM50 directions are not present when use_pam50 is disabled,
+# catching mismatches between config flags and explicit direction lists early.
 pam50_in_directions = [d for d in AGN_DIRECTIONS if d.startswith("pam50_")]
 if pam50_in_directions and not USE_PAM50:
     raise ValueError(
@@ -220,9 +233,9 @@ if USE_PAM50 and not cfg.get("pam50", {}).get("ensembl_gene_list") and not cfg.g
 
 
 def cfgrel(*keys):
-    """Get config path as relative (keeps as-is from config). Raises KeyError if key missing.
-    
-    Use this for outputs to keep them relative and portable.
+    """
+    Traverses the merged config by key path and returns the value as-is (relative).
+    Used for rule output declarations to keep paths portable across environments.
     """
     d = cfg
     for k in keys:
@@ -231,22 +244,17 @@ def cfgrel(*keys):
 
 
 def cfgabs(*keys):
-    """Get config path and convert to absolute. Raises KeyError if key missing.
-    
-    Use this for inputs/params that need absolute paths.
+    """
+    Traverses the merged config by key path and returns the value as an absolute path.
+    Used for rule inputs and params where scripts require fully resolved paths.
     """
     return abspath(cfgrel(*keys))
 
 
 def cfgget_path_rel(default_rel, *keys):
-    """Get cfg path if present (relative), otherwise use default_rel.
-    
-    Args:
-        default_rel: Relative path to use as default
-        *keys: Config keys to traverse (e.g., "paths", "tumour_nh_expr_hvg")
-    
-    Returns:
-        Relative path from config if present, otherwise default_rel
+    """
+    Returns the config value at the given key path as a relative path, falling back
+    to default_rel if any key is absent. Used in rule output declarations.
     """
     d = cfg
     for k in keys:
@@ -257,41 +265,39 @@ def cfgget_path_rel(default_rel, *keys):
 
 
 def cfgget_path_abs(default_rel, *keys):
-    """Get cfg path if present (absolute), otherwise use absolute of default_rel.
-    
-    Args:
-        default_rel: Relative path to use as default (will be made absolute)
-        *keys: Config keys to traverse (e.g., "paths", "tumour_nh_expr_hvg")
-    
-    Returns:
-        Absolute path from config if present, otherwise absolute path of default_rel
+    """
+    Returns the config value at the given key path as an absolute path, falling back
+    to the absolute form of default_rel if any key is absent. Used in params/shell contexts.
     """
     return abspath(cfgget_path_rel(default_rel, *keys))
 
 
+# Sets strict shell execution flags and pins thread counts for linear algebra libraries
+# to prevent unintended CPU over-subscription on shared HPC nodes.
 shell.prefix("set -euo pipefail; export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1; ")
 
-# --- UNSUP root (REL for outputs, ABS for params/inputs) ---
-# Keep outputs relative for proper Snakemake path handling.
+# Resolves the unsupervised output root: relative for rule output declarations
+# (Snakemake DAG portability), absolute for params/shell arguments (script compatibility).
 UNSUP_BASE = os.path.normpath(cfgget_path_rel("results/unsupervised", "paths", "unsup_root"))
 vprint(f"[Snakefile] UNSUP_BASE (from config) = {UNSUP_BASE}")
 
-# Convert absolute config paths to PIPE_ROOT-relative for output declarations.
+# Converts absolute config-sourced paths back to PIPE_ROOT-relative for output declarations.
 if os.path.isabs(UNSUP_BASE):
     UNSUP_BASE = os.path.relpath(UNSUP_BASE, PIPE_ROOT)
 
-# Ensure profile suffix exists in the relative output root.
+# Ensures the profile name is embedded as the final directory component of the output root,
+# so results from different profiles never collide under the same parent directory.
 if os.path.basename(UNSUP_BASE) != profile_name:
     UNSUP_REL = os.path.join(UNSUP_BASE, profile_name)
 else:
     UNSUP_REL = UNSUP_BASE
 
-# Absolute pair used only in params/input/script arguments.
+# Absolute counterpart used only in params, inputs, and script arguments.
 UNSUP = os.path.join(PIPE_ROOT, UNSUP_REL)
 vprint(f"[Snakefile] UNSUP_REL (final, relative) = {UNSUP_REL}")
 vprint(f"[Snakefile] UNSUP (final, absolute) = {UNSUP}")
 
-# Inputs: absolute
+# Resolves the joint VST-normalised expression matrix (absolute; external input).
 VST_JOINT = cfgabs("paths", "vst_joint_rds")
 
 # Feature list paths.
@@ -306,17 +312,31 @@ FEATURELIST_FILES   = [
     for m in FEATURE_METHODS
 ]
 
-# Relative roots for rule output: declarations (Snakemake DAG tracks these).
-# Absolute counterparts are derived via os.path.join(PIPE_ROOT, *_REL) where needed in params/shell.
+# Defines relative and absolute roots for agnostic clustering outputs and
+# tumour neighbourhood input staging directories.
 FEATURE_METHOD_OUTDIR_REL = os.path.join(UNSUP_REL, "feature_selection_unsupervised", "featuresets")
 FEATURE_METHOD_OUTDIR     = os.path.join(UNSUP,     "feature_selection_unsupervised", "featuresets")
 TUMOUR_NH_INPUT_ROOT_REL  = os.path.join(UNSUP_REL, "tumour_neighbourhoods_input")
 TUMOUR_NH_INPUT_ROOT      = os.path.join(UNSUP,     "tumour_neighbourhoods_input")
 
-# Pipeline target is profile-specific (so BRCA/NBL/RBL don't share one file)
+# Profile-specific sentinel file used as the final target for the pipeline DAG,
+# ensuring BRCA, NBL, and RBL runs do not share a completion marker.
 PIPELINE_TARGET = os.path.join(UNSUP_REL, "pipeline_targets.done")
 
+
+# =============================================================================
+# STAGE 0: FEATURE SELECTION
+# =============================================================================
+
 rule feature_selection_unsupervised:
+    """
+    Selects the top N genes from the joint VST expression matrix using multiple
+    statistical methods (Variance, MAD, Entropy, PCA loadings, MX, etc.).
+    Each method produces an independent ranked gene list that defines one
+    feature direction propagated through all downstream clustering rules.
+    The MX gene list is declared explicitly as hvg_list so downstream rules
+    can reference it as a canonical HVG500 set without duplicating the path.
+    """
     input:
         vst = VST_JOINT,
         cfg_file = CFGFILE_ABS
@@ -344,87 +364,101 @@ rule feature_selection_unsupervised:
           > "{log}" 2>&1
         '''
 
-# STEP 1 Config
 
-CELL_VST = cfgabs("paths", "cell_vst_rds")  # Input needs absolute
-TUMOUR_VST = cfgabs("paths", "tumour_vst_rds")  # Input needs absolute
+# =============================================================================
+# STAGE 1: AGNOSTIC CLUSTERING — CONFIGURATION
+# =============================================================================
 
-# AGN_ROOT_REL: relative path used in rule output: declarations.
-# AGN_ROOT_ABS: absolute path passed to params:/shell: where R scripts need it.
-# Always derive from UNSUP_REL/UNSUP so the profile name is already embedded.
-# Config override (agnostic_cluster_root) must be a relative path; if absent, use the default.
+# Resolves cell line and tumour VST expression matrices (absolute; external inputs).
+CELL_VST   = cfgabs("paths", "cell_vst_rds")
+TUMOUR_VST = cfgabs("paths", "tumour_vst_rds")
+
+# Resolves agnostic clustering output root.
+# Config override (agnostic_cluster_root) must be a relative path; if absent,
+# the default is derived from the profile-scoped UNSUP_REL directory.
 _agn_cfg_raw = cfg["paths"].get("agnostic_cluster_root")
 if _agn_cfg_raw and not os.path.isabs(_agn_cfg_raw):
     AGN_ROOT_REL = _agn_cfg_raw
 else:
     AGN_ROOT_REL = os.path.join(UNSUP_REL, "agnostic_clustering")
-AGN_ROOT     = AGN_ROOT_REL                                                          # backwards-compat alias
+AGN_ROOT     = AGN_ROOT_REL                  # Backwards-compatibility alias.
 AGN_ROOT_ABS = os.path.join(PIPE_ROOT, AGN_ROOT_REL) if not os.path.isabs(AGN_ROOT_REL) else AGN_ROOT_REL
 AGN_BASE_FUN = abspath(cfg["paths"].get("agnostic_base_functions_dir", cfg["paths"].get("base_functions_dir", os.path.join(UNSUP, "base_functions"))))
 
-AGN_CFG = cfg.get("agnostic_clustering", {})
-AGN_N_PCS = AGN_CFG.get("n_pcs", 20)
+# Reads agnostic clustering hyperparameters from config with sensible defaults.
+AGN_CFG      = cfg.get("agnostic_clustering", {})
+AGN_N_PCS    = AGN_CFG.get("n_pcs", 20)
 AGN_MAX_K_HC = AGN_CFG.get("max_k_hc", 8)
-AGN_KMIN = AGN_CFG.get("k_min", 2)
-AGN_KMAX = AGN_CFG.get("k_max", 8)
-AGN_SEED = AGN_CFG.get("seed", 42)
+AGN_KMIN     = AGN_CFG.get("k_min", 2)
+AGN_KMAX     = AGN_CFG.get("k_max", 8)
+AGN_SEED     = AGN_CFG.get("seed", 42)
 
-# Get CONS_DIRECTIONS and filter it too
+# Reads and filters the consensus direction list independently of AGN_DIRECTIONS.
 CONS_DIRECTIONS = cfg.get("tumour_neighbourhoods", {}).get("directions", AGN_DIRECTIONS)
 CONS_DIRECTIONS = filter_pam50(CONS_DIRECTIONS, USE_PAM50)
 
-# Build patterns AFTER filtering (ensures wildcard constraints exclude PAM50 when use_pam50=False)
+# Builds wildcard constraint patterns AFTER filtering to ensure PAM50 directions
+# are excluded from regex matches when use_pam50 is False.
 AGN_DIRECTION_PATTERN = "|".join(map(re.escape, AGN_DIRECTIONS))
-AGN_EUC_DIRECTIONS = [d for d in AGN_DIRECTIONS if d.endswith("_euc")]
-AGN_EUC_PATTERN = "|".join(map(re.escape, AGN_EUC_DIRECTIONS)) if AGN_EUC_DIRECTIONS else r"a^"
+AGN_EUC_DIRECTIONS    = [d for d in AGN_DIRECTIONS if d.endswith("_euc")]
+# Falls back to an impossible pattern ('a^') when no Euclidean directions exist,
+# preventing k-means rules from matching any wildcard.
+AGN_EUC_PATTERN       = "|".join(map(re.escape, AGN_EUC_DIRECTIONS)) if AGN_EUC_DIRECTIONS else r"a^"
 
 CONS_DIRECTION_PATTERN = "|".join(map(re.escape, CONS_DIRECTIONS))
-CONS_EUC_DIRECTIONS = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
-CONS_EUC_PATTERN = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
+CONS_EUC_DIRECTIONS    = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
+CONS_EUC_PATTERN       = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
 
-# Legacy feature sets (for backwards compatibility)
-PAM50_DIRS = [d for d in AGN_DIRECTIONS if d.startswith("pam50")]
-HVG_DIRS = [d for d in AGN_DIRECTIONS if d.startswith("hvg")]
-
-# New feature set directions (8 methods × 2 distances)
+# Partitions directions into legacy (pam50, hvg) and new feature-set groups.
+PAM50_DIRS       = [d for d in AGN_DIRECTIONS if d.startswith("pam50")]
+HVG_DIRS         = [d for d in AGN_DIRECTIONS if d.startswith("hvg")]
 FEATURE_SET_DIRS = [d for d in AGN_DIRECTIONS if not d.startswith("pam50") and not d.startswith("hvg")]
 FEATURE_SET_DIR_PATTERN = "|".join(map(re.escape, FEATURE_SET_DIRS)) if FEATURE_SET_DIRS else r"a^"
 
+# Defines the six HC and six k-means clustering kind identifiers.
+# PCA-prefixed kinds are optionally removed for pan-cancer runs where
+# cross-cancer PCA spaces are not comparable.
 HC_KINDS = ["pca_hc_cell", "pca_hc_tumour", "pca_hc_cell_tumour", "hc_cell", "hc_tumour", "hc_cell_tumour"]
 KM_KINDS = ["pca_kmeans_cell", "pca_kmeans_tumour", "pca_kmeans_cell_tumour", "kmeans_cell", "kmeans_tumour", "kmeans_cell_tumour"]
 
-# Filter out PCA kinds if disable_pca_everywhere is set (for pan-cancer)
 if DISABLE_PCA_EVERYWHERE:
     HC_KINDS = [k for k in HC_KINDS if not k.startswith("pca_")]
     KM_KINDS = [k for k in KM_KINDS if not k.startswith("pca_")]
     vprint(f"[Snakefile] Filtered PCA kinds: HC_KINDS={HC_KINDS}, KM_KINDS={KM_KINDS}")
 
+
 def dir_to_feature(direction):
-    """Extract feature method name from direction (e.g., 'Variance_euc' -> 'Variance')"""
+    """Extracts the feature method name from a direction string (e.g., 'Variance_euc' → 'Variance')."""
     if direction.startswith("pam50"):
         return "pam50"
     elif direction.startswith("hvg"):
         return "hvg"
     else:
-        # Extract feature method from direction (everything before '_euc' or '_corr')
         if direction.endswith("_euc") or direction.endswith("_corr"):
             return direction.rsplit("_", 1)[0]
         else:
             return direction
 
+
 def dir_to_dist(direction):
+    """Maps a direction suffix to its R-compatible distance method string."""
     return "correlation" if direction.endswith("corr") else "euclidean"
 
-def dir_to_gene_list(direction):
-    """Get gene list file path for a direction"""
-    feature = dir_to_feature(direction)
 
+def dir_to_gene_list(direction):
+    """
+    Returns the absolute path to the gene list file appropriate for a given direction.
+    Routes PAM50 directions to their dedicated Ensembl ID list, legacy HVG directions
+    to the canonical MX gene set, and new feature-set directions to their method-specific
+    top-N gene list produced by feature_selection_unsupervised.
+    """
+    feature = dir_to_feature(direction)
     if feature == "pam50":
         if not USE_PAM50:
             raise ValueError(f"PAM50 direction requested ({direction}) but use_pam50=false for profile={profile_name}")
         if "pam50" in cfg and "ensembl_gene_list" in cfg["pam50"]:
-            return cfgabs("pam50", "ensembl_gene_list")  # Input needs absolute
-        return cfgabs("features", "pam50_ensembl_gene_list")  # Input needs absolute
+            return cfgabs("pam50", "ensembl_gene_list")
+        return cfgabs("features", "pam50_ensembl_gene_list")
     elif feature == "hvg":
         # Legacy HVG direction maps to the MX gene list (top-500 canonical HVG set).
         return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn('MX')}_MX.txt")
@@ -432,8 +466,9 @@ def dir_to_gene_list(direction):
         # Feature-set directions: filename encodes the method-specific top-N.
         return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(feature)}_{feature}.txt")
 
+
 def dir_to_geneset(direction):
-    """Get human-readable gene set label"""
+    """Returns a human-readable gene set label for annotation and reporting purposes."""
     feature = dir_to_feature(direction)
     if feature == "pam50":
         return "PAM50"
@@ -442,21 +477,30 @@ def dir_to_geneset(direction):
     else:
         return f"{feature}_top{method_topn(feature)}"
 
+
 def agn_outdir_dir(direction, kind):
-    return os.path.join(AGN_ROOT_ABS, direction, kind)  # Absolute for params (scripts need it)
+    """Returns the absolute output directory path for a given direction–kind combination."""
+    return os.path.join(AGN_ROOT_ABS, direction, kind)
 
-# STEP 1 Rules
 
-rule build_agnostic_mats:
+# =============================================================================
+# STAGE 1: AGNOSTIC CLUSTERING — RULES
+# =============================================================================
+
+rule agnostic_cluster_build_inputs:
+    """
+    Subsets the cell line and tumour VST expression matrices to the gene list
+    defined by the given direction, producing filtered RDS objects used as
+    input to all agnostic clustering rules for that direction.
+    """
     input:
         cell   = CELL_VST,
         tumour = TUMOUR_VST,
-        # dir_to_gene_list() already handles hvg, pam50, and all feature-set directions.
         genes  = lambda wc: dir_to_gene_list(wc.direction)
     output:
         cell_filt   = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds"),
         tumour_filt = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
-    log: os.path.join(LOGROOT, "build_agnostic_mats_{direction}.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_build_inputs_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -472,7 +516,14 @@ rule build_agnostic_mats:
           > "{log}" 2>&1
         '''
 
-rule pca_hc_cell:
+
+rule agnostic_cluster_pca_hc_cell:
+    """
+    Applies PCA dimensionality reduction followed by hierarchical clustering
+    to the cell line expression matrix. Optimal k is selected by silhouette
+    or gap statistic within [2, max_k]. Produces a cluster assignment RDS
+    consumed by downstream tumour neighbourhood and consensus rules.
+    """
     input:
         cell = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds")
     output:
@@ -484,7 +535,7 @@ rule pca_hc_cell:
         max_k    = AGN_MAX_K_HC,
         dist     = lambda wc: dir_to_dist(wc.direction),
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_pca_hc_cell.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_pca_hc_cell.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -504,7 +555,14 @@ rule pca_hc_cell:
           > "{log}" 2>&1
         '''
 
-rule pca_hc_tumour:
+
+rule agnostic_cluster_pca_hc_tumour:
+    """
+    Applies PCA dimensionality reduction followed by hierarchical clustering
+    to the tumour expression matrix. Mirrors agnostic_cluster_pca_hc_cell but
+    operates on patient tumour samples independently to capture tumour-intrinsic
+    structure.
+    """
     input:
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
     output:
@@ -516,7 +574,7 @@ rule pca_hc_tumour:
         max_k    = AGN_MAX_K_HC,
         dist     = lambda wc: dir_to_dist(wc.direction),
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_pca_hc_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_pca_hc_tumour.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -536,7 +594,14 @@ rule pca_hc_tumour:
           > "{log}" 2>&1
         '''
 
-rule pca_hc_cell_tumour:
+
+rule agnostic_cluster_pca_hc_joint:
+    """
+    Applies PCA dimensionality reduction followed by hierarchical clustering
+    to the concatenated cell line and tumour expression matrix. Joint embedding
+    captures shared transcriptional structure across both sample types,
+    enabling direct cross-space cluster comparison.
+    """
     input:
         cell   = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds"),
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
@@ -549,7 +614,7 @@ rule pca_hc_cell_tumour:
         max_k    = AGN_MAX_K_HC,
         dist     = lambda wc: dir_to_dist(wc.direction),
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_pca_hc_cell_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_pca_hc_joint.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -571,7 +636,13 @@ rule pca_hc_cell_tumour:
           > "{log}" 2>&1
         '''
 
-rule pca_kmeans_cell:
+
+rule agnostic_cluster_pca_kmeans_cell:
+    """
+    Applies PCA dimensionality reduction followed by k-means clustering to
+    the cell line expression matrix. Constrained to Euclidean directions only,
+    as k-means minimises Euclidean inertia and is undefined under correlation distance.
+    """
     input:
         cell = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds")
     output:
@@ -583,7 +654,7 @@ rule pca_kmeans_cell:
         kmin     = AGN_KMIN,
         kmax     = AGN_KMAX,
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_pca_kmeans_cell.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_pca_kmeans_cell.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -603,7 +674,13 @@ rule pca_kmeans_cell:
           > "{log}" 2>&1
         '''
 
-rule pca_kmeans_tumour:
+
+rule agnostic_cluster_pca_kmeans_tumour:
+    """
+    Applies PCA dimensionality reduction followed by k-means clustering to
+    the tumour expression matrix. Euclidean directions only; mirrors
+    agnostic_cluster_pca_kmeans_cell but operates on patient samples independently.
+    """
     input:
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
     output:
@@ -615,7 +692,7 @@ rule pca_kmeans_tumour:
         kmin     = AGN_KMIN,
         kmax     = AGN_KMAX,
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_pca_kmeans_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_pca_kmeans_tumour.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -635,7 +712,13 @@ rule pca_kmeans_tumour:
           > "{log}" 2>&1
         '''
 
-rule pca_kmeans_cell_tumour:
+
+rule agnostic_cluster_pca_kmeans_joint:
+    """
+    Applies PCA dimensionality reduction followed by k-means clustering to
+    the joint cell line and tumour expression matrix. Euclidean directions only.
+    Joint embedding allows k-means to assign both sample types to shared clusters.
+    """
     input:
         cell   = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds"),
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
@@ -648,7 +731,7 @@ rule pca_kmeans_cell_tumour:
         kmin     = AGN_KMIN,
         kmax     = AGN_KMAX,
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_pca_kmeans_cell_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_pca_kmeans_joint.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -670,7 +753,15 @@ rule pca_kmeans_cell_tumour:
           > "{log}" 2>&1
         '''
 
-rule hc_cell:
+
+rule agnostic_cluster_hc_cell:
+    """
+    Applies hierarchical clustering directly to the raw gene-subsetted cell line
+    expression matrix without PCA pre-processing. Distance metric is determined
+    by the direction suffix (Euclidean or correlation). Provides a non-PCA
+    baseline for comparison with agnostic_cluster_pca_hc_cell under the same
+    feature set.
+    """
     input:
         cell = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds")
     output:
@@ -681,7 +772,7 @@ rule hc_cell:
         max_k    = AGN_MAX_K_HC,
         dist     = lambda wc: dir_to_dist(wc.direction),
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_hc_cell.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_hc_cell.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -700,7 +791,13 @@ rule hc_cell:
           > "{log}" 2>&1
         '''
 
-rule hc_tumour:
+
+rule agnostic_cluster_hc_tumour:
+    """
+    Applies hierarchical clustering directly to the raw gene-subsetted tumour
+    expression matrix without PCA pre-processing. Provides a non-PCA baseline
+    for tumour-intrinsic cluster structure under each feature direction.
+    """
     input:
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
     output:
@@ -711,7 +808,7 @@ rule hc_tumour:
         max_k    = AGN_MAX_K_HC,
         dist     = lambda wc: dir_to_dist(wc.direction),
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_hc_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_hc_tumour.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -730,7 +827,14 @@ rule hc_tumour:
           > "{log}" 2>&1
         '''
 
-rule hc_cell_tumour:
+
+rule agnostic_cluster_hc_joint:
+    """
+    Applies hierarchical clustering to the joint cell line and tumour expression
+    matrix without PCA pre-processing. Supports both Euclidean and correlation
+    distances, enabling direct assessment of co-clustering fidelity across
+    sample types in the raw feature space.
+    """
     input:
         cell   = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds"),
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
@@ -742,7 +846,7 @@ rule hc_cell_tumour:
         max_k    = AGN_MAX_K_HC,
         dist     = lambda wc: dir_to_dist(wc.direction),
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_hc_cell_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_hc_joint.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -763,7 +867,14 @@ rule hc_cell_tumour:
           > "{log}" 2>&1
         '''
 
-rule kmeans_cell:
+
+rule agnostic_cluster_kmeans_cell:
+    """
+    Applies k-means clustering directly to the raw cell line expression matrix
+    without PCA pre-processing. Constrained to Euclidean directions only.
+    Serves as a non-PCA counterpart to agnostic_cluster_pca_kmeans_cell for
+    sensitivity assessment.
+    """
     input:
         cell = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds")
     output:
@@ -774,7 +885,7 @@ rule kmeans_cell:
         kmin     = AGN_KMIN,
         kmax     = AGN_KMAX,
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_kmeans_cell.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_kmeans_cell.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -793,7 +904,12 @@ rule kmeans_cell:
           > "{log}" 2>&1
         '''
 
-rule kmeans_tumour:
+
+rule agnostic_cluster_kmeans_tumour:
+    """
+    Applies k-means clustering directly to the raw tumour expression matrix
+    without PCA pre-processing. Constrained to Euclidean directions only.
+    """
     input:
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
     output:
@@ -804,7 +920,7 @@ rule kmeans_tumour:
         kmin     = AGN_KMIN,
         kmax     = AGN_KMAX,
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_kmeans_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_kmeans_tumour.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -823,7 +939,13 @@ rule kmeans_tumour:
           > "{log}" 2>&1
         '''
 
-rule kmeans_cell_tumour:
+
+rule agnostic_cluster_kmeans_joint:
+    """
+    Applies k-means clustering to the joint cell line and tumour expression matrix
+    without PCA pre-processing. Constrained to Euclidean directions only.
+    Joint clustering provides a raw-space baseline for cross-type co-assignment.
+    """
     input:
         cell   = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds"),
         tumour = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "tumour_expr.rds")
@@ -835,7 +957,7 @@ rule kmeans_cell_tumour:
         kmin     = AGN_KMIN,
         kmax     = AGN_KMAX,
         seed     = AGN_SEED
-    log: os.path.join(LOGROOT, "agnostic_{direction}_kmeans_cell_tumour.log")
+    log: os.path.join(LOGROOT, "agnostic_cluster_{direction}_kmeans_joint.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -856,49 +978,72 @@ rule kmeans_cell_tumour:
           > "{log}" 2>&1
         '''
 
-rule agnostic_all_directions:
+
+rule agnostic_cluster_all:
+    """
+    Convenience aggregation rule that collects all HC and k-means cluster outputs
+    across every direction. Allows the full Stage 1 suite to be run independently
+    via 'snakemake agnostic_cluster_all' without proceeding to consensus.
+    """
     input:
         expand(os.path.join(AGN_ROOT_REL, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=AGN_DIRECTIONS, kind=HC_KINDS),
         expand(os.path.join(AGN_ROOT_REL, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=AGN_EUC_DIRECTIONS, kind=KM_KINDS)
 
-# STEP 2: Consensus Clustering
 
-# _REL for rule output: declarations; non-suffixed absolute for params:/scripts
+# =============================================================================
+# STAGE 2: CONSENSUS CLUSTERING
+# =============================================================================
+
+# Defines consensus output root and clustering kind identifiers.
+# PCA-containing kinds are stripped when DISABLE_PCA_EVERYWHERE is set.
 CONS_ROOT_REL = os.path.join(UNSUP_REL, "consensus")
 CONS_ROOT     = os.path.join(UNSUP,     "consensus")
 CONS_KM_KINDS = ["ccp_kmeans_expr_cell_tumour", "ccp_kmeans_pca_cell_tumour", "ccp_kmeans_expr_cell", "ccp_kmeans_pca_cell", "ccp_kmeans_expr_tumour", "ccp_kmeans_pca_tumour"]
 CONS_HC_KINDS = ["ccp_hc_expr_cell_tumour", "ccp_hc_pca_cell_tumour", "ccp_hc_expr_cell", "ccp_hc_pca_cell", "ccp_hc_expr_tumour", "ccp_hc_pca_tumour"]
 
-# Filter out PCA consensus kinds if disable_pca_everywhere is set (for pan-cancer)
 if DISABLE_PCA_EVERYWHERE:
     CONS_KM_KINDS = [k for k in CONS_KM_KINDS if "_pca_" not in k]
     CONS_HC_KINDS = [k for k in CONS_HC_KINDS if "_pca_" not in k]
     vprint(f"[Snakefile] Filtered PCA consensus kinds: CONS_KM_KINDS={CONS_KM_KINDS}, CONS_HC_KINDS={CONS_HC_KINDS}")
 
-# Build dynamic pattern for consensus kind wildcard constraint
+# Builds a single regex pattern covering all consensus kind identifiers for wildcard validation.
 CONS_KIND_PATTERN = "|".join(map(re.escape, CONS_KM_KINDS + CONS_HC_KINDS))
 
+
 def cons_outdir(direction, kind):
+    """Returns the absolute output directory for a consensus direction–kind combination."""
     return os.path.join(CONS_ROOT, direction, kind)
 
+
 def kind_to_mode(kind):
+    """Extracts the feature mode (pca or expr) from a consensus kind identifier."""
     return "pca" if "_pca_" in kind else "expr"
 
+
 def kind_to_alg(kind):
+    """Extracts the clustering algorithm (hc or km) from a consensus kind identifier."""
     return "hc" if kind.startswith("ccp_hc_") else "km"
 
-rule consensus_ccp_cell_tumour:
+
+rule consensus_cluster_ccp:
+    """
+    Runs ConsensusClusterPlus on the joint cell line and tumour expression matrix
+    for a given direction and kind. Resampling-based consensus stabilises cluster
+    assignments that are sensitive to initialisation in single-run methods.
+    Mode (pca/expr) and algorithm (hc/km) are inferred from the kind wildcard,
+    allowing a single rule to cover all twelve consensus variants per direction.
+    """
     input:
-        config = CFGFILE_ABS,
-        # Use the MX feature-set list as the canonical HVG500 set
+        config   = CFGFILE_ABS,
+        # Uses the canonical MX gene list as the HVG500 set for all consensus runs.
         hvg_list = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt")
     output:
         cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
     params:
         outdir = lambda wc: cons_outdir(wc.direction, wc.kind),
-        mode = lambda wc: kind_to_mode(wc.kind),
-        alg = lambda wc: kind_to_alg(wc.kind)
-    log: os.path.join(LOGROOT, "consensus_ccp_{direction}_{kind}.log")
+        mode   = lambda wc: kind_to_mode(wc.kind),
+        alg    = lambda wc: kind_to_alg(wc.kind)
+    log: os.path.join(LOGROOT, "consensus_cluster_{direction}_{kind}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=CONS_DIRECTION_PATTERN,
@@ -918,34 +1063,44 @@ rule consensus_ccp_cell_tumour:
           --cluster_rds {output.cluster_rds} > {log} 2>&1
         '''
 
-rule consensus_all_directions:
+
+rule consensus_cluster_all:
+    """
+    Convenience aggregation rule that collects all consensus cluster outputs
+    across every direction and kind. HC kinds run on all directions; k-means
+    kinds are constrained to Euclidean directions only.
+    """
     input:
         expand(os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=CONS_DIRECTIONS, kind=CONS_HC_KINDS),
         expand(os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=CONS_EUC_DIRECTIONS, kind=CONS_KM_KINDS)
 
-# STEP 3: Tumour Neighbourhood Analysis
-# KEY FIX: Separate map_rds files for PAM50 and HVG
+
+# =============================================================================
+# STAGE 3: TUMOUR NEIGHBOURHOOD INPUT CONSTRUCTION
+# =============================================================================
 
 TUMOUR_NH_ROOT = os.path.join(UNSUP_REL, "tumour_neighbourhoods")
 
-# Always derive defaults from the profile-specific tumour_nh_input_root
-# (keeps the pipeline portable; config can still override)
-# Use ABSOLUTE paths for outputs (for --directory compatibility)
-# HVG inputs (always present) - absolute, derived from UNSUP
-TUMOUR_NH_EXPR_HVG = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_hvg.rds")
+# Resolves HVG neighbourhood input paths (absolute; always present).
+TUMOUR_NH_EXPR_HVG    = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_hvg.rds")
 TUMOUR_NH_MAP_RDS_HVG = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_hvg.rds")
 
-# PAM50 inputs (only if enabled) - absolute, derived from UNSUP
+# Resolves PAM50 neighbourhood input paths (absolute; conditional on use_pam50).
 if USE_PAM50:
-    TUMOUR_NH_EXPR_PAM50 = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_pam50.rds")
+    TUMOUR_NH_EXPR_PAM50    = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_pam50.rds")
     TUMOUR_NH_MAP_RDS_PAM50 = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_pam50.rds")
 else:
-    TUMOUR_NH_EXPR_PAM50 = None
+    TUMOUR_NH_EXPR_PAM50    = None
     TUMOUR_NH_MAP_RDS_PAM50 = None
 
-# Helper functions for tumour neighbourhood paths
+
 def nh_expr_rds(direction):
-    """Get expression matrix RDS path for a direction (absolute for --directory compatibility)"""
+    """
+    Returns the absolute path to the expression submatrix RDS for a direction.
+    Routes PAM50 directions to their dedicated matrix, HVG/MX directions to the
+    canonical HVG expression file, and all other feature-set directions to their
+    method-specific submatrix in the featuresets staging directory.
+    """
     feature = dir_to_feature(direction)
     if feature == "pam50":
         if TUMOUR_NH_EXPR_PAM50:
@@ -954,11 +1109,15 @@ def nh_expr_rds(direction):
     elif feature == "hvg":
         return TUMOUR_NH_EXPR_HVG
     else:
-        # For new feature sets, use the featuresets directory (absolute via FEATURE_METHOD_OUTDIR)
         return os.path.join(FEATURE_METHOD_OUTDIR, feature, "expr_submatrix.rds")
 
+
 def nh_map_rds(direction):
-    """Get mapping RDS path for a direction (absolute for --directory compatibility)"""
+    """
+    Returns the absolute path to the cell-line-to-sample-ID mapping RDS for a direction.
+    Mapping files associate DSMZ cell line identifiers with the original VST sample IDs
+    used in the tumour neighbourhood computation.
+    """
     feature = dir_to_feature(direction)
     if feature == "pam50":
         if TUMOUR_NH_MAP_RDS_PAM50:
@@ -967,10 +1126,10 @@ def nh_map_rds(direction):
     elif feature == "hvg":
         return TUMOUR_NH_MAP_RDS_HVG
     else:
-        # For new feature sets, create mapping file in tumour_neighbourhoods_input (absolute via TUMOUR_NH_INPUT_ROOT)
         return os.path.join(TUMOUR_NH_INPUT_ROOT, f"cell_line_to_original_sample_id_{feature}.rds")
 
-# Canonical path helpers for tumour neighbourhood outputs (single source of truth)
+
+# Path helper functions for tumour neighbourhood outputs (single source of truth).
 def nh_final_consensus_rds(direction):
     return os.path.join(
         TUMOUR_NH_ROOT, direction, "final_consensus",
@@ -989,16 +1148,22 @@ def nh_umap_tsv(direction):
 def nh_umap_pdf(direction):
     return os.path.join(nh_qc_dir(direction), "nh_umap.pdf")
 
+
 if USE_PAM50:
-    rule build_tumour_neighbourhood_input_pam50:
+    rule tumour_nh_build_inputs_pam50:
+        """
+        Constructs the joint PAM50 expression matrix and cell-line-to-sample mapping
+        file from pre-computed PAM50-scored TCGA and DSMZ expression tables.
+        Only instantiated when use_pam50 is enabled for the current profile.
+        """
         input:
             tcga_pam50 = cfgabs("paths", "tcga_brca_pam50_expr") if "tcga_brca_pam50_expr" in cfg["paths"] else cfgabs("paths", "tcga_pam50_expr"),
             dsmz_pam50 = cfgabs("paths", "dsmz_bcc_pam50_expr") if "dsmz_bcc_pam50_expr" in cfg["paths"] else cfgabs("paths", "dsmz_pam50_expr"),
-            dsmz_meta = cfgabs("paths", "dsmz_meta_csv")
+            dsmz_meta  = cfgabs("paths", "dsmz_meta_csv")
         output:
             expr_rds = TUMOUR_NH_EXPR_PAM50,
-            map_rds = TUMOUR_NH_MAP_RDS_PAM50
-        log: os.path.join(LOGROOT, "build_tumour_neighbourhood_input_pam50.log")
+            map_rds  = TUMOUR_NH_MAP_RDS_PAM50
+        log: os.path.join(LOGROOT, "tumour_nh_build_inputs_pam50.log")
         conda: CONDA_ENV_R
         shell:
             r'''
@@ -1008,19 +1173,24 @@ if USE_PAM50:
             test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
             '''
 
-rule build_tumour_neighbourhood_input_hvg:
+
+rule tumour_nh_build_inputs_hvg:
+    """
+    Constructs the joint HVG expression submatrix and cell-line-to-sample mapping
+    from the VST-normalised joint matrix, subsetting to the canonical MX top-N gene list.
+    Produces the primary input files for all HVG-direction tumour neighbourhood rules.
+    """
     input:
-        vst = VST_JOINT,
-        # Use the MX feature-set list as the canonical HVG500 set
+        vst       = VST_JOINT,
         gene_list = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt"),
-        dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),  # Input needs absolute (external file)
-        cfg = CFGFILE_ABS
+        dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),
+        cfg       = CFGFILE_ABS
     output:
         expr_rds = TUMOUR_NH_EXPR_HVG,
-        map_rds = TUMOUR_NH_MAP_RDS_HVG
+        map_rds  = TUMOUR_NH_MAP_RDS_HVG
     params:
         direction = "hvg"
-    log: os.path.join(LOGROOT, "build_tumour_neighbourhood_input_hvg.log")
+    log: os.path.join(LOGROOT, "tumour_nh_build_inputs_hvg.log")
     conda: CONDA_ENV_R
     shell:
         r'''
@@ -1037,18 +1207,24 @@ rule build_tumour_neighbourhood_input_hvg:
         test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
         '''
 
-# Generalized rule for building tumour neighbourhood inputs for new feature sets
-# Uses the same parameterized builder as the HVG path to avoid hard-coding HVG logic
-rule build_tumour_neighbourhood_input_featureset:
+
+rule tumour_nh_build_inputs_featureset:
+    """
+    Constructs the joint expression submatrix and cell-line-to-sample mapping for
+    a given feature method, subsetting to the corresponding top-N gene list produced
+    by feature_selection_unsupervised. Parameterised over the feature wildcard to
+    cover all eight methods without duplication. Uses the explicit conda Rscript
+    binary to avoid environment PATH ambiguity on HPC nodes.
+    """
     input:
-        vst = VST_JOINT,
+        vst       = VST_JOINT,
         gene_list = lambda wc: os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
-        dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),  # Input needs absolute
-        cfg = CFGFILE_ABS
+        dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),
+        cfg       = CFGFILE_ABS
     output:
         expr_rds = os.path.join(FEATURE_METHOD_OUTDIR, "{feature}", "expr_submatrix.rds"),
-        map_rds = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_{feature}.rds")
-    log: os.path.join(LOGROOT, "build_tumour_neighbourhood_input_{feature}.log")
+        map_rds  = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_{feature}.rds")
+    log: os.path.join(LOGROOT, "tumour_nh_build_inputs_{feature}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         feature="|".join(map(re.escape, FEATURE_METHODS))
@@ -1072,18 +1248,30 @@ rule build_tumour_neighbourhood_input_featureset:
         test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
         '''
 
-# ---- explicit tumour neighbourhood rules (NO lambda) ----
 
-rule tumour_neighbourhoods_hc_hvg:
+# =============================================================================
+# STAGE 4: TUMOUR NEIGHBOURHOOD ANALYSIS
+# =============================================================================
+
+rule tumour_nh_hc_hvg:
+    """
+    Computes per-cell-line tumour neighbourhoods for HVG directions using
+    hierarchical nearest-neighbour ranking. Produces Top_m_long_*.csv files
+    encoding ranked tumour proximity scores for each DSMZ cell line.
+    A sentinel .done file is written only after output validation, preventing
+    downstream consensus rules from proceeding on empty or truncated results.
+    Constrained to hvg_euc and hvg_corr to avoid DAG ambiguity with the
+    PAM50 and feature-set neighbourhood rules.
+    """
     input:
         expr_rds = TUMOUR_NH_EXPR_HVG,
-        map_rds = TUMOUR_NH_MAP_RDS_HVG
+        map_rds  = TUMOUR_NH_MAP_RDS_HVG
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
     params:
         script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "tumour_neighbourhoods_hc_{direction}.log")
+    log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
@@ -1101,17 +1289,24 @@ rule tumour_neighbourhoods_hc_hvg:
         touch {output.done}
         '''
 
+
 if USE_PAM50:
-    rule tumour_neighbourhoods_hc_pam50:
+    rule tumour_nh_hc_pam50:
+        """
+        Computes per-cell-line tumour neighbourhoods for PAM50 directions.
+        Constrained to pam50_euc and pam50_corr wildcards to avoid DAG ambiguity
+        with the HVG and feature-set neighbourhood rules. Only instantiated
+        when use_pam50 is enabled.
+        """
         input:
             expr_rds = TUMOUR_NH_EXPR_PAM50,
-            map_rds = TUMOUR_NH_MAP_RDS_PAM50
+            map_rds  = TUMOUR_NH_MAP_RDS_PAM50
         output:
             done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
         params:
             script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
             config = os.path.join(BASE, "config", "config.yaml")
-        log: os.path.join(LOGROOT, "tumour_neighbourhoods_hc_{direction}.log")
+        log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
         conda: CONDA_ENV_R
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
@@ -1129,17 +1324,23 @@ if USE_PAM50:
             touch {output.done}
             '''
 
-# Generalized rule for tumour neighbourhoods with new feature sets
-rule tumour_neighbourhoods_hc_featureset:
+
+rule tumour_nh_hc_featureset:
+    """
+    Computes per-cell-line tumour neighbourhoods for all non-HVG, non-PAM50
+    feature-set directions. Uses lambda inputs to resolve direction-specific
+    expression and mapping paths at DAG evaluation time. Constrained to the
+    FEATURE_SET_DIR_PATTERN regex to avoid overlap with HVG and PAM50 rules.
+    """
     input:
         expr_rds = lambda wc: nh_expr_rds(wc.direction),
-        map_rds = lambda wc: nh_map_rds(wc.direction)
+        map_rds  = lambda wc: nh_map_rds(wc.direction)
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
     params:
         script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "tumour_neighbourhoods_hc_{direction}.log")
+    log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=FEATURE_SET_DIR_PATTERN
@@ -1157,17 +1358,26 @@ rule tumour_neighbourhoods_hc_featureset:
         touch {output.done}
         '''
 
-rule tumour_neighbourhoods_km_any:
+
+rule tumour_nh_km_euc:
+    """
+    Extends the tumour neighbourhood analysis to include k-means cluster-based
+    neighbourhoods for Euclidean directions. Depends on the HC sentinel file to
+    ensure HC-based neighbourhood files are present before the k-means pass runs,
+    as both passes write into the same direction output directory. Constrained to
+    Euclidean directions only, consistent with the k-means distance restriction
+    applied throughout Stage 1.
+    """
     input:
-        hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
+        hc_done  = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
         expr_rds = lambda wc: nh_expr_rds(wc.direction),
-        map_rds = lambda wc: nh_map_rds(wc.direction)
+        map_rds  = lambda wc: nh_map_rds(wc.direction)
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
     params:
         script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "tumour_neighbourhoods_km_{direction}.log")
+    log: os.path.join(LOGROOT, "tumour_nh_km_euc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_EUC_PATTERN
@@ -1183,9 +1393,18 @@ rule tumour_neighbourhoods_km_any:
         touch {output.done}
         '''
 
-# ---- consensus: explicit, depends on matching hc_done ----
 
-rule tumour_neighbourhood_p_consensus_hvg:
+# =============================================================================
+# STAGE 4 (CONTINUED): PROBABILISTIC NEIGHBOURHOOD CONSENSUS
+# =============================================================================
+
+rule tumour_nh_consensus_hvg:
+    """
+    Aggregates per-cell-line tumour neighbourhood rankings across all clustering
+    solutions for HVG directions into a single probabilistic consensus assignment.
+    Output RDS and TSV files encode the final consensus neighbourhood per cell line,
+    consumed by scoring and visualisation rules. Constrained to hvg_euc and hvg_corr.
+    """
     input:
         hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
     output:
@@ -1194,7 +1413,7 @@ rule tumour_neighbourhood_p_consensus_hvg:
     params:
         script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "tumour_neighbourhood_p_consensus_{direction}.log")
+    log: os.path.join(LOGROOT, "tumour_nh_consensus_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction="hvg_euc|hvg_corr"
@@ -1209,8 +1428,15 @@ rule tumour_neighbourhood_p_consensus_hvg:
           > {log} 2>&1
         '''
 
+
 if USE_PAM50:
-    rule tumour_neighbourhood_p_consensus_pam50:
+    rule tumour_nh_consensus_pam50:
+        """
+        Aggregates tumour neighbourhood rankings for PAM50 directions into a
+        probabilistic consensus assignment. Passes explicit output paths to the
+        R script rather than relying on workdir inference. Only instantiated
+        when use_pam50 is enabled.
+        """
         input:
             hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
         output:
@@ -1219,7 +1445,7 @@ if USE_PAM50:
         params:
             script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
             config = os.path.join(BASE, "config", "config.yaml")
-        log: os.path.join(LOGROOT, "tumour_neighbourhood_p_consensus_{direction}.log")
+        log: os.path.join(LOGROOT, "tumour_nh_consensus_{direction}.log")
         conda: CONDA_ENV_R
         wildcard_constraints:
             direction="pam50_euc|pam50_corr"
@@ -1235,8 +1461,14 @@ if USE_PAM50:
               > {log} 2>&1
             '''
 
-# Generalized rule for p_consensus with new feature sets
-rule tumour_neighbourhood_p_consensus_featureset:
+
+rule tumour_nh_consensus_featureset:
+    """
+    Aggregates tumour neighbourhood rankings for all non-HVG, non-PAM50 feature-set
+    directions into a probabilistic consensus assignment. Constrained to
+    FEATURE_SET_DIR_PATTERN to prevent DAG ambiguity with the HVG and PAM50
+    consensus rules that share the same output path template.
+    """
     input:
         hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
     output:
@@ -1245,7 +1477,7 @@ rule tumour_neighbourhood_p_consensus_featureset:
     params:
         script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "tumour_neighbourhood_p_consensus_{direction}.log")
+    log: os.path.join(LOGROOT, "tumour_nh_consensus_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=FEATURE_SET_DIR_PATTERN
