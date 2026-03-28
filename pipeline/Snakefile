@@ -310,6 +310,7 @@ FEATURESETS_DIR     = os.path.join(UNSUP,     "feature_selection_unsupervised", 
 FEATURELIST_FILES   = [
     os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(m)}_{m}.txt")
     for m in FEATURE_METHODS
+    if m != "MX"
 ]
 
 # Defines relative and absolute roots for agnostic clustering outputs and
@@ -355,7 +356,7 @@ rule feature_selection_unsupervised:
         r'''
         mkdir -p "{params.outdir}" "{FEATURESETS_DIR}"
         Rscript "{SCRIPTS_DIR}/feature_selection_unsupervised.R" \
-          --config="{CFGFILE_ABS}" \
+          --config="{input.cfg_file}" \
           --profile="{profile_name}" \
           --outdir="{params.outdir}" \
           --vst_rds="{input.vst}" \
@@ -370,8 +371,10 @@ rule feature_selection_unsupervised:
 # =============================================================================
 
 # Resolves cell line and tumour VST expression matrices (absolute; external inputs).
-CELL_VST   = cfgabs("paths", "cell_vst_rds")
-TUMOUR_VST = cfgabs("paths", "tumour_vst_rds")
+# Falls back to vst_joint_rds for profiles (e.g. brca, nbl) that do not define
+# separate cell_vst_rds / tumour_vst_rds keys.
+CELL_VST   = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "cell_vst_rds")
+TUMOUR_VST = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "tumour_vst_rds")
 
 # Resolves agnostic clustering output root.
 # Config override (agnostic_cluster_root) must be a relative path; if absent,
@@ -1036,7 +1039,7 @@ rule consensus_cluster_ccp:
     input:
         config   = CFGFILE_ABS,
         # Uses the canonical MX gene list as the HVG500 set for all consensus runs.
-        hvg_list = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt")
+        hvg_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt")
     output:
         cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
     params:
