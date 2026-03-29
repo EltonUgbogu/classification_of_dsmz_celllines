@@ -17,15 +17,20 @@ defaults:
 
 # Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
 # pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
-# outdir, run_validation). Keep separate from profiles.pan_cancer.
+# outdir, run_validation). Mirrors profiles.pan_cancer semantics.
 pan_cancer:
   dist_metrics:
-    - cosine
-    - euclidean
+    - euc
+    - corr
   feature_methods:
     - Variance
     - MAD
+    - MeanAbsDev
     - Entropy
+    - PCA
+    - Spearman
+    - MX
+    - kTotal
   outdir: results/pan_cancer_joint_benchmark
   run_validation: true
   profiles:
@@ -94,12 +99,15 @@ profiles:
       hvg_final_gene_list: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # brca — full 8-method × 2-distance grid; PAM50 enabled
+  # brca — full 8-method × 2-distance grid
+  # PAM50 disabled until tcga_brca_pam50_expr and dsmz_bcc_pam50_expr paths
+  # are configured under paths. Re-enable use_pam50 and restore pam50_euc/
+  # pam50_corr directions once those expression matrices are available.
   # ---------------------------------------------------------------------------
   brca:
     analysis:
       cancer_type: BRCA
-      use_pam50: true
+      use_pam50: false
     feature_sets:
       distances:
         - euc
@@ -118,6 +126,8 @@ profiles:
       vst_joint_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
       cell_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
       tumour_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
+      dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
+      meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
       directions:
         - Variance_euc
@@ -136,8 +146,6 @@ profiles:
         - MX_corr
         - kTotal_euc
         - kTotal_corr
-        - pam50_euc
-        - pam50_corr
     features:
       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
       hvg_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/hvg_joint_scores.tsv
@@ -168,6 +176,8 @@ profiles:
       vst_joint_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
       cell_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
       tumour_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
+      dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
+      meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
       directions:
         - Variance_euc
