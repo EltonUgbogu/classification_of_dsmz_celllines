@@ -1168,7 +1168,9 @@ if USE_PAM50:
     else:
         raise ValueError(
             f"Profile '{profile_name}' has use_pam50=true but neither "
-            "paths.tcga_brca_pam50_expr nor paths.tcga_pam50_expr is set in config."
+            "paths.tcga_brca_pam50_expr nor paths.tcga_pam50_expr is set in config. "
+            "BRCA PAM50 tumour-neighbourhood analysis requires configured PAM50 "
+            "expression matrices (paths.tcga_brca_pam50_expr or paths.tcga_pam50_expr)."
         )
     if "dsmz_bcc_pam50_expr" in _pam50_paths:
         _DSMZ_PAM50_PATH = cfgabs("paths", "dsmz_bcc_pam50_expr")
@@ -1177,7 +1179,9 @@ if USE_PAM50:
     else:
         raise ValueError(
             f"Profile '{profile_name}' has use_pam50=true but neither "
-            "paths.dsmz_bcc_pam50_expr nor paths.dsmz_pam50_expr is set in config."
+            "paths.dsmz_bcc_pam50_expr nor paths.dsmz_pam50_expr is set in config. "
+            "BRCA PAM50 tumour-neighbourhood analysis requires configured PAM50 "
+            "expression matrices (paths.dsmz_bcc_pam50_expr or paths.dsmz_pam50_expr)."
         )
 
     rule tumour_nh_build_inputs_pam50:
@@ -1189,7 +1193,7 @@ if USE_PAM50:
         input:
             tcga_pam50 = _TCGA_PAM50_PATH,
             dsmz_pam50 = _DSMZ_PAM50_PATH,
-            dsmz_meta  = cfgabs("paths", "dsmz_meta_csv")
+            dsmz_meta  = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv")
         output:
             expr_rds = TUMOUR_NH_EXPR_PAM50,
             map_rds  = TUMOUR_NH_MAP_RDS_PAM50
@@ -1213,7 +1217,7 @@ rule tumour_nh_build_inputs_hvg:
     input:
         vst       = VST_JOINT,
         gene_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt"),
-        dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),
+        dsmz_meta = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
         expr_rds = TUMOUR_NH_EXPR_HVG,
@@ -1249,7 +1253,7 @@ rule tumour_nh_build_inputs_featureset:
     input:
         vst       = VST_JOINT,
         gene_list = lambda wc: os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
-        dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),
+        dsmz_meta = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
         expr_rds = os.path.join(FEATURE_METHOD_OUTDIR, "{feature}", "expr_submatrix.rds"),
@@ -1294,13 +1298,17 @@ rule tumour_nh_hc_hvg:
     PAM50 and feature-set neighbourhood rules.
     """
     input:
-        expr_rds = TUMOUR_NH_EXPR_HVG,
-        map_rds  = TUMOUR_NH_MAP_RDS_HVG
+        expr_rds    = TUMOUR_NH_EXPR_HVG,
+        map_rds     = TUMOUR_NH_MAP_RDS_HVG,
+        cfg_file    = CFGFILE_ABS,
+        cluster_rds = lambda wc: expand(
+            os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+            kind=CONS_HC_KINDS
+        )
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
     params:
-        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
-        config = os.path.join(BASE, "config", "config.yaml")
+        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
     log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
@@ -1309,7 +1317,7 @@ rule tumour_nh_hc_hvg:
         r'''
         mkdir -p $(dirname {output.done})
         Rscript {params.script} \
-          --config {params.config} \
+          --config "{input.cfg_file}" \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
@@ -1329,13 +1337,17 @@ if USE_PAM50:
         when use_pam50 is enabled.
         """
         input:
-            expr_rds = TUMOUR_NH_EXPR_PAM50,
-            map_rds  = TUMOUR_NH_MAP_RDS_PAM50
+            expr_rds    = TUMOUR_NH_EXPR_PAM50,
+            map_rds     = TUMOUR_NH_MAP_RDS_PAM50,
+            cfg_file    = CFGFILE_ABS,
+            cluster_rds = lambda wc: expand(
+                os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+                kind=CONS_HC_KINDS
+            )
         output:
             done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
         params:
-            script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
-            config = os.path.join(BASE, "config", "config.yaml")
+            script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
         log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
         conda: CONDA_ENV_R
         wildcard_constraints:
@@ -1344,7 +1356,7 @@ if USE_PAM50:
             r'''
             mkdir -p $(dirname {output.done})
             Rscript {params.script} \
-              --config {params.config} \
+              --config "{input.cfg_file}" \
               --profile "{profile_name}" \
               --direction {wildcards.direction} \
               --expr-rds {input.expr_rds} \
@@ -1363,13 +1375,17 @@ rule tumour_nh_hc_featureset:
     FEATURE_SET_DIR_PATTERN regex to avoid overlap with HVG and PAM50 rules.
     """
     input:
-        expr_rds = lambda wc: nh_expr_rds(wc.direction),
-        map_rds  = lambda wc: nh_map_rds(wc.direction)
+        expr_rds    = lambda wc: nh_expr_rds(wc.direction),
+        map_rds     = lambda wc: nh_map_rds(wc.direction),
+        cfg_file    = CFGFILE_ABS,
+        cluster_rds = lambda wc: expand(
+            os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+            kind=CONS_HC_KINDS
+        )
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
     params:
-        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
-        config = os.path.join(BASE, "config", "config.yaml")
+        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
     log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
@@ -1378,7 +1394,7 @@ rule tumour_nh_hc_featureset:
         r'''
         mkdir -p $(dirname {output.done})
         Rscript {params.script} \
-          --config {params.config} \
+          --config "{input.cfg_file}" \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
@@ -1399,22 +1415,26 @@ rule tumour_nh_km_euc:
     applied throughout Stage 1.
     """
     input:
-        hc_done  = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
-        expr_rds = lambda wc: nh_expr_rds(wc.direction),
-        map_rds  = lambda wc: nh_map_rds(wc.direction)
+        hc_done     = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
+        expr_rds    = lambda wc: nh_expr_rds(wc.direction),
+        map_rds     = lambda wc: nh_map_rds(wc.direction),
+        cfg_file    = CFGFILE_ABS,
+        cluster_rds = lambda wc: expand(
+            os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+            kind=CONS_KM_KINDS
+        )
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
     params:
-        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R"),
-        config = os.path.join(BASE, "config", "config.yaml")
+        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
     log: os.path.join(LOGROOT, "tumour_nh_km_euc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
-        direction=AGN_EUC_PATTERN
+        direction=CONS_EUC_PATTERN
     shell:
         r'''
         Rscript {params.script} \
-          --config {params.config} \
+          --config "{input.cfg_file}" \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
