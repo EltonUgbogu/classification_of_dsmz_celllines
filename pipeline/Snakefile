@@ -1245,12 +1245,11 @@ if USE_PAM50:
     TUMOUR_NH_MAP_RDS_PAM50 = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_pam50.rds")
 else:
     TUMOUR_NH_EXPR_PAM50    = None
+    TUMOUR_NH_MAP_RDS_PAM50 = None
 
 # This section shifts from clustering to tumour-neighbourhood analysis.
 # Upstream clustering results are now treated as evidence that helps define
 # neighbourhood relationships between cell lines and tumours.
-
-    TUMOUR_NH_MAP_RDS_PAM50 = None
 
 
 def nh_expr_rds(direction):
@@ -1330,17 +1329,6 @@ if USE_PAM50:
     elif "dsmz_pam50_expr" in _pam50_paths:
         _DSMZ_PAM50_PATH = cfgabs("paths", "dsmz_pam50_expr")
     else:
-# -----------------------------------------------------------------------------
-# RULE: tumour_nh_build_inputs_hvg
-#
-# Purpose:
-#   Build the expression matrix and mapping files needed for tumour-neighbourhood
-#   analysis when using the canonical HVG/MX gene set.
-#
-# Why a separate prep rule exists:
-#   The tumour-neighbourhood scripts need a very specific input format, so this
-#   rule transforms the general joint VST matrix into that format.
-# -----------------------------------------------------------------------------
         raise ValueError(
             f"Profile '{profile_name}' has use_pam50=true but neither "
             "paths.dsmz_bcc_pam50_expr nor paths.dsmz_pam50_expr is set in config. "
@@ -1357,7 +1345,7 @@ if USE_PAM50:
         input:
             tcga_pam50 = _TCGA_PAM50_PATH,
             dsmz_pam50 = _DSMZ_PAM50_PATH,
-            dsmz_meta  = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv")
+            dsmz_meta  = cfgget_path_abs(cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"), "paths", "dsmz_meta_csv")
         output:
             expr_rds = TUMOUR_NH_EXPR_PAM50,
             map_rds  = TUMOUR_NH_MAP_RDS_PAM50
@@ -1375,20 +1363,13 @@ if USE_PAM50:
 rule tumour_nh_build_inputs_hvg:
     """
     Constructs the joint HVG expression submatrix and cell-line-to-sample mapping
-# -----------------------------------------------------------------------------
-# RULE: tumour_nh_build_inputs_featureset
-#
-# Purpose:
-#   Same idea as the HVG input builder, but now for any feature-set direction
-#   such as Variance, MAD, PCA, Entropy, Spearman, MX, or kTotal.
-# -----------------------------------------------------------------------------
     from the VST-normalised joint matrix, subsetting to the canonical MX top-N gene list.
     Produces the primary input files for all HVG-direction tumour neighbourhood rules.
     """
     input:
         vst       = VST_JOINT,
         gene_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt"),
-        dsmz_meta = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
+        dsmz_meta = cfgget_path_abs(cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
         expr_rds = TUMOUR_NH_EXPR_HVG,
@@ -1424,20 +1405,9 @@ rule tumour_nh_build_inputs_featureset:
     input:
         vst       = VST_JOINT,
         gene_list = lambda wc: os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
-        dsmz_meta = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
+        dsmz_meta = cfgget_path_abs(cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
-# -----------------------------------------------------------------------------
-# RULE: tumour_nh_hc_hvg
-#
-# Purpose:
-#   Run tumour-neighbourhood analysis for HVG-based directions using hierarchical
-#   clustering outputs as explicit upstream dependencies.
-#
-# Interpretation:
-#   This stage asks which tumours repeatedly appear near a given cell line under
-#   one clustering direction.
-# -----------------------------------------------------------------------------
         expr_rds = os.path.join(FEATURE_METHOD_OUTDIR, "{feature}", "expr_submatrix.rds"),
         map_rds  = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_{feature}.rds")
     log: os.path.join(LOGROOT, "tumour_nh_build_inputs_{feature}.log")
@@ -1551,16 +1521,6 @@ if USE_PAM50:
               --expr-rds {input.expr_rds} \
               --mapping-rds {input.map_rds} \
               > {log} 2>&1
-# -----------------------------------------------------------------------------
-# RULE: tumour_nh_km_euc
-#
-# Purpose:
-#   Run tumour-neighbourhood analysis based on Euclidean k-means directions.
-#
-# Important detail:
-#   Only Euclidean directions are used here because this rule is constrained to
-#   the consensus Euclidean direction pattern.
-# -----------------------------------------------------------------------------
             test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
             touch {output.done}
             '''
@@ -1591,20 +1551,16 @@ rule tumour_nh_hc_featureset:
         direction=FEATURE_SET_DIR_PATTERN
     shell:
         r'''
-        set -euo pipefail
-        mkdir -p "$(dirname "{output.rds}")"
-
-        Rscript "{SCRIPTS_DIR}/tumour_neighbourhood_p_consensus.R" \
-          --config "{input.cfg}" \
+        mkdir -p $(dirname {output.done})
+        Rscript {params.script} \
+          --config "{input.cfg_file}" \
           --profile "{profile_name}" \
-          --direction "{wildcards.direction}" \
-          --workdir "{BASE}" \
-          --ccp_hc_rds "{input.ccp_hc}" \
-          --ccp_kmeans_rds "{input.ccp_km}" \
-          --meta_tsv "{input.meta}" \
-          --out_rds "{output.rds}" \
-          --out_tsv "{output.tsv}" \
-          2>&1 | tee "{log}"
+          --direction {wildcards.direction} \
+          --expr-rds {input.expr_rds} \
+          --mapping-rds {input.map_rds} \
+          > {log} 2>&1
+        test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+        touch {output.done}
         '''
 
 rule tumour_nh_km_euc:
