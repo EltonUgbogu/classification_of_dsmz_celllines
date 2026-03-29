@@ -14,20 +14,24 @@ defaults:
       Spearman:   500
       MX:         500
       kTotal:     500
+
+# Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
+# pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
+# outdir, run_validation). Keep separate from profiles.pan_cancer.
 pan_cancer:
   dist_metrics:
-  - cosine
-  - euclidean
+    - cosine
+    - euclidean
   feature_methods:
-  - Variance
-  - MAD
-  - Entropy
+    - Variance
+    - MAD
+    - Entropy
   outdir: results/pan_cancer_joint_benchmark
   run_validation: true
   profiles:
-  - brca
-  - nbl
-  - rbl
+    - brca
+    - nbl
+    - rbl
   tumour_neighbourhoods:
     p_consensus_threshold: 0.7
   validation:
@@ -38,19 +42,28 @@ pan_cancer:
   features:
     hvg_joint_scores_tsv: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
     hvg_final_gene_list: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
+
 profiles:
+  # ---------------------------------------------------------------------------
+  # pan_cancer — full 8-method × 2-distance grid; no PAM50
+  # ---------------------------------------------------------------------------
   pan_cancer:
     analysis:
       cancer_type: Pan-Cancer
       use_pam50: false
     feature_sets:
       distances:
-      - euc
-      - corr
+        - euc
+        - corr
       methods:
-      - Variance
-      - MAD
-      - Entropy
+        - Variance
+        - MAD
+        - MeanAbsDev
+        - Entropy
+        - PCA
+        - Spearman
+        - MX
+        - kTotal
     paths:
       unsup_root: results/pan_cancer_joint_benchmark/unsupervised
       vst_joint_rds: results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds
@@ -58,57 +71,185 @@ profiles:
       tumour_vst_rds: results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds
       dsmz_meta_csv: results/unsupervised/pan_cancer/inputs/joint_metadata.tsv
       meta_tsv: results/unsupervised/pan_cancer/inputs/joint_metadata.tsv
+    tumour_neighbourhoods:
+      directions:
+        - Variance_euc
+        - Variance_corr
+        - MAD_euc
+        - MAD_corr
+        - MeanAbsDev_euc
+        - MeanAbsDev_corr
+        - Entropy_euc
+        - Entropy_corr
+        - PCA_euc
+        - PCA_corr
+        - Spearman_euc
+        - Spearman_corr
+        - MX_euc
+        - MX_corr
+        - kTotal_euc
+        - kTotal_corr
     features:
-      pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
       hvg_joint_scores_tsv: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
       hvg_final_gene_list: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
+
+  # ---------------------------------------------------------------------------
+  # brca — full 8-method × 2-distance grid; PAM50 enabled
+  # ---------------------------------------------------------------------------
   brca:
+    analysis:
+      cancer_type: BRCA
+      use_pam50: true
+    feature_sets:
+      distances:
+        - euc
+        - corr
+      methods:
+        - Variance
+        - MAD
+        - MeanAbsDev
+        - Entropy
+        - PCA
+        - Spearman
+        - MX
+        - kTotal
     paths:
-      vst_joint_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
       unsup_root: results/unsupervised/brca
+      vst_joint_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
+      cell_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
+      tumour_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
+    tumour_neighbourhoods:
+      directions:
+        - Variance_euc
+        - Variance_corr
+        - MAD_euc
+        - MAD_corr
+        - MeanAbsDev_euc
+        - MeanAbsDev_corr
+        - Entropy_euc
+        - Entropy_corr
+        - PCA_euc
+        - PCA_corr
+        - Spearman_euc
+        - Spearman_corr
+        - MX_euc
+        - MX_corr
+        - kTotal_euc
+        - kTotal_corr
+        - pam50_euc
+        - pam50_corr
+    features:
+      pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
+      hvg_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/hvg_joint_scores.tsv
+      hvg_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/hvg_final_gene_list.txt
+
+  # ---------------------------------------------------------------------------
+  # nbl — full 8-method × 2-distance grid; no PAM50
+  # ---------------------------------------------------------------------------
   nbl:
+    analysis:
+      cancer_type: NBL
+      use_pam50: false
+    feature_sets:
+      distances:
+        - euc
+        - corr
+      methods:
+        - Variance
+        - MAD
+        - MeanAbsDev
+        - Entropy
+        - PCA
+        - Spearman
+        - MX
+        - kTotal
     paths:
-      vst_joint_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
       unsup_root: results/unsupervised/nbl
+      vst_joint_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
+      cell_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
+      tumour_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
+    tumour_neighbourhoods:
+      directions:
+        - Variance_euc
+        - Variance_corr
+        - MAD_euc
+        - MAD_corr
+        - MeanAbsDev_euc
+        - MeanAbsDev_corr
+        - Entropy_euc
+        - Entropy_corr
+        - PCA_euc
+        - PCA_corr
+        - Spearman_euc
+        - Spearman_corr
+        - MX_euc
+        - MX_corr
+        - kTotal_euc
+        - kTotal_corr
     features:
       hvg_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/hvg_joint_scores.tsv
       hvg_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/hvg_final_gene_list.txt
+
+  # ---------------------------------------------------------------------------
+  # rbl — full 8-method × 2-distance grid; no PAM50
+  # ---------------------------------------------------------------------------
   rbl:
+    analysis:
+      cancer_type: RBL
+      use_pam50: false
+    feature_sets:
+      distances:
+        - euc
+        - corr
+      methods:
+        - Variance
+        - MAD
+        - MeanAbsDev
+        - Entropy
+        - PCA
+        - Spearman
+        - MX
+        - kTotal
     paths:
-      vst_joint_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
       unsup_root: results/unsupervised/rbl
+      vst_joint_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
       cell_vst_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
       tumour_vst_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
       directions:
-        - Entropy_corr
-        - Entropy_euc
-        - MAD_corr
-        - MAD_euc
-        - MX_corr
-        - MX_euc
-        - MeanAbsDev_corr
-        - MeanAbsDev_euc
-        - PCA_corr
-        - PCA_euc
-        - Spearman_corr
-        - Spearman_euc
-        - Variance_corr
         - Variance_euc
-        - hvg_euc
-        - kTotal_corr
+        - Variance_corr
+        - MAD_euc
+        - MAD_corr
+        - MeanAbsDev_euc
+        - MeanAbsDev_corr
+        - Entropy_euc
+        - Entropy_corr
+        - PCA_euc
+        - PCA_corr
+        - Spearman_euc
+        - Spearman_corr
+        - MX_euc
+        - MX_corr
         - kTotal_euc
+        - kTotal_corr
     features:
       hvg_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/hvg_joint_scores.tsv
       hvg_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/hvg_final_gene_list.txt
+
+  # ---------------------------------------------------------------------------
+  # heme — full 8-method × 2-distance grid; no PAM50
+  # ---------------------------------------------------------------------------
   heme:
     analysis:
       cancer_type: HEME
       use_pam50: false
     feature_sets:
-      distances: [euc, corr]
+      distances:
+        - euc
+        - corr
       methods:
         - Variance
         - MAD
@@ -121,31 +262,32 @@ profiles:
     paths:
       unsup_root: results/unsupervised/heme
       vst_joint_rds: results/unsupervised/heme/integrated/heme_joint_expr_vst_batch_corrected.rds
-      tumour_vst_rds: data/heme/laml_cll_tumour_vst_batch_corrected.rds
       cell_vst_rds: data/heme/dsmz_ll100_cellline_vst_batch_corrected.rds
+      tumour_vst_rds: data/heme/laml_cll_tumour_vst_batch_corrected.rds
       meta_tsv: results/unsupervised/heme/inputs/heme_joint_metadata.tsv
       dsmz_meta_csv: results/unsupervised/heme/inputs/heme_joint_metadata.tsv
     tumour_neighbourhoods:
       directions:
-        - Entropy_euc
-        - Entropy_corr
+        - Variance_euc
+        - Variance_corr
         - MAD_euc
         - MAD_corr
         - MeanAbsDev_euc
         - MeanAbsDev_corr
-        - MX_euc
-        - MX_corr
+        - Entropy_euc
+        - Entropy_corr
         - PCA_euc
         - PCA_corr
         - Spearman_euc
         - Spearman_corr
-        - Variance_euc
-        - Variance_corr
+        - MX_euc
+        - MX_corr
         - kTotal_euc
         - kTotal_corr
     features:
       hvg_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/hvg_joint_scores.tsv
       hvg_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/hvg_final_gene_list.txt
+
 paths:
   tumour_nh_base_functions: R/base_functions
   agnostic_base_functions_dir: R
