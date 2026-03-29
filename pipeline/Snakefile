@@ -336,9 +336,9 @@ FEATURE_METHOD_OUTDIR     = os.path.join(UNSUP,     "feature_selection_unsupervi
 TUMOUR_NH_INPUT_ROOT_REL  = os.path.join(UNSUP_REL, "tumour_neighbourhoods_input")
 TUMOUR_NH_INPUT_ROOT      = os.path.join(UNSUP,     "tumour_neighbourhoods_input")
 
-# Profile-specific sentinel file used as the final target for the pipeline DAG,
-# ensuring BRCA, NBL, and RBL runs do not share a completion marker.
-PIPELINE_TARGET = os.path.join(UNSUP_REL, "pipeline_targets.done")
+# Profile-specific terminal target for the pipeline DAG: the resolved DSMZ
+# neighbour table produced by the graph-consensus resolution stage.
+PIPELINE_TARGET = os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbors.tsv")
 
 
 # =============================================================================
@@ -1772,4 +1772,50 @@ rule summarize_p_consensus_all:
           --profile "{profile_name}" \
           --threshold {params.threshold} \
           > {log} 2>&1
+        '''
+
+
+# =============================================================================
+# STAGE 6: GRAPH-BASED CONSENSUS NEIGHBOUR RESOLUTION
+# =============================================================================
+
+rule resolve_dsmz_graph_neighbors:
+    """
+    Resolves per-cell-line DSMZ neighbours by intersecting the global best-direction
+    graph with each cell line's winner-direction graph. Consumes the cross-direction
+    consensus summary outputs and all per-direction DSMZ similarity graph edge files
+    produced by dsmz_dsmz_similarity_graph. The intersection strategy retains only
+    neighbours present in both the global best direction and the cell-line-specific
+    winner direction, providing a robust estimate of stable similarity relationships.
+    Uses CONS_DIRECTIONS (not AGN_DIRECTIONS) so only configured consensus directions
+    are included as explicit DAG dependencies.
+    """
+    input:
+        cfg_file        = CFGFILE_ABS,
+        winners_tsv     = os.path.join(P_CONS_ALL_DIR, "p_consensus_winners_by_frac_ge_thr.tsv"),
+        dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
+        graph_edges     = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "DSMZ_DSMZ_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbors.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "resolve_dsmz_graph_neighbors.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
+    log: os.path.join(LOGROOT, "resolve_dsmz_graph_neighbors.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p {P_CONS_ALL_DIR}
+        Rscript {params.script} \
+          --config {params.config} \
+          --profile "{profile_name}" \
+          --winners_tsv {input.winners_tsv} \
+          --direction_summary_tsv {input.dir_summary_tsv} \
+          --graph_root {TUMOUR_NH_ROOT_ABS} \
+          --output_tsv {output.resolved_tsv} \
+          > {log} 2>&1
+        test -s {output.resolved_tsv} || (echo "ERROR: missing {output.resolved_tsv}" >&2; exit 1)
         '''

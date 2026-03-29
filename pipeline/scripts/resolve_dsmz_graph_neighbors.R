@@ -242,12 +242,12 @@ if (!dir.exists(tumour_nh_root)) {
 # on the analysis profile:
 #
 # Pan-cancer:
-#   - Feature methods: Variance, MAD, Entropy
-#   - Distance metrics: cosine, euclidean
-#   - Resulting directions: e.g., "Variance_cosine", "MAD_euclidean"
+#   - Feature methods: Variance, MAD, MeanAbsDev, Entropy, PCA, Spearman, MX, kTotal
+#   - Distance metrics: euc, corr
+#   - Resulting directions: e.g., "Variance_euc", "MAD_corr"
 #
 # Single-cohort (brca, nbl, rbl):
-#   - Directions: hvg_euc, hvg_corr, pam50_euc, pam50_corr
+#   - Directions: hvg_euc, hvg_corr (and pam50_euc, pam50_corr when use_pam50 is enabled)
 #   - These correspond to highly-variable genes (HVG) or PAM50 gene sets
 #     combined with Euclidean or correlation-based distances.
 
@@ -256,14 +256,14 @@ if (profile == "pan_cancer") {
   pan_cfg <- cfg_full$pan_cancer %||%
     stop("pan_cancer section not found in config")
   feature_methods <- pan_cfg$feature_methods %||%
-    c("Variance", "MAD", "Entropy")
+    c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal")
   dist_metrics <- pan_cfg$dist_metrics %||%
-    c("cosine", "euclidean")
+    c("euc", "corr")
   directions <- paste0(rep(feature_methods, each = length(dist_metrics)), "_",
                        rep(dist_metrics, times = length(feature_methods)))
 } else {
   directions <- cfg$tumour_neighbourhoods$directions %||%
-    c("hvg_euc", "hvg_corr", "pam50_euc", "pam50_corr")
+    c("hvg_euc", "hvg_corr")
 }
 
 # -----------------------------------------------------------------------------
