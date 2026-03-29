@@ -1082,7 +1082,10 @@ rule consensus_cluster_all:
 # STAGE 3: TUMOUR NEIGHBOURHOOD INPUT CONSTRUCTION
 # =============================================================================
 
-TUMOUR_NH_ROOT = os.path.join(UNSUP_REL, "tumour_neighbourhoods")
+TUMOUR_NH_ROOT     = os.path.join(UNSUP_REL, "tumour_neighbourhoods")
+# Absolute counterpart used in shell find commands to ensure correctness on HPC
+# nodes where the job working directory may differ from PIPE_ROOT.
+TUMOUR_NH_ROOT_ABS = os.path.join(UNSUP,     "tumour_neighbourhoods")
 
 # Resolves HVG neighbourhood input paths (absolute; always present).
 TUMOUR_NH_EXPR_HVG    = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_hvg.rds")
@@ -1153,6 +1156,30 @@ def nh_umap_pdf(direction):
 
 
 if USE_PAM50:
+    # Resolves PAM50 expression matrix paths before instantiating the rule.
+    # Prefers profile-specific keys (tcga_brca_pam50_expr, dsmz_bcc_pam50_expr);
+    # falls back to generic keys; raises a clear error rather than a bare KeyError
+    # if neither is present — catching config omissions at parse time.
+    _pam50_paths = cfg.get("paths", {})
+    if "tcga_brca_pam50_expr" in _pam50_paths:
+        _TCGA_PAM50_PATH = cfgabs("paths", "tcga_brca_pam50_expr")
+    elif "tcga_pam50_expr" in _pam50_paths:
+        _TCGA_PAM50_PATH = cfgabs("paths", "tcga_pam50_expr")
+    else:
+        raise ValueError(
+            f"Profile '{profile_name}' has use_pam50=true but neither "
+            "paths.tcga_brca_pam50_expr nor paths.tcga_pam50_expr is set in config."
+        )
+    if "dsmz_bcc_pam50_expr" in _pam50_paths:
+        _DSMZ_PAM50_PATH = cfgabs("paths", "dsmz_bcc_pam50_expr")
+    elif "dsmz_pam50_expr" in _pam50_paths:
+        _DSMZ_PAM50_PATH = cfgabs("paths", "dsmz_pam50_expr")
+    else:
+        raise ValueError(
+            f"Profile '{profile_name}' has use_pam50=true but neither "
+            "paths.dsmz_bcc_pam50_expr nor paths.dsmz_pam50_expr is set in config."
+        )
+
     rule tumour_nh_build_inputs_pam50:
         """
         Constructs the joint PAM50 expression matrix and cell-line-to-sample mapping
@@ -1160,8 +1187,8 @@ if USE_PAM50:
         Only instantiated when use_pam50 is enabled for the current profile.
         """
         input:
-            tcga_pam50 = cfgabs("paths", "tcga_brca_pam50_expr") if "tcga_brca_pam50_expr" in cfg["paths"] else cfgabs("paths", "tcga_pam50_expr"),
-            dsmz_pam50 = cfgabs("paths", "dsmz_bcc_pam50_expr") if "dsmz_bcc_pam50_expr" in cfg["paths"] else cfgabs("paths", "dsmz_pam50_expr"),
+            tcga_pam50 = _TCGA_PAM50_PATH,
+            dsmz_pam50 = _DSMZ_PAM50_PATH,
             dsmz_meta  = cfgabs("paths", "dsmz_meta_csv")
         output:
             expr_rds = TUMOUR_NH_EXPR_PAM50,
@@ -1185,7 +1212,7 @@ rule tumour_nh_build_inputs_hvg:
     """
     input:
         vst       = VST_JOINT,
-        gene_list = os.path.join(FEATURESETS_DIR, f"genes_top{TOPN}_MX.txt"),
+        gene_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt"),
         dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
@@ -1221,7 +1248,7 @@ rule tumour_nh_build_inputs_featureset:
     """
     input:
         vst       = VST_JOINT,
-        gene_list = lambda wc: os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
+        gene_list = lambda wc: os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
         dsmz_meta = cfgabs("paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
@@ -1288,7 +1315,7 @@ rule tumour_nh_hc_hvg:
           --expr-rds {input.expr_rds} \
           --mapping-rds {input.map_rds} \
           > {log} 2>&1
-        test $(find {TUMOUR_NH_ROOT}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+        test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
         touch {output.done}
         '''
 
@@ -1323,7 +1350,7 @@ if USE_PAM50:
               --expr-rds {input.expr_rds} \
               --mapping-rds {input.map_rds} \
               > {log} 2>&1
-            test $(find {TUMOUR_NH_ROOT}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+            test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
             touch {output.done}
             '''
 
@@ -1357,7 +1384,7 @@ rule tumour_nh_hc_featureset:
           --expr-rds {input.expr_rds} \
           --mapping-rds {input.map_rds} \
           > {log} 2>&1
-        test $(find {TUMOUR_NH_ROOT}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
+        test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
         touch {output.done}
         '''
 
