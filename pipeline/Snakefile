@@ -1,3 +1,23 @@
+# =============================================================================
+# BEGINNER GUIDE TO THIS SNAKEFILE (first 1397 lines)
+#
+# What this workflow does overall:
+# 1. Read a profile-specific config (for example: heme, nbl, rbl, brca, pan_cancer).
+# 2. Build feature/gene sets from a joint expression matrix.
+# 3. Run many unsupervised clustering jobs across method × distance combinations.
+# 4. Build consensus clustering summaries from those clustering results.
+# 5. Build tumour-neighbourhood inputs and run tumour-neighbourhood analysis.
+#
+# How to read this file as a beginner:
+# - 'input:' means files a rule needs.
+# - 'output:' means files a rule creates.
+# - 'params:' means extra settings passed to scripts.
+# - 'log:' is where stdout/stderr are written.
+# - 'conda:' selects the software environment for that rule.
+# - Most heavy work is actually done by the R scripts in scripts/.
+# - The Snakefile's job is to connect those scripts into a reproducible DAG.
+# =============================================================================
+
 #!/usr/bin/env snakemake
 
 # Unsupervised Clustering and Tumour Neighbourhood Analysis Pipeline
@@ -8,6 +28,10 @@ import re
 from pathlib import Path
 from snakemake.shell import shell
 from snakemake.io import expand
+
+# Beginner note:
+# This first section defines paths, config loading, and helper functions used
+# everywhere else in the workflow. Nothing is computed yet; this is setup.
 
 # -----------------------------------------------------------------------------
 # PATHS / PROFILE SETUP (MUST BE DEFINED BEFORE RULES)
@@ -59,6 +83,14 @@ PIPELINE_TARGET = []
 # DEFAULT TARGET (FIRST RULE)
 # -----------------------------------------------------------------------------
 
+# -----------------------------------------------------------------------------
+# RULE: all
+#
+# This is the default entry point of the whole workflow.
+# When you run Snakemake without naming a specific rule, Snakemake tries to build
+# whatever appears here. In this pipeline, the final target is chosen later based
+# on the active profile, so this rule acts like a profile-aware 'run everything'.
+# -----------------------------------------------------------------------------
 rule all:
     input:
         # Lazily evaluated so the target list is not resolved until after profile
@@ -144,6 +176,10 @@ else:
     cfg = config
     profile_name = config.get("profile", "default")
 
+
+# Beginner note:
+# From here down, the Snakefile converts config values into Python variables
+# that make the rest of the workflow easier to read and reuse.
 
 analysis_cfg = cfg.get("analysis", {})
 # Controls whether PAM50 gene-set directions are included in the analysis.
@@ -287,6 +323,10 @@ if os.path.isabs(UNSUP_BASE):
 
 # Ensures the profile name is embedded as the final directory component of the output root,
 # so results from different profiles never collide under the same parent directory.
+# Beginner note:
+# The variables below define where outputs live and how directions are named.
+# Think of them as the bookkeeping layer that keeps many clustering runs organised.
+
 if os.path.basename(UNSUP_BASE) != profile_name:
     UNSUP_REL = os.path.join(UNSUP_BASE, profile_name)
 else:
@@ -329,6 +369,18 @@ PIPELINE_TARGET = os.path.join(UNSUP_REL, "pipeline_targets.done")
 # STAGE 0: FEATURE SELECTION
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# RULE: feature_selection_unsupervised
+#
+# Purpose:
+#   Start the analysis by creating gene lists that define different 'views' of the
+#   same data. Each feature-selection method picks genes in a different way.
+#
+# Why this matters:
+#   All downstream clustering rules depend on these gene sets. A direction such as
+#   'Variance_euc' means: use the Variance-selected genes, then cluster with
+#   Euclidean distance. The canonical MX list is also reused as the HVG set.
+# -----------------------------------------------------------------------------
 rule feature_selection_unsupervised:
     """
     Selects the top N genes from the joint VST expression matrix using multiple
@@ -490,6 +542,17 @@ def agn_outdir_dir(direction, kind):
 # STAGE 1: AGNOSTIC CLUSTERING — RULES
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_build_inputs
+#
+# Purpose:
+#   For one analysis direction, subset the cell-line and tumour expression matrices
+#   to only the genes relevant for that direction.
+#
+# Output meaning:
+#   These filtered matrices are the clean starting inputs for all clustering jobs
+#   for that direction.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_build_inputs:
     """
     Subsets the cell line and tumour VST expression matrices to the gene list
@@ -520,6 +583,16 @@ rule agnostic_cluster_build_inputs:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_pca_hc_cell
+#
+# Purpose:
+#   Cluster only the cell-line matrix using hierarchical clustering after PCA.
+#
+# Beginner note:
+#   'pca_hc' means the data are first reduced to principal components, then
+#   hierarchical clustering is performed.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_hc_cell:
     """
     Applies PCA dimensionality reduction followed by hierarchical clustering
@@ -559,6 +632,11 @@ rule agnostic_cluster_pca_hc_cell:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_pca_hc_tumour
+#
+# Same idea as the previous rule, but now only tumour samples are clustered.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_hc_tumour:
     """
     Applies PCA dimensionality reduction followed by hierarchical clustering
@@ -598,6 +676,16 @@ rule agnostic_cluster_pca_hc_tumour:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_pca_hc_joint
+#
+# Purpose:
+#   Cluster the combined cell-line + tumour matrix together after PCA.
+#
+# Why this is useful:
+#   Joint clustering lets you see whether cell lines and tumours occupy similar
+#   regions of transcriptomic space.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_hc_joint:
     """
     Applies PCA dimensionality reduction followed by hierarchical clustering
@@ -640,6 +728,12 @@ rule agnostic_cluster_pca_hc_joint:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_pca_kmeans_cell
+#
+# Purpose:
+#   Run k-means on PCA-reduced cell-line data for one direction.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_kmeans_cell:
     """
     Applies PCA dimensionality reduction followed by k-means clustering to
@@ -678,6 +772,12 @@ rule agnostic_cluster_pca_kmeans_cell:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_pca_kmeans_tumour
+#
+# Purpose:
+#   Run k-means on PCA-reduced tumour data for one direction.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_kmeans_tumour:
     """
     Applies PCA dimensionality reduction followed by k-means clustering to
@@ -716,6 +816,12 @@ rule agnostic_cluster_pca_kmeans_tumour:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_pca_kmeans_joint
+#
+# Purpose:
+#   Run k-means on the PCA-reduced joint cell-line + tumour matrix.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_kmeans_joint:
     """
     Applies PCA dimensionality reduction followed by k-means clustering to
@@ -757,6 +863,13 @@ rule agnostic_cluster_pca_kmeans_joint:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_hc_cell
+#
+# Purpose:
+#   Run hierarchical clustering directly on the filtered cell-line matrix
+#   without PCA. This keeps the analysis in the original selected-gene space.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_hc_cell:
     """
     Applies hierarchical clustering directly to the raw gene-subsetted cell line
@@ -795,6 +908,12 @@ rule agnostic_cluster_hc_cell:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_hc_tumour
+#
+# Purpose:
+#   Run hierarchical clustering directly on the filtered tumour matrix.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_hc_tumour:
     """
     Applies hierarchical clustering directly to the raw gene-subsetted tumour
@@ -831,6 +950,12 @@ rule agnostic_cluster_hc_tumour:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_hc_joint
+#
+# Purpose:
+#   Run hierarchical clustering directly on the filtered joint matrix.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_hc_joint:
     """
     Applies hierarchical clustering to the joint cell line and tumour expression
@@ -871,6 +996,12 @@ rule agnostic_cluster_hc_joint:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_kmeans_cell
+#
+# Purpose:
+#   Run k-means directly on the filtered cell-line matrix without PCA.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_kmeans_cell:
     """
     Applies k-means clustering directly to the raw cell line expression matrix
@@ -908,6 +1039,12 @@ rule agnostic_cluster_kmeans_cell:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_kmeans_tumour
+#
+# Purpose:
+#   Run k-means directly on the filtered tumour matrix without PCA.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_kmeans_tumour:
     """
     Applies k-means clustering directly to the raw tumour expression matrix
@@ -943,6 +1080,12 @@ rule agnostic_cluster_kmeans_tumour:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_kmeans_joint
+#
+# Purpose:
+#   Run k-means directly on the filtered joint cell-line + tumour matrix.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_kmeans_joint:
     """
     Applies k-means clustering to the joint cell line and tumour expression matrix
@@ -982,6 +1125,17 @@ rule agnostic_cluster_kmeans_joint:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: agnostic_cluster_all
+#
+# Purpose:
+#   This is a collector rule. It does not perform a new analysis itself.
+#   Instead, it asks Snakemake to build every clustering result that belongs to
+#   the active direction set and clustering kinds.
+#
+# Why collector rules are useful:
+#   They provide one clean target that stands for 'finish this whole stage'.
+# -----------------------------------------------------------------------------
 rule agnostic_cluster_all:
     """
     Convenience aggregation rule that collects all HC and k-means cluster outputs
@@ -1028,6 +1182,17 @@ def kind_to_alg(kind):
     return "hc" if kind.startswith("ccp_hc_") else "km"
 
 
+# -----------------------------------------------------------------------------
+# RULE: consensus_cluster_ccp
+#
+# Purpose:
+#   Take the clustering results from the previous stage and summarize them into
+#   consensus-clustering outputs for one direction.
+#
+# Intuition:
+#   Instead of trusting a single clustering view, consensus clustering measures
+#   how stable the grouping is across related clustering runs.
+# -----------------------------------------------------------------------------
 rule consensus_cluster_ccp:
     """
     Runs ConsensusClusterPlus on the joint cell line and tumour expression matrix
@@ -1067,6 +1232,13 @@ rule consensus_cluster_ccp:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: consensus_cluster_all
+#
+# Purpose:
+#   Another collector rule. It makes Snakemake build all consensus outputs across
+#   the configured directions for the active profile.
+# -----------------------------------------------------------------------------
 rule consensus_cluster_all:
     """
     Convenience aggregation rule that collects all consensus cluster outputs
@@ -1097,6 +1269,11 @@ if USE_PAM50:
     TUMOUR_NH_MAP_RDS_PAM50 = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_pam50.rds")
 else:
     TUMOUR_NH_EXPR_PAM50    = None
+# Beginner note:
+# This section shifts from clustering to tumour-neighbourhood analysis.
+# Upstream clustering results are now treated as evidence that helps define
+# neighbourhood relationships between cell lines and tumours.
+
     TUMOUR_NH_MAP_RDS_PAM50 = None
 
 
@@ -1177,6 +1354,17 @@ if USE_PAM50:
     elif "dsmz_pam50_expr" in _pam50_paths:
         _DSMZ_PAM50_PATH = cfgabs("paths", "dsmz_pam50_expr")
     else:
+# -----------------------------------------------------------------------------
+# RULE: tumour_nh_build_inputs_hvg
+#
+# Purpose:
+#   Build the expression matrix and mapping files needed for tumour-neighbourhood
+#   analysis when using the canonical HVG/MX gene set.
+#
+# Why a separate prep rule exists:
+#   The tumour-neighbourhood scripts need a very specific input format, so this
+#   rule transforms the general joint VST matrix into that format.
+# -----------------------------------------------------------------------------
         raise ValueError(
             f"Profile '{profile_name}' has use_pam50=true but neither "
             "paths.dsmz_bcc_pam50_expr nor paths.dsmz_pam50_expr is set in config. "
@@ -1211,6 +1399,13 @@ if USE_PAM50:
 rule tumour_nh_build_inputs_hvg:
     """
     Constructs the joint HVG expression submatrix and cell-line-to-sample mapping
+# -----------------------------------------------------------------------------
+# RULE: tumour_nh_build_inputs_featureset
+#
+# Purpose:
+#   Same idea as the HVG input builder, but now for any feature-set direction
+#   such as Variance, MAD, PCA, Entropy, Spearman, MX, or kTotal.
+# -----------------------------------------------------------------------------
     from the VST-normalised joint matrix, subsetting to the canonical MX top-N gene list.
     Produces the primary input files for all HVG-direction tumour neighbourhood rules.
     """
@@ -1256,6 +1451,17 @@ rule tumour_nh_build_inputs_featureset:
         dsmz_meta = cfgget_path_abs(cfgrel("paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
         cfg       = CFGFILE_ABS
     output:
+# -----------------------------------------------------------------------------
+# RULE: tumour_nh_hc_hvg
+#
+# Purpose:
+#   Run tumour-neighbourhood analysis for HVG-based directions using hierarchical
+#   clustering outputs as explicit upstream dependencies.
+#
+# Interpretation:
+#   This stage asks which tumours repeatedly appear near a given cell line under
+#   one clustering direction.
+# -----------------------------------------------------------------------------
         expr_rds = os.path.join(FEATURE_METHOD_OUTDIR, "{feature}", "expr_submatrix.rds"),
         map_rds  = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_{feature}.rds")
     log: os.path.join(LOGROOT, "tumour_nh_build_inputs_{feature}.log")
@@ -1328,6 +1534,13 @@ rule tumour_nh_hc_hvg:
         '''
 
 
+# -----------------------------------------------------------------------------
+# RULE: tumour_nh_hc_featureset
+#
+# Purpose:
+#   Run tumour-neighbourhood analysis for non-HVG feature-set directions using
+#   hierarchical clustering outputs for the same direction.
+# -----------------------------------------------------------------------------
 if USE_PAM50:
     rule tumour_nh_hc_pam50:
         """
@@ -1362,6 +1575,16 @@ if USE_PAM50:
               --expr-rds {input.expr_rds} \
               --mapping-rds {input.map_rds} \
               > {log} 2>&1
+# -----------------------------------------------------------------------------
+# RULE: tumour_nh_km_euc
+#
+# Purpose:
+#   Run tumour-neighbourhood analysis based on Euclidean k-means directions.
+#
+# Important detail:
+#   Only Euclidean directions are used here because this rule is constrained to
+#   the consensus Euclidean direction pattern.
+# -----------------------------------------------------------------------------
             test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
             touch {output.done}
             '''
@@ -1392,18 +1615,21 @@ rule tumour_nh_hc_featureset:
         direction=FEATURE_SET_DIR_PATTERN
     shell:
         r'''
-        mkdir -p $(dirname {output.done})
-        Rscript {params.script} \
-          --config "{input.cfg_file}" \
-          --profile "{profile_name}" \
-          --direction {wildcards.direction} \
-          --expr-rds {input.expr_rds} \
-          --mapping-rds {input.map_rds} \
-          > {log} 2>&1
-        test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
-        touch {output.done}
-        '''
+        set -euo pipefail
+        mkdir -p "$(dirname "{output.rds}")"
 
+        Rscript "{SCRIPTS_DIR}/tumour_neighbourhood_p_consensus.R" \
+          --config "{input.cfg}" \
+          --profile "{profile_name}" \
+          --direction "{wildcards.direction}" \
+          --workdir "{BASE}" \
+          --ccp_hc_rds "{input.ccp_hc}" \
+          --ccp_kmeans_rds "{input.ccp_km}" \
+          --meta_tsv "{input.meta}" \
+          --out_rds "{output.rds}" \
+          --out_tsv "{output.tsv}" \
+          2>&1 | tee "{log}"
+        '''
 
 rule tumour_nh_km_euc:
     """
