@@ -14,6 +14,21 @@ defaults:
       Spearman:   500
       MX:         500
       kTotal:     500
+  deseq2:
+    sample_id_col: sample_id
+    cell_line_col: cell_line
+    component_col: component
+    fdr_isolate: 0.01
+    lfc_isolate: 1.5
+    topN_isolate: 50
+    fdr_anchor: 0.05
+    lfc_anchor: 1.0
+    topN_anchor: 200
+    fdr_component: 0.05
+    lfc_component: 1.0
+    topN_component: 500
+    min_baseMean: 10
+    recurrence_k: 2
 
 # Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
 # pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
@@ -126,6 +141,7 @@ profiles:
       vst_joint_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
       cell_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
       tumour_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
+      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -176,6 +192,7 @@ profiles:
       vst_joint_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
       cell_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
       tumour_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
+      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -225,6 +242,7 @@ profiles:
       vst_joint_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
       cell_vst_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
       tumour_vst_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
+      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
