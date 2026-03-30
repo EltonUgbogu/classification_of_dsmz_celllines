@@ -29,6 +29,10 @@ defaults:
     topN_component: 500
     min_baseMean: 10
     recurrence_k: 2
+    enabled_profiles:
+      - brca
+      - nbl
+      - rbl
 
 # Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
 # pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
