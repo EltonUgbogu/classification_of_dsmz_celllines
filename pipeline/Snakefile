@@ -2002,9 +2002,16 @@ rule derive_components_list:
     log: os.path.join(LOGROOT, "derive_components_list.log")
     shell:
         r'''
-        awk -F'\t' 'NR==1 {{ for(i=1;i<=NF;i++) if($i=="component") c=i }}
-             NR>1 && $c!="" && $c!="NA" {{ counts[$c]++ }}
-             END {{ for(k in counts) if(counts[k]>=2) print k }}' \
+        awk -F'\t' '
+          NR==1 {{ for(i=1;i<=NF;i++) if($i=="component") c=i }}
+          NR>1 && $c!="" && $c!="NA" {{
+            if ($c !~ /^[0-9]+$/) {{
+              print "ERROR: non-integer component value on row " NR ": \"" $c "\"" > "/dev/stderr"
+              exit 1
+            }}
+            counts[$c]++
+          }}
+          END {{ for(k in counts) if(counts[k]>=2) print k+0 }}' \
           {input.meta_comp} | sort -n > {output.comp_list} 2> {log}
         '''
 
@@ -2127,5 +2134,12 @@ rule deseq2_component_vs_rest_all:
         '''
 
 
-# Update the pipeline terminal target to include Stage 7 completion.
-PIPELINE_TARGET = os.path.join(DESEQ2_COMP_DIR, ".done")
+# Final pipeline terminal target: list covering both Stage 6 (resolved
+# neighbours) and Stage 7 (DESeq2 component-vs-rest completion).
+# Defined here — after all Stage 7 path variables — so DESEQ2_COMP_DIR
+# is already in scope.  rule all: evaluates this lazily via lambda.
+PIPELINE_TARGET = [
+    os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all",
+                 "resolved_dsmz_neighbors.tsv"),
+    os.path.join(DESEQ2_COMP_DIR, ".done"),
+]
