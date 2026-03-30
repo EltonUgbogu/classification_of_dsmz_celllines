@@ -1824,13 +1824,11 @@ rule resolve_dsmz_graph_neighbors:
 # =============================================================================
 # STAGE 7: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS
 # =============================================================================
-# Wire the existing helper scripts (prepare_deseq2_inputs.R,
-# add_component_to_metadata.R, deseq2_isolate_degs.R,
-# deseq2_component_vs_rest.R) into the DAG.  Stage 7 is wired for brca, nbl,
-# and rbl profiles only; heme and pan_cancer are deferred until their metadata
-# schemas are verified for compatibility with prepare_deseq2_inputs.R.
+# Gated to brca, nbl, and rbl only — the three profiles that have
+# dsmz_counts_rds + dsmz_meta_csv configured and whose metadata schema is
+# compatible with prepare_deseq2_inputs.R.  heme and pan_cancer are deferred.
 
-DESEQ2_CFG         = config.get("defaults", {}).get("deseq2", {})
+DESEQ2_CFG           = config.get("defaults", {}).get("deseq2", {})
 DESEQ2_INPUT_DIR     = os.path.join(UNSUP_REL, "deseq2_inputs")
 DESEQ2_INPUT_DIR_ABS = os.path.join(UNSUP,     "deseq2_inputs")
 DESEQ2_ISOLATE_DIR     = os.path.join(UNSUP_REL, "deseq2", "isolate_degs")
@@ -1845,301 +1843,309 @@ DSMZ_META_CSV   = cfgget_path_abs(
     "paths", "dsmz_meta_csv"
 )
 
-# Cross-direction aggregated graph node stats file (produced by aggregate rule)
+# Cross-direction aggregated graph node stats (produced by aggregate_graph_node_stats)
 NODE_STATS_TSV = os.path.join(P_CONS_ALL_DIR, "dsmz_cellline_graph_node_stats.tsv")
 
+# Gate: Stage 7 rules are only instantiated for profiles with DSMZ counts/meta
+STAGE7_ENABLED = profile_name in ("brca", "nbl", "rbl")
 
-# -----------------------------------------------------------------------------
-# RULE: aggregate_graph_node_stats
-#
-# Picks the best-direction graph node annotations (cell_line, component,
-# is_outlier) and writes a single aggregated node stats file used by
-# downstream DESeq2 prep scripts.  The best direction is determined at
-# runtime from the cross-direction summary produced by
-# summarize_p_consensus_all.
-# -----------------------------------------------------------------------------
-rule aggregate_graph_node_stats:
-    input:
-        dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
-        node_annots     = expand(
-            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
-                         "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
-            direction=CONS_DIRECTIONS
-        )
-    output:
-        node_stats_tsv = NODE_STATS_TSV
-    log: os.path.join(LOGROOT, "aggregate_graph_node_stats.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        Rscript -e '
-        suppressPackageStartupMessages(library(readr))
-        dir_sum <- read_tsv("{input.dir_summary_tsv}", show_col_types = FALSE)
-        best_dir <- dir_sum[order(-dir_sum$frac_ge_thr), ][1, "direction", drop = TRUE]
-        cat("Best overall direction:", best_dir, "\n")
-        annot_path <- file.path("{TUMOUR_NH_ROOT_ABS}", best_dir, "final_consensus",
-                                paste0("DSMZ_DSMZ_graph_node_annotations_", best_dir, ".tsv"))
-        annot <- read_tsv(annot_path, show_col_types = FALSE)
-        out <- data.frame(
-            cell_line  = annot$cell_line,
-            component  = annot$component,
-            is_isolate = as.logical(annot$is_outlier),
-            degree     = annot$degree,
-            betweenness = annot$betweenness,
-            community_louv = annot$community_louv,
-            community_leid = annot$community_leid,
-            stringsAsFactors = FALSE
-        )
-        write_tsv(out, "{output.node_stats_tsv}")
-        cat("Wrote", nrow(out), "rows to {output.node_stats_tsv}\n")
-        ' > {log} 2>&1
-        test -s {output.node_stats_tsv} || (echo "ERROR: missing {output.node_stats_tsv}" >&2; exit 1)
-        '''
+if STAGE7_ENABLED:
 
-
-# -----------------------------------------------------------------------------
-# RULE: prepare_deseq2_inputs
-# -----------------------------------------------------------------------------
-rule prepare_deseq2_inputs:
-    """
-    Extracts disease-specific raw counts and metadata from DSMZ archives,
-    subsetting to the cell lines present in the aggregated graph node stats.
-    Produces counts.tsv and metadata.tsv consumed by all downstream DESeq2 rules.
-    """
-    input:
-        dsmz_counts = DSMZ_COUNTS_RDS,
-        dsmz_meta   = DSMZ_META_CSV,
-        node_stats  = NODE_STATS_TSV
-    output:
-        counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-        metadata_tsv = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv")
-    params:
-        script = os.path.join(BASE, "scripts", "prepare_deseq2_inputs.R"),
-        outdir = DESEQ2_INPUT_DIR_ABS
-    log: os.path.join(LOGROOT, "prepare_deseq2_inputs.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p {params.outdir}
-        Rscript {params.script} \
-          --profile "{profile_name}" \
-          --dsmz_counts {input.dsmz_counts} \
-          --dsmz_meta {input.dsmz_meta} \
-          --node_stats {input.node_stats} \
-          --outdir {params.outdir} \
-          > {log} 2>&1
-        test -s {output.counts_tsv}   || (echo "ERROR: missing {output.counts_tsv}"   >&2; exit 1)
-        test -s {output.metadata_tsv} || (echo "ERROR: missing {output.metadata_tsv}" >&2; exit 1)
-        '''
+    # -------------------------------------------------------------------------
+    # RULE: aggregate_graph_node_stats
+    #
+    # Picks the best-direction graph node annotations and writes a single
+    # dsmz_cellline_graph_node_stats.tsv in P_CONS_ALL_DIR.  Best direction
+    # is selected at runtime from p_consensus_direction_summary.tsv.
+    # -------------------------------------------------------------------------
+    rule aggregate_graph_node_stats:
+        input:
+            dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
+            node_annots     = expand(
+                os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                             "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
+                direction=CONS_DIRECTIONS
+            )
+        output:
+            node_stats_tsv = NODE_STATS_TSV
+        log: os.path.join(LOGROOT, "aggregate_graph_node_stats.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript -e '
+            suppressPackageStartupMessages(library(readr))
+            dir_sum <- read_tsv("{input.dir_summary_tsv}", show_col_types = FALSE)
+            best_dir <- dir_sum[order(-dir_sum$frac_ge_thr), ][1, "direction", drop = TRUE]
+            cat("Best overall direction:", best_dir, "\n")
+            annot_path <- file.path("{TUMOUR_NH_ROOT_ABS}", best_dir, "final_consensus",
+                                    paste0("DSMZ_DSMZ_graph_node_annotations_", best_dir, ".tsv"))
+            annot <- read_tsv(annot_path, show_col_types = FALSE)
+            out <- data.frame(
+                cell_line      = annot$cell_line,
+                component      = annot$component,
+                is_isolate     = as.logical(annot$is_outlier),
+                degree         = annot$degree,
+                betweenness    = annot$betweenness,
+                community_louv = annot$community_louv,
+                community_leid = annot$community_leid,
+                stringsAsFactors = FALSE
+            )
+            write_tsv(out, "{output.node_stats_tsv}")
+            cat("Wrote", nrow(out), "rows to {output.node_stats_tsv}\n")
+            ' > {log} 2>&1
+            test -s {output.node_stats_tsv} || (echo "ERROR: missing {output.node_stats_tsv}" >&2; exit 1)
+            '''
 
 
-# -----------------------------------------------------------------------------
-# RULE: add_component_to_metadata
-# -----------------------------------------------------------------------------
-rule add_component_to_metadata:
-    """
-    Joins graph-derived component and is_isolate columns onto the staged
-    metadata produced by prepare_deseq2_inputs, using the aggregated node
-    stats as the source of component assignments.
-    """
-    input:
-        meta       = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv"),
-        node_stats = NODE_STATS_TSV
-    output:
-        meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
-    params:
-        script       = os.path.join(BASE, "scripts", "add_component_to_metadata.R"),
-        cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line")
-    log: os.path.join(LOGROOT, "add_component_to_metadata.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        Rscript {params.script} \
-          --node_stats {input.node_stats} \
-          --meta {input.meta} \
-          --cell_line_col {params.cell_line_col} \
-          --output {output.meta_comp} \
-          > {log} 2>&1
-        test -s {output.meta_comp} || (echo "ERROR: missing {output.meta_comp}" >&2; exit 1)
-        '''
-
-
-# -----------------------------------------------------------------------------
-# RULE: derive_isolate_list
-# -----------------------------------------------------------------------------
-rule derive_isolate_list:
-    """
-    Extracts the comma-separated list of isolate cell lines (is_isolate == TRUE)
-    from metadata_with_components.tsv for use as --isolate_list in
-    deseq2_isolate_degs.R.
-    """
-    input:
-        meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
-    output:
-        isolate_csv = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv")
-    log: os.path.join(LOGROOT, "derive_isolate_list.log")
-    shell:
-        r'''
-        awk -F'\t' 'NR==1 {{ for(i=1;i<=NF;i++) {{ if($i=="cell_line") cl=i; if($i=="is_isolate") iso=i }} }}
-             NR>1 && $iso=="TRUE" {{ print $cl }}' \
-          {input.meta_comp} | sort -u | paste -sd',' > {output.isolate_csv} 2> {log}
-        '''
-
-
-# -----------------------------------------------------------------------------
-# RULE: derive_components_list
-# -----------------------------------------------------------------------------
-rule derive_components_list:
-    """
-    Extracts unique non-singleton component IDs from metadata_with_components.tsv.
-    Components with fewer than 2 members are excluded since component-vs-rest
-    DESeq2 requires at least one sample on each side of the contrast.
-    """
-    input:
-        meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
-    output:
-        comp_list = os.path.join(DESEQ2_INPUT_DIR, "components_list.txt")
-    log: os.path.join(LOGROOT, "derive_components_list.log")
-    shell:
-        r'''
-        awk -F'\t' '
-          NR==1 {{ for(i=1;i<=NF;i++) if($i=="component") c=i }}
-          NR>1 && $c!="" && $c!="NA" {{
-            if ($c !~ /^[0-9]+$/) {{
-              print "ERROR: non-integer component value on row " NR ": \"" $c "\"" > "/dev/stderr"
-              exit 1
-            }}
-            counts[$c]++
-          }}
-          END {{ for(k in counts) if(counts[k]>=2) print k+0 }}' \
-          {input.meta_comp} | sort -n > {output.comp_list} 2> {log}
-        '''
-
-
-# -----------------------------------------------------------------------------
-# RULE: deseq2_isolate_degs
-# -----------------------------------------------------------------------------
-rule deseq2_isolate_degs:
-    """
-    Runs DESeq2 isolate-vs-rest contrasts for each isolate cell line identified
-    by the graph resolution stage.  Produces per-contrast DEG tables, filtered
-    marker gene lists, size-factor QC, and a recurrence-based unique feature set.
-    Anchor analysis is disabled for now (no anchor_list or anchor_components
-    provided) pending verification that the node-stats schema supports anchor
-    identification.
-    """
-    input:
-        counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-        meta_comp    = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
-        isolate_csv  = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv")
-    output:
-        size_factors = os.path.join(DESEQ2_ISOLATE_DIR, "qc", "size_factors.tsv"),
-        manifest     = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
-        recurrence   = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "gene_recurrence_across_contrasts.tsv"),
-        unique_set   = os.path.join(DESEQ2_ISOLATE_DIR, "markers",
-                           f"unique_feature_set_recurrence_ge_{DESEQ2_CFG.get('recurrence_k', 2)}.txt")
-    params:
-        script        = os.path.join(BASE, "scripts", "deseq2_isolate_degs.R"),
-        outdir        = DESEQ2_ISOLATE_DIR_ABS,
-        sample_id_col = DESEQ2_CFG.get("sample_id_col", "sample_id"),
-        cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line"),
-        component_col = DESEQ2_CFG.get("component_col", "component"),
-        fdr           = DESEQ2_CFG.get("fdr_isolate", 0.01),
-        lfc           = DESEQ2_CFG.get("lfc_isolate", 1.5),
-        topN          = DESEQ2_CFG.get("topN_isolate", 50),
-        min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10),
-        recurrence_k  = DESEQ2_CFG.get("recurrence_k", 2)
-    log: os.path.join(LOGROOT, "deseq2_isolate_degs.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        ISOLATE_LIST=$(cat {input.isolate_csv})
-        if [ -z "$ISOLATE_LIST" ]; then
-            echo "[WARN] No isolates found; creating empty outputs" > {log}
-            mkdir -p {params.outdir}/qc {params.outdir}/markers
-            echo -e "sample_id\tsize_factor" > {output.size_factors}
-            echo -e "contrast\tmarker_file\tn_markers" > {output.manifest}
-            echo -e "gene_id\tn_contrasts" > {output.recurrence}
-            touch {output.unique_set}
-            exit 0
-        fi
-        mkdir -p {params.outdir}
-        Rscript {params.script} \
-          --counts {input.counts_tsv} \
-          --meta {input.meta_comp} \
-          --sample_id_col {params.sample_id_col} \
-          --cell_line_col {params.cell_line_col} \
-          --component_col {params.component_col} \
-          --isolate_list "$ISOLATE_LIST" \
-          --outdir {params.outdir} \
-          --fdr_isolate {params.fdr} \
-          --lfc_isolate {params.lfc} \
-          --topN_isolate {params.topN} \
-          --min_baseMean {params.min_baseMean} \
-          --recurrence_k {params.recurrence_k} \
-          > {log} 2>&1
-        '''
-
-
-# -----------------------------------------------------------------------------
-# RULE: deseq2_component_vs_rest_all
-# -----------------------------------------------------------------------------
-rule deseq2_component_vs_rest_all:
-    """
-    Runs deseq2_component_vs_rest.R once per component in components_list.txt.
-    A shell loop iterates over component IDs, running the R script for each.
-    A sentinel .done file is written only after all components complete.
-    """
-    input:
-        counts_tsv = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-        meta_comp  = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
-        comp_list  = os.path.join(DESEQ2_INPUT_DIR, "components_list.txt"),
-        isolate_manifest = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv")
-    output:
-        done = touch(os.path.join(DESEQ2_COMP_DIR, ".done"))
-    params:
-        script        = os.path.join(BASE, "scripts", "deseq2_component_vs_rest.R"),
-        outdir        = DESEQ2_COMP_DIR_ABS,
-        component_col = DESEQ2_CFG.get("component_col", "component"),
-        sample_id_col = DESEQ2_CFG.get("sample_id_col", "sample_id"),
-        fdr           = DESEQ2_CFG.get("fdr_component", 0.05),
-        lfc           = DESEQ2_CFG.get("lfc_component", 1.0),
-        topN          = DESEQ2_CFG.get("topN_component", 500)
-    log: os.path.join(LOGROOT, "deseq2_component_vs_rest_all.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p {params.outdir}
-        echo "[START] Component-vs-rest loop" > {log}
-        if [ ! -s {input.comp_list} ]; then
-            echo "[WARN] No components to process; sentinel written" >> {log}
-            exit 0
-        fi
-        while IFS= read -r COMP; do
-            [ -z "$COMP" ] && continue
-            echo "[INFO] Running component $COMP" >> {log}
+    # -------------------------------------------------------------------------
+    # RULE: prepare_deseq2_inputs
+    #
+    # Extracts disease-specific raw counts and metadata from DSMZ archives,
+    # subsetting to cell lines in dsmz_cellline_graph_node_stats.tsv.
+    # Uses the node-stats file (not resolved_dsmz_neighbors.tsv).
+    # -------------------------------------------------------------------------
+    rule prepare_deseq2_inputs:
+        input:
+            dsmz_counts = DSMZ_COUNTS_RDS,
+            dsmz_meta   = DSMZ_META_CSV,
+            node_stats  = NODE_STATS_TSV
+        output:
+            counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
+            metadata_tsv = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv")
+        params:
+            script = os.path.join(BASE, "scripts", "prepare_deseq2_inputs.R"),
+            outdir = DESEQ2_INPUT_DIR_ABS
+        log: os.path.join(LOGROOT, "prepare_deseq2_inputs.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p {params.outdir}
             Rscript {params.script} \
-              --counts {input.counts_tsv} \
-              --meta {input.meta_comp} \
-              --component "$COMP" \
-              --component_col {params.component_col} \
+              --profile "{profile_name}" \
+              --dsmz_counts {input.dsmz_counts} \
+              --dsmz_meta   {input.dsmz_meta} \
+              --node_stats  {input.node_stats} \
+              --outdir      {params.outdir} \
+              > {log} 2>&1
+            test -s {output.counts_tsv}   || (echo "ERROR: missing {output.counts_tsv}"   >&2; exit 1)
+            test -s {output.metadata_tsv} || (echo "ERROR: missing {output.metadata_tsv}" >&2; exit 1)
+            '''
+
+
+    # -------------------------------------------------------------------------
+    # RULE: add_component_to_metadata
+    #
+    # Joins component and is_isolate onto the staged metadata using the
+    # aggregated node stats as the authoritative source.
+    # -------------------------------------------------------------------------
+    rule add_component_to_metadata:
+        input:
+            meta       = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv"),
+            node_stats = NODE_STATS_TSV
+        output:
+            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+        params:
+            script        = os.path.join(BASE, "scripts", "add_component_to_metadata.R"),
+            cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line")
+        log: os.path.join(LOGROOT, "add_component_to_metadata.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript {params.script} \
+              --node_stats  {input.node_stats} \
+              --meta        {input.meta} \
+              --cell_line_col {params.cell_line_col} \
+              --output      {output.meta_comp} \
+              > {log} 2>&1
+            test -s {output.meta_comp} || (echo "ERROR: missing {output.meta_comp}" >&2; exit 1)
+            '''
+
+
+    # -------------------------------------------------------------------------
+    # RULE: derive_isolate_list
+    #
+    # Extracts comma-separated isolate cell lines (is_isolate == TRUE) from
+    # metadata_with_components.tsv.  Fails clearly if required columns are absent.
+    # -------------------------------------------------------------------------
+    rule derive_isolate_list:
+        input:
+            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+        output:
+            isolate_csv = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv")
+        log: os.path.join(LOGROOT, "derive_isolate_list.log")
+        shell:
+            r'''
+            awk -F'\t' '
+              NR==1 {{
+                for(i=1;i<=NF;i++) {{
+                  if($i=="cell_line") cl=i
+                  if($i=="is_isolate") iso=i
+                }}
+                if(cl==0) {{ print "ERROR: column cell_line not found in " FILENAME > "/dev/stderr"; exit 1 }}
+                if(iso==0) {{ print "ERROR: column is_isolate not found in " FILENAME > "/dev/stderr"; exit 1 }}
+              }}
+              NR>1 && $iso=="TRUE" {{ print $cl }}' \
+              {input.meta_comp} 2>> {log} | sort -u | paste -sd',' \
+              > {output.isolate_csv}
+            '''
+
+
+    # -------------------------------------------------------------------------
+    # RULE: derive_components_list
+    #
+    # Extracts unique non-singleton component IDs.  Validates that all
+    # component values are integer-like; fails with a clear message otherwise.
+    # -------------------------------------------------------------------------
+    rule derive_components_list:
+        input:
+            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+        output:
+            comp_list = os.path.join(DESEQ2_INPUT_DIR, "components_list.txt")
+        log: os.path.join(LOGROOT, "derive_components_list.log")
+        shell:
+            r'''
+            awk -F'\t' '
+              NR==1 {{
+                for(i=1;i<=NF;i++) if($i=="component") c=i
+                if(c==0) {{
+                  print "ERROR: column component not found in " FILENAME > "/dev/stderr"
+                  exit 1
+                }}
+              }}
+              NR>1 {{
+                val = $c
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+                if(val=="" || val=="NA") next
+                if(val !~ /^[0-9]+$/) {{
+                  print "ERROR: non-integer component value on row " NR ": \"" val "\"" > "/dev/stderr"
+                  exit 1
+                }}
+                counts[val]++
+              }}
+              END {{
+                for(k in counts) if(counts[k]>=2) print k+0
+              }}' \
+              {input.meta_comp} 2>> {log} | sort -n > {output.comp_list}
+            '''
+
+
+    # -------------------------------------------------------------------------
+    # RULE: deseq2_isolate_degs
+    # -------------------------------------------------------------------------
+    rule deseq2_isolate_degs:
+        """
+        Runs DESeq2 isolate-vs-rest contrasts for each isolate cell line.
+        Anchor analysis disabled pending node-stats schema verification.
+        """
+        input:
+            counts_tsv  = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
+            meta_comp   = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
+            isolate_csv = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv")
+        output:
+            size_factors = os.path.join(DESEQ2_ISOLATE_DIR, "qc", "size_factors.tsv"),
+            manifest     = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
+            recurrence   = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "gene_recurrence_across_contrasts.tsv"),
+            unique_set   = os.path.join(DESEQ2_ISOLATE_DIR, "markers",
+                               f"unique_feature_set_recurrence_ge_{DESEQ2_CFG.get('recurrence_k', 2)}.txt")
+        params:
+            script        = os.path.join(BASE, "scripts", "deseq2_isolate_degs.R"),
+            outdir        = DESEQ2_ISOLATE_DIR_ABS,
+            sample_id_col = DESEQ2_CFG.get("sample_id_col", "sample_id"),
+            cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line"),
+            component_col = DESEQ2_CFG.get("component_col", "component"),
+            fdr           = DESEQ2_CFG.get("fdr_isolate", 0.01),
+            lfc           = DESEQ2_CFG.get("lfc_isolate", 1.5),
+            topN          = DESEQ2_CFG.get("topN_isolate", 50),
+            min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10),
+            recurrence_k  = DESEQ2_CFG.get("recurrence_k", 2)
+        log: os.path.join(LOGROOT, "deseq2_isolate_degs.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            ISOLATE_LIST=$(cat {input.isolate_csv})
+            if [ -z "$ISOLATE_LIST" ]; then
+                echo "[WARN] No isolates found; creating empty outputs" > {log}
+                mkdir -p {params.outdir}/qc {params.outdir}/markers
+                printf "sample_id\tsize_factor\n"  > {output.size_factors}
+                printf "contrast\tmarker_file\tn_markers\n" > {output.manifest}
+                printf "gene_id\tn_contrasts\n"    > {output.recurrence}
+                touch {output.unique_set}
+                exit 0
+            fi
+            mkdir -p {params.outdir}
+            Rscript {params.script} \
+              --counts        {input.counts_tsv} \
+              --meta          {input.meta_comp} \
               --sample_id_col {params.sample_id_col} \
-              --outdir {params.outdir} \
-              --fdr {params.fdr} \
-              --lfc {params.lfc} \
-              --topN {params.topN} \
-              >> {log} 2>&1
-        done < {input.comp_list}
-        echo "[DONE] All components processed" >> {log}
-        '''
+              --cell_line_col {params.cell_line_col} \
+              --component_col {params.component_col} \
+              --isolate_list  "$ISOLATE_LIST" \
+              --outdir        {params.outdir} \
+              --fdr_isolate   {params.fdr} \
+              --lfc_isolate   {params.lfc} \
+              --topN_isolate  {params.topN} \
+              --min_baseMean  {params.min_baseMean} \
+              --recurrence_k  {params.recurrence_k} \
+              > {log} 2>&1
+            '''
 
 
-# Final pipeline terminal target: list covering both Stage 6 (resolved
-# neighbours) and Stage 7 (DESeq2 component-vs-rest completion).
-# Defined here — after all Stage 7 path variables — so DESEQ2_COMP_DIR
-# is already in scope.  rule all: evaluates this lazily via lambda.
+    # -------------------------------------------------------------------------
+    # RULE: deseq2_component_vs_rest_all
+    #
+    # Shell loop over components_list.txt running deseq2_component_vs_rest.R
+    # once per component.  Sentinel .done written only after all complete.
+    # -------------------------------------------------------------------------
+    rule deseq2_component_vs_rest_all:
+        input:
+            counts_tsv       = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
+            meta_comp        = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
+            comp_list        = os.path.join(DESEQ2_INPUT_DIR, "components_list.txt"),
+            isolate_manifest = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv")
+        output:
+            done = touch(os.path.join(DESEQ2_COMP_DIR, ".done"))
+        params:
+            script        = os.path.join(BASE, "scripts", "deseq2_component_vs_rest.R"),
+            outdir        = DESEQ2_COMP_DIR_ABS,
+            component_col = DESEQ2_CFG.get("component_col", "component"),
+            sample_id_col = DESEQ2_CFG.get("sample_id_col", "sample_id"),
+            fdr           = DESEQ2_CFG.get("fdr_component", 0.05),
+            lfc           = DESEQ2_CFG.get("lfc_component", 1.0),
+            topN          = DESEQ2_CFG.get("topN_component", 500)
+        log: os.path.join(LOGROOT, "deseq2_component_vs_rest_all.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p {params.outdir}
+            echo "[START] Component-vs-rest loop" > {log}
+            if [ ! -s {input.comp_list} ]; then
+                echo "[WARN] No components to process; sentinel written" >> {log}
+                exit 0
+            fi
+            while IFS= read -r COMP; do
+                [ -z "$COMP" ] && continue
+                echo "[INFO] Running component $COMP" >> {log}
+                Rscript {params.script} \
+                  --counts        {input.counts_tsv} \
+                  --meta          {input.meta_comp} \
+                  --component     "$COMP" \
+                  --component_col {params.component_col} \
+                  --sample_id_col {params.sample_id_col} \
+                  --outdir        {params.outdir} \
+                  --fdr           {params.fdr} \
+                  --lfc           {params.lfc} \
+                  --topN          {params.topN} \
+                  >> {log} 2>&1
+            done < {input.comp_list}
+            echo "[DONE] All components processed" >> {log}
+            '''
+
+
+# Final pipeline terminal target.  Stage 7 included only for brca/nbl/rbl.
+# rule all: evaluates PIPELINE_TARGET lazily via lambda wc: PIPELINE_TARGET.
 PIPELINE_TARGET = [
     os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all",
                  "resolved_dsmz_neighbors.tsv"),
-    os.path.join(DESEQ2_COMP_DIR, ".done"),
 ]
+if STAGE7_ENABLED:
+    PIPELINE_TARGET.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
