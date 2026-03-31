@@ -2163,6 +2163,162 @@ if DESEQ2_ENABLED:
             '''
 
 
+# =============================================================================
+# STAGE 8: MARKER POST-PROCESSING (CONSENSUS + PAN-CANCER FEATURES)
+# =============================================================================
+# Gated behind marker_postprocessing.enabled in config.  When disabled the
+# rules are not defined and PIPELINE_TARGET remains unchanged.
+
+CONSENSUS_OUTDIR_REL = os.path.join(UNSUP_REL, "consensus_markers")
+CONSENSUS_OUTDIR_ABS = os.path.join(UNSUP,     "consensus_markers")
+PAN_CANCER_FEATURES_DIR_REL = os.path.join(UNSUP_REL, "pan_cancer_features")
+PAN_CANCER_FEATURES_DIR_ABS = os.path.join(UNSUP,     "pan_cancer_features")
+
+CONSENSUS_CFG = MARKER_POST_CFG.get("consensus", {})
+PAN_CANCER_MP_CFG = MARKER_POST_CFG.get("pan_cancer", {})
+
+if MARKER_POST_ENABLED and DESEQ2_ENABLED:
+
+    # -------------------------------------------------------------------------
+    # RULE: build_component_consensus_markers
+    # -------------------------------------------------------------------------
+    rule build_component_consensus_markers:
+        """
+        Within-profile aggregation: reads anchor/component DESeq2 tables and
+        produces signed component consensus markers plus a disease-level signed
+        catalog (disease_consensus_catalog.tsv).
+        """
+        input:
+            deseq2_done = os.path.join(DESEQ2_COMP_DIR, ".done")
+        output:
+            catalog  = os.path.join(CONSENSUS_OUTDIR_REL, "disease_consensus_catalog.tsv"),
+            summary  = os.path.join(CONSENSUS_OUTDIR_REL, "component_consensus_summary.tsv"),
+            qc       = os.path.join(CONSENSUS_OUTDIR_REL, "anchor_agreement_qc.tsv")
+        params:
+            script           = os.path.join(SCRIPTS_DIR, "build_component_consensus_markers_v2.py"),
+            tables_dir       = DESEQ2_COMP_DIR_ABS,
+            outdir           = CONSENSUS_OUTDIR_ABS,
+            disease          = profile_name,
+            padj             = CONSENSUS_CFG.get("padj", 0.05),
+            basemean         = CONSENSUS_CFG.get("basemean", 1.0),
+            lfc              = CONSENSUS_CFG.get("lfc", 0.5),
+            core_support_min = CONSENSUS_CFG.get("core_support_min", 2),
+            core_support_frac = CONSENSUS_CFG.get("core_support_frac", 0.30),
+            min_anchor_genes = CONSENSUS_CFG.get("min_anchor_genes", 25),
+            fallback_topn    = CONSENSUS_CFG.get("fallback_topn", 200),
+            flip_policy      = CONSENSUS_CFG.get("flip_policy", "remove")
+        log: os.path.join(LOGROOT, "build_component_consensus_markers.log")
+        conda: CONDA_ENV_PY
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            python "{params.script}" \
+              --tables-dir "{params.tables_dir}" \
+              --disease "{params.disease}" \
+              --outdir "{params.outdir}" \
+              --padj {params.padj} \
+              --basemean {params.basemean} \
+              --lfc {params.lfc} \
+              --core-support-min {params.core_support_min} \
+              --core-support-frac {params.core_support_frac} \
+              --min-anchor-genes {params.min_anchor_genes} \
+              --fallback-topn {params.fallback_topn} \
+              --flip-policy {params.flip_policy} \
+              > "{log}" 2>&1
+            test -s "{output.catalog}" || (echo "ERROR: missing {output.catalog}" >&2; exit 1)
+            '''
+
+
+    # -------------------------------------------------------------------------
+    # RULE: build_pan_cancer_features
+    # -------------------------------------------------------------------------
+    _pan_profiles = PAN_CANCER_MP_CFG.get("disease_profiles",
+                                           config.get("pan_cancer", {}).get("profiles", ["brca", "nbl", "rbl"]))
+
+    def _pan_cancer_catalog_inputs():
+        """Resolve catalog paths across disease profiles for pan-cancer merge."""
+        inputs = []
+        for prof in _pan_profiles:
+            pcfg = get_profile_cfg(prof)
+            unsup = pcfg.get("paths", {}).get("unsup_root", f"results/unsupervised/{prof}")
+            if not os.path.isabs(unsup):
+                unsup = os.path.join(PIPE_ROOT, unsup)
+            if os.path.basename(unsup) != prof:
+                unsup = os.path.join(unsup, prof)
+            inputs.append(os.path.join(unsup, "consensus_markers", "disease_consensus_catalog.tsv"))
+        return inputs
+
+    def _pan_cancer_catalog_args():
+        """Build --catalog DISEASE=PATH arguments for the pan-cancer script."""
+        args_list = []
+        for prof in _pan_profiles:
+            pcfg = get_profile_cfg(prof)
+            unsup = pcfg.get("paths", {}).get("unsup_root", f"results/unsupervised/{prof}")
+            if not os.path.isabs(unsup):
+                unsup = os.path.join(PIPE_ROOT, unsup)
+            if os.path.basename(unsup) != prof:
+                unsup = os.path.join(unsup, prof)
+            cat_path = os.path.join(unsup, "consensus_markers", "disease_consensus_catalog.tsv")
+            args_list.append(f"--catalog {prof.upper()}={cat_path}")
+        return " ".join(args_list)
+
+    def _pan_cancer_isolate_args():
+        """Build --isolate-dir DISEASE=PATH arguments for isolate markers."""
+        args_list = []
+        for prof in _pan_profiles:
+            pcfg = get_profile_cfg(prof)
+            unsup = pcfg.get("paths", {}).get("unsup_root", f"results/unsupervised/{prof}")
+            if not os.path.isabs(unsup):
+                unsup = os.path.join(PIPE_ROOT, unsup)
+            if os.path.basename(unsup) != prof:
+                unsup = os.path.join(unsup, prof)
+            iso_dir = os.path.join(unsup, "deseq2", "isolate_degs", "markers")
+            args_list.append(f"--isolate-dir {prof.upper()}={iso_dir}")
+        return " ".join(args_list)
+
+    rule build_pan_cancer_features:
+        """
+        Cross-profile merge: combines disease-level consensus catalogs with
+        optional isolate markers into a pan-cancer feature panel.
+        """
+        input:
+            catalogs = _pan_cancer_catalog_inputs()
+        output:
+            features_tsv = os.path.join(PAN_CANCER_FEATURES_DIR_REL, "pan_cancer_features.tsv"),
+            up_txt       = os.path.join(PAN_CANCER_FEATURES_DIR_REL, "pan_cancer_features.UP.txt"),
+            down_txt     = os.path.join(PAN_CANCER_FEATURES_DIR_REL, "pan_cancer_features.DOWN.txt"),
+            clean_txt    = os.path.join(PAN_CANCER_FEATURES_DIR_REL, "pan_cancer_features_clean.txt"),
+            summary_tsv  = os.path.join(PAN_CANCER_FEATURES_DIR_REL, "pan_cancer_features_summary.tsv")
+        params:
+            script            = os.path.join(SCRIPTS_DIR, "build_pan_cancer_features.py"),
+            outdir            = PAN_CANCER_FEATURES_DIR_ABS,
+            catalog_args      = _pan_cancer_catalog_args(),
+            isolate_args      = _pan_cancer_isolate_args(),
+            min_cross_disease = PAN_CANCER_MP_CFG.get("min_cross_disease", 2),
+            cap_specific      = PAN_CANCER_MP_CFG.get("cap_specific", 300),
+            cap_isolate       = PAN_CANCER_MP_CFG.get("cap_isolate", 50),
+            remove_ribo_mt    = "--remove-ribo-mt" if PAN_CANCER_MP_CFG.get("remove_ribo_mt", False) else "",
+            gene_annot        = ("--gene-annotation-tsv " + abspath(PAN_CANCER_MP_CFG["gene_annotation_tsv"])
+                                 if PAN_CANCER_MP_CFG.get("gene_annotation_tsv") else "")
+        log: os.path.join(LOGROOT, "build_pan_cancer_features.log")
+        conda: CONDA_ENV_PY
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            python "{params.script}" \
+              {params.catalog_args} \
+              {params.isolate_args} \
+              --outdir "{params.outdir}" \
+              --min-cross-disease {params.min_cross_disease} \
+              --cap-specific {params.cap_specific} \
+              --cap-isolate {params.cap_isolate} \
+              {params.remove_ribo_mt} \
+              {params.gene_annot} \
+              > "{log}" 2>&1
+            test -s "{output.features_tsv}" || (echo "ERROR: missing {output.features_tsv}" >&2; exit 1)
+            '''
+
+
 # Final pipeline terminal target.  Stage 7 included only for brca/nbl/rbl.
 # rule all: evaluates PIPELINE_TARGET lazily via lambda wc: PIPELINE_TARGET.
 PIPELINE_TARGET = [
@@ -2172,3 +2328,8 @@ PIPELINE_TARGET = [
 ]
 if DESEQ2_ENABLED:
     PIPELINE_TARGET.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
+
+# Append marker post-processing outputs when the stage is enabled.
+if MARKER_POST_ENABLED and DESEQ2_ENABLED:
+    PIPELINE_TARGET.append(os.path.join(CONSENSUS_OUTDIR_REL, "disease_consensus_catalog.tsv"))
+    PIPELINE_TARGET.append(os.path.join(PAN_CANCER_FEATURES_DIR_REL, "pan_cancer_features.tsv"))

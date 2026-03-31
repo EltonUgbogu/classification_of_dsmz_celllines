@@ -1,371 +1,387 @@
 #!/usr/bin/env python3
 """
-Build pan-cancer feature set from disease-specific marker sets.
+build_pan_cancer_features.py
 
-Merge strategy:
-1. PAN_CORE: genes present in ≥2 diseases (using within-disease recurrence ≥2)
-2. Disease-specific: capped per-disease genes (balanced quotas)
-3. Remove ribosomal/mitochondrial families (RPL/RPS/MT genes)
+Cross-profile merge step: reads disease-level signed consensus catalogs
+(produced by build_component_consensus_markers_v2.py) and combines them
+with optional isolate markers into a pan-cancer feature panel.
+
+Selection hierarchy:
+  1. PAN_CORE      -- genes in >= min_cross_disease diseases
+  2. DISEASE_SPECIFIC -- per-disease additions (capped)
+  3. ISOLATE_SPECIFIC -- per-disease isolate additions (capped)
+
+Outputs:
+  pan_cancer_features.tsv          -- full provenance table
+  pan_cancer_features.UP.txt       -- UP gene IDs only
+  pan_cancer_features.DOWN.txt     -- DOWN gene IDs only
+  pan_cancer_features_clean.txt    -- all gene IDs (no comments)
+  pan_cancer_features_summary.tsv  -- summary stats
 """
 
+import argparse
 import os
 import sys
 from pathlib import Path
 from collections import defaultdict
-import argparse
 
-# Default parameters
-DEFAULT_CAP_SPECIFIC = 300  # per disease
-DEFAULT_CAP_ISOLATE = 50    # per disease
-DEFAULT_MIN_CROSS_DISEASE = 2  # genes must appear in ≥2 diseases for PAN_CORE
+import pandas as pd
 
 
-def load_gene_list(filepath):
-    """Load gene IDs from a file (one per line)."""
-    genes = set()
-    if not os.path.exists(filepath):
-        print(f"Warning: {filepath} not found, skipping", file=sys.stderr)
-        return genes
-    
-    with open(filepath, 'r') as f:
-        for line in f:
-            gene = line.strip()
-            if gene and not gene.startswith('#'):
-                genes.add(gene)
-    
-    return genes
+# ---------------------------------------------------------------------------
+# Ensembl ID normalisation (same logic as consensus script)
+# ---------------------------------------------------------------------------
+
+def strip_ensg_version(gene_id: str) -> str:
+    if pd.isna(gene_id):
+        return gene_id
+    return str(gene_id).split(".", 1)[0]
 
 
-def load_recurrence_table(filepath):
-    """Load gene recurrence table (TSV with gene_id and freq columns)."""
-    gene_freq = {}
-    if not os.path.exists(filepath):
-        print(f"Warning: {filepath} not found, skipping", file=sys.stderr)
-        return gene_freq
-    
-    with open(filepath, 'r') as f:
-        header = f.readline().strip().split('\t')
-        if 'gene_id' not in header or 'freq' not in header:
-            print(f"Warning: {filepath} doesn't have expected columns", file=sys.stderr)
-            return gene_freq
-        
-        gene_idx = header.index('gene_id')
-        freq_idx = header.index('freq')
-        
-        for line in f:
-            fields = line.strip().split('\t')
-            if len(fields) > max(gene_idx, freq_idx):
-                gene_id = fields[gene_idx]
-                try:
-                    freq = int(fields[freq_idx])
-                    gene_freq[gene_id] = freq
-                except ValueError:
-                    continue
-    
-    return gene_freq
+def normalize_gene_ids(df: pd.DataFrame, col: str = "gene_id") -> pd.DataFrame:
+    """Strip Ensembl version from a gene_id column."""
+    df = df.copy()
+    df[col] = df[col].map(strip_ensg_version)
+    return df
 
 
-def is_ribosomal_or_mitochondrial(gene_id):
-    """Check if gene is ribosomal or mitochondrial."""
-    # Check gene symbol patterns (we'll need to map or use annotation)
-    # For now, check common patterns in ENSEMBL IDs or use gene symbol lookup
-    # This is a simplified check - you may want to use a gene annotation file
-    gene_lower = gene_id.lower()
-    
-    # Common ribosomal gene patterns in ENSEMBL annotations
-    # Note: This is a heuristic. For production, use proper gene annotation.
-    ribosomal_patterns = ['rpl', 'rps', 'rpm', 'rpn', 'mrpl', 'mrps']
-    mitochondrial_patterns = ['mt-', 'mt_']
-    
-    # Since we have ENSEMBL IDs, we can't directly check gene symbols
-    # We'll need to either:
-    # 1. Load a gene annotation file (GTF/GFF)
-    # 2. Use a gene ID to symbol mapping
-    # 3. Skip this check and do it later with annotation
-    
-    # For now, return False - we'll filter later if needed
+# ---------------------------------------------------------------------------
+# Gene annotation loading for ribo/MT filtering
+# ---------------------------------------------------------------------------
+
+def load_gene_annotation(path: str) -> dict:
+    """Load a TSV with at least gene_id and gene_type/gene_name columns.
+
+    Returns dict mapping gene_id -> dict of annotation fields.
+    """
+    if not path or not os.path.exists(path):
+        return {}
+    df = pd.read_csv(path, sep="\t")
+    if "gene_id" not in df.columns:
+        print(f"[WARN] gene_annotation_tsv missing 'gene_id' column: {path}",
+              file=sys.stderr)
+        return {}
+    df["gene_id"] = df["gene_id"].map(strip_ensg_version)
+    records = {}
+    for _, row in df.iterrows():
+        records[row["gene_id"]] = row.to_dict()
+    return records
+
+
+def is_ribo_or_mt(gene_id: str, annotation: dict) -> bool:
+    """Check if gene is ribosomal or mitochondrial using annotation."""
+    if not annotation:
+        return False
+    info = annotation.get(gene_id, {})
+    gene_name = str(info.get("gene_name", "")).upper()
+    gene_type = str(info.get("gene_type", info.get("gene_biotype", ""))).lower()
+
+    # Ribosomal protein genes
+    if gene_name.startswith(("RPL", "RPS", "MRPL", "MRPS")):
+        return True
+    # Mitochondrial genes
+    if gene_name.startswith(("MT-", "MT_")):
+        return True
+    # rRNA biotype
+    if "rrna" in gene_type:
+        return True
     return False
 
 
-def filter_ribosomal_mitochondrial(genes, annotation_file=None):
-    """
-    Filter out ribosomal and mitochondrial genes.
-    
-    If annotation_file is provided, use it to map gene IDs to symbols.
-    Otherwise, return genes as-is (filtering can be done later).
-    """
-    if annotation_file and os.path.exists(annotation_file):
-        # Load annotation and filter
-        # This would require parsing GTF/GFF or a gene ID mapping file
-        pass
-    
-    # For now, we'll do a simple check on gene IDs
-    # Most ribosomal genes in human have specific ENSEMBL patterns
-    # But without annotation, we can't reliably filter
-    # Return all genes for now - user can filter later with proper annotation
+# ---------------------------------------------------------------------------
+# Catalog loading
+# ---------------------------------------------------------------------------
+
+def load_catalog(path: str) -> pd.DataFrame:
+    """Load a disease_consensus_catalog.tsv."""
+    df = pd.read_csv(path, sep="\t")
+    required = ["gene_id", "direction", "component"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        sys.exit(f"[ERROR] Catalog {path} missing columns: {missing}")
+    return normalize_gene_ids(df)
+
+
+def load_isolate_dir(dirpath: str) -> set:
+    """Load gene IDs from isolate marker files in a directory."""
+    genes = set()
+    if not dirpath or not os.path.isdir(dirpath):
+        return genes
+    p = Path(dirpath)
+    for f in sorted(p.glob("*.txt")):
+        with open(f) as fh:
+            for line in fh:
+                g = line.strip()
+                if g and not g.startswith("#"):
+                    genes.add(strip_ensg_version(g))
+    for f in sorted(p.glob("*.tsv")):
+        try:
+            df = pd.read_csv(f, sep="\t")
+            if "gene_id" in df.columns:
+                for g in df["gene_id"]:
+                    genes.add(strip_ensg_version(str(g)))
+        except Exception:
+            pass
     return genes
 
 
-def build_pan_cancer_features(
-    brca_markers_dir,
-    nbl_markers_dir,
-    rbl_markers_dir,
-    output_file,
-    min_cross_disease=DEFAULT_MIN_CROSS_DISEASE,
-    cap_specific=DEFAULT_CAP_SPECIFIC,
-    cap_isolate=DEFAULT_CAP_ISOLATE,
-    remove_ribo_mt=True
-):
-    """
-    Build pan-cancer feature set.
-    
-    Parameters:
-    -----------
-    brca_markers_dir : str
-        Path to BRCA DESeq2 markers directory
-    nbl_markers_dir : str
-        Path to NBL DESeq2 markers directory
-    rbl_markers_dir : str
-        Path to RBL DESeq2 markers directory
-    output_file : str
-        Output file path for pan-cancer features
-    min_cross_disease : int
-        Minimum number of diseases a gene must appear in for PAN_CORE
-    cap_specific : int
-        Maximum disease-specific genes per disease
-    cap_isolate : int
-        Maximum isolate-specific genes per disease
-    remove_ribo_mt : bool
-        Whether to remove ribosomal/mitochondrial genes
-    """
-    
-    # Disease directories
-    diseases = {
-        'BRCA': brca_markers_dir,
-        'NBL': nbl_markers_dir,
-        'RBL': rbl_markers_dir
-    }
-    
-    # Load unique feature sets (recurrence ≥2) for each disease
-    disease_genes = {}
-    disease_recurrence = {}
-    
-    for disease, markers_dir in diseases.items():
-        unique_file = os.path.join(markers_dir, 'unique_feature_set_recurrence_ge_2.txt')
-        recurrence_file = os.path.join(markers_dir, 'gene_recurrence_across_contrasts.tsv')
-        
-        print(f"Loading {disease} markers from {markers_dir}...", file=sys.stderr)
-        
-        # Load unique genes (recurrence ≥2)
-        disease_genes[disease] = load_gene_list(unique_file)
-        print(f"  Loaded {len(disease_genes[disease])} unique genes (recurrence ≥2)", file=sys.stderr)
-        
-        # Load recurrence frequencies for ranking
-        disease_recurrence[disease] = load_recurrence_table(recurrence_file)
-        print(f"  Loaded recurrence for {len(disease_recurrence[disease])} genes", file=sys.stderr)
-    
-    # Step 1: Build PAN_CORE (genes in ≥min_cross_disease diseases)
-    print(f"\nBuilding PAN_CORE (genes in ≥{min_cross_disease} diseases)...", file=sys.stderr)
-    
-    gene_disease_count = defaultdict(int)
-    for disease, genes in disease_genes.items():
-        for gene in genes:
-            gene_disease_count[gene] += 1
-    
-    pan_core = {
-        gene for gene, count in gene_disease_count.items()
-        if count >= min_cross_disease
-    }
-    
-    print(f"  PAN_CORE: {len(pan_core)} genes", file=sys.stderr)
-    
-    # Step 2: Build disease-specific sets (capped)
-    print(f"\nBuilding disease-specific sets (cap={cap_specific} per disease)...", file=sys.stderr)
-    
-    disease_specific = {}
-    
-    for disease, genes in disease_genes.items():
-        # Get genes that are NOT in PAN_CORE
-        specific_genes = genes - pan_core
-        
-        # Rank by recurrence frequency (higher = better)
-        # If gene not in recurrence table, use frequency 1
-        ranked = sorted(
-            specific_genes,
-            key=lambda g: disease_recurrence[disease].get(g, 1),
-            reverse=True
-        )
-        
-        # Cap at cap_specific
-        disease_specific[disease] = set(ranked[:cap_specific])
-        print(f"  {disease}-specific: {len(disease_specific[disease])} genes (from {len(specific_genes)} candidates)", file=sys.stderr)
-    
-    # Step 3: Load isolate markers (if available, capped separately)
-    print(f"\nLoading isolate markers (cap={cap_isolate} per disease)...", file=sys.stderr)
-    
-    isolate_genes = {}
-    selected_genes = set(pan_core)
-    for genes in disease_specific.values():
-        selected_genes.update(genes)
-    for disease, markers_dir in diseases.items():
-        isolate_files = [
-            f for f in os.listdir(markers_dir)
-            if f.startswith('isolate_') and f.endswith('_markers_top50.txt')
-        ]
-        
-        disease_isolates = set()
-        for isolate_file in isolate_files:
-            filepath = os.path.join(markers_dir, isolate_file)
-            genes = load_gene_list(filepath)
-            disease_isolates.update(genes)
-        
-        # Remove genes already selected (PAN_CORE + all disease-specific + prior isolates)
-        disease_isolates = disease_isolates - selected_genes
-        
-        # Cap at cap_isolate, ensuring global uniqueness
-        ranked_isolates = sorted(
-            disease_isolates,
-            key=lambda g: disease_recurrence[disease].get(g, 1),
-            reverse=True
-        )
-        chosen = []
-        for gene in ranked_isolates:
-            if gene in selected_genes:
-                continue
-            chosen.append(gene)
-            if len(chosen) >= cap_isolate:
-                break
-        isolate_genes[disease] = set(chosen)
-        selected_genes.update(isolate_genes[disease])
-        print(f"  {disease} isolates: {len(isolate_genes[disease])} genes (from {len(disease_isolates)} candidates)", file=sys.stderr)
-    
-    # Step 4: Combine all features
-    all_features = pan_core.copy()
-    for genes in disease_specific.values():
-        all_features.update(genes)
-    for genes in isolate_genes.values():
-        all_features.update(genes)
-    
-    print(f"\nTotal features before filtering: {len(all_features)}", file=sys.stderr)
-    
-    # Step 5: Filter ribosomal/mitochondrial (if requested)
-    if remove_ribo_mt:
-        print("\nFiltering ribosomal/mitochondrial genes...", file=sys.stderr)
-        print("  Note: This requires gene annotation. Skipping for now.", file=sys.stderr)
-        print("  You can filter later using a gene annotation file.", file=sys.stderr)
-        # For now, we keep all genes
-        # TODO: Add proper gene annotation filtering
-    
-    # Step 6: Write output
-    print(f"\nWriting {len(all_features)} features to {output_file}...", file=sys.stderr)
-    
-    with open(output_file, 'w') as f:
-        # Write PAN_CORE first
-        f.write("# PAN_CORE (genes in ≥{} diseases): {} genes\n".format(
-            min_cross_disease, len(pan_core)
-        ))
-        for gene in sorted(pan_core):
-            f.write(f"{gene}\n")
-        
-        # Write disease-specific
-        for disease in sorted(disease_specific.keys()):
-            genes = disease_specific[disease]
-            if genes:
-                f.write(f"\n# {disease}-specific (capped at {cap_specific}): {len(genes)} genes\n")
-                for gene in sorted(genes):
-                    f.write(f"{gene}\n")
-        
-        # Write isolate genes
-        for disease in sorted(isolate_genes.keys()):
-            genes = isolate_genes[disease]
-            if genes:
-                f.write(f"\n# {disease}-isolates (capped at {cap_isolate}): {len(genes)} genes\n")
-                for gene in sorted(genes):
-                    f.write(f"{gene}\n")
-    
-    # Also write a clean version (just gene IDs, no comments)
-    clean_output = output_file.replace('.txt', '_clean.txt')
-    with open(clean_output, 'w') as f:
-        for gene in sorted(all_features):
-            f.write(f"{gene}\n")
-    
-    print(f"  Also wrote clean version to {clean_output}", file=sys.stderr)
-    
-    # Print summary
-    print("\n" + "="*60, file=sys.stderr)
-    print("PAN-CANCER FEATURE SET SUMMARY", file=sys.stderr)
-    print("="*60, file=sys.stderr)
-    print(f"PAN_CORE (≥{min_cross_disease} diseases): {len(pan_core)} genes", file=sys.stderr)
-    for disease in sorted(disease_specific.keys()):
-        print(f"{disease}-specific: {len(disease_specific[disease])} genes", file=sys.stderr)
-        print(f"{disease}-isolates: {len(isolate_genes[disease])} genes", file=sys.stderr)
-    print(f"TOTAL: {len(all_features)} genes", file=sys.stderr)
-    print("="*60, file=sys.stderr)
-    
-    return all_features, pan_core, disease_specific, isolate_genes
-
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Build pan-cancer feature set from disease-specific markers'
+    ap = argparse.ArgumentParser(
+        description="Build pan-cancer feature set from disease consensus catalogs."
     )
-    parser.add_argument(
-        '--brca-markers',
-        required=True,
-        help='Path to BRCA DESeq2 markers directory'
+    ap.add_argument(
+        "--catalog", action="append", default=[], metavar="DISEASE=PATH",
+        help="Repeatable. Map disease name to its disease_consensus_catalog.tsv. "
+             "Example: --catalog BRCA=/path/to/catalog.tsv --catalog NBL=/path/to/catalog.tsv"
     )
-    parser.add_argument(
-        '--nbl-markers',
-        required=True,
-        help='Path to NBL DESeq2 markers directory'
+    ap.add_argument(
+        "--isolate-dir", action="append", default=[], metavar="DISEASE=PATH",
+        help="Repeatable. Map disease name to its isolate markers directory. "
+             "Example: --isolate-dir BRCA=/path/to/isolate_degs/markers"
     )
-    parser.add_argument(
-        '--rbl-markers',
-        required=True,
-        help='Path to RBL DESeq2 markers directory'
-    )
-    parser.add_argument(
-        '--output',
-        default='pan_cancer_features.txt',
-        help='Output file path (default: pan_cancer_features.txt)'
-    )
-    parser.add_argument(
-        '--min-cross-disease',
-        type=int,
-        default=DEFAULT_MIN_CROSS_DISEASE,
-        help=f'Minimum diseases for PAN_CORE (default: {DEFAULT_MIN_CROSS_DISEASE})'
-    )
-    parser.add_argument(
-        '--cap-specific',
-        type=int,
-        default=DEFAULT_CAP_SPECIFIC,
-        help=f'Cap for disease-specific genes per disease (default: {DEFAULT_CAP_SPECIFIC})'
-    )
-    parser.add_argument(
-        '--cap-isolate',
-        type=int,
-        default=DEFAULT_CAP_ISOLATE,
-        help=f'Cap for isolate genes per disease (default: {DEFAULT_CAP_ISOLATE})'
-    )
-    parser.add_argument(
-        '--keep-ribo-mt',
-        action='store_true',
-        help='Keep ribosomal/mitochondrial genes (default: will attempt to filter)'
-    )
-    
-    args = parser.parse_args()
-    
-    build_pan_cancer_features(
-        args.brca_markers,
-        args.nbl_markers,
-        args.rbl_markers,
-        args.output,
-        min_cross_disease=args.min_cross_disease,
-        cap_specific=args.cap_specific,
-        cap_isolate=args.cap_isolate,
-        remove_ribo_mt=not args.keep_ribo_mt
+    ap.add_argument("--outdir", required=True, help="Output directory")
+    ap.add_argument("--min-cross-disease", type=int, default=2)
+    ap.add_argument("--cap-specific", type=int, default=300,
+                    help="Max disease-specific genes per disease")
+    ap.add_argument("--cap-isolate", type=int, default=50,
+                    help="Max isolate genes per disease")
+    ap.add_argument("--remove-ribo-mt", action="store_true", default=False,
+                    help="Filter ribosomal/mitochondrial genes (requires --gene-annotation-tsv)")
+    ap.add_argument("--gene-annotation-tsv", default="",
+                    help="TSV with gene_id, gene_name, gene_type for ribo/MT filtering")
+
+    args = ap.parse_args()
+
+    # Parse --catalog entries
+    catalogs: dict[str, str] = {}
+    for entry in args.catalog:
+        if "=" not in entry:
+            sys.exit(f"[ERROR] --catalog must be DISEASE=PATH, got: {entry}")
+        disease, path = entry.split("=", 1)
+        catalogs[disease.upper()] = path
+
+    if not catalogs:
+        sys.exit("[ERROR] At least one --catalog DISEASE=PATH is required")
+
+    # Parse --isolate-dir entries
+    isolate_dirs: dict[str, str] = {}
+    for entry in args.isolate_dir:
+        if "=" not in entry:
+            sys.exit(f"[ERROR] --isolate-dir must be DISEASE=PATH, got: {entry}")
+        disease, path = entry.split("=", 1)
+        isolate_dirs[disease.upper()] = path
+
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    # Load gene annotation if filtering requested
+    annotation = {}
+    filtering_applied = False
+    if args.remove_ribo_mt:
+        if args.gene_annotation_tsv and os.path.exists(args.gene_annotation_tsv):
+            annotation = load_gene_annotation(args.gene_annotation_tsv)
+            if annotation:
+                filtering_applied = True
+                print(f"[INFO] Loaded {len(annotation)} gene annotations for ribo/MT filtering",
+                      file=sys.stderr)
+            else:
+                print("[WARN] Gene annotation file loaded but empty; skipping ribo/MT filtering",
+                      file=sys.stderr)
+        else:
+            print("[WARN] --remove-ribo-mt set but no valid --gene-annotation-tsv provided; "
+                  "skipping ribo/MT filtering", file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # Load all catalogs
+    # -----------------------------------------------------------------------
+    disease_catalogs: dict[str, pd.DataFrame] = {}
+    for disease, path in sorted(catalogs.items()):
+        print(f"[INFO] Loading catalog for {disease}: {path}", file=sys.stderr)
+        cat = load_catalog(path)
+        if "disease" not in cat.columns:
+            cat["disease"] = disease
+        disease_catalogs[disease] = cat
+        print(f"  {len(cat)} gene-rows, {cat['component'].nunique()} components",
+              file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # Step 1: PAN_CORE -- genes appearing in >= min_cross_disease diseases
+    # -----------------------------------------------------------------------
+    gene_diseases: dict[str, set] = defaultdict(set)
+    gene_best_row: dict[str, dict] = {}
+    gene_components: dict[str, set] = defaultdict(set)
+
+    for disease, cat in disease_catalogs.items():
+        for _, row in cat.iterrows():
+            gid = row["gene_id"]
+            gene_diseases[gid].add(disease)
+            gene_components[gid].add(f"{disease}:{row['component']}")
+            # Keep the row with the best rank_score
+            rs = row.get("rank_score", 0) or 0
+            prev = gene_best_row.get(gid)
+            if prev is None or rs > (prev.get("rank_score", 0) or 0):
+                gene_best_row[gid] = row.to_dict()
+
+    pan_core_genes = {
+        g for g, diseases in gene_diseases.items()
+        if len(diseases) >= args.min_cross_disease
+    }
+    print(f"[INFO] PAN_CORE: {len(pan_core_genes)} genes", file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # Step 2: DISEASE_SPECIFIC additions
+    # -----------------------------------------------------------------------
+    selected = set(pan_core_genes)
+    disease_specific: dict[str, set] = {}
+
+    for disease, cat in sorted(disease_catalogs.items()):
+        candidates = cat[~cat["gene_id"].isin(selected)].copy()
+        if "rank_score" in candidates.columns:
+            candidates = candidates.sort_values("rank_score", ascending=False)
+        chosen = []
+        seen = set()
+        for _, row in candidates.iterrows():
+            gid = row["gene_id"]
+            if gid in seen or gid in selected:
+                continue
+            seen.add(gid)
+            chosen.append(gid)
+            if len(chosen) >= args.cap_specific:
+                break
+        disease_specific[disease] = set(chosen)
+        selected.update(chosen)
+        print(f"[INFO] {disease}-specific: {len(chosen)} genes", file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # Step 3: ISOLATE_SPECIFIC additions
+    # -----------------------------------------------------------------------
+    isolate_specific: dict[str, set] = {}
+    for disease in sorted(catalogs.keys()):
+        iso_dir = isolate_dirs.get(disease)
+        iso_genes = load_isolate_dir(iso_dir) if iso_dir else set()
+        candidates = iso_genes - selected
+        chosen = sorted(candidates)[:args.cap_isolate]
+        isolate_specific[disease] = set(chosen)
+        selected.update(chosen)
+        if iso_genes:
+            print(f"[INFO] {disease}-isolates: {len(chosen)} genes "
+                  f"(from {len(iso_genes)} candidates)", file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # Apply ribo/MT filtering (if configured and annotation available)
+    # -----------------------------------------------------------------------
+    removed_ribo_mt = set()
+    if filtering_applied:
+        for g in list(selected):
+            if is_ribo_or_mt(g, annotation):
+                removed_ribo_mt.add(g)
+        selected -= removed_ribo_mt
+        pan_core_genes -= removed_ribo_mt
+        for d in disease_specific:
+            disease_specific[d] -= removed_ribo_mt
+        for d in isolate_specific:
+            isolate_specific[d] -= removed_ribo_mt
+        print(f"[INFO] Removed {len(removed_ribo_mt)} ribosomal/mitochondrial genes",
+              file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # Build output table with provenance
+    # -----------------------------------------------------------------------
+    rows = []
+    rank_counter = 0
+
+    def _add_rows(gene_set, feature_class):
+        nonlocal rank_counter
+        for gid in sorted(gene_set):
+            rank_counter += 1
+            info = gene_best_row.get(gid, {})
+            rows.append({
+                "gene_id": gid,
+                "direction": info.get("direction", "UNKNOWN"),
+                "feature_class": feature_class,
+                "source_diseases": ",".join(sorted(gene_diseases.get(gid, set()))),
+                "source_components": ",".join(sorted(gene_components.get(gid, set()))),
+                "disease_count": len(gene_diseases.get(gid, set())),
+                "max_support_n": info.get("support_n", 0),
+                "max_support_frac": info.get("support_frac", 0.0),
+                "selection_rank": rank_counter,
+            })
+
+    _add_rows(pan_core_genes, "PAN_CORE")
+    for disease in sorted(disease_specific.keys()):
+        _add_rows(disease_specific[disease], "DISEASE_SPECIFIC")
+    for disease in sorted(isolate_specific.keys()):
+        _add_rows(isolate_specific[disease], "ISOLATE_SPECIFIC")
+
+    features_df = pd.DataFrame(rows)
+
+    # -----------------------------------------------------------------------
+    # Write outputs
+    # -----------------------------------------------------------------------
+    features_df.to_csv(outdir / "pan_cancer_features.tsv", sep="\t", index=False)
+
+    up_genes = set(features_df[features_df["direction"] == "UP"]["gene_id"])
+    down_genes = set(features_df[features_df["direction"] == "DOWN"]["gene_id"])
+
+    with open(outdir / "pan_cancer_features.UP.txt", "w") as f:
+        for g in sorted(up_genes):
+            f.write(f"{g}\n")
+
+    with open(outdir / "pan_cancer_features.DOWN.txt", "w") as f:
+        for g in sorted(down_genes):
+            f.write(f"{g}\n")
+
+    with open(outdir / "pan_cancer_features_clean.txt", "w") as f:
+        for g in sorted(selected):
+            f.write(f"{g}\n")
+
+    # Summary
+    summary_rows = []
+    summary_rows.append({
+        "category": "PAN_CORE", "n_genes": len(pan_core_genes),
+        "n_up": len(pan_core_genes & up_genes),
+        "n_down": len(pan_core_genes & down_genes),
+    })
+    for disease in sorted(disease_specific.keys()):
+        gs = disease_specific[disease]
+        summary_rows.append({
+            "category": f"{disease}_SPECIFIC", "n_genes": len(gs),
+            "n_up": len(gs & up_genes), "n_down": len(gs & down_genes),
+        })
+    for disease in sorted(isolate_specific.keys()):
+        gs = isolate_specific[disease]
+        summary_rows.append({
+            "category": f"{disease}_ISOLATE", "n_genes": len(gs),
+            "n_up": len(gs & up_genes), "n_down": len(gs & down_genes),
+        })
+    summary_rows.append({
+        "category": "TOTAL", "n_genes": len(selected),
+        "n_up": len(up_genes), "n_down": len(down_genes),
+    })
+    if removed_ribo_mt:
+        summary_rows.append({
+            "category": "REMOVED_RIBO_MT", "n_genes": len(removed_ribo_mt),
+            "n_up": 0, "n_down": 0,
+        })
+
+    pd.DataFrame(summary_rows).to_csv(
+        outdir / "pan_cancer_features_summary.tsv", sep="\t", index=False
     )
 
+    print(f"\n[OK] Wrote {len(selected)} features to {outdir}/", file=sys.stderr)
+    print(f"  pan_cancer_features.tsv       ({len(features_df)} rows)", file=sys.stderr)
+    print(f"  pan_cancer_features.UP.txt    ({len(up_genes)} genes)", file=sys.stderr)
+    print(f"  pan_cancer_features.DOWN.txt  ({len(down_genes)} genes)", file=sys.stderr)
+    print(f"  pan_cancer_features_clean.txt ({len(selected)} genes)", file=sys.stderr)
+    if filtering_applied:
+        print(f"  Ribo/MT filtering: {len(removed_ribo_mt)} genes removed", file=sys.stderr)
+    elif args.remove_ribo_mt:
+        print("  Ribo/MT filtering: requested but no annotation available", file=sys.stderr)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

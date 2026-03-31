@@ -33,6 +33,30 @@ defaults:
       - brca
       - nbl
       - rbl
+  marker_postprocessing:
+    enabled: false
+    consensus:
+      enabled: false
+      input_mode: tables_dir
+      padj: 0.05
+      basemean: 1.0
+      lfc: 0.5
+      core_support_min: 2
+      core_support_frac: 0.30
+      min_anchor_genes: 25
+      fallback_topn: 200
+      flip_policy: remove
+    pan_cancer:
+      enabled: false
+      disease_profiles:
+        - brca
+        - nbl
+        - rbl
+      min_cross_disease: 2
+      cap_specific: 300
+      cap_isolate: 50
+      remove_ribo_mt: false
+      gene_annotation_tsv: ""
 
 # Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
 # pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
