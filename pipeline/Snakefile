@@ -2164,37 +2164,6 @@ if DESEQ2_ENABLED:
             '''
 
 
-            core_support_frac = CONSENSUS_CFG.get("core_support_frac", 0.30),
-            min_anchor_genes = CONSENSUS_CFG.get("min_anchor_genes", 25),
-            fallback_topn    = CONSENSUS_CFG.get("fallback_topn", 200),
-            flip_policy      = CONSENSUS_CFG.get("flip_policy", "remove")
-        log: os.path.join(LOGROOT, "build_component_consensus_markers.log")
-        conda: CONDA_ENV_PY
-        shell:
-            r'''
-            mkdir -p "{params.outdir}"
-            python "{params.script}" \
-              --tables-dir "{params.tables_dir}" \
-              --disease "{params.disease}" \
-              --outdir "{params.outdir}" \
-              --padj {params.padj} \
-              --basemean {params.basemean} \
-              --lfc {params.lfc} \
-              --core-support-min {params.core_support_min} \
-              --core-support-frac {params.core_support_frac} \
-              --min-anchor-genes {params.min_anchor_genes} \
-              --fallback-topn {params.fallback_topn} \
-              --flip-policy {params.flip_policy} \
-              > "{log}" 2>&1
-            test -s "{output.catalog}" || (echo "ERROR: missing {output.catalog}" >&2; exit 1)
-            '''
-
-
-    # -------------------------------------------------------------------------
-    # RULE: build_pan_cancer_features
-    # -------------------------------------------------------------------------
-    _pan_profiles = PAN_CANCER_MP_CFG.get("disease_profiles",
-                                           config.get("pan_cancer", {}).get("profiles", ["brca", "nbl", "rbl"]))
 # =============================================================================
 # STAGE 8: MARKER POST-PROCESSING (CONSENSUS → FEATURES → EXPRESSION → MAPPING)
 # =============================================================================
@@ -2230,7 +2199,7 @@ if MARKER_POST_ENABLED:
     rule build_component_consensus_markers:
         """Build per-profile consensus markers and summary exports."""
         input:
-            tables_dir=lambda wc: directory(profile_consensus_tables_dir(wc.profile))
+            tables_dir=lambda wc: profile_consensus_tables_dir(wc.profile)
         output:
             summary_done=lambda wc: os.path.join(profile_consensus_summary_dir(wc.profile), "consensus_export_done.txt")
         params:
