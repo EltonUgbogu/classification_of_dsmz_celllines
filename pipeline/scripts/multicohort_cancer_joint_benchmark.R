@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# pan_cancer_joint_benchmark.R
+# multicohort_cancer_joint_benchmark.R
 
 # ---- Thread limits (HPC-safe) ----
 n_threads <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "8"))
@@ -22,7 +22,7 @@ options(mc.cores = n_threads)
 Sys.setenv(RCPP_PARALLEL_NUM_THREADS = n_threads)
 
 #
-# Joint tumour vs joint cell line pan-cancer benchmarking
+# Joint tumour vs joint cell line multicohort benchmarking
 # - Build ONE joint expression matrix from multiple "joint VST" disease matrices
 # - Run UMAP (no PCA / no cPCA)
 # - Benchmark feature selection methods × UMAP distance metrics
@@ -32,7 +32,7 @@ Sys.setenv(RCPP_PARALLEL_NUM_THREADS = n_threads)
 #   --vst_list: space-separated paths to joint VST RDS files (one per profile, in same order)
 #
 # OUTPUT:
-#   results/pan_cancer_joint_benchmark/
+#   results/multicohort_cancer_benchmark/
 #     inputs/joint_expr_matrix.rds
 #     inputs/joint_metadata.tsv
 #     benchmarks/summary.tsv
@@ -50,6 +50,7 @@ suppressPackageStartupMessages({
   library(optparse)
   library(scales)
   library(matrixStats)
+  library(RColorBrewer)
 })
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0 || all(is.na(x))) y else x
@@ -60,11 +61,11 @@ suppressPackageStartupMessages({
 option_list <- list(
   make_option("--pipe_root", type="character", default=".",
               help="Pipeline root [default: %default]"),
-  make_option("--outdir", type="character", default="results/pan_cancer_joint_benchmark",
+  make_option("--outdir", type="character", default="results/multicohort_cancer_benchmark",
               help="Output directory [default: %default]"),
 
   # Profiles and their VST paths (from Snakemake)
-  make_option("--profiles", type="character", default="brca,nbl,rbl",
+  make_option("--profiles", type="character", default="brca,nbl,rbl,heme",
               help="Comma-separated profile names [default: %default]"),
   make_option("--vst_list", type="character", default="",
               help="Space-separated paths to joint VST RDS files (one per profile, in same order as --profiles)"),
@@ -131,10 +132,18 @@ profile_to_cancer <- function(prof) {
     prof_upper == "BRCA" ~ "BRCA",
     prof_upper == "NBL"  ~ "NBL",
     prof_upper == "RBL"  ~ "RBL",
-    prof_upper %in% c("LEU", "LYM", "LEU_LYM", "LEU/LYM") ~ "LEU/LYM",
+    prof_upper %in% c("HEME", "HEM", "HEMATOLOGIC", "HEMATOLOGY",
+                      "LEU", "LYM", "LEU_LYM", "LEU/LYM") ~ "HEME",
     TRUE ~ prof_upper
   )
 }
+
+cancer_label_map <- c(
+  BRCA = "Breast Cancer",
+  NBL  = "Neuroblastoma",
+  RBL  = "Retinoblastoma",
+  HEME = "Hematologic Malignancy"
+)
 
 # Parse VST paths
 vst_paths <- character(0)
@@ -221,25 +230,33 @@ theme_umap_main <- function() {
 }
 
 prepare_plot_data <- function(df) {
+  disease <- cancer_label_map[df$cancer_type]
+  disease[is.na(disease)] <- df$cancer_type[is.na(disease)]
+  disease_levels <- unique(disease)
   df %>%
     mutate(
-      type = ifelse(sample_type == "Cell Line", "Cell Line", "Tumour"),
-      type = factor(type, levels = c("Tumour", "Cell Line")),
-      disease = case_when(
-        cancer_type == "BRCA"    ~ "Breast Cancer",
-        cancer_type == "NBL"     ~ "Neuroblastoma",
-        cancer_type == "LEU/LYM" ~ "Leukemia/Lymphoma",
-        cancer_type == "RBL"     ~ "Retinoblastoma",
-        TRUE                     ~ cancer_type
-      ),
-      disease = factor(
-        disease,
-        levels = c("Breast Cancer",
-                   "Neuroblastoma",
-                   "Leukemia/Lymphoma",
-                   "Retinoblastoma")
-      )
+      type = factor(ifelse(sample_type == "Cell Line", "Cell Line", "Tumour"),
+                    levels = c("Tumour", "Cell Line")),
+      disease = factor(disease, levels = disease_levels)
     )
+}
+
+build_disease_palette <- function(labels) {
+  base_palette <- c(
+    "Breast Cancer"         = "#E41A1C",
+    "Neuroblastoma"         = "#377EB8",
+    "Retinoblastoma"        = "#FF7F00",
+    "Hematologic Malignancy" = "#4DAF4A"
+  )
+  palette <- setNames(rep(NA_character_, length(labels)), labels)
+  overlap <- intersect(labels, names(base_palette))
+  palette[overlap] <- base_palette[overlap]
+  missing <- labels[is.na(palette)]
+  if (length(missing) > 0) {
+    extra_cols <- RColorBrewer::brewer.pal(max(3, length(missing)), "Dark2")
+    palette[missing] <- extra_cols[seq_along(missing)]
+  }
+  palette
 }
 
 plot_main_overview <- function(df, palette, subtitle_text) {
@@ -267,7 +284,7 @@ plot_main_overview <- function(df, palette, subtitle_text) {
       shape  = guide_legend(order = 2, override.aes = list(size = 3, alpha = 1))
     ) +
     labs(
-      title    = "Pan-Cancer Tumour–Cell Line Alignment",
+      title    = "Multicohort Tumour–Cell Line Alignment",
       subtitle = subtitle_text,
       caption  = "Colour: cancer type; shape: circle = tumour, cross = cell line",
       x = "UMAP 1", y = "UMAP 2"
@@ -707,16 +724,6 @@ submat_root  <- file.path(outdir, "featuresets")   # mirrors per-disease layout
 dir.create(featset_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(submat_root, recursive = TRUE, showWarnings = FALSE)
 
-# ─────────────────────────────────────────────────────────────
-# Benchmark grid: feature selection × distance
-# ─────────────────────────────────────────────────────────────
-disease_palette <- c(
-  "Breast Cancer"       = "#E41A1C",
-  "Neuroblastoma"       = "#377EB8",
-  "Leukemia/Lymphoma"   = "#4DAF4A",
-  "Retinoblastoma"      = "#FF7F00"
-)
-
 all_summaries <- list()
 
 for (fm in feature_methods) {
@@ -807,7 +814,8 @@ for (fm in feature_methods) {
       length(genes_keep), fm, length(genes_keep), dm, opt$n_neighbors, opt$min_dist
     )
 
-    p <- plot_main_overview(plot_df, disease_palette, subtitle)
+    palette <- build_disease_palette(levels(droplevels(plot_df$disease)))
+    p <- plot_main_overview(plot_df, palette, subtitle)
 
     plot_base <- file.path(outdir, "benchmarks", paste0("01_main_overview_", tag))
     save_plot(p, plot_base, width=18, height=10)
@@ -861,4 +869,3 @@ cat("\n=== TOP 10 (by ranking) ===\n")
 print(head(summary_tbl, 10))
 
 cat("\n[SUCCESS] Joint benchmark complete.\n")
-

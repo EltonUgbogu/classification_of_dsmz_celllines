@@ -48,9 +48,9 @@ Valid profiles are the keys under `profiles:` in `config/config.yaml`:
 - `local` - Run on local machine (uses `--cores`)
 - `slurm` - Submit to Slurm cluster (uses `--jobs`)
 
-### Pan-Cancer Analysis
+### Multicohort Benchmark Analysis
 
-Pan-cancer analysis combines data from multiple disease profiles. **You don't use a separate `--profile pan_cancer`** - instead, you specify a pan-cancer target rule:
+The multicohort benchmark combines data from multiple disease profiles. **You don't use a separate `--profile pan_cancer`** — instead, you specify a multicohort target rule:
 
 ```bash
 # Run full pan-cancer pipeline (clustering + consensus + graphs)
@@ -59,14 +59,29 @@ Pan-cancer analysis combines data from multiple disease profiles. **You don't us
 # Run only pan-cancer graphs (if clustering already done)
 ./run_pipeline.sh --profile brca --executor local --cores 8 pan_cancer_graph_targets
 
-# Run pan-cancer joint benchmark
-./run_pipeline.sh --profile brca --executor local --cores 8 pan_cancer_joint_benchmark
+# Run multicohort joint benchmark
+./run_pipeline.sh --profile brca --executor local --cores 8 build_multicohort_joint_benchmark
 ```
 
 **Important:** 
 - `--profile brca` (or any profile) is still required - it sets log paths and config resolution
-- Pan-cancer **profiles included** come from `config.pan_cancer.profiles` (default: `["brca", "nbl", "rbl"]`)
-- Pan-cancer outputs go to `results/pan_cancer/joint_benchmark/` (not profile-specific)
+- Multicohort **profiles included** come from `config.multicohort_cancer.profiles` (default: `["brca", "nbl", "rbl", "heme"]`)
+- Multicohort outputs go to `results/multicohort_cancer_benchmark/` (not profile-specific)
+
+### Dry-run placeholders
+
+When running Snakemake in dry-run mode, create tiny placeholder VST RDS files so the external cohort inputs exist:
+
+```bash
+python scripts/create_dryrun_placeholders.py --config config/config.yaml --profiles brca,nbl,rbl,heme
+snakemake -n --config pipeline_profile=brca
+snakemake -n --config pipeline_profile=nbl
+snakemake -n --config pipeline_profile=rbl
+snakemake -n --config pipeline_profile=heme
+snakemake -n --config pipeline_profile=multicohort_cancer
+```
+
+The helper script is idempotent and will skip any real inputs that already exist.
 
 **To override which profiles are included** (without editing config):
 ```bash

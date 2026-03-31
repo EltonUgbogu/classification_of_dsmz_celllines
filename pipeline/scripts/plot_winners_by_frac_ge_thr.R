@@ -2,7 +2,7 @@
 
 # plot_winners_by_frac_ge_thr.R
 # Creates a dot plot matrix showing the best feature representation per cell line
-# Supports both per-disease and pan_cancer profiles
+# Supports both per-disease and multicohort_cancer profiles
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -37,7 +37,7 @@ option_list <- list(
   make_option("--config", type = "character", default = "config/config.yaml",
               help = "Path to config.yaml"),
   make_option("--profile", type = "character", default = NULL,
-              help = "Profile name (brca, nbl, rbl, or pan_cancer)"),
+              help = "Profile name (brca, nbl, rbl, or multicohort_cancer)"),
   make_option("--winners_tsv", type = "character", default = NULL,
               help = "Path to p_consensus_winners_by_frac_ge_thr.tsv"),
   make_option("--output_prefix", type = "character", default = NULL,
@@ -57,10 +57,10 @@ profile <- cfg$profile
 if (!is.null(opt$output_prefix)) {
   output_prefix <- opt$output_prefix
 } else {
-  if (profile == "pan_cancer") {
+  if (profile == "multicohort_cancer") {
     cfg_full <- yaml::read_yaml(opt$config)
-    pan_cfg <- cfg_full$pan_cancer %||% stop("pan_cancer section not found in config")
-    outdir <- pan_cfg$outdir %||% "results/pan_cancer_joint_benchmark"
+    pan_cfg <- cfg_full$multicohort_cancer %||% stop("multicohort_cancer section not found in config")
+    outdir <- pan_cfg$outdir %||% "results/multicohort_cancer_benchmark"
     if (!dir.exists(outdir)) {
       config_dir <- dirname(normalizePath(opt$config))
       outdir <- file.path(config_dir, "..", outdir)

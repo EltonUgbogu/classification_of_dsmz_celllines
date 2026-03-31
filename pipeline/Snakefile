@@ -164,10 +164,10 @@ analysis_cfg = cfg.get("analysis", {})
 # Controls whether PAM50 gene-set directions are included in the analysis.
 USE_PAM50 = analysis_cfg.get("use_pam50", False)
 
-# Pan-cancer flag that disables PCA pre-processing steps across all profiles
-# to ensure comparability when merging cross-cancer datasets.
-PAN_CFG = config.get("pan_cancer", {})
-DISABLE_PCA_EVERYWHERE = bool(PAN_CFG.get("disable_pca_everywhere", False))
+# Multicohort benchmark flag that disables PCA pre-processing steps across all
+# profiles to ensure comparability when merging cross-cancer datasets.
+MULTICOHORT_CFG = config.get("multicohort_cancer", {})
+DISABLE_PCA_EVERYWHERE = bool(MULTICOHORT_CFG.get("disable_pca_everywhere", False))
 vprint(f"[Snakefile] DISABLE_PCA_EVERYWHERE = {DISABLE_PCA_EVERYWHERE}")
 
 # Resolves the list of feature selection methods and distance metrics from config,
@@ -318,6 +318,98 @@ vprint(f"[Snakefile] UNSUP (final, absolute) = {UNSUP}")
 
 # Resolves the joint VST-normalised expression matrix (absolute; external input).
 VST_JOINT = cfgabs("paths", "vst_joint_rds")
+
+# Multicohort benchmark inputs (only used when running the multicohort profile).
+IS_MULTICOHORT_PROFILE = profile_name == "multicohort_cancer"
+MC_BENCH_PROFILES = [str(p) for p in MULTICOHORT_CFG.get("profiles", [])]
+MC_BENCH_FEATURE_METHODS_LIST = list(MULTICOHORT_CFG.get("feature_methods", ["Variance", "MAD", "Entropy"]))
+if DISABLE_PCA_EVERYWHERE:
+    MC_BENCH_FEATURE_METHODS_LIST = [m for m in MC_BENCH_FEATURE_METHODS_LIST if m.lower() != "pca"]
+MC_BENCH_DIST_METRICS_LIST = list(MULTICOHORT_CFG.get("dist_metrics", ["cosine", "euclidean"]))
+MC_BENCH_FEATURE_METHODS = ",".join(MC_BENCH_FEATURE_METHODS_LIST)
+MC_BENCH_DIST_METRICS = ",".join(MC_BENCH_DIST_METRICS_LIST)
+MC_BENCH_OUTDIR_REL = MULTICOHORT_CFG.get("outdir", "results/multicohort_cancer_benchmark")
+MC_BENCH_OUTDIR = abspath(MC_BENCH_OUTDIR_REL)
+MC_BENCH_INPUT_DIR = os.path.join(MC_BENCH_OUTDIR, "inputs")
+MC_BENCH_EXPR = os.path.join(MC_BENCH_INPUT_DIR, "joint_expr_matrix.rds")
+MC_BENCH_META = os.path.join(MC_BENCH_INPUT_DIR, "joint_metadata.tsv")
+MC_BENCH_N_GENES = int(MULTICOHORT_CFG.get("n_genes", 500))
+MC_BENCH_N_NEIGHBORS = int(MULTICOHORT_CFG.get("n_neighbors", 30))
+MC_BENCH_MIN_DIST = float(MULTICOHORT_CFG.get("min_dist", 0.3))
+MC_BENCH_EVAL_K = int(MULTICOHORT_CFG.get("eval_k", 30))
+MC_BENCH_MAX_SAMPLES = int(MULTICOHORT_CFG.get("max_samples", 0))
+
+if IS_MULTICOHORT_PROFILE and MC_BENCH_PROFILES:
+    MC_BENCH_VST_INPUTS = [profile_vst_joint_abs(p) for p in MC_BENCH_PROFILES]
+    MC_BENCH_FEATURE_METHODS_LIST_STR = " ".join(MC_BENCH_FEATURE_METHODS_LIST)
+    MC_BENCH_PROFILES_ARG = ",".join(MC_BENCH_PROFILES)
+    MC_BENCH_VST_LIST_STR = " ".join(shlex.quote(p) for p in MC_BENCH_VST_INPUTS)
+    if os.path.abspath(VST_JOINT) != os.path.abspath(MC_BENCH_EXPR):
+        raise ValueError(
+            "multicohort profile expects paths.vst_joint_rds to match the benchmark output"
+        )
+
+    rule build_multicohort_joint_benchmark:
+        """Build the multicohort joint benchmark inputs from cohort-level VST matrices."""
+        input:
+            vst_list = MC_BENCH_VST_INPUTS
+        output:
+            summary = os.path.join(MC_BENCH_OUTDIR, "benchmarks", "summary.tsv"),
+            joint_matrix = VST_JOINT,
+            joint_meta = MC_BENCH_META,
+            gene_lists = [
+                os.path.join(
+                    MC_BENCH_OUTDIR,
+                    f"feature_sets_top{MC_BENCH_N_GENES}",
+                    f"genes_top{MC_BENCH_N_GENES}_{method}.txt"
+                )
+                for method in MC_BENCH_FEATURE_METHODS_LIST
+            ],
+            submatrices = [
+                os.path.join(MC_BENCH_OUTDIR, "featuresets", method, "expr_submatrix.rds")
+                for method in MC_BENCH_FEATURE_METHODS_LIST
+            ]
+        params:
+            script = os.path.join(SCRIPTS_DIR, "multicohort_cancer_joint_benchmark.R"),
+            outdir = MC_BENCH_OUTDIR,
+            profiles = MC_BENCH_PROFILES_ARG,
+            feature_methods = MC_BENCH_FEATURE_METHODS,
+            dist_metrics = MC_BENCH_DIST_METRICS,
+            n_genes = MC_BENCH_N_GENES,
+            n_neighbors = MC_BENCH_N_NEIGHBORS,
+            min_dist = MC_BENCH_MIN_DIST,
+            eval_k = MC_BENCH_EVAL_K,
+            max_samples = MC_BENCH_MAX_SAMPLES,
+            feature_methods_list = MC_BENCH_FEATURE_METHODS_LIST_STR,
+            vst_list_str = MC_BENCH_VST_LIST_STR
+        log:
+            os.path.join(LOGROOT, "multicohort_joint_benchmark.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            set -euo pipefail
+            mkdir -p \
+              "{params.outdir}/inputs" \
+              "{params.outdir}/benchmarks" \
+              "{params.outdir}/feature_sets_top{params.n_genes}" \
+              "{params.outdir}/featuresets"
+            for m in {params.feature_methods_list}; do
+              mkdir -p "{params.outdir}/featuresets/${{m}}"
+            done
+            Rscript "{params.script}" \
+              --pipe_root "{PIPE_ROOT}" \
+              --outdir "{params.outdir}" \
+              --profiles "{params.profiles}" \
+              --vst_list "{params.vst_list_str}" \
+              --feature_methods "{params.feature_methods}" \
+              --dist_metrics "{params.dist_metrics}" \
+              --n_genes {params.n_genes} \
+              --n_neighbors {params.n_neighbors} \
+              --min_dist {params.min_dist} \
+              --eval_k {params.eval_k} \
+              --max_samples {params.max_samples} \
+              > "{log}" 2>&1
+            '''
 
 # Feature list paths.
 # _REL variant → used in rule output: declarations (relative, for portable DAG tracking).
@@ -2171,7 +2263,7 @@ if DESEQ2_ENABLED:
 # =============================================================================
 
 MARKER_POST_CFG = config.get("defaults", {}).get("marker_postprocessing", {})
-MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False))
+MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False)) and profile_name == "multicohort_cancer"
 
 if MARKER_POST_ENABLED:
     CONSENSUS_CFG = MARKER_POST_CFG.get("consensus", {})
@@ -2197,6 +2289,12 @@ if MARKER_POST_ENABLED:
 
     def profile_consensus_summary_dir(profile):
         return os.path.join(profile_consensus_outdir(profile), "summary")
+
+    def profile_consensus_summary_rel(profile):
+        return os.path.join(
+            "results", "unsupervised", profile,
+            "deseq2_markers", CONSENSUS_OUTDIR_NAME, "summary"
+        )
 
     rule build_component_consensus_markers:
         """Build per-profile consensus markers and summary exports."""
@@ -2267,7 +2365,7 @@ if MARKER_POST_ENABLED:
         """Merge per-profile summaries into a pan-cancer feature panel."""
         input:
             summaries=[
-                os.path.join(profile_consensus_summary_dir(p), "consensus_export_done.txt")
+                os.path.join(profile_consensus_summary_rel(p), "consensus_export_done.txt")
                 for p in PAN_PROFILES
             ]
         output:
@@ -2302,6 +2400,9 @@ if MARKER_POST_ENABLED:
             test -s "{output.features_tsv}" || (echo "ERROR: missing {output.features_tsv}" >&2; exit 1)
             '''
 
+    PAN_EXPR_RDS = abspath(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"))
+    PAN_EXPR_META = abspath(PAN_EXPR_CFG.get("output_meta_tsv", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv"))
+
     rule build_pan_cancer_feature_expression_matrix:
         """Combine per-profile VST inputs into the feature-restricted pan-cancer matrix."""
         input:
@@ -2310,8 +2411,8 @@ if MARKER_POST_ENABLED:
             nbl  = lambda wc: profile_vst_joint_abs("nbl"),
             rbl  = lambda wc: profile_vst_joint_abs("rbl")
         output:
-            expr_rds = abspath(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds")),
-            meta_tsv = abspath(PAN_EXPR_CFG.get("output_meta_tsv", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv"))
+            expr_rds = PAN_EXPR_RDS,
+            meta_tsv = PAN_EXPR_META
         params:
             script=os.path.join(SCRIPTS_DIR, "build_pan_cancer_expression_matrix.R"),
             metadata=abspath(PAN_EXPR_CFG.get("metadata_fallback_csv", "")) if PAN_EXPR_CFG.get("metadata_fallback_csv") else "",
@@ -2343,7 +2444,7 @@ if MARKER_POST_ENABLED:
     rule score_tumour_cellline_mapping:
         """Score tumour-to-cell-line mappings using the combined expression object."""
         input:
-            expr_rds = PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds")
+            expr_rds = PAN_EXPR_RDS
         output:
             metrics_summary = mapping_metrics_summary()
         params:
@@ -2377,11 +2478,11 @@ if MARKER_POST_ENABLED:
 # Final pipeline terminal target list.
 PIPELINE_TARGET = [
     os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbors.tsv"),
-    NODE_STATS_TSV,
 ]
 if DESEQ2_ENABLED:
+    PIPELINE_TARGET.append(NODE_STATS_TSV)
     PIPELINE_TARGET.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
 
 if MARKER_POST_ENABLED:
-    PIPELINE_TARGET.append(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"))
+    PIPELINE_TARGET.append(PAN_EXPR_RDS)
     PIPELINE_TARGET.append(mapping_metrics_summary())

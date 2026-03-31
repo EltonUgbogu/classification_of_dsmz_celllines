@@ -74,10 +74,10 @@ defaults:
       global_gene_regex: "^RPL|^RPS|^MT-|^HIST"
       gene_symbol_map: ""
 
-# Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
-# pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
-# outdir, run_validation). Mirrors profiles.pan_cancer semantics.
-pan_cancer:
+# Top-level multicohort_cancer block: read by the Snakefile to drive the
+# multicohort joint benchmark (feature_methods, dist_metrics, profiles,
+# outdir, run_validation). Mirrors profiles.multicohort_cancer semantics.
+multicohort_cancer:
   dist_metrics:
     - euc
     - corr
@@ -90,30 +90,31 @@ pan_cancer:
     - Spearman
     - MX
     - kTotal
-  outdir: results/pan_cancer_joint_benchmark
+  outdir: results/multicohort_cancer_benchmark
   run_validation: true
   profiles:
     - brca
     - nbl
     - rbl
+    - heme
   tumour_neighbourhoods:
     p_consensus_threshold: 0.7
   validation:
     outdir: results/unsupervised/pan_cancer
   paths:
-    unsup_root: results/pan_cancer_joint_benchmark/unsupervised
-    vst_joint_rds: results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds
+    unsup_root: results/multicohort_cancer_benchmark/unsupervised
+    vst_joint_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
   features:
-    hvg_joint_scores_tsv: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
-    hvg_final_gene_list: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
+    hvg_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
+    hvg_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
 
 profiles:
   # ---------------------------------------------------------------------------
-  # pan_cancer — full 8-method × 2-distance grid; no PAM50
+  # multicohort_cancer — full 8-method × 2-distance grid; no PAM50
   # ---------------------------------------------------------------------------
-  pan_cancer:
+  multicohort_cancer:
     analysis:
-      cancer_type: Pan-Cancer
+      cancer_type: Multicohort Cancer
       use_pam50: false
     feature_sets:
       distances:
@@ -129,12 +130,12 @@ profiles:
         - MX
         - kTotal
     paths:
-      unsup_root: results/pan_cancer_joint_benchmark/unsupervised
-      vst_joint_rds: results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds
-      cell_vst_rds: results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds
-      tumour_vst_rds: results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds
-      dsmz_meta_csv: results/unsupervised/pan_cancer/inputs/joint_metadata.tsv
-      meta_tsv: results/unsupervised/pan_cancer/inputs/joint_metadata.tsv
+      unsup_root: results/multicohort_cancer_benchmark/unsupervised
+      vst_joint_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
+      cell_vst_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
+      tumour_vst_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
+      dsmz_meta_csv: results/multicohort_cancer_benchmark/inputs/joint_metadata.tsv
+      meta_tsv: results/multicohort_cancer_benchmark/inputs/joint_metadata.tsv
     tumour_neighbourhoods:
       directions:
         - Variance_euc
@@ -154,8 +155,8 @@ profiles:
         - kTotal_euc
         - kTotal_corr
     features:
-      hvg_joint_scores_tsv: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
-      hvg_final_gene_list: results/pan_cancer_joint_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
+      hvg_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
+      hvg_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # brca — full 8-method × 2-distance grid

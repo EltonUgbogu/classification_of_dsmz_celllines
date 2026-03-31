@@ -122,7 +122,7 @@ if (file.exists(lib_config_path)) {
 #
 # Configuration:
 #   --config             Path to config.yaml (default: config/config.yaml)
-#   --profile            Profile name (brca, nbl, rbl, or pan_cancer)
+#   --profile            Profile name (brca, nbl, rbl, or multicohort_cancer)
 #
 # Optional overrides:
 #   --direction_summary_tsv   Path to direction summary for global best selection
@@ -134,7 +134,7 @@ option_list <- list(
   make_option("--config", type = "character", default = "config/config.yaml",
               help = "Path to config.yaml"),
   make_option("--profile", type = "character", default = NULL,
-              help = "Profile name (brca, nbl, rbl, or pan_cancer)"),
+              help = "Profile name (brca, nbl, rbl, or multicohort_cancer)"),
 
   make_option("--winners_tsv", type = "character", default = NULL,
               help = "Path to p_consensus_winners_by_frac_ge_thr.tsv (per-cell-line best direction)"),
@@ -196,7 +196,7 @@ resolve_path_if_needed <- function(p, config_path) {
 #
 #   1. Explicit --graph_root argument (highest priority)
 #   2. Profile-specific default paths:
-#      - pan_cancer: {outdir}/graphs/dsmz_dsmz/within
+#      - multicohort_cancer: {outdir}/graphs/dsmz_dsmz/within
 #      - Other profiles: {unsup_root}/tumour_neighbourhoods
 #
 # The script validates that the resolved directory exists before proceeding.
@@ -208,13 +208,13 @@ if (!is.null(opt$graph_root) && nzchar(opt$graph_root)) {
          " (resolved to: ", tumour_nh_root, ")")
   }
 } else {
-  if (profile == "pan_cancer") {
-    # Pan-cancer profile: read from dedicated pan_cancer config section
+  if (profile == "multicohort_cancer") {
+    # Pan-cancer profile: read from dedicated multicohort_cancer config section
     cfg_full <- yaml::read_yaml(opt$config)
-    pan_cfg <- cfg_full$pan_cancer %||%
-      stop("pan_cancer section not found in config")
+    mc_cfg <- cfg_full$multicohort_cancer %||%
+      stop("multicohort_cancer section not found in config")
 
-    outdir <- pan_cfg$outdir %||% "results/pan_cancer_joint_benchmark"
+    outdir <- mc_cfg$outdir %||% "results/multicohort_cancer_benchmark"
     outdir <- resolve_path_if_needed(outdir, opt$config)
 
     tumour_nh_root <- file.path(outdir, "graphs", "dsmz_dsmz", "within")
@@ -251,13 +251,13 @@ if (!dir.exists(tumour_nh_root)) {
 #   - These correspond to highly-variable genes (HVG) or PAM50 gene sets
 #     combined with Euclidean or correlation-based distances.
 
-if (profile == "pan_cancer") {
+if (profile == "multicohort_cancer") {
   cfg_full <- yaml::read_yaml(opt$config)
-  pan_cfg <- cfg_full$pan_cancer %||%
-    stop("pan_cancer section not found in config")
-  feature_methods <- pan_cfg$feature_methods %||%
+  mc_cfg <- cfg_full$multicohort_cancer %||%
+    stop("multicohort_cancer section not found in config")
+  feature_methods <- mc_cfg$feature_methods %||%
     c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal")
-  dist_metrics <- pan_cfg$dist_metrics %||%
+  dist_metrics <- mc_cfg$dist_metrics %||%
     c("euc", "corr")
   directions <- paste0(rep(feature_methods, each = length(dist_metrics)), "_",
                        rep(dist_metrics, times = length(feature_methods)))
@@ -351,7 +351,7 @@ get_neighbors <- function(edges_df, node) {
 # This ensures we use all available directions, not just those in config
 discovered_directions <- character()
 if (dir.exists(tumour_nh_root)) {
-  if (profile == "pan_cancer") {
+  if (profile == "multicohort_cancer") {
     # Pan-cancer: look for {direction}/DSMZ_DSMZ_graph_edges_{direction}.tsv
     subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
     for (subdir in subdirs) {
@@ -383,7 +383,7 @@ if (length(discovered_directions) > 0) {
 
 edges_list <- list()
 for (d in directions) {
-  edge_file <- if (profile == "pan_cancer") {
+  edge_file <- if (profile == "multicohort_cancer") {
     file.path(tumour_nh_root, d, paste0("DSMZ_DSMZ_graph_edges_", d, ".tsv"))
   } else {
     file.path(tumour_nh_root, d, "final_consensus",
@@ -658,17 +658,17 @@ resolved_neighbors_formatted <- resolved_neighbors %>%
 #
 #   1. Explicit --output_tsv argument (highest priority)
 #   2. Profile-specific defaults:
-#      - pan_cancer: {outdir}/unsupervised/tumour_neighbourhoods/final_consensus_all/
+#      - multicohort_cancer: {outdir}/unsupervised/tumour_neighbourhoods/final_consensus_all/
 #      - Other: {unsup_root}/tumour_neighbourhoods/final_consensus_all/
 #
 # Parent directories are created automatically if they do not exist.
 
 if (is.null(opt$output_tsv) || !nzchar(opt$output_tsv)) {
-  if (profile == "pan_cancer") {
+  if (profile == "multicohort_cancer") {
     cfg_full <- yaml::read_yaml(opt$config)
-    pan_cfg <- cfg_full$pan_cancer %||%
-      stop("pan_cancer section not found in config")
-    outdir <- pan_cfg$outdir %||% "results/pan_cancer_joint_benchmark"
+    mc_cfg <- cfg_full$multicohort_cancer %||%
+      stop("multicohort_cancer section not found in config")
+    outdir <- mc_cfg$outdir %||% "results/multicohort_cancer_benchmark"
     outdir <- resolve_path_if_needed(outdir, opt$config)
     output_tsv <- file.path(outdir, "unsupervised", "tumour_neighbourhoods",
                             "final_consensus_all", "resolved_dsmz_neighbors.tsv")
