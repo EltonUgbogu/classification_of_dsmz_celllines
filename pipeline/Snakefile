@@ -371,6 +371,7 @@ if IS_MULTICOHORT_PROFILE and MC_BENCH_PROFILES:
             ]
         params:
             script = os.path.join(SCRIPTS_DIR, "multicohort_cancer_joint_benchmark.R"),
+            pipe_root = PIPE_ROOT,
             outdir = MC_BENCH_OUTDIR,
             profiles = MC_BENCH_PROFILES_ARG,
             feature_methods = MC_BENCH_FEATURE_METHODS,
@@ -397,7 +398,7 @@ if IS_MULTICOHORT_PROFILE and MC_BENCH_PROFILES:
               mkdir -p "{params.outdir}/featuresets/${{m}}"
             done
             Rscript "{params.script}" \
-              --pipe_root "{PIPE_ROOT}" \
+              --pipe_root "{params.pipe_root}" \
               --outdir "{params.outdir}" \
               --profiles "{params.profiles}" \
               --vst_list "{params.vst_list_str}" \
@@ -577,8 +578,12 @@ def dir_to_gene_list(direction):
     Routes PAM50 directions to their dedicated Ensembl ID list, legacy HVG directions
     to the canonical MX gene set, and new feature-set directions to their method-specific
     top-N gene list produced by feature_selection_unsupervised.
+
+    Raises ValueError or AssertionError if the direction is invalid or unmapped, ensuring
+    that new directions cannot silently reuse an incorrect gene list.
     """
     feature = dir_to_feature(direction)
+
     if feature == "pam50":
         if not USE_PAM50:
             raise ValueError(f"PAM50 direction requested ({direction}) but use_pam50=false for profile={profile_name}")
@@ -588,9 +593,16 @@ def dir_to_gene_list(direction):
     elif feature == "hvg":
         # Legacy HVG direction maps to the MX gene list (top-500 canonical HVG set).
         return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn('MX')}_MX.txt")
-    else:
+    elif feature in FEATURE_METHODS:
         # Feature-set directions: filename encodes the method-specific top-N.
+        # Using FEATURE_METHODS ensures we only handle recognized methods.
         return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(feature)}_{feature}.txt")
+    else:
+        # Unknown feature: fail loudly to prevent silent reuse of a default gene list.
+        raise ValueError(
+            f"Unknown feature '{feature}' extracted from direction '{direction}'. "
+            f"Known features: {sorted(set(FEATURE_METHODS) | {'hvg', 'pam50'})}"
+        )
 
 
 def dir_to_geneset(direction):
@@ -602,6 +614,55 @@ def dir_to_geneset(direction):
         return f"HVG{method_topn('MX')}"
     else:
         return f"{feature}_top{method_topn(feature)}"
+
+
+def validate_direction_to_gene_list(direction):
+    """
+    Validates that a direction string correctly resolves to its gene-list file.
+    Raises an AssertionError if the resolved feature is unknown or unmapped.
+    This safeguard prevents silent bugs where multiple directions collapse onto
+    a single hardcoded gene-list file (regression test for the consensus_cluster_ccp bug).
+    """
+    feature = dir_to_feature(direction)
+
+    # Check that the extracted feature is recognized.
+    known_features = {"pam50", "hvg"} | set(FEATURE_METHODS)
+    assert feature in known_features, \
+        f"Unknown feature '{feature}' extracted from direction '{direction}'. " \
+        f"Known features: {sorted(known_features)}"
+
+    # Verify the gene-list file path is well-formed and method-specific.
+    gene_list_path = dir_to_gene_list(direction)
+
+    # Extract method name from filename (e.g., genes_top500_MX.txt -> MX)
+    filename = os.path.basename(gene_list_path)
+    if not filename.startswith("genes_top"):
+        raise AssertionError(
+            f"Gene list file '{gene_list_path}' has unexpected name format. "
+            f"Expected 'genes_top<N>_<method>.txt' pattern."
+        )
+
+    # Verify that the filename method matches the direction-derived feature.
+    # (Skip check for hvg since it maps to MX file, and pam50 is special.)
+    if feature not in ("hvg", "pam50"):
+        if not filename.endswith(f"_{feature}.txt"):
+            raise AssertionError(
+                f"Gene list for direction '{direction}' (method '{feature}') "
+                f"resolved to file '{filename}', which does not end with '_{feature}.txt'. "
+                f"This indicates a misalignment in the direction-to-gene-list mapping."
+            )
+
+    return gene_list_path
+
+
+# ---------------------------------------------------------------------------
+# DIRECTION → GENE-LIST VALIDATION (runs at Snakefile parse time)
+# Catches mapping bugs early: every declared direction must resolve to a
+# gene-list file whose filename encodes the correct feature method.
+# ---------------------------------------------------------------------------
+for _d in AGN_DIRECTIONS:
+    validate_direction_to_gene_list(_d)
+vprint(f"[Snakefile] Direction→gene-list validation passed for {len(AGN_DIRECTIONS)} directions")
 
 
 def agn_outdir_dir(direction, kind):
@@ -1274,8 +1335,10 @@ rule consensus_cluster_ccp:
     """
     input:
         config   = CFGFILE_ABS,
-        # Uses the canonical MX gene list as the HVG500 set for all consensus runs.
-        hvg_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt")
+        # Resolves direction-specific feature-list file using dir_to_gene_list helper.
+        # Each direction (e.g. Variance_euc, PCA_corr, MX_euc) maps to its corresponding
+        # method's gene list, ensuring clustering uses the correct feature set.
+        hvg_list = lambda wc: dir_to_gene_list(wc.direction)
     output:
         cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
     params:
@@ -2403,22 +2466,41 @@ if MARKER_POST_ENABLED:
     PAN_EXPR_RDS = abspath(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"))
     PAN_EXPR_META = abspath(PAN_EXPR_CFG.get("output_meta_tsv", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv"))
 
+    # Precompute optional CLI fragments for the expression matrix rule.
+    # Snakemake shell blocks only support simple {name} placeholders, NOT
+    # inline Python expressions like {expr if cond else ""}.
+    _PAN_EXPR_HEME_PATH = profile_vst_joint_abs("heme") if PAN_EXPR_CFG.get("include_heme") else ""
+    _PAN_EXPR_METADATA_PATH = abspath(PAN_EXPR_CFG.get("metadata_fallback_csv", "")) if PAN_EXPR_CFG.get("metadata_fallback_csv") else ""
+    _PAN_EXPR_HEME_ARG = f'--heme-vst "{_PAN_EXPR_HEME_PATH}"' if _PAN_EXPR_HEME_PATH else ""
+    _PAN_EXPR_METADATA_ARG = f'--metadata "{_PAN_EXPR_METADATA_PATH}"' if _PAN_EXPR_METADATA_PATH else ""
+    _PAN_EXPR_OUTPUT_META_ARG = f'--output-metadata "{PAN_EXPR_META}"' if PAN_EXPR_META else ""
+
+    # Precompute concrete input paths (avoid lambdas in input:).
+    _PAN_EXPR_BRCA_VST = profile_vst_joint_abs("brca")
+    _PAN_EXPR_NBL_VST = profile_vst_joint_abs("nbl")
+    _PAN_EXPR_RBL_VST = profile_vst_joint_abs("rbl")
+
+    # Build the input list; include heme VST only when configured.
+    _PAN_EXPR_INPUTS = [_PAN_EXPR_BRCA_VST, _PAN_EXPR_NBL_VST, _PAN_EXPR_RBL_VST]
+    if _PAN_EXPR_HEME_PATH:
+        _PAN_EXPR_INPUTS.append(_PAN_EXPR_HEME_PATH)
+
     rule build_pan_cancer_feature_expression_matrix:
         """Combine per-profile VST inputs into the feature-restricted pan-cancer matrix."""
         input:
             genes = PAN_FEATURES_CLEAN,
-            brca = lambda wc: profile_vst_joint_abs("brca"),
-            nbl  = lambda wc: profile_vst_joint_abs("nbl"),
-            rbl  = lambda wc: profile_vst_joint_abs("rbl")
+            brca = _PAN_EXPR_BRCA_VST,
+            nbl  = _PAN_EXPR_NBL_VST,
+            rbl  = _PAN_EXPR_RBL_VST
         output:
             expr_rds = PAN_EXPR_RDS,
             meta_tsv = PAN_EXPR_META
         params:
-            script=os.path.join(SCRIPTS_DIR, "build_pan_cancer_expression_matrix.R"),
-            metadata=abspath(PAN_EXPR_CFG.get("metadata_fallback_csv", "")) if PAN_EXPR_CFG.get("metadata_fallback_csv") else "",
-            heme_path=profile_vst_joint_abs("heme") if PAN_EXPR_CFG.get("include_heme") else "",
-            output_meta=PAN_EXPR_CFG.get("output_meta_tsv", ""),
-            expr_dir=os.path.abspath(os.path.dirname(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds")))
+            script = os.path.join(SCRIPTS_DIR, "build_pan_cancer_expression_matrix.R"),
+            heme_arg = _PAN_EXPR_HEME_ARG,
+            metadata_arg = _PAN_EXPR_METADATA_ARG,
+            output_meta_arg = _PAN_EXPR_OUTPUT_META_ARG,
+            expr_dir = os.path.abspath(os.path.dirname(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds")))
         log: os.path.join(LOGROOT, "build_pan_cancer_expression_matrix.log")
         conda: CONDA_ENV_R
         shell:
@@ -2428,11 +2510,11 @@ if MARKER_POST_ENABLED:
               --brca-vst "{input.brca}" \
               --nbl-vst "{input.nbl}" \
               --rbl-vst "{input.rbl}" \
-              {"--heme-vst \"" + params.heme_path + "\"" if params.heme_path else ""} \
-              {"--metadata \"" + params.metadata + "\"" if params.metadata else ""} \
+              {params.heme_arg} \
+              {params.metadata_arg} \
               --genes "{input.genes}" \
               --output "{output.expr_rds}" \
-              {"--output-metadata \"" + output.meta_tsv + "\"" if output.meta_tsv else ""} \
+              {params.output_meta_arg} \
               > "{log}" 2>&1
             '''
 
@@ -2440,6 +2522,10 @@ if MARKER_POST_ENABLED:
 
     def mapping_metrics_summary():
         return os.path.join(MAPPING_OUTDIR, "metrics_summary.tsv")
+
+    # Precompute optional CLI fragment for gene-symbol-map.
+    _MAPPING_GENE_MAP_RAW = MAPPING_CFG.get("gene_symbol_map", "")
+    _MAPPING_GENE_MAP_ARG = f'--gene-symbol-map "{_MAPPING_GENE_MAP_RAW}"' if _MAPPING_GENE_MAP_RAW else ""
 
     rule score_tumour_cellline_mapping:
         """Score tumour-to-cell-line mappings using the combined expression object."""
@@ -2455,7 +2541,7 @@ if MARKER_POST_ENABLED:
             zscore_value="TRUE" if MAPPING_CFG.get("zscore_cohort", True) else "FALSE",
             drop_global_value="TRUE" if MAPPING_CFG.get("drop_global_genes", True) else "FALSE",
             global_regex=MAPPING_CFG.get("global_gene_regex", "^RPL|^RPS|^MT-|^HIST"),
-            gene_map=MAPPING_CFG.get("gene_symbol_map", "")
+            gene_map_arg=_MAPPING_GENE_MAP_ARG
         log: os.path.join(LOGROOT, "score_tumour_cellline_mapping.log")
         conda: CONDA_ENV_R
         shell:
@@ -2469,7 +2555,7 @@ if MARKER_POST_ENABLED:
               --global-gene-regex "{params.global_regex}" \
               --zscore-cohort {params.zscore_value} \
               --drop-global-genes {params.drop_global_value} \
-              {"--gene-symbol-map \"" + params.gene_map + "\"" if params.gene_map else ""} \
+              {params.gene_map_arg} \
               > "{log}" 2>&1
             test -s "{output.metrics_summary}" || (echo "ERROR: missing {output.metrics_summary}" >&2; exit 1)
             '''
