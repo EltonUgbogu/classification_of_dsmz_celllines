@@ -68,6 +68,28 @@ The multicohort benchmark combines data from multiple disease profiles. **You do
 - Multicohort **profiles included** come from `config.multicohort_cancer.profiles` (default: `["brca", "nbl", "rbl", "heme"]`)
 - Multicohort outputs go to `results/multicohort_cancer_benchmark/` (not profile-specific)
 
+### Dry-Run Validation (without real data)
+
+To verify that the Snakemake DAG builds correctly without requiring real cohort data files, use the placeholder helper script followed by `snakemake -n`:
+
+```bash
+# 1. Create minimal valid placeholder files at configured source paths
+python scripts/create_dryrun_placeholders.py \
+  --config config/config.yaml \
+  --profiles brca,nbl,rbl,heme
+
+# 2. Dry-run each single-cohort profile
+snakemake -n --config pipeline_profile=brca
+snakemake -n --config pipeline_profile=nbl
+snakemake -n --config pipeline_profile=rbl
+snakemake -n --config pipeline_profile=heme
+
+# 3. Dry-run the multicohort aggregate benchmark
+snakemake -n --config pipeline_profile=multicohort_cancer
+```
+
+The placeholder script reads `config/config.yaml`, finds the configured external source paths for each profile (VST matrices, metadata CSVs, counts RDS), and creates tiny valid RDS/CSV files at those paths only if the real files do not already exist. A manifest is written to `results/dryrun_placeholders/manifest.tsv` recording what was created or skipped.
+
 ### Dry-run placeholders
 
 When running Snakemake in dry-run mode, create tiny placeholder VST RDS files so the external cohort inputs exist:
