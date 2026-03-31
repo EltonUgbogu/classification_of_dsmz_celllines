@@ -574,17 +574,23 @@ def dir_to_dist(direction):
 
 def dir_to_gene_list(direction):
     """
-    Returns the absolute path to the gene list file appropriate for a given direction.
-    Routes PAM50 directions to their dedicated Ensembl ID list, legacy HVG directions
-    to the canonical MX gene set, and new feature-set directions to their method-specific
-    top-N gene list produced by feature_selection_unsupervised.
+    Returns the **relative** path to the gene list file appropriate for a given
+    direction.  The path style MUST match the producer rule
+    (feature_selection_unsupervised), which declares its outputs under the
+    relative FEATURESETS_DIR_REL.  Using the absolute FEATURESETS_DIR here would
+    cause a MissingInputException because Snakemake tracks files by the exact
+    path string used in the output: declaration.
 
-    Raises ValueError or AssertionError if the direction is invalid or unmapped, ensuring
-    that new directions cannot silently reuse an incorrect gene list.
+    PAM50 gene lists are external resource files (not rule-produced), so they
+    use absolute paths via cfgabs().
+
+    Raises ValueError if the direction contains an unknown feature method.
     """
     feature = dir_to_feature(direction)
 
     if feature == "pam50":
+        # PAM50 gene lists are external resources, not produced by a rule.
+        # Absolute paths are correct here.
         if not USE_PAM50:
             raise ValueError(f"PAM50 direction requested ({direction}) but use_pam50=false for profile={profile_name}")
         if "pam50" in cfg and "ensembl_gene_list" in cfg["pam50"]:
@@ -592,11 +598,12 @@ def dir_to_gene_list(direction):
         return cfgabs("features", "pam50_ensembl_gene_list")
     elif feature == "hvg":
         # Legacy HVG direction maps to the MX gene list (top-500 canonical HVG set).
-        return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn('MX')}_MX.txt")
+        # Uses FEATURESETS_DIR_REL to match the producer rule output.
+        return os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn('MX')}_MX.txt")
     elif feature in FEATURE_METHODS:
         # Feature-set directions: filename encodes the method-specific top-N.
-        # Using FEATURE_METHODS ensures we only handle recognized methods.
-        return os.path.join(FEATURESETS_DIR, f"genes_top{method_topn(feature)}_{feature}.txt")
+        # Uses FEATURESETS_DIR_REL to match the producer rule output.
+        return os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(feature)}_{feature}.txt")
     else:
         # Unknown feature: fail loudly to prevent silent reuse of a default gene list.
         raise ValueError(
@@ -619,28 +626,33 @@ def dir_to_geneset(direction):
 def validate_direction_to_gene_list(direction):
     """
     Validates that a direction string correctly resolves to its gene-list file.
-    Raises an AssertionError if the resolved feature is unknown or unmapped.
-    This safeguard prevents silent bugs where multiple directions collapse onto
-    a single hardcoded gene-list file (regression test for the consensus_cluster_ccp bug).
+    Three checks:
+      1. The feature method parsed from the direction is recognized.
+      2. The resolved filename encodes the correct method name.
+      3. Non-PAM50 paths are relative (matching the producer rule output style),
+         preventing the absolute-vs-relative MissingInputException.
+
+    Runs at Snakefile parse time to catch bugs before any job executes.
     """
     feature = dir_to_feature(direction)
 
-    # Check that the extracted feature is recognized.
+    # 1. Check that the extracted feature is recognized.
     known_features = {"pam50", "hvg"} | set(FEATURE_METHODS)
     assert feature in known_features, \
         f"Unknown feature '{feature}' extracted from direction '{direction}'. " \
         f"Known features: {sorted(known_features)}"
 
-    # Verify the gene-list file path is well-formed and method-specific.
+    # 2. Verify the gene-list file path is well-formed and method-specific.
     gene_list_path = dir_to_gene_list(direction)
-
-    # Extract method name from filename (e.g., genes_top500_MX.txt -> MX)
     filename = os.path.basename(gene_list_path)
-    if not filename.startswith("genes_top"):
-        raise AssertionError(
-            f"Gene list file '{gene_list_path}' has unexpected name format. "
-            f"Expected 'genes_top<N>_<method>.txt' pattern."
-        )
+
+    # For feature-set directions (not pam50), verify filename format.
+    if feature not in ("pam50",):
+        if not filename.startswith("genes_top"):
+            raise AssertionError(
+                f"Gene list file '{gene_list_path}' has unexpected name format. "
+                f"Expected 'genes_top<N>_<method>.txt' pattern."
+            )
 
     # Verify that the filename method matches the direction-derived feature.
     # (Skip check for hvg since it maps to MX file, and pam50 is special.)
@@ -651,6 +663,17 @@ def validate_direction_to_gene_list(direction):
                 f"resolved to file '{filename}', which does not end with '_{feature}.txt'. "
                 f"This indicates a misalignment in the direction-to-gene-list mapping."
             )
+
+    # 3. Non-PAM50 paths must be relative to match the producer rule
+    #    (feature_selection_unsupervised) output declarations.
+    #    Absolute paths would cause Snakemake MissingInputException.
+    if feature != "pam50" and os.path.isabs(gene_list_path):
+        raise AssertionError(
+            f"Gene list path for direction '{direction}' is absolute: {gene_list_path}\n"
+            f"The producer rule (feature_selection_unsupervised) declares outputs as "
+            f"relative paths under FEATURESETS_DIR_REL={FEATURESETS_DIR_REL}.\n"
+            f"Using an absolute path here will cause a MissingInputException."
+        )
 
     return gene_list_path
 
