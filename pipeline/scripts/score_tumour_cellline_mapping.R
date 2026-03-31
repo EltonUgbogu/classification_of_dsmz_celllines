@@ -304,14 +304,14 @@ if (!opt$similarity %in% valid_similarity) {
 # Critical inputs are validated before proceeding to prevent cryptic errors
 # during execution. The script requires:
 #
-#   1. Cell line expression data (--pan-cancer-expr): Reference database
-#   2. Feature gene list (--genes): Defines comparison space
-#   3. Output directory (--output-dir): Required for saving results
+#   1. Feature-restricted pan-cancer expression (--pan-cancer-expr)
+#   2. Output directory (--output-dir)
 #
-# Joint VST files are validated at load time as they are conditionally used.
+# Joint VST inputs are retained for backwards compatibility but ignored in the
+# default config-driven pipeline.
 
-if (is.null(opt$`pan-cancer-expr`) || is.null(opt$genes) || is.null(opt$`output-dir`)) {
-  stop("--pan-cancer-expr, --genes, and --output-dir are required")
+if (is.null(opt$`pan-cancer-expr`) || is.null(opt$`output-dir`)) {
+  stop("--pan-cancer-expr and --output-dir are required")
 }
 
 # Create output directory with recursive = TRUE to handle nested paths
@@ -330,257 +330,71 @@ cat("========================================\n\n")
 
 
 # =============================================================================
-# STEP 1: Load Pan-Cancer Feature Genes
+# STEP 1: Load Feature-Restricted Pan-Cancer Expression Object
 # =============================================================================
-# The feature gene list defines the expression space in which tumour-cell line
-# similarity is computed. These genes are typically selected based on one or
-# more criteria:
-#
-#   Variance-Based Selection:
-#     Genes with high variance across samples capture biological heterogeneity
-#     and distinguish between molecular subtypes. Low-variance genes contribute
-#     little discriminative information.
-#
-#   Biological Relevance:
-#     Genes involved in cancer-relevant pathways (proliferation, apoptosis,
-#     immune response, metabolism) ensure similarity reflects biologically
-#     meaningful differences.
-#
-#   Pan-Cancer Applicability:
-#     Genes must be robustly expressed across multiple cancer types to enable
-#     cross-lineage comparisons. Tissue-specific genes may bias results.
-#
-# Ensembl Version Suffix Handling:
-# Ensembl gene identifiers may include version suffixes (e.g., ENSG00000141510.16)
-# indicating the annotation version. These suffixes are stripped to ensure
-# compatibility with expression matrices that may use unversioned identifiers.
-# The sub() function with regex "\\.[0-9]+$" matches a dot followed by one or
-# more digits at the string end.
+cat("[1] Loading pan-cancer expression object...\n")
+pan_obj <- readRDS(opt$`pan-cancer-expr`)
+if (!is.list(pan_obj) || is.null(pan_obj$expr) || is.null(pan_obj$meta)) {
+  stop("--pan-cancer-expr must be an RDS containing list(expr=..., meta=...)")
+}
+expr_all <- pan_obj$expr
+meta_all <- as.data.table(pan_obj$meta)
 
-cat("[1] Loading pan-cancer feature genes...\n")
-genes <- readLines(opt$genes)
-genes <- genes[genes != ""]  # Remove empty lines
+strip_version <- function(x) sub("\\.[0-9]+$", "", x)
 
-# Strip version numbers (e.g., ENSG00000141510.16 -> ENSG00000141510)
-# Regex explanation: \\. matches literal dot, [0-9]+ matches digits, $ anchors to end
-genes_no_version <- sub("\\.[0-9]+$", "", genes)
-cat("  Loaded", length(genes_no_version), "genes\n")
-
-
-# =============================================================================
-# STEP 2: Load Cell Line Expression Data
-# =============================================================================
-# The pan-cancer cell line expression matrix serves as the reference database
-# against which tumour samples are compared. This matrix aggregates cell lines
-# from multiple cancer types (e.g., BRCA, NBL, RBL), enabling both within-lineage
-# and cross-lineage similarity assessments.
-#
-# Expected Data Structure:
-# The RDS file should contain a list with two components:
-#
-#   $expr:  Numeric matrix with genes as rows and samples as columns
-#           Values should be normalised (VST, log-TPM) for comparability
-#
-#   $meta:  data.table/data.frame with sample metadata including:
-#           - sample_id: Unique identifier matching expression column names
-#           - lineage:   Cancer type (e.g., "BRCA", "NBL", "RBL")
-#           - type:      Sample type ("cell_line") for filtering
-#
-# Normalisation Considerations:
-# Expression values should be normalised prior to this analysis. Common choices:
-#
-#   VST (Variance Stabilising Transformation):
-#     From DESeq2, stabilises variance across the expression range. Suitable
-#     for count data and preserves relative differences between samples.
-#
-#   Log-TPM:
-#     Transcripts per million with log transformation. Accounts for library
-#     size and gene length, enabling cross-sample comparisons.
-#
-# The choice of normalisation affects absolute correlation values but typically
-# preserves relative rankings, which are the primary output of this analysis.
-
-cat("\n[2] Loading cell line expression...\n")
-cell_dat <- readRDS(opt$`pan-cancer-expr`)
-expr_cell <- cell_dat$expr
-meta_cell <- cell_dat$meta
-
-# -----------------------------------------------------------------------------
-# Validate Metadata Schema
-# -----------------------------------------------------------------------------
-# Required columns are checked to provide informative error messages rather
-# than cryptic failures during downstream processing.
-
-req_cols <- c("sample_id", "lineage")
-missing <- setdiff(req_cols, colnames(meta_cell))
+required_meta_cols <- c("sample_id", "lineage", "type")
+missing <- setdiff(required_meta_cols, colnames(meta_all))
 if (length(missing) > 0) {
-  stop("meta_cell is missing required columns: ", paste(missing, collapse = ", "))
+  stop("Pan-cancer metadata missing columns: ", paste(missing, collapse = ", "))
 }
 
-# -----------------------------------------------------------------------------
-# Filter to Cell Lines Only
-# -----------------------------------------------------------------------------
-# The pan-cancer expression file may contain both cell lines and tumours.
-# If a "type" column exists, filter to retain only cell line samples.
-# This ensures the reference database contains only model systems.
+if (!all(meta_all$sample_id %in% colnames(expr_all))) {
+  bad <- setdiff(meta_all$sample_id, colnames(expr_all))
+  stop("Metadata sample IDs not found in expression matrix: ",
+       paste(head(bad, 20), collapse = ", "))
+}
+expr_all <- expr_all[, meta_all$sample_id, drop = FALSE]
 
-if ("type" %in% colnames(meta_cell)) {
-  meta_cell <- meta_cell[type == "cell_line"]
-  expr_cell <- expr_cell[, meta_cell$sample_id, drop = FALSE]
+if (!is.null(pan_obj$genes)) {
+  feature_genes <- strip_version(pan_obj$genes)
+  cat("  Feature genes from RDS: ", length(feature_genes), "\n", sep = "")
+} else if (!is.null(opt$genes) && nzchar(opt$genes)) {
+  fallback_genes <- readLines(opt$genes)
+  fallback_genes <- fallback_genes[fallback_genes != ""]
+  feature_genes <- strip_version(fallback_genes)
+  cat("  Feature genes from --genes: ", length(feature_genes), "\n", sep = "")
+} else {
+  feature_genes <- strip_version(rownames(expr_all))
+  cat("  Feature genes inferred from expression matrix: ", length(feature_genes), "\n", sep = "")
 }
 
-# -----------------------------------------------------------------------------
-# Validate Expression-Metadata Alignment
-# -----------------------------------------------------------------------------
-# Ensure all sample IDs in metadata have corresponding columns in the
-# expression matrix. Misalignment could indicate data corruption or
-# version mismatches between files.
 
-if (!all(meta_cell$sample_id %in% colnames(expr_cell))) {
-  bad <- setdiff(meta_cell$sample_id, colnames(expr_cell))
-  stop("These meta_cell$sample_id are missing in expr_cell colnames: ",
-       paste(head(bad, 20), collapse = ", "),
-       if (length(bad) > 20) paste0(" ... (+", length(bad) - 20, " more)") else "")
+# =============================================================================
+# STEP 2: Split Cell Lines and Tumours
+# =============================================================================
+cat("\n[2] Splitting cell lines and tumours...\n")
+type_norm <- tolower(meta_all$type)
+type_norm[type_norm %in% c("cellline", "cell line", "cells", "cell_lines")] <- "cell_line"
+type_norm[type_norm %in% c("tumor", "tumours", "tumor_sample", "tumour")] <- "tumour"
+meta_all[, type := type_norm]
+
+meta_cell <- meta_all[type == "cell_line"]
+meta_tum <- meta_all[type == "tumour"]
+
+if (nrow(meta_cell) == 0) {
+  stop("Pan-cancer expression object contains no cell line samples")
 }
 
-# Reorder expression columns to match metadata row order
-# This ensures consistent indexing throughout the analysis
-expr_cell <- expr_cell[, meta_cell$sample_id, drop = FALSE]
-stopifnot(identical(colnames(expr_cell), meta_cell$sample_id))
+expr_cell <- expr_all[, meta_cell$sample_id, drop = FALSE]
+expr_tum <- expr_all[, meta_tum$sample_id, drop = FALSE]
 
 cat("  Cell lines: ", ncol(expr_cell), " samples\n", sep = "")
 cat("  Cell line lineages:\n")
 print(table(meta_cell$lineage))
 
 
-# =============================================================================
-# STEP 3: Load Tumour Expression Data
-# =============================================================================
-# Tumour expression is loaded from joint VST files that contain both cell lines
-# and tumours from the same cancer type. Using joint batch-corrected matrices
-# is critical for valid tumour-cell line comparisons:
-#
-# Batch Effect Correction Rationale:
-# Tumour and cell line samples are typically processed in separate batches,
-# using different sequencing facilities, library preparation protocols, or
-# time points. These technical differences introduce systematic biases that
-# can dominate biological signal if not corrected.
-#
-# Joint normalisation approaches (e.g., ComBat-seq, limma::removeBatchEffect)
-# applied to combined tumour + cell line matrices address this by:
-#
-#   1. Estimating batch effects from the full dataset
-#   2. Removing systematic technical variation while preserving biological
-#      differences
-#   3. Ensuring expression scales are directly comparable between sample types
-#
-# Within-Lineage Processing:
-# Batch correction is performed separately for each cancer type (lineage).
-# This preserves lineage-specific biological variation that would be lost
-# if all samples were corrected together.
-#
-# Tumour Sample Identification:
-# Tumour samples are identified by exclusion: samples present in the joint
-# matrix but absent from the cell line metadata are classified as tumours.
-# This approach avoids requiring separate tumour metadata files.
-
-cat("\n[3] Loading tumour expression from joint VST files...\n")
-expr_tum_list <- list()
-meta_tum_list <- list()
-
-
-# -----------------------------------------------------------------------------
-# Load BRCA (Breast Cancer) Tumours
-# -----------------------------------------------------------------------------
-# BRCA tumours from TCGA or similar cohorts represent diverse molecular
-# subtypes (Luminal A, Luminal B, HER2-enriched, Basal-like, Normal-like).
-# The breast cancer cell line panel should ideally span these subtypes.
-
-if (!is.null(opt$`joint-vst-brca`) && file.exists(opt$`joint-vst-brca`)) {
-  cat("  Loading BRCA joint VST...\n")
-  brca <- readRDS(opt$`joint-vst-brca`)
-  if (is.matrix(brca)) {
-    # Identify cell line sample IDs for this lineage
-    cell_ids <- meta_cell[lineage == "BRCA", sample_id]
-    # Tumours are samples NOT in the cell line set
-    tum_ids <- setdiff(colnames(brca), cell_ids)
-    if (length(tum_ids) > 0) {
-      expr_tum_list[["BRCA"]] <- brca[, tum_ids, drop = FALSE]
-      meta_tum_list[["BRCA"]] <- data.table(
-        sample_id = tum_ids,
-        lineage = "BRCA",
-        type = "tumour"
-      )
-      cat("    BRCA tumours: ", length(tum_ids), "\n", sep = "")
-    }
-  }
-}
-
-
-# -----------------------------------------------------------------------------
-# Load NBL (Neuroblastoma) Tumours
-# -----------------------------------------------------------------------------
-# Neuroblastoma is a paediatric cancer arising from neural crest cells.
-# NBL tumours exhibit heterogeneous clinical behaviour ranging from
-# spontaneous regression to aggressive metastatic disease. MYCN amplification
-# status is a major prognostic factor that may influence cell line matching.
-
-if (!is.null(opt$`joint-vst-nbl`) && file.exists(opt$`joint-vst-nbl`)) {
-  cat("  Loading NBL joint VST...\n")
-  nbl <- readRDS(opt$`joint-vst-nbl`)
-  if (is.matrix(nbl)) {
-    cell_ids <- meta_cell[lineage == "NBL", sample_id]
-    tum_ids <- setdiff(colnames(nbl), cell_ids)
-    if (length(tum_ids) > 0) {
-      expr_tum_list[["NBL"]] <- nbl[, tum_ids, drop = FALSE]
-      meta_tum_list[["NBL"]] <- data.table(
-        sample_id = tum_ids,
-        lineage = "NBL",
-        type = "tumour"
-      )
-      cat("    NBL tumours: ", length(tum_ids), "\n", sep = "")
-    }
-  }
-}
-
-
-# -----------------------------------------------------------------------------
-# Load RBL (Retinoblastoma) Tumours
-# -----------------------------------------------------------------------------
-# Retinoblastoma is a rare paediatric eye cancer characterised by RB1
-# inactivation. The limited number of available RBL cell lines makes
-# accurate tumour-cell line matching particularly valuable for this
-# cancer type.
-
-if (!is.null(opt$`joint-vst-rbl`) && file.exists(opt$`joint-vst-rbl`)) {
-  cat("  Loading RBL joint VST...\n")
-  rbl <- readRDS(opt$`joint-vst-rbl`)
-  if (is.matrix(rbl)) {
-    cell_ids <- meta_cell[lineage == "RBL", sample_id]
-    tum_ids <- setdiff(colnames(rbl), cell_ids)
-    if (length(tum_ids) > 0) {
-      expr_tum_list[["RBL"]] <- rbl[, tum_ids, drop = FALSE]
-      meta_tum_list[["RBL"]] <- data.table(
-        sample_id = tum_ids,
-        lineage = "RBL",
-        type = "tumour"
-      )
-      cat("    RBL tumours: ", length(tum_ids), "\n", sep = "")
-    }
-  }
-}
-
-
-# -----------------------------------------------------------------------------
-# Validate and Combine Tumour Data
-# -----------------------------------------------------------------------------
-# Tumour expression matrices from individual cancer types are combined
-# column-wise (cbind) to create a unified matrix for pan-cancer analysis.
-# Row names (genes) must match across matrices - this is ensured by loading
-# from consistently processed joint VST files.
-
-if (length(expr_tum_list) == 0) {
-  cat("  No tumour samples found in joint VST files. Writing empty outputs...\n")
+if (nrow(meta_tum) == 0) {
+  cat("  No tumour samples present in pan-cancer expression object. Writing empty outputs...\n")
 
   empty_rank_t2c <- data.table(
     tumour = character(),
@@ -755,11 +569,6 @@ if (length(expr_tum_list) == 0) {
   quit(status = 0)
 }
 
-# Combine matrices: genes (rows) must match; samples (columns) are concatenated
-expr_tum <- do.call(cbind, expr_tum_list)
-# Combine metadata tables by stacking rows
-meta_tum <- rbindlist(meta_tum_list)
-
 # Validate tumour metadata schema
 req_cols_t <- c("sample_id", "lineage")
 missing_t <- setdiff(req_cols_t, colnames(meta_tum))
@@ -816,14 +625,12 @@ print(table(meta_tum$lineage))
 
 cat("\n[4] Filtering to pan-cancer features...\n")
 
-# Compute three-way intersection of gene identifiers
-common_genes <- intersect(rownames(expr_cell), genes_no_version)
-common_genes <- intersect(common_genes, rownames(expr_tum))
+common_genes <- intersect(rownames(expr_cell), rownames(expr_tum))
+common_genes <- intersect(common_genes, feature_genes)
 
 if (length(common_genes) == 0) {
-  stop("No common genes found between expression matrices and feature list")
+  stop("No common genes shared by cell lines, tumours, and the feature list")
 }
-
 # Subset matrices to common genes
 # drop = FALSE ensures matrix structure is preserved even with one sample
 expr_cell_filt <- expr_cell[common_genes, , drop = FALSE]

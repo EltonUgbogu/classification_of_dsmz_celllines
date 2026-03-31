@@ -3,18 +3,13 @@
 # build_pan_cancer_expression_matrix.R
 # =============================================================================
 #
-# Build combined pan-cancer expression matrix restricted to pan-cancer features
-# Includes: BRCA, NBL, RBL cell lines + hematologic (HEME) as negative control
-#
-# USAGE:
-# Rscript build_pan_cancer_expression_matrix.R \
-#   --brca-vst results/brca/inputs/vst_joint.rds \
-#   --nbl-vst results/nbl/inputs/vst_joint.rds \
-#   --rbl-vst results/rbl/inputs/vst_joint.rds \
-#   --heme-vst results/heme/inputs/vst_joint.rds \
-#   --metadata data/dsmz/DSMZ_metadata.csv \
-#   --genes results/unsupervised/pan_cancer/pan_cancer_features_clean.txt \
-#   --output results/unsupervised/pan_cancer/pan_cancer_expr.rds
+# Build a feature-restricted pan-cancer expression object by combining the
+# BRCA, NBL, and RBL joint VST matrices (optional HEME) into a single list
+# containing expr, meta, and genes. The gene set is supplied by
+# pan_cancer_features_clean.txt and the output preserves that ordering.
+# Metadata embedded in the input RDS files is used when available; an
+# external --metadata CSV acts only as a fallback to fill missing lineage
+# or type annotations.
 #
 # =============================================================================
 
@@ -23,258 +18,254 @@ suppressPackageStartupMessages({
   library(optparse)
 })
 
-# Parse command-line arguments
+strip_version <- function(x) {
+  sub("\\\.[0-9]+$", "", x)
+}
+
+ensure_sample_id <- function(dt) {
+  if ("sample_id" %in% names(dt)) {
+    dt[, sample_id := as.character(sample_id)]
+    return(dt)
+  }
+  for (col in c("sample", "sample_name", "Cell_Line", "DSMZ_Cell_line_norm",
+                "Sample.ID", "SampleID", "Barcode", "id")) {
+    if (col %in% names(dt)) {
+      dt[, sample_id := as.character(get(col))]
+      return(dt)
+    }
+  }
+  stop("Metadata is missing a recognizable sample identifier column")
+}
+
+lineage_from_values <- function(values) {
+  out <- rep(NA_character_, length(values))
+  if (is.null(values)) {
+    return(out)
+  }
+  out[grepl("BRCA|Breast", values, ignore.case = TRUE)] <- "BRCA"
+  out[grepl("NBL|Neuroblastoma", values, ignore.case = TRUE)] <- "NBL"
+  out[grepl("RBL|Retinoblastoma", values, ignore.case = TRUE)] <- "RBL"
+  out[grepl("HEME|Hema|LL-100|Leukemia|Lymphoma", values, ignore.case = TRUE)] <- "HEME"
+  out
+}
+
+derive_lineage <- function(dt, default_lineage) {
+  lineage <- if ("lineage" %in% names(dt)) as.character(dt$lineage) else rep(NA_character_, nrow(dt))
+  if ("lineage_fbk" %in% names(dt)) {
+    idx <- is.na(lineage) | lineage == ""
+    lineage[idx] <- as.character(dt$lineage_fbk[idx])
+  }
+  for (col in c("cancer_type", "cancer_type_fbk", "Disease", "Disease_fbk", "group2", "group2_fbk")) {
+    if (col %in% names(dt)) {
+      guess <- lineage_from_values(dt[[col]])
+      idx <- is.na(lineage) | lineage == ""
+      lineage[idx] <- guess[idx]
+    }
+  }
+  lineage[is.na(lineage) | lineage == ""] <- default_lineage
+  toupper(lineage)
+}
+
+derive_type <- function(dt) {
+  type <- if ("type" %in% names(dt)) as.character(dt$type) else rep(NA_character_, nrow(dt))
+  if ("type_fbk" %in% names(dt)) {
+    idx <- is.na(type) | type == ""
+    type[idx] <- as.character(dt$type_fbk[idx])
+  }
+  for (col in c("sample_type", "sample_type_fbk")) {
+    if (col %in% names(dt)) {
+      idx <- is.na(type) | type == ""
+      type[idx] <- as.character(dt[[col]][idx])
+    }
+  }
+  type <- tolower(type)
+  type[type %in% c("cell", "cells", "cell line", "cellline", "cell_line")] <- "cell_line"
+  type[type %in% c("tumour", "tumor", "tumors", "tumours")] <- "tumour"
+  type
+}
+
+prepare_metadata <- function(meta_dt, fallback_meta, default_lineage, source_label, sample_ids) {
+  if (is.null(meta_dt)) {
+    meta_dt <- data.table(sample_id = sample_ids)
+  } else {
+    meta_dt <- as.data.table(meta_dt)
+    meta_dt <- ensure_sample_id(meta_dt)
+    meta_dt <- unique(meta_dt, by = "sample_id")
+    meta_dt <- meta_dt[sample_id %in% sample_ids]
+  }
+  missing_ids <- setdiff(sample_ids, meta_dt$sample_id)
+  if (length(missing_ids) > 0) {
+    meta_dt <- rbind(meta_dt, data.table(sample_id = missing_ids), fill = TRUE)
+  }
+  if (!is.null(fallback_meta)) {
+    fbk <- copy(fallback_meta)
+    fallback_cols <- setdiff(names(fallback_meta), "sample_id")
+    setnames(fbk, fallback_cols, paste0(fallback_cols, "_fbk"))
+    meta_dt <- merge(meta_dt, fbk, by = "sample_id", all.x = TRUE, sort = FALSE)
+  }
+  meta_dt <- meta_dt[match(sample_ids, meta_dt$sample_id)]
+  meta_dt[, lineage := derive_lineage(.SD, default_lineage)]
+  meta_dt[, type := derive_type(.SD)]
+  tumour_pattern <- grepl("^(GSE|SRR|SRP|TCGA-|TARGET-|GDC-)", meta_dt$sample_id, ignore.case = TRUE)
+  dsmz_pattern <- grepl("^NG-[0-9]+", meta_dt$sample_id, ignore.case = TRUE)
+  meta_dt[(is.na(type) | type == "") & tumour_pattern & !dsmz_pattern, type := "tumour"]
+  meta_dt[(is.na(type) | type == ""), type := "cell_line"]
+  meta_dt[, source_profile := toupper(source_label)]
+  drop_cols <- grep("_fbk$", names(meta_dt), value = TRUE)
+  if (length(drop_cols) > 0) {
+    meta_dt[, (drop_cols) := NULL]
+  }
+  meta_dt[, .(sample_id, lineage, type, source_profile)]
+}
+
+load_expr_with_meta <- function(path, profile_label) {
+  obj <- readRDS(path)
+  expr <- NULL
+  meta <- NULL
+  if (is.matrix(obj)) {
+    expr <- obj
+  } else if (is.list(obj) && "expr" %in% names(obj)) {
+    expr <- obj$expr
+    if (!is.null(obj$meta)) {
+      meta <- as.data.table(obj$meta)
+    }
+  } else {
+    stop(sprintf("Unsupported RDS structure for %s: %s", profile_label, path))
+  }
+  expr <- as.matrix(expr)
+  rownames(expr) <- strip_version(rownames(expr))
+  list(expr = expr, meta = meta)
+}
+
+load_fallback_metadata <- function(path) {
+  if (is.null(path) || path == "" || !file.exists(path)) {
+    return(NULL)
+  }
+  dt <- fread(path)
+  dt <- ensure_sample_id(dt)
+  keep_cols <- intersect(c("sample_id", "lineage", "cancer_type", "Disease",
+                           "group2", "sample_type", "type"), names(dt))
+  unique(dt[, ..keep_cols])
+}
+
 option_list <- list(
-  make_option(c("--brca-vst"), type="character", default=NULL,
-              help="Path to BRCA VST expression matrix (RDS)"),
-  make_option(c("--nbl-vst"), type="character", default=NULL,
-              help="Path to NBL VST expression matrix (RDS)"),
-  make_option(c("--rbl-vst"), type="character", default=NULL,
-              help="Path to RBL VST expression matrix (RDS)"),
-  make_option(c("--heme-vst"), type="character", default=NULL,
-              help="Path to HEME VST expression matrix (RDS)"),
-  make_option(c("--metadata"), type="character", default=NULL,
-              help="Path to DSMZ metadata CSV file"),
-  make_option(c("--genes"), type="character", default=NULL,
-              help="Path to pan-cancer feature gene list (one per line)"),
-  make_option(c("--output"), type="character", default=NULL,
-              help="Output path for combined expression matrix (RDS)")
+  make_option(c("--brca-vst"), type = "character", default = NULL,
+              help = "Path to BRCA joint VST RDS"),
+  make_option(c("--nbl-vst"), type = "character", default = NULL,
+              help = "Path to NBL joint VST RDS"),
+  make_option(c("--rbl-vst"), type = "character", default = NULL,
+              help = "Path to RBL joint VST RDS"),
+  make_option(c("--heme-vst"), type = "character", default = NULL,
+              help = "Optional path to HEME VST RDS"),
+  make_option(c("--metadata"), type = "character", default = NULL,
+              help = "Fallback metadata CSV/TSV"),
+  make_option(c("--genes"), type = "character", default = NULL,
+              help = "Feature gene list (pan_cancer_features_clean.txt)"),
+  make_option(c("--output"), type = "character", default = NULL,
+              help = "Output RDS path"),
+  make_option(c("--output-metadata"), type = "character", default = NULL,
+              help = "Optional TSV path for metadata export")
 )
 
-opt_parser <- OptionParser(option_list=option_list)
-opt <- parse_args(opt_parser)
+opt <- parse_args(OptionParser(option_list = option_list))
 
-# Validate required arguments
-required <- c("brca-vst", "nbl-vst", "rbl-vst", "metadata", "genes", "output")
-missing <- setdiff(required, names(opt)[!sapply(opt, is.null)])
+required <- c("brca-vst", "nbl-vst", "rbl-vst", "genes", "output")
+missing <- required[!nzchar(unlist(opt[required]))]
 if (length(missing) > 0) {
-  stop("Missing required arguments: ", paste(missing, collapse=", "))
+  stop("Missing required arguments: ", paste(missing, collapse = ", "))
 }
 
-cat("[1/5] Loading pan-cancer feature genes...\n")
-genes <- fread(opt$genes, header=FALSE)$V1
-cat("  Loaded", length(genes), "genes\n")
+if (!file.exists(opt$genes)) {
+  stop("Gene list not found: ", opt$genes)
+}
 
-cat("[2/5] Loading expression matrices...\n")
+gene_list <- fread(opt$genes, header = FALSE)$V1
+gene_list <- gene_list[gene_list != ""]
+gene_list <- unique(gene_list)
+genes_clean <- strip_version(gene_list)
+cat("[1/4] Loaded", length(genes_clean), "pan-cancer features\n")
+
+profile_inputs <- list(
+  BRCA = opt$`brca-vst`,
+  NBL  = opt$`nbl-vst`,
+  RBL  = opt$`rbl-vst`
+)
+if (!is.null(opt$`heme-vst`) && opt$`heme-vst` != "") {
+  profile_inputs$HEME <- opt$`heme-vst`
+}
+
 expr_list <- list()
-
-# Load BRCA
-if (!is.null(opt$`brca-vst`) && file.exists(opt$`brca-vst`)) {
-  cat("  Loading BRCA:", opt$`brca-vst`, "\n")
-  brca <- readRDS(opt$`brca-vst`)
-  if (is.matrix(brca)) {
-    expr_list[["BRCA"]] <- brca
-  } else if (is.list(brca) && "expr" %in% names(brca)) {
-    expr_list[["BRCA"]] <- brca$expr
-  } else {
-    stop("BRCA VST file has unexpected structure")
-  }
-  cat("    BRCA: ", nrow(expr_list[["BRCA"]]), " genes, ", 
-      ncol(expr_list[["BRCA"]]), " samples\n", sep="")
+meta_list <- list()
+fallback_meta <- load_fallback_metadata(opt$metadata)
+if (!is.null(fallback_meta)) {
+  cat("[INFO] Loaded fallback metadata for", nrow(fallback_meta), "samples\n")
 }
 
-# Load NBL
-if (!is.null(opt$`nbl-vst`) && file.exists(opt$`nbl-vst`)) {
-  cat("  Loading NBL:", opt$`nbl-vst`, "\n")
-  nbl <- readRDS(opt$`nbl-vst`)
-  if (is.matrix(nbl)) {
-    expr_list[["NBL"]] <- nbl
-  } else if (is.list(nbl) && "expr" %in% names(nbl)) {
-    expr_list[["NBL"]] <- nbl$expr
-  } else {
-    stop("NBL VST file has unexpected structure")
+cat("[2/4] Loading expression matrices...\n")
+for (profile in names(profile_inputs)) {
+  path <- profile_inputs[[profile]]
+  if (is.null(path) || path == "") {
+    next
   }
-  cat("    NBL: ", nrow(expr_list[["NBL"]]), " genes, ", 
-      ncol(expr_list[["NBL"]]), " samples\n", sep="")
-}
-
-# Load RBL
-if (!is.null(opt$`rbl-vst`) && file.exists(opt$`rbl-vst`)) {
-  cat("  Loading RBL:", opt$`rbl-vst`, "\n")
-  rbl <- readRDS(opt$`rbl-vst`)
-  if (is.matrix(rbl)) {
-    expr_list[["RBL"]] <- rbl
-  } else if (is.list(rbl) && "expr" %in% names(rbl)) {
-    expr_list[["RBL"]] <- rbl$expr
-  } else {
-    stop("RBL VST file has unexpected structure")
+  if (!file.exists(path)) {
+    stop(sprintf("Expression file for %s not found: %s", profile, path))
   }
-  cat("    RBL: ", nrow(expr_list[["RBL"]]), " genes, ", 
-      ncol(expr_list[["RBL"]]), " samples\n", sep="")
-}
-
-# Load HEME (optional)
-if (!is.null(opt$`heme-vst`) && file.exists(opt$`heme-vst`)) {
-  cat("  Loading HEME:", opt$`heme-vst`, "\n")
-  heme <- readRDS(opt$`heme-vst`)
-  if (is.matrix(heme)) {
-    expr_list[["HEME"]] <- heme
-  } else if (is.list(heme) && "expr" %in% names(heme)) {
-    expr_list[["HEME"]] <- heme$expr
-  } else {
-    stop("HEME VST file has unexpected structure")
-  }
-  cat("    HEME: ", nrow(expr_list[["HEME"]]), " genes, ", 
-      ncol(expr_list[["HEME"]]), " samples\n", sep="")
+  cat(sprintf("  Loading %s: %s\n", profile, path))
+  obj <- load_expr_with_meta(path, profile)
+  expr_list[[profile]] <- obj$expr
+  sample_ids <- colnames(obj$expr)
+  meta_processed <- prepare_metadata(
+    meta_dt = obj$meta,
+    fallback_meta = fallback_meta,
+    default_lineage = profile,
+    source_label = profile,
+    sample_ids = sample_ids
+  )
+  meta_list[[profile]] <- meta_processed
+  cat(sprintf("    %s: %d genes x %d samples\n",
+              profile, nrow(obj$expr), ncol(obj$expr)))
 }
 
 if (length(expr_list) == 0) {
   stop("No expression matrices loaded")
 }
 
-cat("[3/5] Filtering to pan-cancer features and merging...\n")
-# Strip version numbers from gene IDs if present (ENSG00000000003.15 -> ENSG00000000003)
-# VST matrices typically don't have version numbers
-genes_no_version <- sub("\\.[0-9]+$", "", genes)
+gene_sets <- lapply(expr_list, rownames)
+common_genes <- Reduce(intersect, gene_sets)
+common_genes <- intersect(common_genes, genes_clean)
+if (length(common_genes) == 0) {
+  stop("No genes present across all profiles and the feature list")
+}
+ordered_genes <- genes_clean[genes_clean %in% common_genes]
 
-# Filter each matrix to pan-cancer features
-expr_filtered <- lapply(expr_list, function(expr) {
-  # Try matching with and without version numbers
-  vst_genes <- rownames(expr)
-  common_genes <- intersect(vst_genes, genes_no_version)
-  
-  if (length(common_genes) == 0) {
-    # Try with version numbers if no match
-    common_genes <- intersect(vst_genes, genes)
-  }
-  
-  if (length(common_genes) == 0) {
-    stop("No common genes found between expression matrix and feature list")
-  }
-  expr[common_genes, , drop=FALSE]
+expr_list <- lapply(expr_list, function(mat) {
+  mat[ordered_genes, , drop = FALSE]
 })
+combined_expr <- do.call(cbind, expr_list)
 
-# Merge matrices (cbind, handling missing genes)
-all_genes <- unique(unlist(lapply(expr_filtered, rownames)))
-all_genes <- intersect(all_genes, genes_no_version)  # Only keep genes in feature list (no version)
-
-cat("  Merging", length(all_genes), "genes across", length(expr_filtered), "diseases\n")
-
-# Build combined matrix
-combined_expr <- matrix(NA, nrow=length(all_genes), ncol=0)
-rownames(combined_expr) <- all_genes
-
-for (disease in names(expr_filtered)) {
-  expr_sub <- expr_filtered[[disease]]
-  common <- intersect(rownames(combined_expr), rownames(expr_sub))
-  combined_expr <- cbind(combined_expr, expr_sub[common, , drop=FALSE])
+meta_combined <- rbindlist(meta_list, use.names = TRUE, fill = TRUE)
+meta_combined <- meta_combined[match(colnames(combined_expr), sample_id)]
+if (any(is.na(meta_combined$sample_id))) {
+  stop("Metadata is missing annotations for one or more samples")
 }
 
-# Fill missing values with 0 (shouldn't happen if all matrices have same genes)
-combined_expr[is.na(combined_expr)] <- 0
-
-cat("  Combined matrix: ", nrow(combined_expr), " genes, ", 
-    ncol(combined_expr), " samples\n", sep="")
-
-cat("[4/5] Loading and aligning metadata...\n")
-meta <- fread(opt$metadata)
-
-# Determine lineage from available metadata columns
-if ("lineage" %in% colnames(meta)) {
-  meta[, lineage := as.character(lineage)]
-} else if ("cancer_type" %in% colnames(meta)) {
-  meta[, lineage := fcase(
-    cancer_type %like% "BRCA|Breast", "BRCA",
-    cancer_type %like% "NBL|Neuroblastoma", "NBL",
-    cancer_type %like% "RBL|Retinoblastoma", "RBL",
-    cancer_type %like% "HEME|Hematologic", "HEME",
-    default = NA_character_
-  )]
-} else if ("Disease" %in% colnames(meta)) {
-  meta[, lineage := fcase(
-    Disease %like% "Breast", "BRCA",
-    Disease %like% "Neuroblastoma", "NBL",
-    Disease %like% "Retinoblastoma", "RBL",
-    Disease %like% "leukemia|lymphoma|Hematologic", "HEME",
-    default = NA_character_
-  )]
-  if ("group2" %in% colnames(meta)) {
-    meta[is.na(lineage), lineage := fcase(
-      group2 %like% "Breast", "BRCA",
-      group2 %like% "Neuroblastoma", "NBL",
-      group2 %like% "Retinoblastoma", "RBL",
-      group2 %like% "LL-100|leukemia|lymphoma|Hematologic", "HEME",
-      default = NA_character_
-    )]
-  }
-} else if ("group2" %in% colnames(meta)) {
-  meta[, lineage := fcase(
-    group2 %like% "Breast", "BRCA",
-    group2 %like% "Neuroblastoma", "NBL",
-    group2 %like% "Retinoblastoma", "RBL",
-    group2 %like% "LL-100|leukemia|lymphoma|Hematologic", "HEME",
-    default = NA_character_
-  )]
-}
-
-# Determine sample_id column
-sample_id_col <- NULL
-for (col in c("sample_id", "sample", "sample_name", "Cell_Line", "DSMZ_Cell_line_norm")) {
-  if (col %in% colnames(meta)) {
-    sample_id_col <- col
-    break
-  }
-}
-if (is.null(sample_id_col)) {
-  stop("Could not find sample ID column in metadata")
-}
-
-meta[, sample_id := get(sample_id_col)]
-if ("sample_type" %in% colnames(meta)) {
-  meta[, type := fcase(
-    sample_type %like% "Cell Line|cell_line|cell line", "cell_line",
-    sample_type %like% "Tumour|Tumor|tumour|tumor", "tumour",
-    default = "cell_line"
-  )]
-} else {
-  meta[, type := "cell_line"]  # Default for DSMZ-only metadata
-}
-
-# Build expression-derived metadata for all samples (including tumours)
-expr_meta <- rbindlist(lapply(names(expr_list), function(disease) {
-  data.table(sample_id = colnames(expr_list[[disease]]), lineage_expr = disease)
-}), use.names = TRUE)
-
-meta <- meta[, .(sample_id, lineage_meta = lineage, type_meta = type)]
-meta <- unique(meta)
-
-meta_all <- merge(expr_meta, meta, by = "sample_id", all.x = TRUE)
-meta_all[, lineage := ifelse(!is.na(lineage_meta), lineage_meta, lineage_expr)]
-meta_all[, type := ifelse(!is.na(type_meta), type_meta, "tumour")]
-
-# Override type based on sample ID patterns: force tumour classification for
-# tumour-like IDs (GSE*, SRR*, SRP*, TCGA*, TARGET*, GDC*) that don't match DSMZ cell line patterns
-# This override applies even if metadata says "cell_line" to ensure consistency
-is_tumour_pattern <- grepl("^GSE[0-9]+|^SRR[0-9]+|^SRP[0-9]+|^TCGA-|^TARGET-|^GDC-", meta_all$sample_id)
-is_dsmz_cellline <- grepl("^NG-[0-9]+_.*_lib[0-9]+_|^NG-[0-9]+_.*_libLAB", meta_all$sample_id)
-meta_all[is_tumour_pattern & !is_dsmz_cellline, type := "tumour"]
-
-meta_all <- meta_all[, .(sample_id, lineage, type)]
-meta_all <- unique(meta_all)
-
-# Align with expression matrix and preserve column order
-meta_all <- meta_all[match(colnames(combined_expr), sample_id)]
-if (any(is.na(meta_all$sample_id))) {
-  stop("Missing metadata for one or more expression samples")
-}
-
-combined_expr <- combined_expr[, meta_all$sample_id, drop = FALSE]
-meta <- meta_all
-
-cat("  Aligned metadata: ", nrow(meta), " samples\n", sep="")
-cat("  Lineage distribution:\n")
-print(table(meta$lineage, useNA = "ifany"))
-cat("  Type distribution:\n")
-print(table(meta$type, useNA = "ifany"))
-
-cat("[5/5] Saving combined expression matrix...\n")
 result <- list(
   expr = combined_expr,
-  meta = meta,
-  genes = all_genes
+  meta = meta_combined,
+  genes = ordered_genes
 )
 
 saveRDS(result, file = opt$output)
-cat("[OK] Combined pan-cancer expression matrix saved to:", opt$output, "\n")
-cat("  Final dimensions: ", nrow(combined_expr), " genes x ", 
-    ncol(combined_expr), " samples\n", sep="")
+cat(sprintf("[OK] Saved feature-restricted expression matrix: %s\n", opt$output))
+cat(sprintf("      Dimensions: %d genes x %d samples\n",
+            nrow(combined_expr), ncol(combined_expr)))
+
+if (!is.null(opt$`output-metadata`) && opt$`output-metadata` != "") {
+  fwrite(meta_combined, opt$`output-metadata`, sep = "\t")
+  cat(sprintf("[INFO] Wrote metadata TSV: %s\n", opt$`output-metadata`))
+}
+
+cat("[SUMMARY] Sample counts by lineage:\n")
+print(table(meta_combined$lineage))
+cat("[SUMMARY] Sample counts by type:\n")
+print(table(meta_combined$type))
