@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shlex
+import sys
 from pathlib import Path
 from snakemake.shell import shell
 from snakemake.io import expand, directory
@@ -51,6 +52,7 @@ profile_name = config.get("pipeline_profile") or config.get("profile") or "defau
 
 # Initialises log root under a per-profile subdirectory; overwritten after validation.
 LOGROOT = os.path.join(PIPE_ROOT, "logs", profile_name)
+IS_DRYRUN = any(arg in ("-n", "--dry-run", "--dryrun") for arg in sys.argv)
 
 # Defines a safe default for PIPELINE_TARGET so DAG parsing never fails before
 # profile-specific targets are resolved later in the Snakefile.
@@ -145,7 +147,7 @@ if "profiles" in config:
 
     # Updates LOGROOT to the validated, profile-specific log directory.
     LOGROOT = os.path.join(PIPE_ROOT, "logs", profile_name)
-    if not workflow.dryrun:
+    if not IS_DRYRUN:
         os.makedirs(LOGROOT, exist_ok=True)
     vprint(f"[Snakefile] LOGROOT = {LOGROOT}")
 else:
