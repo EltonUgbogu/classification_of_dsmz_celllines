@@ -97,3 +97,6 @@ __pycache__/
 !*.err
 !*.tsv
 !*.csv
+
+.codex/
+jarvis_pipeline_data
