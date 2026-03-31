@@ -5,9 +5,11 @@
 *.fq.gz
 *.bam
 *.bai
+*.sra
 *.sam
 *.parquet
 *.gtf
+*.gtf.gz
 *.zip
 *.tar.gz
 
@@ -39,13 +41,34 @@ miniconda3/
 *.egg-info/
 
 # Large generated data and tool directories
+count_data/
+*_family.soft.gz
+data/reference/gencode_v44/
+data/reference/**/GRCh38.primary_assembly.genome.fa
+data/reference/star_*/
+pipeline/data/reference/gencode_v44/
+pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
+pipeline/data/reference/star_*/
+*.fa
+*.fasta
+*.fna
+data/nbl/target_nbl/manifests/*.json
+data/nbl/target_nbl/metadata/payload*.json
+pipeline/data/nbl/target_nbl/manifests/*.json
+pipeline/data/nbl/target_nbl/metadata/payload*.json
 benchmarks/
 HISAT2/genome/
 snakemake/Miniconda3-latest-Linux-x86_64.sh
 Trimmomatic-0.39/
 data/HISAT2/genome/grch38/
 data/HISAT2/genome/
-data/
+# Keep pipeline/data mostly ignored, but track selected text/log/script outputs
+pipeline/data/**
+!pipeline/data/**/
+!pipeline/data/**/*.out
+!pipeline/data/**/*.err
+!pipeline/data/**/*.sh
+!pipeline/data/**/*.txt
 bin/
 tmp/
 illumina/
@@ -67,3 +90,10 @@ __pycache__/
 *.swp
 *.tmp
 .TinyTeX/
+
+# Keep text/log/tabular files
+!*.txt
+!*.out
+!*.err
+!*.tsv
+!*.csv
