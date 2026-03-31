@@ -2203,7 +2203,11 @@ if MARKER_POST_ENABLED:
         input:
             tables_dir=lambda wc: profile_consensus_tables_dir(wc.profile)
         output:
-            summary_done=lambda wc: os.path.join(profile_consensus_summary_dir(wc.profile), "consensus_export_done.txt")
+            summary_done=os.path.join(
+                "results", "unsupervised", "{profile}",
+                "deseq2_markers", CONSENSUS_OUTDIR_NAME,
+                "summary", "consensus_export_done.txt"
+            )
         params:
             script=os.path.join(SCRIPTS_DIR, "build_component_consensus_markers_v2.py"),
             outdir=lambda wc: profile_consensus_outdir(wc.profile),
@@ -2216,7 +2220,8 @@ if MARKER_POST_ENABLED:
             fallback_topn=CONSENSUS_CFG.get("fallback_topn", 200),
             flip_policy=CONSENSUS_CFG.get("flip_policy", "remove"),
             recurrence_k=CONSENSUS_CFG.get("recurrence_k", 2)
-        log: lambda wc: os.path.join(LOGROOT, f"build_component_consensus_markers_{wc.profile}.log")
+        log:
+            os.path.join(LOGROOT, "build_component_consensus_markers_{profile}.log")
         conda: CONDA_ENV_PY
         shell:
             r'''
