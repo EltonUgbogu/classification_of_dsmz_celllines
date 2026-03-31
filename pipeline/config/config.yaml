@@ -34,10 +34,10 @@ defaults:
       - nbl
       - rbl
   marker_postprocessing:
-    enabled: false
+    enabled: true
     consensus:
-      enabled: false
-      input_mode: tables_dir
+      enabled: true
+      outdir_name: consensus_markers
       padj: 0.05
       basemean: 1.0
       lfc: 0.5
@@ -46,17 +46,33 @@ defaults:
       min_anchor_genes: 25
       fallback_topn: 200
       flip_policy: remove
+      recurrence_k: 2
     pan_cancer:
-      enabled: false
-      disease_profiles:
-        - brca
-        - nbl
-        - rbl
+      enabled: true
+      disease_profiles: [brca, nbl, rbl]
+      outdir: results/unsupervised/pan_cancer/feature_space
+      final_features_tsv: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.tsv
+      final_features_clean: results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt
+      final_features_up: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.UP.txt
+      final_features_down: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.DOWN.txt
+      build_summary_tsv: results/unsupervised/pan_cancer/feature_space/pan_cancer_feature_build_summary.tsv
       min_cross_disease: 2
       cap_specific: 300
-      cap_isolate: 50
       remove_ribo_mt: false
       gene_annotation_tsv: ""
+    expression_matrix:
+      include_heme: true
+      metadata_fallback_csv: data/dsmz/DSMZ_metadata.csv
+      output_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds
+      output_meta_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
+    mapping:
+      output_dir: results/unsupervised/pan_cancer/tumour_mapping
+      top_k: 10
+      similarity: spearman
+      zscore_cohort: true
+      drop_global_genes: true
+      global_gene_regex: "^RPL|^RPS|^MT-|^HIST"
+      gene_symbol_map: ""
 
 # Top-level pan_cancer block: read by PAN_CFG in the Snakefile to drive the
 # pan-cancer joint-benchmark rules (feature_methods, dist_metrics, profiles,
