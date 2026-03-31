@@ -2266,7 +2266,10 @@ if MARKER_POST_ENABLED:
     rule build_pan_cancer_features:
         """Merge per-profile summaries into a pan-cancer feature panel."""
         input:
-            expand(lambda profile: consensus_summary_done(profile), profile=PAN_PROFILES)
+            summaries=[
+                os.path.join(profile_consensus_summary_dir(p), "consensus_export_done.txt")
+                for p in PAN_PROFILES
+            ]
         output:
             features_tsv = PAN_FEATURES_TSV,
             clean_txt   = PAN_FEATURES_CLEAN,
