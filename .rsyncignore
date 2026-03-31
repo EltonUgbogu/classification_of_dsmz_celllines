@@ -5,11 +5,32 @@
 # Big / generated directories inside pipeline
 results/
 logs/
-data/
+count_data/
+*_family.soft.gz
+data/reference/gencode_v44/
+data/reference/**/GRCh38.primary_assembly.genome.fa
+data/reference/star_*/
+pipeline/data/reference/gencode_v44/
+pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
+pipeline/data/reference/star_*/
+*.fa
+*.fasta
+*.fna
+data/nbl/target_nbl/manifests/*.json
+data/nbl/target_nbl/metadata/payload*.json
+pipeline/data/nbl/target_nbl/manifests/*.json
+pipeline/data/nbl/target_nbl/metadata/payload*.json
 
 # Exclude generated conda payloads, but keep env spec files
 envs/.conda/
 **/envs/.conda/
+
+# Large sequencing/alignment artifacts
+*.fastq.gz
+*.fq.gz
+*.bam
+*.bai
+*.sra
 
 # Python / R junk
 __pycache__/
@@ -31,3 +52,10 @@ __pycache__/
 # Annotations (too big for GitHub)
 *.gtf
 *.gtf.gz
+
+# Keep text and scheduler logs in sync
+!*.txt
+!*.out
+!*.err
+!*.tsv
+!*.csv

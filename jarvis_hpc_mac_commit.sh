@@ -71,10 +71,22 @@ mkdir -p "$LOCAL_PIPELINE_DIR"
 #
 #   • .snakemake/      — Snakemake's runtime cache; environment-specific and
 #                        potentially very large.
-#   • results/, logs/, data/ — Generated outputs, runtime logs, and input data
-#                        that should not be mirrored into Git.
+#   • results/, logs/, count_data/ — Generated outputs, runtime logs, and
+#                        count matrices that should not be mirrored into Git.
+#   • *_family.soft.gz  — GEO family soft archives.
+#   • data/reference/gencode_v44/ and pipeline/data/reference/gencode_v44/
+#     plus GRCh38.primary_assembly.genome.fa and generic FASTA assets
+#     (*.fa, *.fasta, *.fna).
+#   • data/reference/star_*/ and pipeline/data/reference/star_*/
+#                        STAR index/reference folders.
+#   • data/nbl/target_nbl/manifests/*.json,
+#     data/nbl/target_nbl/metadata/payload*.json and their
+#     pipeline/data/... equivalents
+#                        target-nbl payload and manifest JSON files.
 #   • envs/.conda/     — Generated Conda payloads; YAML environment specs and
 #                        setup scripts elsewhere under envs/ remain tracked.
+#   • *.fastq.gz, *.fq.gz, *.bam, *.bai, *.sra — Large sequencing/alignment
+#                        artefacts that should not be synced/committed.
 #   • *.rds / *.Rds    — Serialised R objects; binary files that change
 #                        frequently and are reproducible from source.
 #   • *.gtf / *.gtf.gz — Reference genome annotation files; large static
@@ -82,6 +94,8 @@ mkdir -p "$LOCAL_PIPELINE_DIR"
 #   • Reports / artifacts — PDFs, HTML, Parquet, and common image outputs.
 #   • Python / R junk  — Bytecode caches (__pycache__/, *.pyc), R session
 #                        files (.Rhistory, .RData), and backup files (*.bak).
+#   • !*.txt / !*.out / !*.err — Explicitly kept for mirrored text outputs and
+#                        scheduler logs.
 #
 # A file-based exclude list (--exclude-from) is preferred over inline rsync
 # flags because it is auditable, versionable alongside the repository, and
@@ -94,17 +108,36 @@ if [[ ! -f "$RSYNC_EXCLUDE_FILE" ]]; then
 .snakemake/
 **/.snakemake/
 
-
+# Big / generated directories inside pipeline
+results/
+logs/
+count_data/
 *_family.soft.gz
-*_gsms.tsv
-*SraRunInfo.csv
-*SraRunInfo_primary.csv  
-*SraRunInfo_primary_PE.csv
+data/reference/gencode_v44/
+data/reference/**/GRCh38.primary_assembly.genome.fa
+data/reference/star_*/
+pipeline/data/reference/gencode_v44/
+pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
+pipeline/data/reference/star_*/
+*.fa
+*.fasta
+*.fna
+data/nbl/target_nbl/manifests/*.json
+data/nbl/target_nbl/metadata/payload*.json
+pipeline/data/nbl/target_nbl/manifests/*.json
+pipeline/data/nbl/target_nbl/metadata/payload*.json
 
 
 # Generated conda cache/env internals — exclude these, but keep env spec files
 envs/.conda/
 **/envs/.conda/
+
+# Large sequencing/alignment artifacts
+*.fastq.gz
+*.fq.gz
+*.bam
+*.bai
+*.sra
 
 # Python / R junk
 __pycache__/
@@ -114,18 +147,25 @@ __pycache__/
 *.rds
 *.Rds
 *.bak
-*.sra
-*/work/ugbogu/pipeline/data/reference
 
 # Reports / artifacts
-
+*.pdf
 *.html
 *.parquet
-
+*.png
+*.jpg
+*.jpeg
 
 # Annotations (too big for GitHub)
 *.gtf
 *.gtf.gz
+
+# Keep text and scheduler logs in sync
+!*.txt
+!*.out
+!*.err
+!*.tsv
+!*.csv
 EOF
     echo "Created default rsync exclude file at $RSYNC_EXCLUDE_FILE"
 fi
@@ -234,4 +274,3 @@ fi
 echo "==> Pushing to origin/main"
 git push
 echo "==> Done."
-
