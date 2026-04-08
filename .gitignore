@@ -1,17 +1,26 @@
 # Large data and analysis outputs
 *.rds
 *.Rds
+*.fastq
 *.fastq.gz
+*.fq
 *.fq.gz
 *.bam
 *.bai
-*.sra
 *.sam
+*.cram
+*.sra
 *.parquet
 *.gtf
 *.gtf.gz
 *.zip
 *.tar.gz
+
+# Bulky sequencing subdirectories
+**/fastq/
+**/bam/
+**/sra/
+**/tmp/
 
 # R / analysis artifacts
 .Rhistory
@@ -69,6 +78,8 @@ pipeline/data/**
 !pipeline/data/**/*.err
 !pipeline/data/**/*.sh
 !pipeline/data/**/*.txt
+!pipeline/data/**/*.tsv
+!pipeline/data/**/*.csv
 bin/
 tmp/
 illumina/

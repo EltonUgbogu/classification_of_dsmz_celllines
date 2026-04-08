@@ -25,12 +25,21 @@ pipeline/data/nbl/target_nbl/metadata/payload*.json
 envs/.conda/
 **/envs/.conda/
 
-# Large sequencing/alignment artifacts
+# Large sequencing/alignment artifacts — directories first
+**/fastq/
+**/bam/
+**/sra/
+**/tmp/
+
+*.fastq
 *.fastq.gz
+*.fq
 *.fq.gz
 *.bam
 *.bai
+*.sam
 *.sra
+*.cram
 
 # Python / R junk
 __pycache__/
