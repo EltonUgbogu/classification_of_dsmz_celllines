@@ -1,9 +1,0 @@
-# HSTS 1.0 Known Hosts database for GNU Wget.
-# Edit at your own risk.
-# <hostname>	<port>	<incl. subdomains>	<created>	<max-age>
-api.gdc.cancer.gov	0	1	1753376672	63072001
-www.ebi.ac.uk	0	0	1751907217	0
-www.ncbi.nlm.nih.gov	0	1	1759166148	31536000
-github.com	0	1	1753380265	31536000
-gdc.cancer.gov	0	1	1753373361	31536000
-trace.ncbi.nlm.nih.gov	0	1	1759166147	31536000

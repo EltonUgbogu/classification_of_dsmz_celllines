@@ -102,3 +102,28 @@ __pycache__/
 
 .codex/
 jarvis_pipeline_data
+
+# Never track user/home/HPC environment files
+.cache/
+.conda/
+.config/
+.cursor/
+.ipython/
+.java/
+.jupyter/
+.ncbi/
+.pki/
+.secrets/
+.ssh/
+.vscode-R/
+
+.Rprofile
+.bash_history
+.bash_logout
+.bashrc
+.condarc
+.gh_env
+.gitconfig
+.lesshst
+.profile
+.wget-hsts
