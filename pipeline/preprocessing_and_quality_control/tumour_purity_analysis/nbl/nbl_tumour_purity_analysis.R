@@ -160,36 +160,46 @@ filter_samples_by_purity <- function(expr_matrix, purity_scores, threshold = 0.7
 }
 
 # --------------------------------------------------------------
-# 4. Extract project from sample names
+# 4. Extract project from sample names via metadata lookup
 # --------------------------------------------------------------
 # Bioinformatics rationale:
-#   Cancer cohorts often combine samples from multiple sources (GEO series,
-#   SRA projects, TARGET, etc.). This function infers cohort provenance from
-#   sample naming conventions to enable stratified QC and retention reporting.
-extract_project <- function(samples) {
-  # The prefix heuristic assumes sample IDs begin with a project token
-  # followed by an underscore and additional identifiers.
-  prefix <- sub("^([^_]+).*", "\\1", samples)
+#   Sample IDs in this pipeline are SRR accessions (GEO cohorts) or
+#   aliquot_submitter_ids (TARGET-NBL). Neither carries a parseable cohort
+#   prefix, so project assignment is resolved by lookup against the
+#   nbl_tumour_sample_metadata.csv produced by merge_star_counts.R.
+#   This guarantees traceability back to the source cohort for every sample.
+build_sample_to_cohort_map <- function(meta_csv_path) {
+  if (!file.exists(meta_csv_path)) {
+    stop("[ERROR] Sample metadata file not found: ", meta_csv_path,
+         "\nRun merge_star_counts.R first to generate it.")
+  }
+  meta <- fread(meta_csv_path, sep = ",", header = TRUE, data.table = FALSE)
+  required <- c("cohort", "sample")
+  missing  <- setdiff(required, colnames(meta))
+  if (length(missing) > 0) {
+    stop("[ERROR] Missing columns in metadata: ", paste(missing, collapse = ", "))
+  }
+  # Handle TARGET-NBL rows which use aliquot_id instead of sample
+  if ("aliquot_id" %in% colnames(meta)) {
+    target_rows <- !is.na(meta$aliquot_id) & meta$aliquot_id != ""
+    meta$sample[target_rows] <- meta$aliquot_id[target_rows]
+  }
+  setNames(meta$cohort, meta$sample)
+}
 
-  project <- dplyr::case_when(
-    grepl("^GSE[0-9]+$", prefix) ~ prefix,
-    grepl("^SRP[0-9]+$", prefix) ~ prefix,
-    grepl("^TARGET", prefix)     ~ "TARGET",
-    TRUE                         ~ "Unknown"
-  )
-
-  # Failing early here prevents silent mislabelling of samples, which would
-  # weaken any project-level QC interpretation.
-  if (any(project == "Unknown")) {
-    bad <- unique(samples[project == "Unknown"])
+extract_project <- function(samples, sample_to_cohort) {
+  # Direct lookup; fails explicitly for any sample not in the metadata.
+  project <- sample_to_cohort[samples]
+  unknown <- is.na(project)
+  if (any(unknown)) {
+    bad <- unique(samples[unknown])
     stop(
-      "[ERROR] Some samples could not be mapped to a project: \n  ",
+      "[ERROR] Some samples have no cohort mapping in metadata:\n  ",
       paste(bad, collapse = ", "),
-      "\nPlease check their naming / patterns in extract_project()."
+      "\nCheck that merge_star_counts.R has been run and metadata is up to date."
     )
   }
-
-  project
+  unname(project)
 }
 
 # --------------------------------------------------------------
@@ -203,13 +213,24 @@ extract_project <- function(samples) {
 #   - filters by purity and saves outputs
 #   - generates diagnostics to justify the filtering choice
 run_tidyestimate_with_barplot <- function(
-  se_path          = "/home/chu25/data/nbl/nbl_combined_count_matrix_ensembl.rds",
-  output_dir       = "/work/ugbogu/pipeline/results/tumour_purity_analysis/nbl",
-  map_tsv          = "/home/chu25/data/nbl/final_nbl_ensembl_to_hgnc.tsv",
-  purity_threshold = 0.7
+  se_path          = Sys.getenv("SE_PATH",
+                       "/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_count.rds"),
+  output_dir       = Sys.getenv("OUTPUT_DIR",
+                       "/work/ugbogu/pipeline/results/tumour_purity_analysis/nbl"),
+  map_tsv          = Sys.getenv("MAP_TSV",
+                       "/work/ugbogu/pipeline/data/nbl/count_data/nbl_ensembl_to_hgnc.tsv"),
+  meta_csv         = Sys.getenv("META_CSV",
+                       "/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_sample_metadata.csv"),
+  purity_threshold = as.numeric(Sys.getenv("PURITY_THRESHOLD", "0.7"))
 ) {
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-  
+
+  # Build sample → cohort lookup from pipeline metadata before any analysis.
+  # This is the single source of truth for project assignment throughout the script.
+  message("[INFO] Loading sample-to-cohort map from: ", meta_csv)
+  sample_to_cohort <- build_sample_to_cohort_map(meta_csv)
+  message(sprintf("[INFO] Loaded cohort map for %d samples.", length(sample_to_cohort)))
+
   # Set up log file
   log_file <- file.path(output_dir, paste0("nbl_purity_pipeline_", 
                                             format(Sys.time(), "%Y%m%d_%H%M%S"), 
@@ -233,7 +254,7 @@ run_tidyestimate_with_barplot <- function(
     message("[INFO] Loaded: ", nrow(se), " genes × ", ncol(se), " samples")
 
     # Project assignment before filtering supports an explicit retention summary.
-    colData(se)$project <- extract_project(colnames(se))
+    colData(se)$project <- extract_project(colnames(se), sample_to_cohort)
     project_before <- table(colData(se)$project)
     message("[INFO] Project counts BEFORE filtering:")
     print(project_before)
@@ -290,14 +311,14 @@ run_tidyestimate_with_barplot <- function(
     kept_samples <- colnames(counts_filtered)
     ensembl_filtered <- counts[, kept_samples, drop = FALSE]
     ensembl_out <- file.path(
-      "/home/chu25/data/nbl",
+      output_dir,
       sprintf("nbl_filtered_count_matrix_ensembl_purity%.1f.rds", purity_threshold)
     )
     saveRDS(ensembl_filtered, ensembl_out)
     message("[INFO] Filtered Ensembl matrix saved to: ", ensembl_out)
 
     # Project counts after filtering quantify sample retention by study source.
-    project_after <- table(extract_project(kept_samples))
+    project_after <- table(extract_project(kept_samples, sample_to_cohort))
     message("[INFO] Project counts AFTER filtering:")
     print(project_after)
 
@@ -378,7 +399,7 @@ run_tidyestimate_with_barplot <- function(
       as.data.frame() %>%
       rownames_to_column("Sample") %>%
       mutate(
-        Project     = extract_project(Sample),
+        Project     = extract_project(Sample, sample_to_cohort),
         PurityGroup = cut(
           tumourPurity,
           breaks = c(-Inf, purity_threshold, Inf),
@@ -484,9 +505,13 @@ run_tidyestimate_with_barplot <- function(
 #   - the mapping table to HGNC symbols,
 #   - the output directory for scores, filtered matrices, and plots,
 #   - the purity threshold used for sample retention.
-run_tidyestimate_with_barplot(
-  se_path    = "/home/chu25/data/nbl/nbl_combined_count_matrix_ensembl.rds",
-  output_dir = "/work/ugbogu/pipeline/results/tumour_purity_analysis/nbl",
-  map_tsv    = "/home/chu25/data/nbl/final_nbl_ensembl_to_hgnc.tsv",
-  purity_threshold = 0.7
-)
+# Paths and threshold are resolved from environment variables in the function
+# defaults above. Override via env vars or pass arguments directly:
+#
+#   SE_PATH=/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_count.rds \
+#   META_CSV=/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_sample_metadata.csv \
+#   MAP_TSV=/work/ugbogu/pipeline/data/nbl/count_data/nbl_ensembl_to_hgnc.tsv \
+#   OUTPUT_DIR=/work/ugbogu/pipeline/results/tumour_purity_analysis/nbl \
+#   PURITY_THRESHOLD=0.7 \
+#   Rscript nbl_tumour_purity_analysis.R
+run_tidyestimate_with_barplot()
