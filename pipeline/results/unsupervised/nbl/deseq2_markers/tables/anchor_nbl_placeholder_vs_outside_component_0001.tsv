@@ -1,3 +1,0 @@
-gene_id	baseMean	log2FoldChange	pvalue	padj
-ENSG00000000001	10	1.0	0.001	0.01
-ENSG00000000002	15	-1.2	0.002	0.02
