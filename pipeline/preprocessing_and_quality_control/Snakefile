@@ -353,15 +353,25 @@ rule star_2pass:
 # - insert size distributions, indicating library prep consistency (InsertSizeMetrics)
 
 rule picard_validate_samfile:
-    input: bam = rules.star_2pass.output.bam, ref = REF_FASTA
-    output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_validate_samfile.txt"
-    log:    f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_validate_samfile.log"
-    conda:  f"{ENV_DIR}/picard.yaml"
+    input:
+        bam = rules.star_2pass.output.bam,
+        ref = REF_FASTA
+    output:
+        f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_validate_samfile.txt"
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_validate_samfile.log"
+    conda:
+        f"{ENV_DIR}/picard.yaml"
     shell:
-        # A non-zero exit can occur even when the BAM is usable; the output report
-        # still provides useful diagnostics, so the command is tolerated if it warns.
-        "picard ValidateSamFile I={input.bam} O={output} MODE=SUMMARY "
-        "REFERENCE_SEQUENCE={input.ref} > {log} 2>&1 || true"
+        r"""
+        mkdir -p "$(dirname {output})" "$(dirname {log})"
+        picard ValidateSamFile \
+            I={input.bam} \
+            O={output} \
+            MODE=SUMMARY \
+            REFERENCE_SEQUENCE={input.ref} \
+            > {log} 2>&1 || true
+        """
 
 rule picard_alignment_summary_metrics:
     input:
@@ -375,7 +385,7 @@ rule picard_alignment_summary_metrics:
         f"{ENV_DIR}/picard.yaml"
     shell:
         r"""
-        mkdir -p $(dirname {output}) $(dirname {log})
+        mkdir -p "$(dirname {output})" "$(dirname {log})"
         picard CollectAlignmentSummaryMetrics \
             R={input.ref} \
             I={input.bam} \
@@ -394,7 +404,7 @@ rule picard_quality_yield_metrics:
         f"{ENV_DIR}/picard.yaml"
     shell:
         r"""
-        mkdir -p $(dirname {output}) $(dirname {log})
+        mkdir -p "$(dirname {output})" "$(dirname {log})"
         picard CollectQualityYieldMetrics \
             I={input.bam} \
             O={output} \
@@ -413,7 +423,7 @@ rule picard_insert_size_metrics:
         f"{ENV_DIR}/picard.yaml"
     shell:
         r"""
-        mkdir -p $(dirname {output.metrics}) $(dirname {log})
+        mkdir -p "$(dirname {output.metrics})" "$(dirname {log})"
         picard CollectInsertSizeMetrics \
             I={input.bam} \
             O={output.metrics} \
