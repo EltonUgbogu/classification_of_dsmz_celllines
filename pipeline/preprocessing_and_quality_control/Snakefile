@@ -6,7 +6,7 @@
 # Bioinformatics goal:
 #   The workflow performs read-level QC, alignment to a reference genome,
 #   extraction of gene-level counts, alignment QC metrics, and project-level
-#   summarisation reports. Outputs are suitable for downstream analyses such as
+#   summarisation reports. Outputs are suitable for further analyses such as
 #   differential expression, sample QC, and cohort comparison.
 #
 # Intent:
@@ -36,7 +36,7 @@ ENV_DIR = config.get("env_dir") or os.path.abspath(os.path.join(WORKFLOW_DIR, "e
 # Reference resources and tool paths
 # ------------------------------------------------------------------------------
 # REF_INDEX: STAR genome index directory (built from the reference FASTA + annotation)
-# GTF: gene annotation used by aligner/counting tools and downstream interpretation
+# GTF: gene annotation used by aligner/counting tools and further interpretation
 # REF_FASTA: reference genome FASTA (required for alignment QC checks)
 # THREADS: compute threads; defaults to 12 if not specified in config
 REF_INDEX   = config["genome"]["star_index"]
@@ -106,7 +106,7 @@ for project_id in PROJECTS:
             paired_count += 1
         else:
             # Incomplete pairs are excluded because they can bias QC summaries and
-            # disrupt consistent downstream matrices.
+            # disrupt consistent further matrices.
             print(f"[WARN] Missing R2 (skipping): {os.path.basename(r1_path)}")
 
     print(f"[SUCCESS] {project_id}: Found {paired_count} real paired-end samples")
@@ -120,7 +120,7 @@ for project_id in PROJECTS:
 ALL_RUNS = [(p, s) for p in PROJECTS for s in ALL_SAMPLES_BY_PROJECT.get(p, [])]
 
 if not ALL_RUNS:
-    # Failing early here prevents misleading downstream execution with empty targets.
+    # Failing early here prevents misleading further execution with empty targets.
     raise ValueError("No paired-end samples found in fastq/ directories! Check file names and paths.")
 else:
     # Reporting sample counts supports auditability and quick verification
@@ -278,11 +278,11 @@ rule fastqc:
 # Bioinformatics intent:
 #   - Align paired-end RNA-seq reads to a reference genome with STAR.
 #   - Use two-pass mode to improve splice junction detection in RNA-seq.
-#   - Produce a coordinate-sorted BAM for downstream QC 
+#   - Produce a coordinate-sorted BAM for further QC 
 #   - Produce gene-level counts suitable for DESeq2/edgeR-style workflows.
 #
 # Note on quantMode GeneCounts:
-#   STAR generates a per-gene count table; downstream scripts typically select
+#   STAR generates a per-gene count table; further scripts typically select
 #   the appropriate strandedness column based on library prep inference.
 rule star_2pass:
     input:
@@ -317,7 +317,7 @@ rule star_2pass:
         mkdir -p "$(dirname "{output.bam}")" "$(dirname "{output.counts}")" "$(dirname "{log}")"
 
         # STAR alignment:
-        # - BAM output is sorted by genomic coordinate for downstream processing.
+        # - BAM output is sorted by genomic coordinate for further processing.
         # - Two-pass mode improves detection of splice junctions across reads.
         # - GeneCounts produces a simple per-gene count table.
         STAR --genomeDir "{input.index}" \
@@ -335,7 +335,7 @@ rule star_2pass:
         samtools index "{output.bam}"
 
         # The STAR gene count table is moved into a dedicated counts directory
-        # to simplify downstream matrix assembly.
+        # to simplify further matrix assembly.
         mv -f "{params.prefix}ReadsPerGene.out.tab" "{output.counts}"
 
         # STAR writes Log.final.out automatically using the chosen prefix; the
@@ -364,26 +364,63 @@ rule picard_validate_samfile:
         "REFERENCE_SEQUENCE={input.ref} > {log} 2>&1 || true"
 
 rule picard_alignment_summary_metrics:
-    input: bam = rules.star_2pass.output.bam, ref = REF_FASTA
-    output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_alignment_summary_metrics.txt"
+    input:
+        bam = rules.star_2pass.output.bam,
+        ref = REF_FASTA
+    output:
+        f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_alignment_summary_metrics.txt"
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_alignment_summary_metrics.log"
+    conda:
+        f"{ENV_DIR}/picard.yaml"
     shell:
-        "picard CollectAlignmentSummaryMetrics R={input.ref} I={input.bam} O={output}"
+        r"""
+        mkdir -p $(dirname {output}) $(dirname {log})
+        picard CollectAlignmentSummaryMetrics \
+            R={input.ref} \
+            I={input.bam} \
+            O={output} \
+            > {log} 2>&1
+        """
 
 rule picard_quality_yield_metrics:
-    input:  bam = rules.star_2pass.output.bam
-    output: f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_quality_yield_metrics.txt"
+    input:
+        bam = rules.star_2pass.output.bam
+    output:
+        f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_quality_yield_metrics.txt"
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_quality_yield_metrics.log"
+    conda:
+        f"{ENV_DIR}/picard.yaml"
     shell:
-        "picard CollectQualityYieldMetrics I={input.bam} O={output}"
+        r"""
+        mkdir -p $(dirname {output}) $(dirname {log})
+        picard CollectQualityYieldMetrics \
+            I={input.bam} \
+            O={output} \
+            > {log} 2>&1
+        """
 
 rule picard_insert_size_metrics:
-    input: bam = rules.star_2pass.output.bam
+    input:
+        bam = rules.star_2pass.output.bam
     output:
         metrics = f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_insert_size_metrics.txt",
         hist    = f"{DATA_ROOT}/{{project}}/results/picard/{{sample}}_insert_size_histogram.pdf"
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/picard/{{sample}}_insert_size_metrics.log"
+    conda:
+        f"{ENV_DIR}/picard.yaml"
     shell:
-        # Insert size distributions are informative for paired-end RNA-seq libraries:
-        # shifts or multimodal patterns can indicate technical issues or sample differences.
-        "picard CollectInsertSizeMetrics I={input.bam} O={output.metrics} H={output.hist} M=0.5"
+        r"""
+        mkdir -p $(dirname {output.metrics}) $(dirname {log})
+        picard CollectInsertSizeMetrics \
+            I={input.bam} \
+            O={output.metrics} \
+            H={output.hist} \
+            M=0.5 \
+            > {log} 2>&1
+        """
 
 # ------------------------------------------------------------------------------
 # MultiQC: per-project aggregation of QC and alignment metrics

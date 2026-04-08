@@ -184,3 +184,11 @@ message(sprintf("[OK] Wrote metadata: %s", file.path(opt$outdir, "metadata.tsv")
 
 message(sprintf("[DONE] Prepared inputs for %s: %d samples, %d genes", 
                 opt$profile, length(matched_samples), nrow(counts_out)))
+
+
+
+prepare_deseq2_inputs.R
+add_component_to_metadata.R
+resolve_dsmz_graph_neighbors.R
+deseq2_isolate_degs.R
+deseq2_component_vs_rest.R
