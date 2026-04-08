@@ -233,6 +233,11 @@ FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fa
 # Project-level reporting is often preferred when projects represent distinct studies.
 MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in PROJECTS]
 
+# Count matrix outputs produced by merge_star_counts.R
+COUNT_MATRIX = f"{DATA_ROOT}/count_data/nbl_tumour_count.rds"
+COUNT_META   = f"{DATA_ROOT}/count_data/nbl_tumour_sample_metadata.csv"
+COUNT_GENES  = f"{DATA_ROOT}/count_data/nbl_tumour_gene_list_hgnc.txt"
+
 # ------------------------------------------------------------------------------
 # Final pipeline outputs
 # ------------------------------------------------------------------------------
@@ -242,6 +247,7 @@ MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in 
 # - gene-level counts were collected
 # - alignment QC metrics were generated
 # - MultiQC reports were built per project
+# - all per-sample counts merged into a single count matrix
 rule all:
     input:
         STAR_BAMS,
@@ -250,7 +256,10 @@ rule all:
         PICARD_TXT,
         PICARD_HIST,
         FASTQC_HTML,
-        MULTIQC_HTML
+        MULTIQC_HTML,
+        COUNT_MATRIX,
+        COUNT_META,
+        COUNT_GENES
 
 # ------------------------------------------------------------------------------
 # Rule: FastQC on each FASTQ file
@@ -430,6 +439,28 @@ rule picard_insert_size_metrics:
             H={output.hist} \
             M=0.5 \
             > {log} 2>&1
+        """
+
+# ------------------------------------------------------------------------------
+# Rule: merge per-sample STAR count tables into a single count matrix
+# ------------------------------------------------------------------------------
+# Reads all valid_count/{sample}.tab files across all projects and merges them
+# into a genes x samples count matrix via merge_star_counts.R.
+rule build_nbl_count_matrix:
+    input:
+        STAR_COUNTS
+    output:
+        matrix = COUNT_MATRIX,
+        meta   = COUNT_META,
+        genes  = COUNT_GENES
+    log:
+        f"{DATA_ROOT}/count_data/merge_star_counts.log"
+    conda:
+        f"{ENV_DIR}/r-base.yaml"
+    shell:
+        r"""
+        mkdir -p $(dirname {output.matrix})
+        ROOT_DIR={DATA_ROOT} Rscript {WORKFLOW_DIR}/scripts/nbl/merge_star_counts.R > {log} 2>&1
         """
 
 # ------------------------------------------------------------------------------
