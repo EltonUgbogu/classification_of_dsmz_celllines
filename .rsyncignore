@@ -3,7 +3,6 @@
 **/.snakemake/
 
 # Big / generated directories inside pipeline
-results/
 logs/
 count_data/
 *_family.soft.gz

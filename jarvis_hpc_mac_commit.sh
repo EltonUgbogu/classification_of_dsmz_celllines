@@ -191,11 +191,16 @@ fi
 echo "==> Rsync from ${REMOTE_HOST}:${REMOTE_DIR} -> ${LOCAL_PIPELINE_DIR}/"
 RSYNC_ARGS=(
     -av
-    --delete
-    --delete-excluded
     --prune-empty-dirs
     --exclude-from="$RSYNC_EXCLUDE_FILE"
 )
+
+# Mirror deletions only when explicitly requested.
+# Default behaviour is additive-only to prevent accidental removal of tracked
+# documents that were deleted or moved on the HPC.
+if [[ "${MIRROR_DELETE:-0}" == "1" ]]; then
+    RSYNC_ARGS+=(--delete)
+fi
 
 if [[ "$DRY_RUN" == "1" ]]; then
     # In dry-run mode --dry-run is appended so rsync reports what would change
@@ -246,7 +251,14 @@ if [[ -z "$(git status --porcelain)" ]]; then
 fi
 
 echo "==> Staging changes under pipeline/"
-git add -A pipeline
+# By default, do not stage deletions — this prevents tracked documents from
+# being removed when they are absent on the HPC (moved, renamed, or never
+# pushed there). Pass STAGE_DELETIONS=1 to opt in to mirroring removals.
+if [[ "${STAGE_DELETIONS:-0}" == "1" ]]; then
+    git add -A pipeline
+else
+    git add --ignore-removal pipeline
+fi
 
 # Guard 2: exit cleanly if .gitignore suppressed all changed files after staging.
 if git diff --cached --quiet; then
