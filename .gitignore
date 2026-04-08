@@ -71,15 +71,6 @@ snakemake/Miniconda3-latest-Linux-x86_64.sh
 Trimmomatic-0.39/
 data/HISAT2/genome/grch38/
 data/HISAT2/genome/
-# Keep pipeline/data mostly ignored, but track selected text/log/script outputs
-pipeline/data/**
-!pipeline/data/**/
-!pipeline/data/**/*.out
-!pipeline/data/**/*.err
-!pipeline/data/**/*.sh
-!pipeline/data/**/*.txt
-!pipeline/data/**/*.tsv
-!pipeline/data/**/*.csv
 bin/
 tmp/
 illumina/
