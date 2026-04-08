@@ -4,19 +4,30 @@ options(stringsAsFactors = FALSE)
 suppressPackageStartupMessages(library(data.table))
 
 # ==============================================================================
-# Merge STAR ReadsPerGene .tab files into one genes x samples count matrix
-# - one .tab file = one sample
-# - sample ID = filename without .tab (e.g. SRR12345678)
-# - cohort/project stored separately in metadata
+# Merge STAR count files into one combined genes x samples count matrix
+#
+# Sources:
+#   1. GEO cohorts (GSE100148, GSE189367, SRP409177)
+#      {ROOT_DIR}/{cohort}/results/star/valid_count/{sample}.tab
+#      4-column STAR ReadsPerGene format; sample ID = SRR accession
+#
+#   2. TARGET-NBL (GDC)
+#      {ROOT_DIR}/target_nbl/merged/target_nbl_count.rds
+#      Pre-merged by merge_target_nbl_counts.R; columns = aliquot_submitter_id
+#
+# Genes are matched on stripped Ensembl ID (no version suffix).
+# The final matrix is the intersection of genes across both sources.
 # ==============================================================================
 
 # ------------------------------
 # Config
 # ------------------------------
-ROOT_DIR <- Sys.getenv("ROOT_DIR", "/work/ugbogu/pipeline/data/nbl")
-COHORTS  <- c("GSE100148", "GSE189367", "SRP409177")
+ROOT_DIR   <- Sys.getenv("ROOT_DIR", "/work/ugbogu/pipeline/data/nbl")
+COHORTS    <- c("GSE100148", "GSE189367", "SRP409177")
+TARGET_RDS <- file.path(ROOT_DIR, "target_nbl", "merged", "target_nbl_count.rds")
+TARGET_META_FILE <- file.path(ROOT_DIR, "target_nbl", "merged", "target_nbl_sample_metadata.csv")
 
-OUT_DIR  <- file.path(ROOT_DIR, "count_data")
+OUT_DIR    <- file.path(ROOT_DIR, "count_data")
 OUT_MATRIX <- file.path(OUT_DIR, "nbl_tumour_count.rds")
 OUT_META   <- file.path(OUT_DIR, "nbl_tumour_sample_metadata.csv")
 OUT_GENES  <- file.path(OUT_DIR, "nbl_tumour_gene_list_hgnc.txt")
@@ -170,18 +181,72 @@ if (n_samples > 1) {
   }
 }
 
-cat("\nFinal matrix dimensions:\n")
+cat("\nGEO matrix dimensions:\n")
 cat("  genes   =", nrow(count_mat), "\n")
 cat("  samples =", ncol(count_mat), "\n")
+
+# ------------------------------
+# Load and merge TARGET-NBL matrix
+# ------------------------------
+if (!file.exists(TARGET_RDS)) {
+  stop("TARGET-NBL matrix not found: ", TARGET_RDS,
+       "\nRun merge_target_nbl_counts.R first.")
+}
+
+cat("\nLoading TARGET-NBL matrix:", TARGET_RDS, "\n")
+target_mat <- readRDS(TARGET_RDS)
+
+cat("TARGET-NBL matrix dimensions:\n")
+cat("  genes   =", nrow(target_mat), "\n")
+cat("  samples =", ncol(target_mat), "\n")
+
+# Intersect genes — GEO uses GENCODE v44, TARGET uses GENCODE v36
+common_genes <- intersect(rownames(count_mat), rownames(target_mat))
+cat("\nCommon genes (intersection):", length(common_genes), "\n")
+
+if (length(common_genes) == 0) {
+  stop("No common genes between GEO and TARGET-NBL matrices.")
+}
+
+geo_sub    <- count_mat[common_genes, , drop = FALSE]
+target_sub <- target_mat[common_genes, , drop = FALSE]
+
+combined_mat <- cbind(geo_sub, target_sub)
+cat("\nCombined matrix dimensions:\n")
+cat("  genes   =", nrow(combined_mat), "\n")
+cat("  samples =", ncol(combined_mat), "\n")
+
+# Build combined metadata
+target_meta <- fread(TARGET_META_FILE)
+target_meta[, cohort := "TARGET-NBL"]
+setnames(target_meta, "aliquot_id", "sample", skip_absent = TRUE)
+
+# Align columns between the two metadata tables
+geo_cols    <- c("cohort", "sample", "stranded_col")
+target_cols <- c("cohort", "sample", "count_col")
+setnames(target_meta, "count_col", "stranded_col", skip_absent = TRUE)
+
+geo_meta    <- sample_table[, .(cohort, sample, stranded_col = as.character(stranded_col))]
+target_slim <- target_meta[, .(cohort, sample = aliquot_id %||% sample,
+                                stranded_col)]
+
+# Use file_id + aliquot columns that exist
+keep_cols <- intersect(c("cohort", "file_id", "aliquot_id", "file", "stranded_col"),
+                       names(target_meta))
+target_slim <- target_meta[, ..keep_cols]
+target_slim[, cohort := "TARGET-NBL"]
+
+combined_meta <- rbindlist(list(sample_table, target_slim),
+                            use.names = TRUE, fill = TRUE)
 
 # ------------------------------
 # Save outputs
 # ------------------------------
 dir.create(OUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
-saveRDS(count_mat, OUT_MATRIX)
-fwrite(sample_table, OUT_META)
-writeLines(rownames(count_mat), OUT_GENES)
+saveRDS(combined_mat, OUT_MATRIX)
+fwrite(combined_meta, OUT_META)
+writeLines(rownames(combined_mat), OUT_GENES)
 
 cat("\nSaved:\n")
 cat("  Matrix   :", OUT_MATRIX, "\n")

@@ -233,10 +233,16 @@ FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fa
 # Project-level reporting is often preferred when projects represent distinct studies.
 MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in PROJECTS]
 
-# Count matrix outputs produced by merge_star_counts.R
+# Count matrix outputs produced by merge_star_counts.R (GEO cohorts)
 COUNT_MATRIX = f"{DATA_ROOT}/count_data/nbl_tumour_count.rds"
 COUNT_META   = f"{DATA_ROOT}/count_data/nbl_tumour_sample_metadata.csv"
 COUNT_GENES  = f"{DATA_ROOT}/count_data/nbl_tumour_gene_list_hgnc.txt"
+
+# Count matrix outputs produced by merge_target_nbl_counts.R (TARGET-NBL)
+TARGET_NBL_DIR    = f"{DATA_ROOT}/target_nbl"
+TARGET_MATRIX     = f"{TARGET_NBL_DIR}/merged/target_nbl_count.rds"
+TARGET_META       = f"{TARGET_NBL_DIR}/merged/target_nbl_sample_metadata.csv"
+TARGET_GENES      = f"{TARGET_NBL_DIR}/merged/target_nbl_gene_list.txt"
 
 # ------------------------------------------------------------------------------
 # Final pipeline outputs
@@ -259,7 +265,10 @@ rule all:
         MULTIQC_HTML,
         COUNT_MATRIX,
         COUNT_META,
-        COUNT_GENES
+        COUNT_GENES,
+        TARGET_MATRIX,
+        TARGET_META,
+        TARGET_GENES
 
 # ------------------------------------------------------------------------------
 # Rule: FastQC on each FASTQ file
@@ -444,11 +453,14 @@ rule picard_insert_size_metrics:
 # ------------------------------------------------------------------------------
 # Rule: merge per-sample STAR count tables into a single count matrix
 # ------------------------------------------------------------------------------
-# Reads all valid_count/{sample}.tab files across all projects and merges them
-# into a genes x samples count matrix via merge_star_counts.R.
+# Reads all valid_count/{sample}.tab files across all GEO projects, then loads
+# the pre-built TARGET-NBL matrix and combines both into one genes x samples
+# count matrix via merge_star_counts.R.
+# Depends on build_target_nbl_count_matrix completing first.
 rule build_nbl_count_matrix:
     input:
-        STAR_COUNTS
+        tabs   = STAR_COUNTS,
+        target = TARGET_MATRIX
     output:
         matrix = COUNT_MATRIX,
         meta   = COUNT_META,
@@ -461,6 +473,28 @@ rule build_nbl_count_matrix:
         r"""
         mkdir -p $(dirname {output.matrix})
         ROOT_DIR={DATA_ROOT} Rscript {WORKFLOW_DIR}/scripts/nbl/merge_star_counts.R > {log} 2>&1
+        """
+
+# ------------------------------------------------------------------------------
+# Rule: merge TARGET-NBL GDC STAR count TSVs into a single count matrix
+# ------------------------------------------------------------------------------
+# Reads UUID-named sample directories under target_nbl/count_data/ and maps
+# them to aliquot_submitter_id (TARGET-30-*) via target_nbl_file_to_aliquot.tsv.
+rule build_target_nbl_count_matrix:
+    input:
+        mapping = f"{TARGET_NBL_DIR}/metadata/target_nbl_file_to_aliquot.tsv"
+    output:
+        matrix = TARGET_MATRIX,
+        meta   = TARGET_META,
+        genes  = TARGET_GENES
+    log:
+        f"{TARGET_NBL_DIR}/merged/merge_target_nbl_counts.log"
+    conda:
+        f"{ENV_DIR}/r-base.yaml"
+    shell:
+        r"""
+        mkdir -p $(dirname {output.matrix})
+        TARGET_NBL_DIR={TARGET_NBL_DIR} Rscript {WORKFLOW_DIR}/scripts/nbl/merge_target_nbl_counts.R > {log} 2>&1
         """
 
 # ------------------------------------------------------------------------------
