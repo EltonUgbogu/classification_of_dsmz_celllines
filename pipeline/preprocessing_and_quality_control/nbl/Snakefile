@@ -18,7 +18,7 @@
 import os
 import glob
 
-WORKFLOW_DIR = os.path.dirname(os.path.abspath(__file__))
+WORKFLOW_DIR = workflow.basedir
 
 # ------------------------------------------------------------------------------
 # Paths and study identifiers
@@ -474,7 +474,7 @@ rule build_nbl_count_matrix:
         f"{ENV_DIR}/r-base.yaml"
     shell:
         r"""
-        mkdir -p $(dirname {output.matrix})
+        mkdir -p "$(dirname "{output.matrix}")"
         ROOT_DIR={DATA_ROOT} Rscript {WORKFLOW_DIR}/scripts/merge_star_counts.R > {log} 2>&1
         """
 
@@ -497,7 +497,7 @@ rule build_target_nbl_count_matrix:
         f"{ENV_DIR}/r-base.yaml"
     shell:
         r"""
-        mkdir -p $(dirname {output.matrix})
+        mkdir -p "$(dirname "{output.matrix}")"
         TARGET_NBL_DIR={TARGET_NBL_DIR} Rscript {WORKFLOW_DIR}/scripts/merge_target_nbl_counts.R > {log} 2>&1
         """
 
