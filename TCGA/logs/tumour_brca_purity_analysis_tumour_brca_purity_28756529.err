@@ -1,9 +1,0 @@
-[INFO] Starting tidyestimate purity analysis pipeline...
-[INFO] Log file closed: /home/chu25/TCGA/all_tcga_count_data/tumour_purity/results/TCGA_BRCA/tcga_purity_pipeline_20260216_145147.log
-[SUCCESS] tidyestimate purity analysis completed successfully.
-[INFO] Filtered dataset ready: 60660 genes × 914 samples
-Warning messages:
-1: In grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y,  :
-  for 'Purity ≥ 0.7 | 1231 → 914 (74.2% kept)' in 'mbcsToSbcs': >= substituted for ≥ (U+2265)
-2: In grid.Call.graphics(C_text, as.graphicsAnnot(x$label), x$x, x$y,  :
-  for 'Purity ≥ 0.7 | 1231 → 914 (74.2% kept)' in 'mbcsToSbcs': -> substituted for → (U+2192)

@@ -1,2 +1,0 @@
-2025-09-29T12:20:47 prefetch.3.0.10 warn: Maximum file size download limit is 20GB 
-pigz: skipping: /home/chu25/data/rbl/fastq/*.fastq does not exist

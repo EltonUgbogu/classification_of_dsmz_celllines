@@ -1,8 +1,0 @@
-Starting strand batch effect check...
-Job ID: 24459126
-Start time: Thu Nov 13 04:31:07 CET 2025
-
- reverse/- unstranded 
-       112          8 
-ERROR: strand_batch_effect.R failed with exit code 1
-End time: Thu Nov 13 04:31:10 CET 2025

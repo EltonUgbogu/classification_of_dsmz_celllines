@@ -1,3 +1,0 @@
-exec > "/work/ugbogu/pipeline/data/nbl/GSE189367/results/star/SRR17010984._STARtmp/tmp.fifo.read2"
-echo FILE 0
-zcat      "/work/ugbogu/pipeline/data/nbl/GSE189367/fastq/SRR17010984_2.fastq.gz"

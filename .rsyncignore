@@ -2,9 +2,35 @@
 .snakemake/
 **/.snakemake/
 
+# FASTQC artifacts
+**/results/fastqc/
+**/results/fastqc/**
+
+# STAR runtime / intermediate outputs
+**/results/star/
+**/results/star/**
+**/*_STARtmp/
+**/*_STARtmp/**
+**/*_STARgenome/
+**/*_STARgenome/**
+**/*_STARpass1/
+**/*_STARpass1/**
+
+# STAR logs and splice junction outputs
+*.Log.out
+*.Log.progress.out
+*.Log.final.out
+*.SJ.out.tab
+
+# Count matrices / per-sample count exports
+count_data/
+**/count_data/
+**/valid_count/
+**/valid_count/**
+*.tab
+
 # Big / generated directories inside pipeline
 logs/
-count_data/
 *_family.soft.gz
 data/reference/gencode_v44/
 data/reference/**/GRCh38.primary_assembly.genome.fa
@@ -61,9 +87,7 @@ __pycache__/
 *.gtf
 *.gtf.gz
 
-# Keep text and scheduler logs in sync
+# Keep text/tabular files
 !*.txt
-!*.out
-!*.err
 !*.tsv
 !*.csv
