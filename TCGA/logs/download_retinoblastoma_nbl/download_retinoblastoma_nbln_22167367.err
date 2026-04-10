@@ -1,5 +1,0 @@
-spots read      : 495,947,775
-reads read      : 1,487,843,325
-reads written   : 991,895,550
-technical reads : 495,947,775
-/var/spool/slurm//job22167367/slurm_script: line 63: unexpected EOF while looking for matching `}'

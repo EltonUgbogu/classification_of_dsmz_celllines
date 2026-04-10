@@ -1,8 +1,0 @@
-
-
-processing file: tcga_estimate_purity.Rmd
-output file: tcga_estimate_purity.knit.md
-
-[WARNING] Deprecated: --highlight-style. Use --syntax-highlighting instead.
-
-Output created: /home/chu25/TCGA/results/tumour_purity_results/tcga_estimate_purity.pdf

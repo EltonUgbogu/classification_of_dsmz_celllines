@@ -1,9 +1,0 @@
-[INFO] Loading Parquet: /home/chu25/data/nbl/final_nbl_count_matrix.parquet
-   Loaded df: 120 × 60661
-[INFO] Matrix: 120 samples × 60660 genes
-   First 5 samples: GSE100148_SRR5710452, GSE100148_SRR5710457, GSE100148_SRR5710462, GSE100148_SRR5710467, GSE189367_SRR17010968
-   First 5 genes: ENSG00000000003, ENSG00000000005, ENSG00000000419, ENSG00000000457, ENSG00000000460
-[INFO] Saving RDS: /home/chu25/data/nbl/nbl_raw_count_matrix.rds
-[SUCCESS] Saved RDS! Size: 6.03 MB
-[SUCCESS] Sample order matches metadata ✅
-[CHECK SUCCESS] Row/Col names are plain characters ✅
