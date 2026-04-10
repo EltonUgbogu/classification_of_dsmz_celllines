@@ -10,7 +10,7 @@ This document is a **complete task file for an agent**, detailing the analysis p
   - `paths.vst_joint_rds`, `paths.cell_vst_rds`, `paths.tumour_vst_rds`
   - `paths.unsup_root`, `paths.dsmz_meta_csv` (or `meta_tsv` for joint metadata)
   - `feature_sets.methods` and `feature_sets.distances` (or `tumour_neighbourhoods.directions` for an explicit list)
-  - `features.hvg_final_gene_list` and optionally `features.hvg_joint_scores_tsv` if using HVG
+  - `feature_selection.method_topn` entries for each active method (Variance, MAD, MeanAbsDev, Entropy, PCA, Spearman, MX, kTotal, HVG)
 - **Conda env:** Rules use `envs/tcga-r-env.yaml` (R + optparse, yaml, dplyr, etc.).
 - **Run from pipeline root:** Use `--snakefile Snakefile` (or full path to Snakefile) and `--configfile config/config.yaml --config pipeline_profile=<name>`.
 
@@ -40,8 +40,8 @@ This document is a **complete task file for an agent**, detailing the analysis p
 - **Inputs:** `paths.vst_joint_rds`, `config/config.yaml`
 - **Outputs:**
   - `results/unsupervised/<profile>/feature_selection_unsupervised/feature_sets/genes_top{N}_{METHOD}.txt` for every configured method (e.g. HVG top-3000, MX top-500)
-  - Optional side outputs: `hvg_joint_scores.tsv`, `hvg_final_gene_list.txt`, UpSet plots, etc.
-- **What it does:** Ranks genes by multiple methods, writes top-N gene lists per method. Required for all downstream steps that use “direction” (e.g. Variance_euc, hvg_corr).
+  - Optional side outputs: MX joint scores TSV (`{profile}_MX_joint_ranks_kTotal_vs_MX.tsv`), UpSet plots, etc.
+- **What it does:** Ranks genes by multiple methods, writes top-N gene lists per method. Required for all downstream steps that use “direction” (e.g. Variance_euc, MX_corr, HVG_euc). Each method emits `feature_sets/genes_top{N}_{METHOD}.txt` where N is method-specific (3000 for Variance/MAD/MeanAbsDev/Entropy/PCA/HVG; 500 for Spearman/MX/kTotal).
 
 **Run:**
 ```bash
@@ -80,8 +80,8 @@ If `build_featureset_matrices` does not exist, request the individual `expr_subm
   - `scripts/kmeans_cell.R`, `kmeans_tumour.R`, `kmeans_cell_tumour.R`
 - **Snakemake rule (aggregate):** `agnostic_all_directions`
 - **Inputs:**  
-  - Cell/tumour VST RDS; per-direction gene list from feature selection (or HVG list for hvg_*).  
-  - Directions come from `tumour_neighbourhoods.directions` or from `feature_sets.methods` × `feature_sets.distances` (e.g. Variance_euc, hvg_corr).
+  - Cell/tumour VST RDS; per-direction gene list from feature selection (resolved via `feature_sets/genes_top{N}_{feature}.txt`).
+  - Directions come from `tumour_neighbourhoods.directions` or from `feature_sets.methods` × `feature_sets.distances` (e.g. Variance_euc, MX_corr, HVG_euc).
 - **Outputs:**  
   - `results/unsupervised/<profile>/agnostic_clustering/<direction>/inputs/cell_expr.rds`, `tumour_expr.rds`  
   - For each direction: `pca_hc_cell`, `pca_hc_tumour`, `pca_hc_cell_tumour`, `hc_cell`, `hc_tumour`, `hc_cell_tumour`, and for _euc only: `pca_kmeans_*`, `kmeans_*` → `*_clusters_optimal.rds`
@@ -115,18 +115,19 @@ snakemake consensus_all_directions \
 
 ## STEP 3: Tumour neighbourhood consensus
 
-### 3a. Build tumour neighbourhood inputs (HVG and PAM50, if used)
+### 3a. Build tumour neighbourhood inputs (per-feature and optional PAM50)
 
 - **Script:** `scripts/build_tumour_neighbourhood_input.R`
-- **Rules:** `build_tumour_neighbourhood_input_hvg`, and optionally `build_tumour_neighbourhood_input_pam50` if PAM50 is enabled.
+- **Rules:** `build_tumour_neighbourhood_input_featureset` (one per active feature direction), and optionally `build_tumour_neighbourhood_input_pam50` if PAM50 is enabled.
 - **Outputs:**  
-  - HVG: `tumour_neighbourhoods_input/expr_hvg.rds`, `cell_line_to_original_sample_id_hvg.rds`  
+  - Per feature: `tumour_neighbourhoods_input/expr_{feature}.rds`, `cell_line_to_original_sample_id_{feature}.rds`  
   - PAM50 (if used): analogous PAM50 RDS files.
+- **Note:** HVG is a computed feature set (top-3000 genes) but is not currently declared as a neighbourhood direction in active profiles. If a profile adds `HVG_euc`/`HVG_corr` to `tumour_neighbourhoods.directions`, this script will be invoked for `feature=HVG` using `feature_sets/genes_top3000_HVG.txt`.
 
 ### 3b. Compute tumour neighbourhoods (HC then kmeans for _euc)
 
 - **Script:** `scripts/comp_tumour_neighbourhoods.R`
-- **Rules:** `tumour_neighbourhoods_hc_hvg`, `tumour_neighbourhoods_hc_featureset`, `tumour_neighbourhoods_km_any`, etc.
+- **Rules:** `tumour_neighbourhoods_hc_featureset`, `tumour_neighbourhoods_km_any`, etc.
 - **Inputs:** Per-direction expr RDS and mapping RDS (from featuresets or HVG/PAM50).
 - **Outputs:**  
   - `tumour_neighbourhoods/<direction>/.tumour_neighbourhoods_done`  
@@ -135,7 +136,7 @@ snakemake consensus_all_directions \
 ### 3c. p-consensus (final neighbourhood consensus per direction)
 
 - **Script:** `scripts/tumour_neighbourhood_p_consensus.R`
-- **Rules:** `tumour_neighbourhood_p_consensus_hvg`, `tumour_neighbourhood_p_consensus_featureset` (and PAM50 if enabled).
+- **Rules:** `tumour_neighbourhood_p_consensus_featureset` (and PAM50 if enabled).
 - **Outputs:**  
   - `tumour_neighbourhoods/<direction>/final_consensus/Final_consensus_tumour_neighbourhoods_<direction>.rds`  
   - `Final_consensus_tumour_neighbourhoods_<direction>.tsv`
@@ -189,7 +190,7 @@ snakemake summarize_p_consensus_all \
 
 ## STEP 6: QC and UMAP (per direction)
 
-- **Script:** `scripts/tumour_neighbourhood_qc_umap.R` (or equivalent; invoked by rules such as `tumour_neighbourhood_qc_umap_hvg`, `tumour_neighbourhood_qc_umap_featureset`).
+- **Script:** `scripts/tumour_neighbourhood_qc_umap.R` (invoked by rule `tumour_neighbourhood_qc_umap_featureset`, one job per direction).
 - **Outputs:**  
   - `tumour_neighbourhoods/<direction>/qc/nh_qc_summary.tsv`  
   - `tumour_neighbourhoods/<direction>/qc/nh_umap.tsv`  

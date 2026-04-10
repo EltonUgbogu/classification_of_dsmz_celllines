@@ -144,7 +144,7 @@ normalise_dataset_type <- function(x) {
 # The pipeline employs a multi-directional ensemble strategy, systematically
 # evaluating combinations of feature selection methods and distance metrics.
 # Each combination is identified by a "method_id" or "direction" string
-# (e.g., "pam50_euc", "hvg_corr", "Variance_euclidean").
+# (e.g., "pam50_euc", "HVG_corr", "Variance_euclidean").
 #
 # These functions provide utilities for:
 #   - Parsing method identifiers from command-line arguments
@@ -169,8 +169,8 @@ get_method_id <- function(default = "pam50_euc") {
   #   A character string containing the method identifier
   #
   # Example command-line usage:
-  #   Rscript analysis.R --method=hvg_corr
-  #   Rscript analysis.R --method hvg_corr
+  #   Rscript analysis.R --method=HVG_corr
+  #   Rscript analysis.R --method HVG_corr
   
   args <- commandArgs(trailingOnly = TRUE)
   
@@ -194,7 +194,7 @@ make_method_tags <- function(feature, distance) {
   # identification of analytical provenance.
   #
   # Parameters:
-  #   feature:  The feature set name (e.g., "pam50", "hvg", "Variance")
+  #   feature:  The feature set name (e.g., "pam50", "HVG", "Variance")
   #   distance: The distance metric name (e.g., "correlation", "euclidean")
   #
   # Returns:

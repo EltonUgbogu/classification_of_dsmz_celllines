@@ -91,6 +91,7 @@ multicohort_cancer:
     - Spearman
     - MX
     - kTotal
+    - HVG
   outdir: results/multicohort_cancer_benchmark
   run_validation: true
   profiles:
@@ -111,7 +112,7 @@ multicohort_cancer:
 
 profiles:
   # ---------------------------------------------------------------------------
-  # multicohort_cancer — full 8-method × 2-distance grid; no PAM50
+  # multicohort_cancer — full 9-method × 2-distance grid; no PAM50
   # ---------------------------------------------------------------------------
   multicohort_cancer:
     analysis:
@@ -130,6 +131,7 @@ profiles:
         - Spearman
         - MX
         - kTotal
+        - HVG
     paths:
       unsup_root: results/multicohort_cancer_benchmark/unsupervised
       vst_joint_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
@@ -155,12 +157,14 @@ profiles:
         - MX_corr
         - kTotal_euc
         - kTotal_corr
+        - HVG_euc
+        - HVG_corr
     features:
       mx_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_joint_scores.tsv
       mx_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # brca — full 8-method × 2-distance grid
+  # brca — full 9-method × 2-distance grid
   # PAM50 disabled until tcga_brca_pam50_expr and dsmz_bcc_pam50_expr paths
   # are configured under paths. Re-enable use_pam50 and restore pam50_euc/
   # pam50_corr directions once those expression matrices are available.
@@ -182,6 +186,7 @@ profiles:
         - Spearman
         - MX
         - kTotal
+        - HVG
     paths:
       unsup_root: results/unsupervised/brca
       vst_joint_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
@@ -208,13 +213,15 @@ profiles:
         - MX_corr
         - kTotal_euc
         - kTotal_corr
+        - HVG_euc
+        - HVG_corr
     features:
       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
       mx_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # nbl — full 8-method × 2-distance grid; no PAM50
+  # nbl — full 9-method × 2-distance grid; no PAM50
   # ---------------------------------------------------------------------------
   nbl:
     analysis:
@@ -233,6 +240,7 @@ profiles:
         - Spearman
         - MX
         - kTotal
+        - HVG
     paths:
       unsup_root: results/unsupervised/nbl
       vst_joint_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
@@ -259,12 +267,14 @@ profiles:
         - MX_corr
         - kTotal_euc
         - kTotal_corr
+        - HVG_euc
+        - HVG_corr
     features:
       mx_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # rbl — full 8-method × 2-distance grid; no PAM50
+  # rbl — full 9-method × 2-distance grid; no PAM50
   # ---------------------------------------------------------------------------
   rbl:
     analysis:
@@ -283,6 +293,7 @@ profiles:
         - Spearman
         - MX
         - kTotal
+        - HVG
     paths:
       unsup_root: results/unsupervised/rbl
       vst_joint_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
@@ -309,12 +320,14 @@ profiles:
         - MX_corr
         - kTotal_euc
         - kTotal_corr
+        - HVG_euc
+        - HVG_corr
     features:
       mx_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # heme — full 8-method × 2-distance grid; no PAM50
+  # heme — full 9-method × 2-distance grid; no PAM50
   # ---------------------------------------------------------------------------
   heme:
     analysis:
@@ -333,6 +346,7 @@ profiles:
         - Spearman
         - MX
         - kTotal
+        - HVG
     paths:
       unsup_root: results/unsupervised/heme
       vst_joint_rds: results/unsupervised/heme/integrated/heme_joint_expr_vst_batch_corrected.rds
@@ -358,6 +372,8 @@ profiles:
         - MX_corr
         - kTotal_euc
         - kTotal_corr
+        - HVG_euc
+        - HVG_corr
     features:
       mx_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/mx_final_gene_list.txt

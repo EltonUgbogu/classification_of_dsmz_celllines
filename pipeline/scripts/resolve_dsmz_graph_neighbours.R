@@ -242,28 +242,43 @@ if (!dir.exists(tumour_nh_root)) {
 # on the analysis profile:
 #
 # Pan-cancer:
-#   - Feature methods: Variance, MAD, MeanAbsDev, Entropy, PCA, Spearman, MX, kTotal
+#   - Feature methods: Variance, MAD, MeanAbsDev, Entropy, PCA, Spearman, MX, kTotal, HVG
 #   - Distance metrics: euc, corr
-#   - Resulting directions: e.g., "Variance_euc", "MAD_corr"
+#   - Resulting directions: e.g., "Variance_euc", "MAD_corr", "HVG_euc"
 #
-# Single-cohort (brca, nbl, rbl):
-#   - Directions: HVG_euc, HVG_corr (and pam50_euc, pam50_corr when use_pam50 is enabled)
-#   - These correspond to trend-corrected HVG or PAM50 gene sets
-#     combined with Euclidean or correlation-based distances.
+# Single-cohort (brca, nbl, rbl, heme):
+#   - Directions: the 9-method × 2-distance grid declared in
+#     tumour_neighbourhoods.directions in config.yaml, e.g.:
+#     Variance_euc, Variance_corr, MAD_euc, ..., kTotal_euc, kTotal_corr,
+#     HVG_euc, HVG_corr
+#   - HVG uses top-3000 genes (LOESS mean-variance trend correction).
+#   - PAM50 directions (pam50_euc, pam50_corr) are added only when
+#     use_pam50 is enabled in the profile config.
 
 if (profile == "multicohort_cancer") {
   cfg_full <- yaml::read_yaml(opt$config)
   mc_cfg <- cfg_full$multicohort_cancer %||%
     stop("multicohort_cancer section not found in config")
   feature_methods <- mc_cfg$feature_methods %||%
-    c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal")
+    c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG")
   dist_metrics <- mc_cfg$dist_metrics %||%
     c("euc", "corr")
   directions <- paste0(rep(feature_methods, each = length(dist_metrics)), "_",
                        rep(dist_metrics, times = length(feature_methods)))
 } else {
+  # Fall back to the tumour_neighbourhoods.directions from config; if not set,
+  # use the 9-method × 2-distance grid that all active single-cohort profiles
+  # declare (including HVG_euc / HVG_corr as of the 9-method activation).
   directions <- cfg$tumour_neighbourhoods$directions %||%
-    c("HVG_euc", "HVG_corr")
+    c("Variance_euc", "Variance_corr",
+      "MAD_euc",      "MAD_corr",
+      "MeanAbsDev_euc", "MeanAbsDev_corr",
+      "Entropy_euc",  "Entropy_corr",
+      "PCA_euc",      "PCA_corr",
+      "Spearman_euc", "Spearman_corr",
+      "MX_euc",       "MX_corr",
+      "kTotal_euc",   "kTotal_corr",
+      "HVG_euc",      "HVG_corr")
 }
 
 # -----------------------------------------------------------------------------
