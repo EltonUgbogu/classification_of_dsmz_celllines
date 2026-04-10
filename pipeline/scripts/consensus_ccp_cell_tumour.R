@@ -237,10 +237,11 @@ option_list <- list(
   # Format: {feature_set}_{distance_metric} (e.g., 'HVG_euc', 'MAD_corr')
   make_option("--direction", type = "character", default = NULL),
 
-  # --hvg_list: Path to the gene list file for this direction.
-  # This file contains gene identifiers selected by the feature method.
-  make_option("--hvg_list", type = "character", default = NULL,
-              help = "Path to gene list for this direction (e.g. genes_top3000_HVG.txt)"),
+  # --feature_list: Optional explicit gene list file for the requested feature.
+  # Required for HVG directions so the script uses the actual HVG-derived set
+  # rather than falling back to legacy aliases.
+  make_option("--feature_list", type = "character", default = NULL,
+              help = "Path to the feature gene list (required for HVG directions)"),
   
   # --kind: Specifies the sample scope for clustering.
   # Valid values: 'cell' (cell lines only), 'tumour' (tumours only),
@@ -665,13 +666,9 @@ build_expr_mat <- function(feature, cfg, kind) {
     
     # Determine the gene list source.
     # Command-line argument takes precedence over configuration.
-    if (!is.null(opt$hvg_list) && file.exists(opt$hvg_list)) {
-      hvg_list <- opt$hvg_list
-    } else {
-      hvg_list <- cfg$features$mx_final_gene_list
-      if (!is.null(hvg_list)) {
-        hvg_list <- abs_from_root(hvg_list)
-      }
+    hvg_list <- opt$feature_list
+    if (!is.null(hvg_list) && nzchar(hvg_list)) {
+      hvg_list <- abs_from_root(hvg_list)
     }
 
     if (is.null(cell_path) || is.null(tumour_path)) {
@@ -679,7 +676,7 @@ build_expr_mat <- function(feature, cfg, kind) {
     }
     
     if (is.null(hvg_list) || !file.exists(hvg_list)) {
-      stop_with("Missing HVG list file")
+      stop_with("Missing HVG list file. Pass --feature_list pointing to the HVG gene list.")
     }
 
     # Load variance-stabilised transformed expression matrices.

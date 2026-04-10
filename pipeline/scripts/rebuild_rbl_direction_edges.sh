@@ -16,7 +16,7 @@ DIRECTIONS=(
   Entropy_corr Entropy_euc MAD_corr MAD_euc MX_corr MX_euc
   MeanAbsDev_corr MeanAbsDev_euc PCA_corr PCA_euc
   Spearman_corr Spearman_euc Variance_corr Variance_euc
-  hvg_euc kTotal_corr kTotal_euc
+  HVG_euc HVG_corr kTotal_corr kTotal_euc
 )
 
 # Build target list: one edge TSV per direction (same pattern as rule output)
