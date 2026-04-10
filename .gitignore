@@ -1,39 +1,24 @@
-# Large data and analysis outputs
-*.rds
-*.Rds
-*.fastq
-*.fastq.gz
-*.fq
-*.fq.gz
-*.bam
-*.bai
-*.sam
-*.cram
-*.sra
-*.parquet
-*.gtf
-*.gtf.gz
-*.zip
-*.tar.gz
+# =========================================================
+# classification_of_dsmz_celllines/.rsyncignore
+# Repo-specific policy for sync from jarvis -> local repo
+#
+# Keep:
+# - workflow source code
+# - config
+# - scripts
+# - lightweight curated text/tabular summaries
+#
+# Exclude:
+# - raw sequencing/alignment files
+# - STAR internals and runtime output
+# - FASTQC packaged outputs
+# - per-sample count exports / count matrices
+# - references, indexes, caches, environments, bulky artifacts
+# =========================================================
 
-# Bulky sequencing subdirectories
-**/fastq/
-**/bam/
-**/sra/
-**/tmp/
-
-# R / analysis artifacts
-.Rhistory
-.RData
-.Rproj.user/
-.Rcache/
-*.Rcheck/
-*.bak
-R/x86_64-redhat-linux-gnu-library/
-R/x86_64-conda-linux-gnu-library/
-R/x86_64-conda-linux-gnu-library/4.4/org.Hs.eg.db/extdata/org.Hs.eg.sqlite
-
-# Snakemake working directories and runtime internals
+# -----------------------------
+# Snakemake runtime internals
+# -----------------------------
 .snakemake/
 **/.snakemake/
 **/.snakemake/conda/
@@ -43,91 +28,132 @@ R/x86_64-conda-linux-gnu-library/4.4/org.Hs.eg.db/extdata/org.Hs.eg.sqlite
 **/.snakemake/log/
 **/.snakemake/metadata/
 
-# Generated Conda environments and package metadata
+# -----------------------------
+# Raw sequencing / alignment files
+# -----------------------------
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bam
+*.bai
+*.sam
+*.cram
+*.sra
+
+pipeline/data/**/fastq/
+pipeline/data/**/bam/
+pipeline/data/**/sra/
+pipeline/data/**/tmp/
+
+# -----------------------------
+# Reference / index assets
+# -----------------------------
+*.fa
+*.fasta
+*.fna
+*.gtf
+*.gtf.gz
+
+pipeline/data/reference/gencode_v44/
+pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
+pipeline/data/reference/star_*/
+pipeline/data/HISAT2/genome/
+pipeline/data/HISAT2/genome/grch38/
+Trimmomatic-0.39/
+HISAT2/genome/
+
+# -----------------------------
+# R / Python / environment artifacts
+# -----------------------------
+.Rhistory
+.RData
+.Rproj.user/
+.Rcache/
+*.Rcheck/
+*.rds
+*.Rds
+*.bak
+
+__pycache__/
+*.pyc
+*.pyo
+
 miniconda3/
 **/envs/.conda/
 *.dist-info/
 *.egg-info/
 
-# FASTQC artifacts
-**/results/fastqc/
-**/results/fastqc/**
+# -----------------------------
+# Generated bulky artifacts
+# -----------------------------
+*.parquet
+*.zip
+*.tar.gz
 
-# STAR runtime / intermediate outputs
-**/results/star/
-**/results/star/**
-**/*_STARtmp/
-**/*_STARtmp/**
-**/*_STARgenome/
-**/*_STARgenome/**
-**/*_STARpass1/
-**/*_STARpass1/**
-
-# STAR logs and splice junction outputs
-*.Log.out
-*.Log.progress.out
-*.Log.final.out
-*.SJ.out.tab
-
-# Count matrices / per-sample count exports
-count_data/
-**/count_data/
-**/valid_count/
-**/valid_count/**
-*.tab
-
-# Large generated data and tool directories
-*_family.soft.gz
-data/reference/gencode_v44/
-data/reference/**/GRCh38.primary_assembly.genome.fa
-data/reference/star_*/
-pipeline/data/reference/gencode_v44/
-pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
-pipeline/data/reference/star_*/
-*.fa
-*.fasta
-*.fna
-data/nbl/target_nbl/manifests/*.json
-data/nbl/target_nbl/metadata/payload*.json
-pipeline/data/nbl/target_nbl/manifests/*.json
-pipeline/data/nbl/target_nbl/metadata/payload*.json
 benchmarks/
-HISAT2/genome/
-snakemake/Miniconda3-latest-Linux-x86_64.sh
-Trimmomatic-0.39/
-data/HISAT2/genome/grch38/
-data/HISAT2/genome/
 bin/
 tmp/
 illumina/
 snap/
 actions-runner/
 
-# Python caches
-__pycache__/
-*.pyc
-*.pyo
+# -----------------------------
+# pipeline/data results policy
+# Keep curated summaries, exclude runtime/intermediate clutter
+# -----------------------------
 
-# OS / IDE metadata
+# FASTQC archives and folders
+pipeline/data/**/results/fastqc/
+pipeline/data/**/results/fastqc/**
+
+# STAR output trees
+pipeline/data/**/results/star/
+pipeline/data/**/results/star/**
+
+# Extra hard-block STAR internals anywhere under pipeline/data
+pipeline/data/**/*_STARtmp/
+pipeline/data/**/*_STARtmp/**
+pipeline/data/**/*_STARgenome/
+pipeline/data/**/*_STARgenome/**
+pipeline/data/**/*_STARpass1/
+pipeline/data/**/*_STARpass1/**
+
+# Count exports / matrices
+pipeline/data/**/count_data/
+pipeline/data/**/count_data/**
+pipeline/data/**/valid_count/
+pipeline/data/**/valid_count/**
+pipeline/data/**/*.tab
+
+# STAR logs and splice junction tables
+pipeline/data/**/*.Log.out
+pipeline/data/**/*.Log.progress.out
+pipeline/data/**/*.Log.final.out
+pipeline/data/**/*.SJ.out.tab
+
+# Scheduler/runtime logs anywhere under pipeline
+pipeline/**/*.out
+pipeline/**/*.err
+
+# TARGET payload / manifest JSONs
+pipeline/data/nbl/target_nbl/manifests/*.json
+pipeline/data/nbl/target_nbl/metadata/payload*.json
+
+# -----------------------------
+# Local-user / editor noise
+# -----------------------------
 .DS_Store
 .vscode/
 .idea/
-
-# Temporary and swap files
 *~
 *.swp
 *.tmp
 .TinyTeX/
 
-# Keep text/tabular files
-!*.txt
-!*.tsv
-!*.csv
-
 .codex/
 jarvis_pipeline_data
 
-# Never track user/home/HPC environment files
 .cache/
 .conda/
 .config/
@@ -151,3 +177,10 @@ jarvis_pipeline_data
 .lesshst
 .profile
 .wget-hsts
+
+# -----------------------------
+# Explicitly keep lightweight outputs
+# -----------------------------
+!*.txt
+!*.tsv
+!*.csv
