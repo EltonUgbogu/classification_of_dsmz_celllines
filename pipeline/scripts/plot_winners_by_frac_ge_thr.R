@@ -100,7 +100,7 @@ winners <- winners %>%
   mutate(
     feature = case_when(
       grepl("^pam50_", best_dir_frac_ge_thr) ~ "PAM50",
-      grepl("^hvg_", best_dir_frac_ge_thr) ~ "HVG",
+      grepl("^HVG_", best_dir_frac_ge_thr) ~ "HVG",
       grepl("_euc$|_euclidean$", best_dir_frac_ge_thr) ~ sub("_(euc|euclidean)$", "", best_dir_frac_ge_thr),
       grepl("_corr$|_cosine$", best_dir_frac_ge_thr) ~ sub("_(corr|cosine)$", "", best_dir_frac_ge_thr),
       TRUE ~ best_dir_frac_ge_thr

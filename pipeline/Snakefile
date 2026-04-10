@@ -77,7 +77,7 @@ rule all:
         lambda wc: PIPELINE_TARGET,
         # Pan-cancer UMAP (optional, can be run independently)
         # Uncomment to include in default target:
-        # os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap", "pan_cancer_hvg_umap_coords.tsv")
+        # os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap", "pan_cancer_mx_umap_coords.tsv")
 
 
 # Utility function: converts a config-relative path to an absolute path.
@@ -175,7 +175,7 @@ vprint(f"[Snakefile] DISABLE_PCA_EVERYWHERE = {DISABLE_PCA_EVERYWHERE}")
 FEATURE_METHODS = cfg.get("feature_sets", {}).get(
     "methods",
     cfg.get("features", {}).get(
-        "methods", ["Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal"]
+        "methods", ["Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG"]
     ),
 )
 DISTANCES = cfg.get("feature_sets", {}).get("distances", ["euc", "corr"])
@@ -192,6 +192,7 @@ _TOPN_DEFAULTS = {
     "Spearman":   500,
     "MX":         500,
     "kTotal":     500,
+    "HVG":        3000,
 }
 _topn_cfg = cfg.get("feature_selection", {}).get("method_topn", {})
 METHOD_TOPN = {m: int(_topn_cfg.get(m, _TOPN_DEFAULTS.get(m, 500))) for m in FEATURE_METHODS}
@@ -200,7 +201,6 @@ def method_topn(m):
     """Return the top-N gene count for feature method m."""
     return METHOD_TOPN.get(m, 500)
 
-# Legacy alias: MX defines the canonical HVG set size used by consensus and tumour-NH rules.
 TOPN = method_topn("MX")
 
 
@@ -451,16 +451,16 @@ PIPELINE_TARGET = os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consen
 # Why this matters:
 #   All downstream clustering rules depend on these gene sets. A direction such as
 #   'Variance_euc' means: use the Variance-selected genes, then cluster with
-#   Euclidean distance. The canonical MX list is also reused as the HVG set.
+#   Euclidean distance.
 # -----------------------------------------------------------------------------
 rule feature_selection_unsupervised:
     """
     Selects the top N genes from the joint VST expression matrix using multiple
-    statistical methods (Variance, MAD, Entropy, PCA loadings, MX, etc.).
+    statistical methods (Variance, MAD, Entropy, PCA loadings, MX, HVG, etc.).
     Each method produces an independent ranked gene list that defines one
     feature direction propagated through all downstream clustering rules.
-    The MX gene list is declared explicitly as hvg_list so downstream rules
-    can reference it as a canonical HVG500 set without duplicating the path.
+    The MX gene list is declared explicitly as mx_list so downstream rules
+    can reference it as the canonical MX top-500 set without duplicating the path.
     """
     input:
         vst = VST_JOINT,
@@ -468,8 +468,8 @@ rule feature_selection_unsupervised:
     output:
         # Relative paths for portable DAG tracking; R script writes via absolute --outdir.
         feature_lists = FEATURELIST_FILES,
-        # Canonical HVG gene list (MX method, top-500) — named output for downstream rules.
-        hvg_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn('MX')}_MX.txt")
+        # Canonical MX gene list (MX method, top-500) — named output for downstream rules.
+        mx_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn('MX')}_MX.txt")
     params:
         outdir         = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised"),
         # Comma-separated method:N pairs so the R script knows each method's top-N.
@@ -536,10 +536,9 @@ CONS_DIRECTION_PATTERN = "|".join(map(re.escape, CONS_DIRECTIONS))
 CONS_EUC_DIRECTIONS    = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
 CONS_EUC_PATTERN       = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
 
-# Partitions directions into legacy (pam50, hvg) and new feature-set groups.
+# Partitions directions into pam50 and all feature-set groups (including HVG).
 PAM50_DIRS       = [d for d in AGN_DIRECTIONS if d.startswith("pam50")]
-HVG_DIRS         = [d for d in AGN_DIRECTIONS if d.startswith("hvg")]
-FEATURE_SET_DIRS = [d for d in AGN_DIRECTIONS if not d.startswith("pam50") and not d.startswith("hvg")]
+FEATURE_SET_DIRS = [d for d in AGN_DIRECTIONS if not d.startswith("pam50")]
 FEATURE_SET_DIR_PATTERN = "|".join(map(re.escape, FEATURE_SET_DIRS)) if FEATURE_SET_DIRS else r"a^"
 
 # Defines the six HC and six k-means clustering kind identifiers.
@@ -558,8 +557,6 @@ def dir_to_feature(direction):
     """Extracts the feature method name from a direction string (e.g., 'Variance_euc' → 'Variance')."""
     if direction.startswith("pam50"):
         return "pam50"
-    elif direction.startswith("hvg"):
-        return "hvg"
     else:
         if direction.endswith("_euc") or direction.endswith("_corr"):
             return direction.rsplit("_", 1)[0]
@@ -596,10 +593,6 @@ def dir_to_gene_list(direction):
         if "pam50" in cfg and "ensembl_gene_list" in cfg["pam50"]:
             return cfgabs("pam50", "ensembl_gene_list")
         return cfgabs("features", "pam50_ensembl_gene_list")
-    elif feature == "hvg":
-        # Legacy HVG direction maps to the MX gene list (top-500 canonical HVG set).
-        # Uses FEATURESETS_DIR_REL to match the producer rule output.
-        return os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn('MX')}_MX.txt")
     elif feature in FEATURE_METHODS:
         # Feature-set directions: filename encodes the method-specific top-N.
         # Uses FEATURESETS_DIR_REL to match the producer rule output.
@@ -608,7 +601,7 @@ def dir_to_gene_list(direction):
         # Unknown feature: fail loudly to prevent silent reuse of a default gene list.
         raise ValueError(
             f"Unknown feature '{feature}' extracted from direction '{direction}'. "
-            f"Known features: {sorted(set(FEATURE_METHODS) | {'hvg', 'pam50'})}"
+            f"Known features: {sorted(set(FEATURE_METHODS) | {'pam50'})}"
         )
 
 
@@ -617,8 +610,6 @@ def dir_to_geneset(direction):
     feature = dir_to_feature(direction)
     if feature == "pam50":
         return "PAM50"
-    elif feature == "hvg":
-        return f"HVG{method_topn('MX')}"
     else:
         return f"{feature}_top{method_topn(feature)}"
 
@@ -637,7 +628,7 @@ def validate_direction_to_gene_list(direction):
     feature = dir_to_feature(direction)
 
     # 1. Check that the extracted feature is recognized.
-    known_features = {"pam50", "hvg"} | set(FEATURE_METHODS)
+    known_features = {"pam50"} | set(FEATURE_METHODS)
     assert feature in known_features, \
         f"Unknown feature '{feature}' extracted from direction '{direction}'. " \
         f"Known features: {sorted(known_features)}"
@@ -655,8 +646,7 @@ def validate_direction_to_gene_list(direction):
             )
 
     # Verify that the filename method matches the direction-derived feature.
-    # (Skip check for hvg since it maps to MX file, and pam50 is special.)
-    if feature not in ("hvg", "pam50"):
+    if feature not in ("pam50",):
         if not filename.endswith(f"_{feature}.txt"):
             raise AssertionError(
                 f"Gene list for direction '{direction}' (method '{feature}') "
@@ -1361,7 +1351,7 @@ rule consensus_cluster_ccp:
         # Resolves direction-specific feature-list file using dir_to_gene_list helper.
         # Each direction (e.g. Variance_euc, PCA_corr, MX_euc) maps to its corresponding
         # method's gene list, ensuring clustering uses the correct feature set.
-        hvg_list = lambda wc: dir_to_gene_list(wc.direction)
+        mx_list = lambda wc: dir_to_gene_list(wc.direction)
     output:
         cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
     params:
@@ -1380,7 +1370,7 @@ rule consensus_cluster_ccp:
           --config {input.config} \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
-          --hvg_list {input.hvg_list} \
+          --hvg_list {input.mx_list} \
           --kind {wildcards.kind} \
           --mode {params.mode} \
           --alg {params.alg} \
@@ -1416,10 +1406,6 @@ TUMOUR_NH_ROOT     = os.path.join(UNSUP_REL, "tumour_neighbourhoods")
 # nodes where the job working directory may differ from PIPE_ROOT.
 TUMOUR_NH_ROOT_ABS = os.path.join(UNSUP,     "tumour_neighbourhoods")
 
-# Resolves HVG neighbourhood input paths (absolute; always present).
-TUMOUR_NH_EXPR_HVG    = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_hvg.rds")
-TUMOUR_NH_MAP_RDS_HVG = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_hvg.rds")
-
 # Resolves PAM50 neighbourhood input paths (absolute; conditional on use_pam50).
 if USE_PAM50:
     TUMOUR_NH_EXPR_PAM50    = os.path.join(TUMOUR_NH_INPUT_ROOT, "expr_pam50.rds")
@@ -1436,17 +1422,15 @@ else:
 def nh_expr_rds(direction):
     """
     Returns the absolute path to the expression submatrix RDS for a direction.
-    Routes PAM50 directions to their dedicated matrix, HVG/MX directions to the
-    canonical HVG expression file, and all other feature-set directions to their
-    method-specific submatrix in the featuresets staging directory.
+    Routes PAM50 directions to their dedicated matrix, and all other feature-set
+    directions (including HVG and MX) to their method-specific submatrix in the
+    featuresets staging directory.
     """
     feature = dir_to_feature(direction)
     if feature == "pam50":
         if TUMOUR_NH_EXPR_PAM50:
             return TUMOUR_NH_EXPR_PAM50
         raise ValueError("PAM50 expression path missing while use_pam50 is enabled")
-    elif feature == "hvg":
-        return TUMOUR_NH_EXPR_HVG
     else:
         return os.path.join(FEATURE_METHOD_OUTDIR, feature, "expr_submatrix.rds")
 
@@ -1462,8 +1446,6 @@ def nh_map_rds(direction):
         if TUMOUR_NH_MAP_RDS_PAM50:
             return TUMOUR_NH_MAP_RDS_PAM50
         raise ValueError("PAM50 map path missing while use_pam50 is enabled")
-    elif feature == "hvg":
-        return TUMOUR_NH_MAP_RDS_HVG
     else:
         return os.path.join(TUMOUR_NH_INPUT_ROOT, f"cell_line_to_original_sample_id_{feature}.rds")
 
@@ -1541,40 +1523,6 @@ if USE_PAM50:
             '''
 
 
-rule tumour_nh_build_inputs_hvg:
-    """
-    Constructs the joint HVG expression submatrix and cell-line-to-sample mapping
-    from the VST-normalised joint matrix, subsetting to the canonical MX top-N gene list.
-    Produces the primary input files for all HVG-direction tumour neighbourhood rules.
-    """
-    input:
-        vst       = VST_JOINT,
-        gene_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{TOPN}_MX.txt"),
-        dsmz_meta = cfgget_path_abs(cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
-        cfg       = CFGFILE_ABS
-    output:
-        expr_rds = TUMOUR_NH_EXPR_HVG,
-        map_rds  = TUMOUR_NH_MAP_RDS_HVG
-    params:
-        direction = "hvg"
-    log: os.path.join(LOGROOT, "tumour_nh_build_inputs_hvg.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p $(dirname {output.expr_rds})
-        Rscript {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R \
-          --config {input.cfg} \
-          --vst {input.vst} \
-          --gene-list {input.gene_list} \
-          --dsmz-meta {input.dsmz_meta} \
-          --expr-out {output.expr_rds} \
-          --map-out {output.map_rds} \
-          --direction {params.direction} > {log} 2>&1
-        test -s {output.expr_rds} || (echo "ERROR: missing {output.expr_rds}" >&2; exit 1)
-        test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
-        '''
-
-
 rule tumour_nh_build_inputs_featureset:
     """
     Constructs the joint expression submatrix and cell-line-to-sample mapping for
@@ -1620,52 +1568,11 @@ rule tumour_nh_build_inputs_featureset:
 # STAGE 4: TUMOUR NEIGHBOURHOOD ANALYSIS
 # =============================================================================
 
-rule tumour_nh_hc_hvg:
-    """
-    Computes per-cell-line tumour neighbourhoods for HVG directions using
-    hierarchical nearest-neighbour ranking. Produces Top_m_long_*.csv files
-    encoding ranked tumour proximity scores for each DSMZ cell line.
-    A sentinel .done file is written only after output validation, preventing
-    downstream consensus rules from proceeding on empty or truncated results.
-    Constrained to hvg_euc and hvg_corr to avoid DAG ambiguity with the
-    PAM50 and feature-set neighbourhood rules.
-    """
-    input:
-        expr_rds    = TUMOUR_NH_EXPR_HVG,
-        map_rds     = TUMOUR_NH_MAP_RDS_HVG,
-        cfg_file    = CFGFILE_ABS,
-        cluster_rds = lambda wc: expand(
-            os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
-            kind=CONS_HC_KINDS
-        )
-    output:
-        done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
-    params:
-        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
-    log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
-    conda: CONDA_ENV_R
-    wildcard_constraints:
-        direction="hvg_euc|hvg_corr"
-    shell:
-        r'''
-        mkdir -p $(dirname {output.done})
-        Rscript {params.script} \
-          --config "{input.cfg_file}" \
-          --profile "{profile_name}" \
-          --direction {wildcards.direction} \
-          --expr-rds {input.expr_rds} \
-          --mapping-rds {input.map_rds} \
-          > {log} 2>&1
-        test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
-        touch {output.done}
-        '''
-
-
 # -----------------------------------------------------------------------------
 # RULE: tumour_nh_hc_featureset
 #
 # Purpose:
-#   Run tumour-neighbourhood analysis for non-HVG feature-set directions using
+#   Run tumour-neighbourhood analysis for non-PAM50 feature-set directions using
 #   hierarchical clustering outputs for the same direction.
 # -----------------------------------------------------------------------------
 if USE_PAM50:
@@ -1709,10 +1616,11 @@ if USE_PAM50:
 
 rule tumour_nh_hc_featureset:
     """
-    Computes per-cell-line tumour neighbourhoods for all non-HVG, non-PAM50
-    feature-set directions. Uses lambda inputs to resolve direction-specific
-    expression and mapping paths at DAG evaluation time. Constrained to the
-    FEATURE_SET_DIR_PATTERN regex to avoid overlap with HVG and PAM50 rules.
+    Computes per-cell-line tumour neighbourhoods for all non-PAM50
+    feature-set directions (including HVG and MX). Uses lambda inputs to resolve
+    direction-specific expression and mapping paths at DAG evaluation time.
+    Constrained to the FEATURE_SET_DIR_PATTERN regex to avoid overlap with
+    PAM50 rules.
     """
     input:
         expr_rds    = lambda wc: nh_expr_rds(wc.direction),
@@ -1787,37 +1695,6 @@ rule tumour_nh_km_euc:
 # STAGE 4 (CONTINUED): PROBABILISTIC NEIGHBOURHOOD CONSENSUS
 # =============================================================================
 
-rule tumour_nh_consensus_hvg:
-    """
-    Aggregates per-cell-line tumour neighbourhood rankings across all clustering
-    solutions for HVG directions into a single probabilistic consensus assignment.
-    Output RDS and TSV files encode the final consensus neighbourhood per cell line,
-    consumed by scoring and visualisation rules. Constrained to hvg_euc and hvg_corr.
-    """
-    input:
-        hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
-    output:
-        consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
-        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
-    params:
-        script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
-        config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "tumour_nh_consensus_{direction}.log")
-    conda: CONDA_ENV_R
-    wildcard_constraints:
-        direction="hvg_euc|hvg_corr"
-    shell:
-        r'''
-        mkdir -p $(dirname {output.consensus_rds})
-        Rscript {params.script} \
-          --config {params.config} \
-          --profile "{profile_name}" \
-          --direction {wildcards.direction} \
-          --workdir {BASE} \
-          > {log} 2>&1
-        '''
-
-
 if USE_PAM50:
     rule tumour_nh_consensus_pam50:
         """
@@ -1853,10 +1730,10 @@ if USE_PAM50:
 
 rule tumour_nh_consensus_featureset:
     """
-    Aggregates tumour neighbourhood rankings for all non-HVG, non-PAM50 feature-set
-    directions into a probabilistic consensus assignment. Constrained to
-    FEATURE_SET_DIR_PATTERN to prevent DAG ambiguity with the HVG and PAM50
-    consensus rules that share the same output path template.
+    Aggregates tumour neighbourhood rankings for all non-PAM50 feature-set
+    directions (including HVG and MX) into a probabilistic consensus assignment.
+    Constrained to FEATURE_SET_DIR_PATTERN to prevent DAG ambiguity with the
+    PAM50 consensus rule that shares the same output path template.
     """
     input:
         hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
@@ -1894,12 +1771,12 @@ rule dsmz_dsmz_similarity_graph:
         nodes_annot = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
         comm_summary = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_community_summary_{direction}.tsv"),
         comm_table = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_Louvain_vs_Leiden_community_table_{direction}.tsv"),
-        hist_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_similarity_histogram_{direction}.pdf"),
-        scatter_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_p_consensus_cell_scatter_{direction}.pdf"),
-        comm_heatmap = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_{direction}.pdf"),
-        graph_leiden = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Leiden_{direction}.pdf"),
-        graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
-        graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
+        hist_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_similarity_histogram_{direction}.pdf"),
+        scatter_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_p_consensus_cell_scatter_{direction}.pdf"),
+        comm_heatmap = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_{direction}.pdf"),
+        graph_leiden = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_Leiden_{direction}.pdf"),
+        graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
+        graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
     params:
         script = os.path.join(BASE, "scripts", "compute_dsmz_dsmz_similarity.R"),
         config = os.path.join(BASE, "config", "config.yaml")

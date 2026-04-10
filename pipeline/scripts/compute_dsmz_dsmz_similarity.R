@@ -55,7 +55,7 @@ option_list <- list(
   make_option("--profile", type = "character", default = NULL,
               help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
   make_option("--direction", type = "character", default = NULL,
-              help = "Direction identifier (e.g. pam50_euc, hvg_corr, Entropy_euclidean, Variance_corr)"),
+              help = "Direction identifier (e.g. pam50_euc, hvg_corr, Variance_corr)"),
   make_option("--meta_tsv", type = "character", default = NULL,
               help = "Pan-cancer joint metadata TSV (required for pan-cancer graphs)"),
   make_option("--mode", type = "character", default = "global",
@@ -98,13 +98,11 @@ direction <- opt$direction
 # ------------------------------------------------------------------------------
 # DIRECTION VALIDATION
 # ------------------------------------------------------------------------------
-# Accept both legacy disease-specific directions (_euc/_corr)
-# and pan-cancer directions (_euclidean)
-if (!grepl("_(euc|corr|euclidean)$", direction)) {
+if (!grepl("_(euc|corr)$", direction)) {
   stop(
     "Invalid --direction: ", direction, "\n",
-    "Expected a direction ending in one of: _euc, _corr, _euclidean.\n",
-    "Examples: hvg_euc, pam50_corr, Entropy_euclidean, Variance_corr.",
+    "Expected a direction ending in one of: _euc, _corr.\n",
+    "Examples: hvg_euc, pam50_corr, Variance_corr.",
     call. = FALSE
   )
 }

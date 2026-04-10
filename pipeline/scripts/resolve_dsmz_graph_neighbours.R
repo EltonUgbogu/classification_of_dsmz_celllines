@@ -247,8 +247,8 @@ if (!dir.exists(tumour_nh_root)) {
 #   - Resulting directions: e.g., "Variance_euc", "MAD_corr"
 #
 # Single-cohort (brca, nbl, rbl):
-#   - Directions: hvg_euc, hvg_corr (and pam50_euc, pam50_corr when use_pam50 is enabled)
-#   - These correspond to highly-variable genes (HVG) or PAM50 gene sets
+#   - Directions: HVG_euc, HVG_corr (and pam50_euc, pam50_corr when use_pam50 is enabled)
+#   - These correspond to trend-corrected HVG or PAM50 gene sets
 #     combined with Euclidean or correlation-based distances.
 
 if (profile == "multicohort_cancer") {
@@ -263,7 +263,7 @@ if (profile == "multicohort_cancer") {
                        rep(dist_metrics, times = length(feature_methods)))
 } else {
   directions <- cfg$tumour_neighbourhoods$directions %||%
-    c("hvg_euc", "hvg_corr")
+    c("HVG_euc", "HVG_corr")
 }
 
 # -----------------------------------------------------------------------------

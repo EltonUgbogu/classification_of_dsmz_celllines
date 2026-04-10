@@ -5,8 +5,8 @@
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
 #SBATCH --requeue
-# Note: --output and --error can be overridden at submission:
-#   sbatch --output=/path/to/logs/%j.out --error=/path/to/logs/%j.err preprocessing_snakefile.sh
+#SBATCH --output=logs/slurm-%j.out
+#SBATCH --error=logs/slurm-%j.err
 
 set -euo pipefail
 
@@ -38,31 +38,11 @@ SMK_ENV_YAML="${SMK_ENV_YAML:-$ENVS_DIR/smk.yaml}"
 # Always ensure logs directory exists in the project
 mkdir -p "$LOG_DIR"
 
-# Best-effort log consolidation: copy default SLURM stdout/stderr into LOG_DIR.
-# This helps when users submit without --output/--error overrides.
-copy_slurm_logs_to_log_dir() {
-  if [ -n "${SLURM_JOB_ID:-}" ]; then
-    local default_out="${SLURM_SUBMIT_DIR:-$PROJECT_DIR}/slurm-${SLURM_JOB_ID}.out"
-    local default_err="${SLURM_SUBMIT_DIR:-$PROJECT_DIR}/slurm-${SLURM_JOB_ID}.err"
-    local target_out="$LOG_DIR/slurm-${SLURM_JOB_ID}.out"
-    local target_err="$LOG_DIR/slurm-${SLURM_JOB_ID}.err"
-
-    if [ -f "$default_out" ]; then
-      cp -f "$default_out" "$target_out" 2>/dev/null || true
-    fi
-    if [ -f "$default_err" ]; then
-      cp -f "$default_err" "$target_err" 2>/dev/null || true
-    fi
-  fi
-}
-trap copy_slurm_logs_to_log_dir EXIT
 
 echo "[INFO] Running from directory: $PROJECT_DIR"
 echo "[INFO] Snakefile: $SNAKEFILE"
 echo "[INFO] Config:    $CONFIGFILE"
 echo "[INFO] Logs:      $LOG_DIR"
-echo "[INFO] Recommended submission for direct logs:"
-echo "       sbatch --output=$LOG_DIR/%j.out --error=$LOG_DIR/%j.err preprocessing_snakefile.sh"
 echo "[INFO] ENVS_DIR:  $ENVS_DIR"
 echo "[INFO] SLURM_CPUS_PER_TASK = ${SLURM_CPUS_PER_TASK:-8}"
 echo "[INFO] SLURM_JOB_ID = ${SLURM_JOB_ID:-NA}"

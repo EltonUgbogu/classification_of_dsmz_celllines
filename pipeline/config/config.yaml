@@ -14,6 +14,7 @@ defaults:
       Spearman:   500
       MX:         500
       kTotal:     500
+      HVG:        3000
   deseq2:
     sample_id_col: sample_id
     cell_line_col: cell_line
@@ -105,8 +106,8 @@ multicohort_cancer:
     unsup_root: results/multicohort_cancer_benchmark/unsupervised
     vst_joint_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
   features:
-    hvg_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
-    hvg_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
+    mx_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_joint_scores.tsv
+    mx_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_final_gene_list.txt
 
 profiles:
   # ---------------------------------------------------------------------------
@@ -155,8 +156,8 @@ profiles:
         - kTotal_euc
         - kTotal_corr
     features:
-      hvg_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_joint_scores.tsv
-      hvg_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/hvg_final_gene_list.txt
+      mx_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_joint_scores.tsv
+      mx_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # brca — full 8-method × 2-distance grid
@@ -209,8 +210,8 @@ profiles:
         - kTotal_corr
     features:
       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
-      hvg_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/hvg_joint_scores.tsv
-      hvg_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/hvg_final_gene_list.txt
+      mx_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/mx_joint_scores.tsv
+      mx_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # nbl — full 8-method × 2-distance grid; no PAM50
@@ -259,8 +260,8 @@ profiles:
         - kTotal_euc
         - kTotal_corr
     features:
-      hvg_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/hvg_joint_scores.tsv
-      hvg_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/hvg_final_gene_list.txt
+      mx_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/mx_joint_scores.tsv
+      mx_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # rbl — full 8-method × 2-distance grid; no PAM50
@@ -309,8 +310,8 @@ profiles:
         - kTotal_euc
         - kTotal_corr
     features:
-      hvg_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/hvg_joint_scores.tsv
-      hvg_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/hvg_final_gene_list.txt
+      mx_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/mx_joint_scores.tsv
+      mx_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # heme — full 8-method × 2-distance grid; no PAM50
@@ -358,8 +359,8 @@ profiles:
         - kTotal_euc
         - kTotal_corr
     features:
-      hvg_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/hvg_joint_scores.tsv
-      hvg_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/hvg_final_gene_list.txt
+      mx_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/mx_joint_scores.tsv
+      mx_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/mx_final_gene_list.txt
 
 paths:
   tumour_nh_base_functions: R/base_functions

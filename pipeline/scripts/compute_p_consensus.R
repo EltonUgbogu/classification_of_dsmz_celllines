@@ -33,25 +33,25 @@ option_list <- list(
   make_option("--profile", type = "character", default = NULL,
               help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
   make_option("--direction", type = "character", default = NULL,
-              help = "Direction identifier (pam50_euc, pam50_corr, hvg_euc, hvg_corr)")
+              help = "Direction identifier (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc)")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
 
 if (is.null(opt$direction)) {
-  stop("Please supply --direction (pam50_euc|pam50_corr|hvg_euc|hvg_corr).")
+  stop("Please supply --direction (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc).")
 }
 
 direction <- opt$direction
-if (!direction %in% c("pam50_euc", "pam50_corr", "hvg_euc", "hvg_corr")) {
+if (!grepl("_(euc|corr)$", direction)) {
   stop("Invalid --direction: ", direction,
-       " (allowed: pam50_euc, pam50_corr, hvg_euc, hvg_corr)")
+       " (expected a direction ending in _euc or _corr)")
 }
 
 cat("[INFO] Using config file: ", opt$config, "\n", sep = "")
 cat("[INFO] Direction: ", direction, "\n", sep = "")
 
-gene_set <- if (startsWith(direction, "pam50")) "PAM50" else "HVG500"
+gene_set <- if (startsWith(direction, "pam50")) "PAM50" else sub("_(euc|corr)$", "", direction)
 cat("[INFO] Gene set: ", gene_set, "\n", sep = "")
 
 # Load config using profiled config loader (merges defaults + profile)

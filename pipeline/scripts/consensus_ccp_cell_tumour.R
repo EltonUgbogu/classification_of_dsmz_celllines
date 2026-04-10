@@ -234,14 +234,13 @@ option_list <- list(
               help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
   
   # --direction: Specifies the feature set and distance metric combination.
-  # Format: {feature_set}_{distance_metric} (e.g., 'hvg_euc', 'MAD_corr')
+  # Format: {feature_set}_{distance_metric} (e.g., 'HVG_euc', 'MAD_corr')
   make_option("--direction", type = "character", default = NULL),
-  
-  # --hvg_list: Path to the highly variable gene list file.
-  # This file contains gene identifiers (typically Ensembl IDs) selected
-  # through variance-based feature selection.
+
+  # --hvg_list: Path to the gene list file for this direction.
+  # This file contains gene identifiers selected by the feature method.
   make_option("--hvg_list", type = "character", default = NULL,
-              help = "Path to HVG gene list (e.g. *_genes_MX_top500.txt)"),
+              help = "Path to gene list for this direction (e.g. genes_top3000_HVG.txt)"),
   
   # --kind: Specifies the sample scope for clustering.
   # Valid values: 'cell' (cell lines only), 'tumour' (tumours only),
@@ -419,7 +418,7 @@ parse_direction <- function(direction) {
   # parse_direction(): Extracts feature set and distance metric from direction string.
   #
   # Direction strings follow the pattern: {feature}_{distance}
-  # Examples: 'hvg_euc', 'pam50_corr', 'Variance_euc', 'MAD_corr'
+  # Examples: 'HVG_euc', 'pam50_corr', 'Variance_euc', 'MAD_corr'
   #
   # Parameters:
   #   direction: The direction string to parse
@@ -429,33 +428,20 @@ parse_direction <- function(direction) {
   #     - feature: The feature set name (e.g., 'HVG', 'PAM50', 'Variance')
   #     - distance: The distance metric (e.g., 'euclidean', 'correlation')
   
-  # Handle special cases for legacy direction names.
-  if (direction %in% c("hvg_euc", "hvg_corr", "hvg_cos")) {
-    dist_tag <- sub(".*_", "", direction)
-    dist <- switch(dist_tag,
-                   euc = "euclidean",
-                   corr = "correlation",
-                   cos = "cosine",
-                   dist_tag)
-    return(list(feature = "HVG", distance = dist))
-  }
-  
   # Parse general pattern: split on underscore and extract components.
   parts <- strsplit(direction, "_")[[1]]
   if (length(parts) < 2) {
     stop_with("Invalid direction: ", direction, " (expected pattern: {feature}_{distance})")
   }
-  
+
   # The distance metric is always the last component.
   dist_tag <- tail(parts, 1)
-  
+
   # The feature name may contain underscores (e.g., 'MeanAbsDev').
   feat <- paste(head(parts, -1), collapse = "_")
-  
+
   # Normalise feature names for consistency.
-  if (feat == "hvg") {
-    feat <- "HVG"
-  } else if (feat == "pam50") {
+  if (feat == "pam50") {
     feat <- "PAM50"
   }
   
@@ -677,12 +663,12 @@ build_expr_mat <- function(feature, cfg, kind) {
     cell_path   <- cfg$paths$cell_vst_rds
     tumour_path <- cfg$paths$tumour_vst_rds
     
-    # Determine the HVG list source.
+    # Determine the gene list source.
     # Command-line argument takes precedence over configuration.
     if (!is.null(opt$hvg_list) && file.exists(opt$hvg_list)) {
       hvg_list <- opt$hvg_list
     } else {
-      hvg_list <- cfg$features$hvg_final_gene_list
+      hvg_list <- cfg$features$mx_final_gene_list
       if (!is.null(hvg_list)) {
         hvg_list <- abs_from_root(hvg_list)
       }

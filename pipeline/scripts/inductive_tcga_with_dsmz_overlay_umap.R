@@ -29,7 +29,7 @@ source("scripts/lib_config.R")
 # ----------------------------------------------------------------------
 option_list <- list(
   make_option("--method", type = "character", default = "pam50_euc",
-              help = "Method ID: pam50_corr, pam50_euc, hvg_corr, or hvg_euc [default: %default]"),
+              help = "Method ID: pam50_corr, pam50_euc, MX_corr, or MX_euc [default: %default]"),
   make_option(c("-c", "--config"), type = "character", default = "config/config.yaml",
               help = "Path to config.yaml [default: %default]"),
   make_option("--profile", type = "character", default = NULL,
@@ -69,9 +69,9 @@ dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 if (m_ctx$feature == "PAM50") {
   tcga_vst_rds <- cfg$paths$tcga_pam50_expr
   dsmz_vst_rds <- cfg$paths$dsmz_pam50_expr
-} else if (m_ctx$feature == "HVG") {
-  tcga_vst_rds <- cfg$paths$tcga_hvg_expr
-  dsmz_vst_rds <- cfg$paths$dsmz_hvg_expr
+} else if (m_ctx$feature == "MX") {
+  tcga_vst_rds <- cfg$paths$tcga_mx_expr
+  dsmz_vst_rds <- cfg$paths$dsmz_mx_expr
 } else {
   stop("Unknown feature type: ", m_ctx$feature)
 }
