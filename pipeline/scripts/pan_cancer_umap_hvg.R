@@ -1,18 +1,18 @@
 #!/usr/bin/env Rscript
 
 # ==============================================================================
-# pan_cancer_umap_hvg.R
-# Pan-Cancer UMAP Visualization with Joint HVG List
+# pan_cancer_umap_mx.R
+# Pan-Cancer UMAP Visualization with Joint MX Gene List
 # ==============================================================================
 #
 # PURPOSE:
 # Creates a unified UMAP embedding across multiple cancer types (BRCA, NBL, RBL)
-# using a joint HVG gene set. Tumours are filtered based on best-performing
+# using a joint MX gene set. Tumours are filtered based on best-performing
 # neighbourhood directions, and cell lines are included from all profiles.
 #
 # INPUTS:
-# - Per-profile expression matrices (expr_hvg.rds)
-# - Per-profile HVG lists (to create joint list)
+# - Per-profile expression matrices (featuresets/MX/expr_submatrix.rds)
+# - Per-profile MX lists (to create joint list)
 # - Best direction summaries (to filter tumours)
 # - Top_m_long files (to get tumour sample IDs)
 #
@@ -135,38 +135,38 @@ for (prof in profiles) {
 }
 
 # ==============================================================================
-# Step 2: Create joint HVG list (union of all profiles)
+# Step 2: Create joint MX list (union of all profiles)
 # ==============================================================================
 
-cat("[INFO] Creating joint HVG list...\n")
+cat("[INFO] Creating joint MX list...\n")
 
-hvg_lists <- list()
+mx_lists <- list()
 for (prof in profiles) {
   cfg <- profile_configs[[prof]]
-  hvg_path <- cfg$features$hvg_final_gene_list
-  if (is.null(hvg_path)) {
+  mx_path <- cfg$features$mx_final_gene_list
+  if (is.null(mx_path)) {
     # Try to construct from pattern
-    hvg_path <- file.path(
+    mx_path <- file.path(
       abs_from_root(cfg$paths$unsup_root),
       "feature_selection_unsupervised",
-      sprintf("%s_TCGA-DSMZ_HVG500_genes_MX_top500.txt", toupper(cfg$analysis$cancer_type %||% toupper(prof)))
+      sprintf("%s_MX_genes_top500.txt", toupper(cfg$analysis$cancer_type %||% toupper(prof)))
     )
   } else {
-    hvg_path <- abs_from_root(hvg_path)
+    mx_path <- abs_from_root(mx_path)
   }
-  
-  if (file.exists(hvg_path)) {
-    hvg_list <- read_lines(hvg_path) %>% trimws() %>% .[nzchar(.)]
-    hvg_lists[[prof]] <- hvg_list
-    cat(sprintf("  %s: %d HVGs\n", toupper(prof), length(hvg_list)))
+
+  if (file.exists(mx_path)) {
+    mx_list <- read_lines(mx_path) %>% trimws() %>% .[nzchar(.)]
+    mx_lists[[prof]] <- mx_list
+    cat(sprintf("  %s: %d MX genes\n", toupper(prof), length(mx_list)))
   } else {
-    stop(sprintf("HVG list not found for %s: %s", prof, hvg_path))
+    stop(sprintf("MX list not found for %s: %s", prof, mx_path))
   }
 }
 
-# Union of all HVG lists (candidate set)
-joint_hvg_union <- unique(unlist(hvg_lists))
-cat(sprintf("[INFO] Joint HVG union (candidate): %d unique genes\n", length(joint_hvg_union)))
+# Union of all MX lists (candidate set)
+joint_mx_union <- unique(unlist(mx_lists))
+cat(sprintf("[INFO] Joint MX union (candidate): %d unique genes\n", length(joint_mx_union)))
 
 # ==============================================================================
 # Step 3: Load expression matrices and filter tumours
@@ -184,8 +184,8 @@ for (prof in profiles) {
   # Load expression matrix
   expr_path <- file.path(
     abs_from_root(cfg$paths$unsup_root),
-    "tumour_neighbourhoods_input",
-    "expr_hvg.rds"
+    "feature_selection_unsupervised",
+    "featuresets", "MX", "expr_submatrix.rds"
   )
   
   if (!file.exists(expr_path)) {
@@ -333,21 +333,21 @@ for (prof in profiles) {
 
 cat("[INFO] Combining matrices on shared genes...\n")
 
-# Get intersection of genes across all matrices AND joint HVG union
-# This ensures: 1) same genes in all matrices, 2) genes are in the HVG candidate set
+# Get intersection of genes across all matrices AND joint MX union
+# This ensures: 1) same genes in all matrices, 2) genes are in the MX candidate set
 all_genes <- map(expr_matrices, colnames)
 shared_genes <- Reduce(intersect, all_genes)  # Intersection across all matrices (mandatory)
-shared_genes <- intersect(shared_genes, joint_hvg_union)  # Also intersect with joint HVG union
+shared_genes <- intersect(shared_genes, joint_mx_union)  # Also intersect with joint MX union
 
 cat(sprintf("  Shared genes (across matrices): %d\n", length(Reduce(intersect, all_genes))))
-cat(sprintf("  Shared genes (with joint HVG union): %d\n", length(shared_genes)))
+cat(sprintf("  Shared genes (with joint MX union): %d\n", length(shared_genes)))
 
 if (length(shared_genes) < 50) {
   warning(sprintf("Only %d shared genes across all three profiles. This may limit UMAP quality.", length(shared_genes)))
   # Option: use genes present in at least 2 of 3 matrices for more genes
   # For now, proceed with intersection but warn
   if (length(shared_genes) < 20) {
-    stop(sprintf("Too few shared genes (%d < 20). Cannot proceed with pan-cancer UMAP. Check gene ID consistency or use a joint HVG list.", length(shared_genes)))
+    stop(sprintf("Too few shared genes (%d < 20). Cannot proceed with pan-cancer UMAP. Check gene ID consistency or use a joint MX list.", length(shared_genes)))
   }
 }
 
@@ -443,12 +443,12 @@ cat("[INFO] UMAP complete\n")
 cat("[INFO] Saving outputs...\n")
 
 # Coordinates + metadata
-coords_path <- file.path(outdir, "pan_cancer_hvg_umap_coords.tsv")
+coords_path <- file.path(outdir, "pan_cancer_mx_umap_coords.tsv")
 write_tsv(umap_output, coords_path)
 cat(sprintf("  Saved: %s\n", coords_path))
 
 # Plot
-plot_path <- file.path(outdir, "pan_cancer_hvg_umap_plot.pdf")
+plot_path <- file.path(outdir, "pan_cancer_mx_umap_plot.pdf")
 pdf(plot_path, width = 12, height = 10)
 
 # Color by cancer_type, shape by cohort
@@ -459,7 +459,7 @@ p <- ggplot(umap_output, aes(x = UMAP_1, y = UMAP_2)) +
   geom_point(aes(color = cancer_type, shape = cohort), size = 1.5, alpha = 0.6) +
   scale_shape_manual(values = c(TCGA = 16, DSMZ = 17)) +
   labs(
-    title = "Pan-Cancer UMAP (Joint HVG)",
+    title = "Pan-Cancer UMAP (Joint MX)",
     subtitle = sprintf("%d samples, %d genes", nrow(umap_output), length(shared_genes)),
     x = "UMAP 1",
     y = "UMAP 2",

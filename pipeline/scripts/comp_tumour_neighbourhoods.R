@@ -15,7 +15,7 @@
 # USAGE:
 # Rscript comp_tumour_neighbourhoods.R \
 #   --config config/config.yaml \
-#   --direction <pam50_euc|pam50_corr|hvg_euc|hvg_corr> \
+#   --direction <pam50_euc|pam50_corr|HVG_euc|HVG_corr|MX_euc|...> \
 #   [--expr-rds <path>] \
 #   [--mapping-rds <path>]
 #
@@ -58,7 +58,7 @@ option_list <- list(
   make_option("--mapping-rds", type = "character", default = NULL,
               help = "Optional override: cell_line → original_sample_id mapping RDS"),
   make_option("--direction", type = "character", default = NULL,
-              help = "Direction identifier (pam50_euc, pam50_corr, hvg_euc, hvg_corr)")
+              help = "Direction identifier (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc)")
 )
 
 # parse_args() processes the command-line arguments according to the defined
@@ -176,7 +176,7 @@ invisible(lapply(helper_files, source))
 # defined in the configuration file, allowing project-specific customisation.
 #
 # Direction format: <feature_set>_<distance_metric>
-#   - Feature sets: pam50 (PAM50 gene signature), hvg (highly variable genes)
+#   - Feature sets: pam50 (PAM50 gene signature), HVG (trend-corrected HVG), MX, etc.
 #   - Distance metrics: euc (Euclidean), corr (correlation)
 
 if (is.null(opt$direction)) {
@@ -188,7 +188,7 @@ direction <- opt$direction
 # Validate direction (suffix-based, consistent with get_nh_methods)
 if (!grepl("_(euc|corr)$", direction)) {
   stop("Invalid --direction: ", direction,
-       "\nExpected a direction ending in _euc or _corr (e.g. hvg_euc, pam50_corr, MAD_euc, Spearman_corr).")
+       "\nExpected a direction ending in _euc or _corr (e.g. HVG_euc, pam50_corr, MAD_euc, Spearman_corr).")
 }
 
 # ------------------------------------------------------------------------------
@@ -203,7 +203,7 @@ if (!grepl("_(euc|corr)$", direction)) {
 guess_unsup_root_from_expr <- function(expr_rds) {
   # expr_rds like: 
   #   - results/unsupervised/brca/feature_selection_unsupervised/featuresets/Variance/expr_submatrix.rds
-  #   - results/unsupervised/brca/tumour_neighbourhoods_input/expr_hvg.rds
+  #   - results/unsupervised/brca/feature_selection_unsupervised/featuresets/HVG/expr_submatrix.rds
   # Return: results/unsupervised/brca
   if (is.null(expr_rds) || !nzchar(expr_rds)) return(NULL)
   # Remove everything after /feature_selection_unsupervised/ or /tumour_neighbourhoods_input/
@@ -235,9 +235,10 @@ unsup_root <- if (!is.null(unsup_root_expr) && nzchar(unsup_root_expr)) {
 
 cat("[INFO] Using unsup_root:", unsup_root, "\n")
 
-# Extract gene set from direction prefix.
-# The startsWith() function performs efficient prefix matching.
-gene_set <- if (startsWith(direction, "pam50")) "PAM50" else "HVG500"
+# Extract feature method from direction (everything before last _euc/_corr).
+direction_feature <- sub("_(euc|corr)$", "", direction)
+# gene_set label: PAM50 for pam50, otherwise use the feature method name.
+gene_set <- if (startsWith(direction, "pam50")) "PAM50" else toupper(direction_feature)
 
 # Extract distance type from direction suffix.
 # The grepl() function performs regular expression matching.
@@ -265,10 +266,8 @@ tn_results_root    <- file.path(unsup_root, "tumour_neighbourhoods", direction)
 expr_mat_path <- opt$`expr-rds` %||%
   if (gene_set == "PAM50") {
     cfg$paths$tumour_nh_expr_pam50
-  } else if (gene_set == "HVG500") {
-    cfg$paths$tumour_nh_expr_hvg
   } else {
-    stop("Unsupported gene_set: ", gene_set, ". Must be PAM50 or HVG500.")
+    stop("--expr-rds must be supplied for non-PAM50 directions (direction: ", direction, ")")
   }
 
 # Resolve sample ID mapping path.
@@ -278,7 +277,7 @@ mapping_path <- opt$`mapping-rds` %||% {
   map_suffix <- if (startsWith(direction, "pam50")) {
     "cell_line_to_original_sample_id_pam50.rds"
   } else {
-    "cell_line_to_original_sample_id_hvg.rds"
+    paste0("cell_line_to_original_sample_id_", direction_feature, ".rds")
   }
   file.path(dirname(expr_mat_path), map_suffix)
 }

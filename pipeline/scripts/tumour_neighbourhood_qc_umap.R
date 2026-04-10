@@ -22,7 +22,7 @@ opt_list <- list(
   make_option(c("-c", "--config"), type="character", help="Path to config.yaml"),
   make_option("--profile", type="character", default=NULL,
               help="Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
-  make_option("--direction",    type="character", help="Direction, e.g. hvg_euc, hvg_corr, pam50_euc, pam50_corr"),
+  make_option("--direction",    type="character", help="Direction, e.g. HVG_euc, HVG_corr, pam50_euc, pam50_corr"),
   make_option("--consensus_rds",type="character", help="Final_consensus_tumour_neighbourhoods_*.rds"),
   make_option("--expr_rds",     type="character", help="Integrated expression matrix RDS (samples x genes)"),
   make_option("--map_rds",      type="character", help="cell_line_to_original_sample_id_*.rds"),

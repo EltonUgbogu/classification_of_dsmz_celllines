@@ -32,7 +32,7 @@ source("scripts/lib_config.R")
 # ----------------------------------------------------------------------
 option_list <- list(
   make_option("--method", type = "character", default = "pam50_euc",
-              help = "Method ID: pam50_corr, pam50_euc, hvg_corr, or hvg_euc [default: %default]"),
+              help = "Method ID: pam50_corr, pam50_euc, MX_corr, or MX_euc [default: %default]"),
   make_option(c("-c", "--config"), type = "character", default = "config/config.yaml",
               help = "Path to config.yaml [default: %default]"),
   make_option("--profile", type = "character", default = NULL,
@@ -82,13 +82,13 @@ consensus_csv <- file.path(
 if (m_ctx$feature == "PAM50") {
   vst_rds <- cfg$paths$tcga_pam50_expr
   use_joint_hvg <- FALSE
-} else if (m_ctx$feature == "HVG") {
-  # Use the joint DSMZ+TCGA HVG500 matrix that already exists
+} else if (m_ctx$feature == "MX") {
+  # Use the joint DSMZ+TCGA MX500 matrix that already exists
   # We'll subset to TCGA samples after loading
   vst_rds <- file.path(
     unsup_root,
     "tumour_neighbourhoods_input",
-    "BRCA_TCGA-DSMZ_HVG500_samples_x_genes.rds"
+    "BRCA_TCGA-DSMZ_MX500_samples_x_genes.rds"
   )
   use_joint_hvg <- TRUE
 } else {
@@ -97,7 +97,7 @@ if (m_ctx$feature == "PAM50") {
 
 cat("[INFO] Using expression matrix:", vst_rds, "\n")
 if (use_joint_hvg) {
-  cat("[INFO] Will subset to TCGA samples from joint HVG matrix\n")
+  cat("[INFO] Will subset to TCGA samples from joint MX matrix\n")
 }
 
 # Output directory for evaluation
@@ -185,16 +185,16 @@ if (!file.exists(subtype_csv)) {
 
 vst <- readRDS(vst_rds)
 
-# For HVG: the joint matrix has samples as ROWS (transposed relative to PAM50)
+# For MX: the joint matrix has samples as ROWS (transposed relative to PAM50)
 # Subset to TCGA samples only
 if (use_joint_hvg) {
-  cat("[INFO] Loaded joint HVG matrix: ", nrow(vst), " samples × ",
+  cat("[INFO] Loaded joint MX matrix: ", nrow(vst), " samples × ",
       ncol(vst), " genes\n", sep = "")
-  
+
   # Matrix is samples × genes; identify TCGA samples by barcode pattern
   tcga_idx <- grepl("^TCGA-", rownames(vst))
   if (!any(tcga_idx)) {
-    stop("No TCGA samples detected in HVG matrix rownames.")
+    stop("No TCGA samples detected in MX matrix rownames.")
   }
   vst <- vst[tcga_idx, , drop = FALSE]
   cat("[INFO] Subset to TCGA: ", nrow(vst), " samples\n", sep = "")

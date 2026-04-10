@@ -161,9 +161,9 @@ option_list <- list(
   
   # --direction: Specifies the feature set and distance metric combination.
   # Format: {feature_set}_{distance_metric}
-  # Examples: 'hvg_euc', 'pam50_corr', 'Entropy_euclidean', 'Variance_cosine'
+  # Examples: 'HVG_euc', 'pam50_corr', 'Entropy_euclidean', 'Variance_cosine'
   make_option("--direction", type = "character", default = NULL,
-              help = "Direction identifier (pam50_euc, pam50_corr, hvg_euc, hvg_corr, etc.)"),
+              help = "Direction identifier (pam50_euc, pam50_corr, HVG_euc, HVG_corr, MX_euc, etc.)"),
   
   # --workdir: Pipeline working directory for anchoring relative paths.
   # This ensures correct file resolution regardless of invocation context.
@@ -259,7 +259,7 @@ direction <- opt$direction
 if (!grepl("_(euc|corr|euclidean|cosine)$", direction)) {
   stop("Invalid --direction: ", direction,
        "\nExpected a direction ending in one of: _euc, _corr, _euclidean, _cosine.",
-       "\nExamples: hvg_euc, pam50_corr, Entropy_euclidean, Variance_cosine.")
+       "\nExamples: HVG_euc, pam50_corr, Entropy_euclidean, Variance_cosine.")
 }
 
 # ------------------------------------------------------------------------------
@@ -294,7 +294,7 @@ cat("[INFO] Direction: ", direction, "\n", sep = "")
 
 # Extract gene set label for plot annotations.
 # The gene set is inferred from the direction prefix.
-gene_set <- if (startsWith(direction, "pam50")) "PAM50" else "HVG500"
+gene_set <- if (startsWith(direction, "pam50")) "PAM50" else sub("_(euc|corr|euclidean|cosine)$", "", direction)
 cat("[INFO] Gene set: ", gene_set, "\n", sep = "")
 
 # Validate that the unsupervised analysis root directory is configured.

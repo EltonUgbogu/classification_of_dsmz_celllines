@@ -5,8 +5,8 @@
 # Sanity-check a single direction:
 #   - pam50_euc
 #   - pam50_corr
-#   - hvg_euc
-#   - hvg_corr
+#   - HVG_euc
+#   - HVG_corr
 #
 # Uses:
 #   config.yaml → paths$unsup_root
@@ -42,7 +42,7 @@ option_list <- list(
     "--direction",
     type    = "character",
     default = "pam50_euc",
-    help    = "Direction: pam50_euc, pam50_corr, hvg_euc, hvg_corr"
+    help    = "Direction: pam50_euc, pam50_corr, HVG_euc, HVG_corr"
   )
 )
 

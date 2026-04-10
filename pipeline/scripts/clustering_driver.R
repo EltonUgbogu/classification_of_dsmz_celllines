@@ -1,14 +1,14 @@
 #!/usr/bin/env Rscript
 
 # clustering_driver.R
-# Generic driver for 4 combos:
-#   feature_set: pam50 / hvg
+# Generic driver for combos:
+#   feature_set: pam50 / MX
 #   distance:    euclidean / correlation
 #
 # Uses:
 #   - config$paths$vst_joint_rds
 #   - config$features$pam50_gene_list
-#   - config$features$hvg_final_gene_list
+#   - config$features$mx_final_gene_list
 #   - config$clustering$k_grid
 #
 # Produces (inside --outdir):
@@ -39,7 +39,7 @@ option_list <- list(
   make_option(c("-c", "--config"), type = "character", help = "Path to config.yaml"),
   make_option("--profile", type = "character", default = NULL,
               help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
-  make_option("--feature_set", type = "character", help = "pam50 or hvg"),
+  make_option("--feature_set", type = "character", help = "pam50 or MX"),
   make_option("--distance",    type = "character", help = "euclidean or correlation"),
   make_option("--outdir",      type = "character", help = "Output directory")
 )
@@ -74,7 +74,7 @@ rn <- rownames(vst_mat)
 rn <- sub("\\.\\d+$", "", rn)
 rownames(vst_mat) <- rn
 
-feature_set <- match.arg(opt$feature_set, c("pam50", "hvg"))
+feature_set <- match.arg(opt$feature_set, c("pam50", "MX"))
 distance    <- match.arg(opt$distance, c("euclidean", "correlation"))
 
 # PAM50: prefer Ensembl list if provided (matches vst_joint_rds rownames)
@@ -86,23 +86,23 @@ if (!is.null(pam50_ens_file) && file.exists(pam50_ens_file)) {
   pam50_genes <- readr::read_lines(pam50_sym_file)
 }
 
-# --- HVG list only if needed ---
-hvg_genes <- NULL
-if (feature_set == "hvg") {
-  hvg_file <- cfg$features$hvg_final_gene_list %||% stop("features$hvg_final_gene_list missing")
-  if (!file.exists(hvg_file)) {
-    stop("HVG file missing for feature_set = 'hvg': ", hvg_file)
+# --- MX list only if needed ---
+mx_genes <- NULL
+if (feature_set == "MX") {
+  mx_file <- cfg$features$mx_final_gene_list %||% stop("features$mx_final_gene_list missing")
+  if (!file.exists(mx_file)) {
+    stop("MX file missing for feature_set = 'MX': ", mx_file)
   }
-  hvg_genes <- readr::read_lines(hvg_file)
+  mx_genes <- readr::read_lines(mx_file)
 }
 
 # choose current gene set
 if (feature_set == "pam50") {
   current_genes <- pam50_genes
   feat_label <- "PAM50"
-} else if (feature_set == "hvg") {
-  current_genes <- hvg_genes
-  feat_label <- "HVG500"
+} else if (feature_set == "MX") {
+  current_genes <- mx_genes
+  feat_label <- "MX500"
 } else {
   stop("Unknown feature_set: ", feature_set)
 }

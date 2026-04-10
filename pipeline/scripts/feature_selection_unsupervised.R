@@ -43,8 +43,8 @@
 #   --vst_rds  : Path to VST-normalised expression matrix (.rds file)
 #
 # OUTPUTS:
-#   - BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt : Final selected gene list
-#   - BRCA_TCGA-DSMZ_HVG500_joint_ranks_kTotal_vs_MX.tsv : Full ranking table
+#   - BRCA_MX_genes_top500.txt : Final selected MX gene list
+#   - BRCA_MX_joint_ranks_kTotal_vs_MX.tsv : Full ranking table
 #   - UpSet plots comparing method overlap
 #   - Various intermediate files for QC and method comparison
 #
@@ -116,10 +116,10 @@ option_list <- list(
     help = "Output path for joint HVG scores table (TSV)"
   ),
   make_option(
-    c("--hvg_list"),
+    c("--mx_list"),
     type = "character",
     default = NULL,
-    help = "Output path for final HVG gene list (TXT)"
+    help = "Output path for final MX gene list (TXT)"
   ),
   make_option(
     c("--profile"),
@@ -429,6 +429,7 @@ run_unsupervised_feature_selection <- function(
     
     legend_text <- c(
       "Variance: highest gene expression variance across samples",
+      "HVG: variance above mean-variance LOESS trend (trend-corrected)",
       "MAD: median absolute deviation across samples",
       "MeanAbsDev: mean absolute deviation across samples",
       "Entropy: Shannon entropy of gene expression distribution",
@@ -486,7 +487,49 @@ run_unsupervised_feature_selection <- function(
   # than apply(counts, 1, var)).
   
   top_var <- names(sort(rowVars(counts, na.rm = TRUE), decreasing = TRUE))[1:top_n_method]
-  
+
+  # ---------------------------------------------------------------------------
+  # METHOD 1b: HVG (MEAN-VARIANCE TREND ADJUSTED)
+  # ---------------------------------------------------------------------------
+  # Raw variance is biased toward highly expressed genes because variance
+  # scales with mean. A true HVG method removes this bias by selecting genes
+  # with higher variance than expected given their average expression level.
+  #
+  # FORMULA: HVG score = log10(var(x) + ε) - E[log10(var) | mean(x)]
+  #
+  # WHERE:
+  #   - E[log10(var) | mean(x)] is the expected log-variance at that mean,
+  #     estimated by a LOESS smooth of log10(variance) ~ mean expression
+  #   - A positive residual means the gene is more variable than expected
+  #
+  # ADVANTAGES:
+  #   - Mean-variance trend corrected (unlike raw Variance)
+  #   - Identifies biologically variable genes regardless of expression level
+  #   - Equivalent to the HVG selection used in Seurat/scran pipelines
+
+  gene_mean <- rowMeans(counts, na.rm = TRUE)
+  gene_var  <- matrixStats::rowVars(counts, na.rm = TRUE)
+  names(gene_var) <- rownames(counts)
+
+  eps <- 1e-8
+  ok  <- is.finite(gene_mean) & is.finite(gene_var) & gene_var > 0
+
+  hvg_fit <- loess(
+    log10(gene_var[ok] + eps) ~ gene_mean[ok],
+    span   = 0.3,
+    degree = 2
+  )
+
+  expected_logvar <- rep(NA_real_, length(gene_var))
+  names(expected_logvar) <- rownames(counts)
+  expected_logvar[ok] <- predict(hvg_fit, newdata = gene_mean[ok])
+
+  hvg_score <- log10(gene_var + eps) - expected_logvar
+  names(hvg_score) <- rownames(counts)
+  hvg_score[!is.finite(hvg_score)] <- -Inf
+
+  top_hvg <- names(sort(hvg_score, decreasing = TRUE))[1:top_n_method]
+
   # ---------------------------------------------------------------------------
   # METHOD 2: MEDIAN ABSOLUTE DEVIATION (MAD)
   # ---------------------------------------------------------------------------
@@ -638,7 +681,7 @@ run_unsupervised_feature_selection <- function(
   # If each method selects 3000 genes with 50% pairwise overlap, the union
   # might contain ~5000-8000 unique genes, depending on method agreement.
   
-  all_candidates <- unique(c(top_var, top_mad, top_mean_absdev, top_entropy, top_pca))
+  all_candidates <- unique(c(top_var, top_hvg, top_mad, top_mean_absdev, top_entropy, top_pca))
   if (!quiet) message("[INFO] Union of candidates: ", length(all_candidates), " genes")
   
   # ===========================================================================
@@ -1144,6 +1187,7 @@ run_unsupervised_feature_selection <- function(
   
   sets_3000 <- list(
     Variance   = top_var[1:min(top_n_method, length(top_var))],
+    HVG        = top_hvg[1:min(top_n_method, length(top_hvg))],
     MAD        = top_mad[1:min(top_n_method, length(top_mad))],
     MeanAbsDev = top_mean_absdev[1:min(top_n_method, length(top_mean_absdev))],
     Entropy    = top_entropy[1:min(top_n_method, length(top_entropy))],
@@ -1189,6 +1233,7 @@ run_unsupervised_feature_selection <- function(
   
   sets_500 <- list(
     Variance   = top_var[1:min(final_top, length(top_var))],
+    HVG        = top_hvg[1:min(final_top, length(top_hvg))],
     MAD        = top_mad[1:min(final_top, length(top_mad))],
     MeanAbsDev = top_mean_absdev[1:min(final_top, length(top_mean_absdev))],
     Entropy    = top_entropy[1:min(final_top, length(top_entropy))],
@@ -1286,6 +1331,7 @@ run_unsupervised_feature_selection <- function(
   # These files enable exploration and QC of individual methods
   
   write_vec(top_var, "top3000_variance.txt")
+  write_vec(top_hvg, "top3000_HVG.txt")
   write_vec(top_mad, "top3000_MAD.txt")
   write_vec(top_mean_absdev, "top3000_meanAbsDev.txt")
   write_vec(top_entropy, "top3000_entropy.txt")
@@ -1301,9 +1347,9 @@ run_unsupervised_feature_selection <- function(
   # If Snakemake (or another caller) provides explicit output paths, honour those
   # exactly; otherwise fall back to profile-tagged filenames under subdir.
   joint_tsv  <- opt$scores_tsv %||%
-    file.path(subdir, sprintf("%s_HVG%d_joint_ranks_kTotal_vs_MX.tsv", profile_tag, final_top))
-  genes_file <- opt$hvg_list %||%
-    file.path(subdir, sprintf("%s_HVG%d_genes_MX_top%d.txt", profile_tag, final_top, final_top))
+    file.path(subdir, sprintf("%s_MX_joint_ranks_kTotal_vs_MX.tsv", profile_tag))
+  genes_file <- opt$mx_list %||%
+    file.path(subdir, sprintf("%s_MX_genes_top%d.txt", profile_tag, final_top))
   
   if (!quiet) {
     message("[DEBUG] Writing output files:")

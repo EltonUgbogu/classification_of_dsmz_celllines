@@ -65,7 +65,7 @@ base_dir   <- file.path(unsup_root, "tumour_neighbourhoods")
 thr        <- opt$threshold
 
 # Directions present in this project (BRCA may have PAM50; NBL/RBL won't)
-default_dirs <- c("hvg_euc", "hvg_corr")
+default_dirs <- c("HVG_euc", "HVG_corr")
 
 directions <- cfg$tumour_neighbourhoods$directions
 if (is.null(directions) || length(directions) == 0) {
@@ -403,13 +403,13 @@ ggsave(file.path(out_dir, "Fig_p_consensus_composite_PCA_weights.pdf"),
 
 # ---- 5) Simple comparison plot (thesis-quality) ----
 # Canonical x-axis order for direction comparison (same across profiles, e.g. NBL and RBL)
-# Feature order then _euc before _corr within each feature; hvg last.
+# Feature order then _euc before _corr within each feature; HVG last.
 direction_plot_order <- c(
   "Variance_euc", "Variance_corr", "MAD_euc", "MAD_corr",
   "MeanAbsDev_euc", "MeanAbsDev_corr", "Entropy_euc", "Entropy_corr",
   "PCA_euc", "PCA_corr", "Spearman_euc", "Spearman_corr",
   "MX_euc", "MX_corr", "kTotal_euc", "kTotal_corr",
-  "hvg_euc", "hvg_corr",
+  "HVG_euc", "HVG_corr",
   "pam50_euc", "pam50_corr"  # if present
 )
 # Use only directions that exist in the data, in canonical order; append any others at end
@@ -426,7 +426,7 @@ feature_cols <- c(
   Spearman    = "#5E2B97",
   MX          = "#2E8B57",
   kTotal      = "#B00020",
-  hvg         = "#800000",
+  HVG         = "#800000",
   pam50       = "#C71585"
 )
 
@@ -441,7 +441,7 @@ dir_summary_plot <- dir_summary %>%
     direction = factor(as.character(direction), levels = order_used)
   )
 # Force same legend/order so NBL matches RBL (stable fill mapping); pam50 last for BRCA
-feature_levels <- c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "hvg", "pam50")
+feature_levels <- c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG", "pam50")
 dir_summary_plot <- dir_summary_plot %>%
   mutate(feature = factor(as.character(feature), levels = feature_levels))
 
@@ -449,7 +449,7 @@ dir_summary_plot <- dir_summary_plot %>%
 missing <- setdiff(levels(dir_summary_plot$feature), names(feature_cols))
 if (length(missing) > 0) stop("No colour mapping for: ", paste(missing, collapse = ", "))
 
-# Use fill values in exact same order as factor levels so MeanAbsDev and hvg never swap
+# Use fill values in exact same order as factor levels so MeanAbsDev and HVG never swap
 fill_values <- feature_cols[levels(dir_summary_plot$feature)]
 
 # Create plot with vertical bars, fixed feature colors, and percentage labels inside bars
