@@ -759,7 +759,7 @@ for (fm in feature_methods) {
     X_sub <- X_joint[, genes_keep, drop=FALSE]
     saveRDS(X_sub, sub_rds_path)
     
-    cat("  [SAVED] ", file.path("feature_sets_top500", basename(gene_list_path)), "\n", sep="")
+    cat("  [SAVED] ", file.path(sprintf("feature_sets_top%d", opt$n_genes), basename(gene_list_path)), "\n", sep="")
     cat("  [SAVED] ", file.path("featuresets", fm, "expr_submatrix.rds"), "\n", sep="")
   }
 

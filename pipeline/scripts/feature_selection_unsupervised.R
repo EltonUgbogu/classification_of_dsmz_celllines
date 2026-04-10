@@ -144,6 +144,17 @@ option_list <- list(
     type = "integer",
     default = NULL,
     help = "Final number of genes to select per method (default: 500)"
+  ),
+  make_option(
+    c("--method_topn"),
+    type = "character",
+    default = NULL,
+    help = paste0(
+      "Comma-separated method:N pairs specifying the top-N for each method ",
+      "(e.g. 'Variance:3000,MAD:3000,MX:500,HVG:3000'). ",
+      "Overrides --top_n_method for named methods. ",
+      "Used by the Snakefile to pass per-method top-N values."
+    )
   )
 )
 
@@ -209,6 +220,7 @@ run_unsupervised_feature_selection <- function(
   outdir = fs_subdir,
   top_n_method = 3000,
   final_top = 500,
+  method_topn_map = list(),
   seed = 123,
   quiet = FALSE
 ) {
@@ -1172,7 +1184,7 @@ run_unsupervised_feature_selection <- function(
   #   A. Top 3000: Shows broader agreement at the candidate selection stage
   #   B. Top 500: Shows agreement at the final selection stage
   
-  if (!quiet) message("[INFO] Creating UpSet plots comparing all 8 methods...")
+  if (!quiet) message("[INFO] Creating UpSet plots comparing all 9 methods...")
   
   # Safety checks for required vectors
   stopifnot(!is.null(names(avg_corr)), length(names(avg_corr)) > 0)
@@ -1217,7 +1229,7 @@ run_unsupervised_feature_selection <- function(
     save_upset_with_legend(
       sets_3000_use,
       file.path(subdir, "upset_all8_top3000_with_legend.png"),
-      title = "UpSet: Top 3000 genes per method (8 methods)"
+      title = "UpSet: Top 3000 genes per method (9 methods)"
     )
     
     if (!quiet) message("[INFO] UpSet plot (top3000) saved: upset_all8_top3000_with_legend.png")
@@ -1248,24 +1260,91 @@ run_unsupervised_feature_selection <- function(
   sets_500_use <- sets_500[nonempty_500]
   
   # ---------------------------------------------------------------------------
-  # EMIT ALL 8 METHOD GENE LISTS FOR DOWNSTREAM PIPELINE FAN-OUT
+  # EMIT ALL METHOD GENE LISTS FOR DOWNSTREAM PIPELINE FAN-OUT
   # ---------------------------------------------------------------------------
-  # Create directory for feature set outputs (used by Snakemake fan-out)
+  # Two output directories are maintained:
+  #
+  #   feature_sets_top{final_top}/ — legacy flat directory; all methods at
+  #     final_top (500 by default).  Kept for backward compatibility with
+  #     non-Snakemake callers and the multicohort benchmark script.
+  #
+  #   feature_sets/ — canonical Snakemake output directory.  Each method is
+  #     written with its own per-method top-N value derived from method_topn_map
+  #     (passed via --method_topn).  File naming: genes_top{N}_{method}.txt.
+  #     This is what the Snakefile rule output: declarations expect.
+
+  # --- Legacy flat directory (all methods at final_top) ---
   feature_sets_dir <- file.path(subdir, paste0("feature_sets_top", final_top))
   dir.create(feature_sets_dir, showWarnings = FALSE, recursive = TRUE)
-  
+
   if (!quiet) {
-    message("[INFO] Emitting gene lists for ", length(sets_500_use), " methods to: ", feature_sets_dir)
+    message("[INFO] Emitting gene lists (legacy flat) for ", length(sets_500_use),
+            " methods to: ", feature_sets_dir)
   }
-  
-  # Write one gene list file per method
+
+  # Write one gene list file per method (legacy, all at final_top)
   for (nm in names(sets_500_use)) {
     if (length(sets_500_use[[nm]]) > 0) {
       fn <- file.path(feature_sets_dir, paste0("genes_top", final_top, "_", nm, ".txt"))
       writeLines(sets_500_use[[nm]], fn)
       if (!quiet) {
-        message("[INFO]   ", nm, ": ", length(sets_500_use[[nm]]), " genes -> ", basename(fn))
+        message("[INFO]   [legacy] ", nm, ": ", length(sets_500_use[[nm]]),
+                " genes -> ", basename(fn))
       }
+    }
+  }
+
+  # --- Canonical Snakemake output directory (per-method top-N) ---
+  # Directory name is 'feature_sets' (no top-N suffix) because different methods
+  # use different N values.  File names encode the method-specific N.
+  canonical_sets_dir <- file.path(subdir, "feature_sets")
+  dir.create(canonical_sets_dir, showWarnings = FALSE, recursive = TRUE)
+
+  # Build a combined gene-vector map: top3000 for broad methods, top500 for
+  # network methods, using the per-gene vectors already computed above.
+  all_method_vectors <- list(
+    Variance   = top_var,
+    HVG        = top_hvg,
+    MAD        = top_mad,
+    MeanAbsDev = top_mean_absdev,
+    Entropy    = top_entropy,
+    PCA        = top_pca,
+    Spearman   = final_top3000_spearman,   # full ranked vector; sliced below
+    MX         = c(final_top500_mx,        # MX canonical = top-500
+                   names(sort(mx_score, decreasing = TRUE))),  # extend for safety
+    kTotal     = c(top500_kTotal,
+                   names(sort(kTotal,    decreasing = TRUE)))
+  )
+  # Re-rank MX and kTotal from their score vectors (already sorted) for safety.
+  all_method_vectors[["MX"]]     <- names(sort(mx_score, decreasing = TRUE))
+  all_method_vectors[["kTotal"]] <- names(sort(kTotal,   decreasing = TRUE))
+
+  # Default per-method top-N (matches Snakefile defaults when --method_topn absent).
+  default_topn <- list(
+    Variance = 3000, HVG = 3000, MAD = 3000, MeanAbsDev = 3000,
+    Entropy  = 3000, PCA = 3000, Spearman = 500, MX = 500, kTotal = 500
+  )
+
+  if (!quiet) {
+    message("[INFO] Emitting canonical gene lists (per-method top-N) to: ", canonical_sets_dir)
+  }
+
+  for (nm in names(all_method_vectors)) {
+    vec <- all_method_vectors[[nm]]
+    if (is.null(vec) || length(vec) == 0) next
+    vec <- unique(vec[!is.na(vec)])
+    # Resolve per-method N: --method_topn takes precedence, then default.
+    n_genes <- if (!is.null(method_topn_map[[nm]])) {
+      as.integer(method_topn_map[[nm]])
+    } else {
+      as.integer(default_topn[[nm]] %||% final_top)
+    }
+    top_genes <- head(vec, n_genes)
+    fn <- file.path(canonical_sets_dir, paste0("genes_top", n_genes, "_", nm, ".txt"))
+    writeLines(top_genes, fn)
+    if (!quiet) {
+      message("[INFO]   [canonical] ", nm, " (top-", n_genes, "): ",
+              length(top_genes), " genes -> ", basename(fn))
     }
   }
   
@@ -1289,7 +1368,7 @@ run_unsupervised_feature_selection <- function(
     save_upset_with_legend(
       sets_500_use,
       file.path(subdir, "upset_all8_top500_with_legend.png"),
-      title = "UpSet: Top 500 genes per method (8 methods)"
+      title = "UpSet: Top 500 genes per method (9 methods)"
     )
     
     if (!quiet) message("[INFO] UpSet plot (top500) saved: upset_all8_top500_with_legend.png")
@@ -1459,7 +1538,7 @@ run_unsupervised_feature_selection <- function(
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
 # Extract parameters: command-line args take precedence over config
-top_n_method <- opt$top_n_method %||% 
+top_n_method <- opt$top_n_method %||%
                 if (!is.null(cfg) && !is.null(cfg$feature_selection$top_n_method)) {
                   cfg$feature_selection$top_n_method
                 } else {
@@ -1473,6 +1552,25 @@ final_top <- opt$final_top %||%
                500
              }
 
+# ---------------------------------------------------------------------------
+# Parse --method_topn into a named integer vector.
+# Format: "Variance:3000,MAD:3000,MX:500,HVG:3000,..."
+# This overrides top_n_method and final_top for named methods, enabling the
+# Snakefile to request per-method top-N values that match the declared outputs.
+# ---------------------------------------------------------------------------
+method_topn_map <- list()
+if (!is.null(opt$method_topn) && nzchar(opt$method_topn)) {
+  pairs <- strsplit(opt$method_topn, ",")[[1]]
+  for (p in pairs) {
+    kv <- strsplit(trimws(p), ":")[[1]]
+    if (length(kv) == 2) {
+      method_topn_map[[trimws(kv[1])]] <- as.integer(trimws(kv[2]))
+    }
+  }
+  message("[FEATURE_SELECTION] Per-method top-N from --method_topn: ",
+          paste(names(method_topn_map), unlist(method_topn_map), sep = "=", collapse = ", "))
+}
+
 # The main function is executed with parameters from command-line or config.
 # Default values (3000 candidates, 500 final) are used if not specified.
 run_unsupervised_feature_selection(
@@ -1480,6 +1578,7 @@ run_unsupervised_feature_selection(
   outdir  = fs_subdir,
   top_n_method = top_n_method,
   final_top    = final_top,
+  method_topn_map = method_topn_map,
   seed         = 123,
   quiet        = FALSE
 )

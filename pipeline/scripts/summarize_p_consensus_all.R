@@ -64,8 +64,21 @@ unsup_root <- abs_from_root(cfg$paths$unsup_root)
 base_dir   <- file.path(unsup_root, "tumour_neighbourhoods")
 thr        <- opt$threshold
 
-# Directions present in this project (BRCA may have PAM50; NBL/RBL won't)
-default_dirs <- c("HVG_euc", "HVG_corr")
+# Directions present in this project — used only when neither config nor the
+# filesystem can provide a direction list.  These match the 9-method × 2-distance
+# grid that all active profiles declare.  HVG uses top-3000 genes (LOESS
+# mean-variance trend correction); MX and kTotal use top-500.
+default_dirs <- c(
+  "Variance_euc", "Variance_corr",
+  "MAD_euc",      "MAD_corr",
+  "MeanAbsDev_euc", "MeanAbsDev_corr",
+  "Entropy_euc",  "Entropy_corr",
+  "PCA_euc",      "PCA_corr",
+  "Spearman_euc", "Spearman_corr",
+  "MX_euc",       "MX_corr",
+  "kTotal_euc",   "kTotal_corr",
+  "HVG_euc",      "HVG_corr"
+)
 
 directions <- cfg$tumour_neighbourhoods$directions
 if (is.null(directions) || length(directions) == 0) {
@@ -402,14 +415,16 @@ ggsave(file.path(out_dir, "Fig_p_consensus_composite_PCA_weights.pdf"),
        p_load, width = 7.5, height = 4.5)
 
 # ---- 5) Simple comparison plot (thesis-quality) ----
-# Canonical x-axis order for direction comparison (same across profiles, e.g. NBL and RBL)
-# Feature order then _euc before _corr within each feature; HVG last.
+# Canonical x-axis order for direction comparison (same across profiles, e.g. NBL and RBL).
+# Feature order then _euc before _corr within each feature.
+# HVG_euc / HVG_corr are included for completeness (they appear if a future profile
+# declares HVG directions); they are simply skipped if not present in the data.
 direction_plot_order <- c(
   "Variance_euc", "Variance_corr", "MAD_euc", "MAD_corr",
   "MeanAbsDev_euc", "MeanAbsDev_corr", "Entropy_euc", "Entropy_corr",
   "PCA_euc", "PCA_corr", "Spearman_euc", "Spearman_corr",
   "MX_euc", "MX_corr", "kTotal_euc", "kTotal_corr",
-  "HVG_euc", "HVG_corr",
+  "HVG_euc", "HVG_corr",   # included for future profiles that wire HVG directions
   "pam50_euc", "pam50_corr"  # if present
 )
 # Use only directions that exist in the data, in canonical order; append any others at end
