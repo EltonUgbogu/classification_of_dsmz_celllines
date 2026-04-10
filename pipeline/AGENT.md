@@ -299,7 +299,7 @@ Feature selection only:
 
 ```bash
 ./run_smk.sh --config profile=brca -j 1 \
-  results/unsupervised/brca/feature_selection_unsupervised/BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt
+  results/unsupervised/brca/feature_selection_unsupervised/feature_sets/genes_top500_MX.txt
 ```
 
 Tumour neighbourhood input PAM50 (BRCA only):
@@ -330,28 +330,32 @@ Directory:
 * Joint ranks table (exact filename depends on profile/dataset naming):
 
   * `*_joint_ranks_*.tsv`
-* HVG final list (exact filename depends on profile/dataset naming):
+* MX final list (top-500 network-ranked genes):
 
-  * `*_genes_*_top500.txt`
+  * `feature_sets/genes_top500_MX.txt`
+* HVG trend-corrected list (top-3000 HVGs):
+
+  * `feature_sets/genes_top3000_HVG.txt`
 * Feature-set gene lists (one per method):
 
-  * `feature_sets_top500/genes_top500_<METHOD>.txt`
-    * Methods: `Variance`, `MAD`, `MeanAbsDev`, `Entropy`, `PCA`, `Spearman`, `MX`, `kTotal`
+  * `feature_sets/genes_top{N}_{METHOD}.txt` where `{N}` matches the method-specific 
+    top-N configured in `feature_selection.method_topn` (e.g. 3000 for HVG, 500 for MX).
+    * Methods: `Variance`, `MAD`, `MeanAbsDev`, `Entropy`, `PCA`, `Spearman`, `MX`, `kTotal`, `HVG`
 
 Example (BRCA):
 
 ```
 results/unsupervised/brca/feature_selection_unsupervised/
-├── BRCA_TCGA-DSMZ_HVG500_joint_ranks_kTotal_vs_MX.tsv
-├── BRCA_TCGA-DSMZ_HVG500_genes_MX_top500.txt
-└── feature_sets_top500/
+├── BRCA_TCGA-DSMZ_joint_ranks_kTotal_vs_MX.tsv
+└── feature_sets/
+    ├── genes_top3000_HVG.txt
+    ├── genes_top500_MX.txt
     ├── genes_top500_Variance.txt
     ├── genes_top500_MAD.txt
     ├── genes_top500_MeanAbsDev.txt
     ├── genes_top500_Entropy.txt
     ├── genes_top500_PCA.txt
     ├── genes_top500_Spearman.txt
-    ├── genes_top500_MX.txt
     └── genes_top500_kTotal.txt
 ```
 
@@ -450,24 +454,19 @@ Directory:
 
 ✅ **Declared outputs (must exist)**:
 
-* HVG always:
-
-  * `expr_hvg.rds`
-  * `cell_line_to_original_sample_id_hvg.rds`
 * PAM50 (if `use_pam50: true` in config):
 
   * `expr_pam50.rds`
   * `cell_line_to_original_sample_id_pam50.rds`
-* For each feature-set method:
+* For each feature-set method (including HVG and MX):
 
-  * `cell_line_to_original_sample_id_<METHOD>.rds`
+  * `tumour_neighbourhoods_input/cell_line_to_original_sample_id_<METHOD>.rds`
+  * `feature_selection_unsupervised/featuresets/<METHOD>/expr_submatrix.rds`
 
 🟡 **Derived artifacts (may exist depending on script logic)**:
 
-* Feature-set **expression submatrices** are written to:
-
-  * `results/unsupervised/<profile>/feature_selection_unsupervised/featuresets/<METHOD>/expr_submatrix.rds`
-  * (Exact path structure depends on `config.features.method_outdir`)
+* Additional per-method diagnostics may appear under 
+  `feature_selection_unsupervised/feature_sets/` (e.g. unique gene tables).
 
 **Completion criteria**:
 

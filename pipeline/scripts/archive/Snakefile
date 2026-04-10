@@ -66,7 +66,7 @@ rule all:
         lambda wc: PIPELINE_TARGET,
         # Pan-cancer UMAP (optional, can be run independently)
         # Uncomment to include in default target:
-        # os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap", "pan_cancer_hvg_umap_coords.tsv")
+        # os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap", "pan_cancer_mx_umap_coords.tsv")
 
 
 # Utility function: converts a config-relative path to an absolute path.
@@ -2550,24 +2550,24 @@ rule pan_cancer_graph_targets:
 # Legacy: Pan-cancer UMAP using joint HVG list (kept for backwards compatibility)
 PAN_CANCER_UMAP_OUTDIR = os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap")
 
-rule pan_cancer_umap_hvg:
+rule pan_cancer_umap_mx:
     input:
         config = CFGFILE_ABS
     output:
-        coords = os.path.join(PAN_CANCER_UMAP_OUTDIR, "pan_cancer_hvg_umap_coords.tsv"),
-        plot = os.path.join(PAN_CANCER_UMAP_OUTDIR, "pan_cancer_hvg_umap_plot.pdf")
+        coords = os.path.join(PAN_CANCER_UMAP_OUTDIR, "pan_cancer_mx_umap_coords.tsv"),
+        plot = os.path.join(PAN_CANCER_UMAP_OUTDIR, "pan_cancer_mx_umap_plot.pdf")
     params:
         profiles = "brca,nbl,rbl",  # Can be overridden via --config
         outdir = PAN_CANCER_UMAP_OUTDIR,
         n_pcs = 50,
         n_neighbors = 15,
         min_dist = 0.1
-    log: os.path.join(BASE, "logs", "pan_cancer_umap_hvg.log")
+    log: os.path.join(BASE, "logs", "pan_cancer_umap_mx.log")
     conda: CONDA_ENV_R
     shell:
         r'''
         mkdir -p {params.outdir}
-        Rscript {SCRIPTS_DIR}/pan_cancer_umap_hvg.R \
+        Rscript {SCRIPTS_DIR}/pan_cancer_umap_mx.R \
           --config {input.config} \
           --profiles {params.profiles} \
           --outdir {params.outdir} \

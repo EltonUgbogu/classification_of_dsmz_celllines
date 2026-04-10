@@ -39,7 +39,7 @@ This document is a **complete task file for an agent**, detailing the analysis p
 - **Snakemake rule:** `feature_selection_unsupervised`
 - **Inputs:** `paths.vst_joint_rds`, `config/config.yaml`
 - **Outputs:**
-  - `results/unsupervised/<profile>/feature_selection_unsupervised/feature_sets_top500/genes_top500_{Variance,MAD,Entropy,PCA,Spearman,MX,kTotal}.txt`
+  - `results/unsupervised/<profile>/feature_selection_unsupervised/feature_sets/genes_top{N}_{METHOD}.txt` for every configured method (e.g. HVG top-3000, MX top-500)
   - Optional side outputs: `hvg_joint_scores.tsv`, `hvg_final_gene_list.txt`, UpSet plots, etc.
 - **What it does:** Ranks genes by multiple methods, writes top-N gene lists per method. Required for all downstream steps that use “direction” (e.g. Variance_euc, hvg_corr).
 
@@ -54,7 +54,7 @@ snakemake feature_selection_unsupervised \
 
 - **Script:** `scripts/build_tumour_neighbourhood_input.R`
 - **Snakemake rule:** `build_tumour_neighbourhood_input_featureset` (one job per feature, e.g. Entropy, MAD, Variance, MX, kTotal). Optional convenience rule: `build_featureset_matrices` (if present in Snakefile).
-- **Inputs:** `paths.vst_joint_rds`, `feature_sets_top500/genes_top500_{feature}.txt`, `paths.dsmz_meta_csv` (or joint metadata TSV with `sample_id` or `sample_name` and a cell-line-like column, e.g. `lineage` or `Cell_line`).
+- **Inputs:** `paths.vst_joint_rds`, `feature_sets/genes_top{N}_{feature}.txt`, `paths.dsmz_meta_csv` (or joint metadata TSV with `sample_id` or `sample_name` and a cell-line-like column, e.g. `lineage` or `Cell_line`).
 - **Outputs:**
   - `results/unsupervised/<profile>/feature_selection_unsupervised/featuresets/<Feature>/expr_submatrix.rds`
   - `results/unsupervised/<profile>/tumour_neighbourhoods_input/cell_line_to_original_sample_id_{feature}.rds`
@@ -99,7 +99,7 @@ snakemake agnostic_all_directions \
 
 - **Script:** `scripts/consensus_ccp_cell_tumour.R`
 - **Snakemake rule (aggregate):** `consensus_all_directions`
-- **Inputs:** Config, profile, per-direction agnostic cluster RDS; HVG list path (e.g. `feature_sets_top500/genes_top500_MX.txt`).
+- **Inputs:** Config, profile, per-direction agnostic cluster RDS; feature-specific gene lists (e.g. HVG uses `feature_sets/genes_top3000_HVG.txt`, MX uses `feature_sets/genes_top500_MX.txt`).
 - **Outputs:**  
   - `results/unsupervised/<profile>/consensus/<direction>/<kind>/<kind>_clusters_optimal.rds`  
   - Kinds: e.g. `ccp_hc_expr_cell_tumour`, `ccp_kmeans_expr_cell_tumour`, and other `ccp_*` kinds defined in the Snakefile.
