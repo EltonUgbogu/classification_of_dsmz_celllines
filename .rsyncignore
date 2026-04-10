@@ -87,6 +87,10 @@ __pycache__/
 *.gtf
 *.gtf.gz
 
+# Scheduler/runtime logs anywhere under pipeline
+pipeline/**/*.out
+pipeline/**/*.err
+
 # Keep text/tabular files
 !*.txt
 !*.tsv
