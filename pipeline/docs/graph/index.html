@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell Line Similarity Network</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        svg {
+            border: 1px solid #eaeaea;
+            border-radius: 4px;
+            background-color: #ffffff;
+            cursor: grab;
+        }
+        svg:active { cursor: grabbing; }
+        .node { stroke: #fff; stroke-width: 1.5px; }
+        .link { stroke: #999; stroke-opacity: 0.4; }
+        .label { font-size: 10px; font-family: sans-serif; pointer-events: none; }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>DSMZ Cell Line Communities (Leiden)</h2>
+        <p>A dynamic force-directed graph. The simulation runs automatically to find equilibrium.</p>
+        <div id="graph"></div>
+    </div>
+    <div id="tooltip"></div>
+
+    <script>
+        const data = {
+            nodes: [
+                {id: "Cell_A1", group: 1}, {id: "Cell_A2", group: 1}, {id: "Cell_A3", group: 1}, {id: "Cell_A4", group: 1},
+                {id: "Cell_B1", group: 2}, {id: "Cell_B2", group: 2}, {id: "Cell_B3", group: 2}, {id: "Cell_B4", group: 2},
+                {id: "Cell_C1", group: 3}, {id: "Cell_C2", group: 3}, {id: "Cell_C3", group: 3},
+                {id: "Iso_X", group: 0}, {id: "Iso_Y", group: 0}, {id: "Iso_Z", group: 0}
+            ],
+            links: [
+                {source: "Cell_A1", target: "Cell_A2", value: 0.9}, {source: "Cell_A2", target: "Cell_A3", value: 0.8},
+                {source: "Cell_A3", target: "Cell_A4", value: 0.9}, {source: "Cell_A4", target: "Cell_A1", value: 0.8},
+                {source: "Cell_B1", target: "Cell_B2", value: 0.9}, {source: "Cell_B2", target: "Cell_B3", value: 0.8},
+                {source: "Cell_B3", target: "Cell_B4", value: 0.9}, {source: "Cell_B4", target: "Cell_B1", value: 0.8},
+                {source: "Cell_C1", target: "Cell_C2", value: 0.9}, {source: "Cell_C2", target: "Cell_C3", value: 0.9},
+                {source: "Cell_A2", target: "Cell_B1", value: 0.4},
+                {source: "Cell_B3", target: "Cell_C1", value: 0.3}
+            ]
+        };
+
+        const width = 800;
+        const height = 500;
+
+        const color = d3.scaleOrdinal()
+            .domain([0, 1, 2, 3])
+            .range(["#cccccc", "#1f77b4", "#ff7f0e", "#2ca02c"]);
+
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        const simulation = d3.forceSimulation(data.nodes)
+            .force("link", d3.forceLink(data.links).id(d => d.id).distance(60))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide().radius(20));
+
+        const link = svg.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(data.links)
+            .join("line")
+            .attr("class", "link")
+            .attr("stroke-width", d => Math.sqrt(d.value) * 3);
+
+        const node = svg.append("g")
+            .attr("class", "nodes")
+            .selectAll("circle")
+            .data(data.nodes)
+            .join("circle")
+            .attr("class", "node")
+            .attr("r", 8)
+            .attr("fill", d => color(d.group))
+            .call(drag(simulation));
+
+        const tooltip = d3.select("#tooltip");
+        node.on("mouseover", (event, d) => {
+            tooltip.style("opacity", 1)
+                .html(`Cell: <strong>${d.id}</strong><br>Community: ${d.group === 0 ? 'Isolate' : d.group}`)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 20) + "px");
+            d3.select(event.currentTarget).attr("stroke", "#333").attr("stroke-width", 2);
+        }).on("mouseout", (event, d) => {
+            tooltip.style("opacity", 0);
+            d3.select(event.currentTarget).attr("stroke", "#fff").attr("stroke-width", 1.5);
+        });
+
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("cx", d => Math.max(10, Math.min(width - 10, d.x)))
+                .attr("cy", d => Math.max(10, Math.min(height - 10, d.y)));
+        });
+
+        function drag(simulation) {
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+            return d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended);
+        }
+    </script>
+</body>
+</html>
