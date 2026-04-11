@@ -1,354 +1,354 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cell Line Similarity Network</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0d1117;
-            color: #e6edf3;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 30px 20px;
-        }
-        .container {
-            background: #161b22;
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid #30363d;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        }
-        h2 {
-            color: #58a6ff;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        p {
-            color: #8b949e;
-            margin-bottom: 16px;
-            font-size: 14px;
-        }
-        .legend {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 16px;
-            font-size: 12px;
-            color: #8b949e;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .legend-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        svg {
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            background-color: #0d1117;
-            cursor: grab;
-        }
-        svg:active { cursor: grabbing; }
-        .node { stroke-width: 1.5px; }
-        .link { stroke-opacity: 0.3; }
-        .label {
-            font-size: 9px;
-            font-family: 'SF Mono', 'Fira Code', monospace;
-            fill: #8b949e;
-            pointer-events: none;
-            text-anchor: middle;
-        }
-        #tooltip {
-            position: absolute;
-            background: rgba(22, 27, 34, 0.95);
-            color: #e6edf3;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #30363d;
-            font-size: 12px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.15s;
-            backdrop-filter: blur(8px);
-        }
-        #tooltip strong { color: #58a6ff; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell Line Similarity Network Demo</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0d1117;
+            color: #e6edf3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 20px;
+        }
+        .container {
+            background: #161b22;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid #30363d;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        h2 {
+            color: #58a6ff;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        p {
+            color: #8b949e;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 12px;
+            color: #8b949e;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        svg {
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            background-color: #0d1117;
+            cursor: grab;
+        }
+        svg:active { cursor: grabbing; }
+        .node { stroke-width: 1.5px; }
+        .link { stroke-opacity: 0.3; }
+        .label {
+            font-size: 9px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            fill: #8b949e;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+        #tooltip {
+            position: absolute;
+            background: rgba(22, 27, 34, 0.95);
+            color: #e6edf3;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            backdrop-filter: blur(8px);
+        }
+        #tooltip strong { color: #58a6ff; }
+    </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2>DSMZ Cell Line Communities (Leiden)</h2>
-        <p>Interactive force-directed graph &mdash; drag nodes to explore, hover for details.</p>
-        <div class="legend" id="legend"></div>
-        <div id="graph"></div>
-    </div>
-    <div id="tooltip"></div>
+    <div class="container">
+        <h2>Cell Line Similarity Network Demo</h2>
+        <p>Interactive force-directed graph &mdash; drag nodes to explore, hover for details. Data shown is illustrative.</p>
+        <div class="legend" id="legend"></div>
+        <div id="graph"></div>
+    </div>
+    <div id="tooltip"></div>
 
-    <script>
-        const communityNames = {
-            0: "Isolate",
-            1: "Breast Carcinoma",
-            2: "Neuroblastoma",
-            3: "Retinoblastoma",
-            4: "AML / Leukaemia",
-            5: "Lymphoma (DLBCL)",
-            6: "Ewing Sarcoma",
-            7: "Glioblastoma",
-            8: "Melanoma"
-        };
+    <script>
+        const communityNames = {
+            0: "Isolate",
+            1: "Breast Carcinoma",
+            2: "Neuroblastoma",
+            3: "Retinoblastoma",
+            4: "AML / Leukaemia",
+            5: "Lymphoma (DLBCL)",
+            6: "Ewing Sarcoma",
+            7: "Glioblastoma",
+            8: "Melanoma"
+        };
 
-        const data = {
-            nodes: [
-                // Breast Carcinoma cluster
-                {id: "MCF-7", group: 1}, {id: "MDA-MB-231", group: 1}, {id: "T-47D", group: 1},
-                {id: "BT-474", group: 1}, {id: "SK-BR-3", group: 1}, {id: "ZR-75-1", group: 1},
-                {id: "MDA-MB-468", group: 1}, {id: "HCC1937", group: 1},
-                // Neuroblastoma cluster
-                {id: "SH-SY5Y", group: 2}, {id: "SK-N-AS", group: 2}, {id: "IMR-32", group: 2},
-                {id: "SK-N-SH", group: 2}, {id: "Kelly", group: 2}, {id: "LAN-1", group: 2},
-                {id: "CHP-212", group: 2},
-                // Retinoblastoma cluster
-                {id: "Y79", group: 3}, {id: "WERI-Rb-1", group: 3}, {id: "RB355", group: 3},
-                {id: "SO-Rb-50", group: 3}, {id: "RBL-13", group: 3},
-                // AML / Leukaemia cluster
-                {id: "HL-60", group: 4}, {id: "K-562", group: 4}, {id: "MOLM-13", group: 4},
-                {id: "MV4-11", group: 4}, {id: "THP-1", group: 4}, {id: "U-937", group: 4},
-                {id: "KG-1", group: 4}, {id: "Kasumi-1", group: 4}, {id: "NB-4", group: 4},
-                // Lymphoma cluster
-                {id: "Raji", group: 5}, {id: "Daudi", group: 5}, {id: "SU-DHL-4", group: 5},
-                {id: "OCI-LY3", group: 5}, {id: "DOHH-2", group: 5}, {id: "U-2932", group: 5},
-                // Ewing Sarcoma cluster
-                {id: "A673", group: 6}, {id: "SK-ES-1", group: 6}, {id: "RD-ES", group: 6},
-                {id: "TC-71", group: 6}, {id: "EW-7", group: 6},
-                // Glioblastoma cluster
-                {id: "U-87 MG", group: 7}, {id: "U-251 MG", group: 7}, {id: "T98G", group: 7},
-                {id: "A172", group: 7}, {id: "LN-229", group: 7},
-                // Melanoma cluster
-                {id: "A375", group: 8}, {id: "SK-MEL-28", group: 8}, {id: "WM115", group: 8},
-                {id: "MeWo", group: 8}, {id: "SK-MEL-5", group: 8},
-                // Isolates
-                {id: "HEK-293", group: 0}, {id: "HeLa", group: 0}, {id: "Jurkat", group: 0}
-            ],
-            links: [
-                // Breast Carcinoma — dense
-                {source: "MCF-7", target: "T-47D", value: 0.92},
-                {source: "MCF-7", target: "ZR-75-1", value: 0.88},
-                {source: "T-47D", target: "BT-474", value: 0.85},
-                {source: "BT-474", target: "SK-BR-3", value: 0.80},
-                {source: "MDA-MB-231", target: "MDA-MB-468", value: 0.87},
-                {source: "MDA-MB-231", target: "HCC1937", value: 0.78},
-                {source: "MDA-MB-468", target: "HCC1937", value: 0.82},
-                {source: "SK-BR-3", target: "ZR-75-1", value: 0.76},
-                {source: "MCF-7", target: "BT-474", value: 0.74},
-                {source: "MDA-MB-231", target: "MCF-7", value: 0.45},
-                // Neuroblastoma — dense
-                {source: "SH-SY5Y", target: "SK-N-SH", value: 0.95},
-                {source: "SH-SY5Y", target: "SK-N-AS", value: 0.88},
-                {source: "IMR-32", target: "Kelly", value: 0.90},
-                {source: "Kelly", target: "LAN-1", value: 0.86},
-                {source: "LAN-1", target: "CHP-212", value: 0.82},
-                {source: "SK-N-AS", target: "IMR-32", value: 0.79},
-                {source: "SK-N-SH", target: "Kelly", value: 0.75},
-                {source: "CHP-212", target: "SH-SY5Y", value: 0.70},
-                // Retinoblastoma — dense
-                {source: "Y79", target: "WERI-Rb-1", value: 0.93},
-                {source: "WERI-Rb-1", target: "RB355", value: 0.88},
-                {source: "RB355", target: "SO-Rb-50", value: 0.85},
-                {source: "SO-Rb-50", target: "RBL-13", value: 0.82},
-                {source: "Y79", target: "SO-Rb-50", value: 0.78},
-                {source: "RBL-13", target: "Y79", value: 0.74},
-                // AML / Leukaemia — dense
-                {source: "HL-60", target: "NB-4", value: 0.91},
-                {source: "K-562", target: "MOLM-13", value: 0.88},
-                {source: "MOLM-13", target: "MV4-11", value: 0.93},
-                {source: "MV4-11", target: "THP-1", value: 0.84},
-                {source: "THP-1", target: "U-937", value: 0.86},
-                {source: "U-937", target: "HL-60", value: 0.80},
-                {source: "KG-1", target: "Kasumi-1", value: 0.87},
-                {source: "Kasumi-1", target: "HL-60", value: 0.79},
-                {source: "KG-1", target: "K-562", value: 0.72},
-                {source: "NB-4", target: "THP-1", value: 0.76},
-                // Lymphoma — dense
-                {source: "Raji", target: "Daudi", value: 0.92},
-                {source: "SU-DHL-4", target: "OCI-LY3", value: 0.89},
-                {source: "OCI-LY3", target: "U-2932", value: 0.85},
-                {source: "DOHH-2", target: "SU-DHL-4", value: 0.87},
-                {source: "Raji", target: "DOHH-2", value: 0.74},
-                {source: "Daudi", target: "U-2932", value: 0.71},
-                // Ewing Sarcoma — dense
-                {source: "A673", target: "SK-ES-1", value: 0.91},
-                {source: "SK-ES-1", target: "RD-ES", value: 0.88},
-                {source: "RD-ES", target: "TC-71", value: 0.85},
-                {source: "TC-71", target: "EW-7", value: 0.83},
-                {source: "EW-7", target: "A673", value: 0.80},
-                // Glioblastoma — dense
-                {source: "U-87 MG", target: "U-251 MG", value: 0.90},
-                {source: "U-251 MG", target: "T98G", value: 0.86},
-                {source: "T98G", target: "A172", value: 0.84},
-                {source: "A172", target: "LN-229", value: 0.82},
-                {source: "LN-229", target: "U-87 MG", value: 0.78},
-                // Melanoma — dense
-                {source: "A375", target: "SK-MEL-28", value: 0.91},
-                {source: "SK-MEL-28", target: "WM115", value: 0.86},
-                {source: "WM115", target: "MeWo", value: 0.83},
-                {source: "MeWo", target: "SK-MEL-5", value: 0.80},
-                {source: "SK-MEL-5", target: "A375", value: 0.77},
-                // Cross-community bottleneck edges
-                {source: "MDA-MB-231", target: "SH-SY5Y", value: 0.25},
-                {source: "SK-N-AS", target: "Y79", value: 0.30},
-                {source: "U-937", target: "Raji", value: 0.35},
-                {source: "A673", target: "U-87 MG", value: 0.28},
-                {source: "A375", target: "HeLa", value: 0.20},
-                {source: "Jurkat", target: "K-562", value: 0.32},
-                {source: "HEK-293", target: "A172", value: 0.22},
-                {source: "LN-229", target: "WM115", value: 0.26}
-            ]
-        };
+        const data = {
+            nodes: [
+                // Breast Carcinoma cluster
+                {id: "MCF-7", group: 1}, {id: "MDA-MB-231", group: 1}, {id: "T-47D", group: 1},
+                {id: "BT-474", group: 1}, {id: "SK-BR-3", group: 1}, {id: "ZR-75-1", group: 1},
+                {id: "MDA-MB-468", group: 1}, {id: "HCC1937", group: 1},
+                // Neuroblastoma cluster
+                {id: "SH-SY5Y", group: 2}, {id: "SK-N-AS", group: 2}, {id: "IMR-32", group: 2},
+                {id: "SK-N-SH", group: 2}, {id: "Kelly", group: 2}, {id: "LAN-1", group: 2},
+                {id: "CHP-212", group: 2},
+                // Retinoblastoma cluster
+                {id: "Y79", group: 3}, {id: "WERI-Rb-1", group: 3}, {id: "RB355", group: 3},
+                {id: "SO-Rb-50", group: 3}, {id: "RBL-13", group: 3},
+                // AML / Leukaemia cluster
+                {id: "HL-60", group: 4}, {id: "K-562", group: 4}, {id: "MOLM-13", group: 4},
+                {id: "MV4-11", group: 4}, {id: "THP-1", group: 4}, {id: "U-937", group: 4},
+                {id: "KG-1", group: 4}, {id: "Kasumi-1", group: 4}, {id: "NB-4", group: 4},
+                // Lymphoma cluster
+                {id: "Raji", group: 5}, {id: "Daudi", group: 5}, {id: "SU-DHL-4", group: 5},
+                {id: "OCI-LY3", group: 5}, {id: "DOHH-2", group: 5}, {id: "U-2932", group: 5},
+                // Ewing Sarcoma cluster
+                {id: "A673", group: 6}, {id: "SK-ES-1", group: 6}, {id: "RD-ES", group: 6},
+                {id: "TC-71", group: 6}, {id: "EW-7", group: 6},
+                // Glioblastoma cluster
+                {id: "U-87 MG", group: 7}, {id: "U-251 MG", group: 7}, {id: "T98G", group: 7},
+                {id: "A172", group: 7}, {id: "LN-229", group: 7},
+                // Melanoma cluster
+                {id: "A375", group: 8}, {id: "SK-MEL-28", group: 8}, {id: "WM115", group: 8},
+                {id: "MeWo", group: 8}, {id: "SK-MEL-5", group: 8},
+                // Isolates
+                {id: "HEK-293", group: 0}, {id: "HeLa", group: 0}, {id: "Jurkat", group: 0}
+            ],
+            links: [
+                // Breast Carcinoma — dense
+                {source: "MCF-7", target: "T-47D", value: 0.92},
+                {source: "MCF-7", target: "ZR-75-1", value: 0.88},
+                {source: "T-47D", target: "BT-474", value: 0.85},
+                {source: "BT-474", target: "SK-BR-3", value: 0.80},
+                {source: "MDA-MB-231", target: "MDA-MB-468", value: 0.87},
+                {source: "MDA-MB-231", target: "HCC1937", value: 0.78},
+                {source: "MDA-MB-468", target: "HCC1937", value: 0.82},
+                {source: "SK-BR-3", target: "ZR-75-1", value: 0.76},
+                {source: "MCF-7", target: "BT-474", value: 0.74},
+                {source: "MDA-MB-231", target: "MCF-7", value: 0.45},
+                // Neuroblastoma — dense
+                {source: "SH-SY5Y", target: "SK-N-SH", value: 0.95},
+                {source: "SH-SY5Y", target: "SK-N-AS", value: 0.88},
+                {source: "IMR-32", target: "Kelly", value: 0.90},
+                {source: "Kelly", target: "LAN-1", value: 0.86},
+                {source: "LAN-1", target: "CHP-212", value: 0.82},
+                {source: "SK-N-AS", target: "IMR-32", value: 0.79},
+                {source: "SK-N-SH", target: "Kelly", value: 0.75},
+                {source: "CHP-212", target: "SH-SY5Y", value: 0.70},
+                // Retinoblastoma — dense
+                {source: "Y79", target: "WERI-Rb-1", value: 0.93},
+                {source: "WERI-Rb-1", target: "RB355", value: 0.88},
+                {source: "RB355", target: "SO-Rb-50", value: 0.85},
+                {source: "SO-Rb-50", target: "RBL-13", value: 0.82},
+                {source: "Y79", target: "SO-Rb-50", value: 0.78},
+                {source: "RBL-13", target: "Y79", value: 0.74},
+                // AML / Leukaemia — dense
+                {source: "HL-60", target: "NB-4", value: 0.91},
+                {source: "K-562", target: "MOLM-13", value: 0.88},
+                {source: "MOLM-13", target: "MV4-11", value: 0.93},
+                {source: "MV4-11", target: "THP-1", value: 0.84},
+                {source: "THP-1", target: "U-937", value: 0.86},
+                {source: "U-937", target: "HL-60", value: 0.80},
+                {source: "KG-1", target: "Kasumi-1", value: 0.87},
+                {source: "Kasumi-1", target: "HL-60", value: 0.79},
+                {source: "KG-1", target: "K-562", value: 0.72},
+                {source: "NB-4", target: "THP-1", value: 0.76},
+                // Lymphoma — dense
+                {source: "Raji", target: "Daudi", value: 0.92},
+                {source: "SU-DHL-4", target: "OCI-LY3", value: 0.89},
+                {source: "OCI-LY3", target: "U-2932", value: 0.85},
+                {source: "DOHH-2", target: "SU-DHL-4", value: 0.87},
+                {source: "Raji", target: "DOHH-2", value: 0.74},
+                {source: "Daudi", target: "U-2932", value: 0.71},
+                // Ewing Sarcoma — dense
+                {source: "A673", target: "SK-ES-1", value: 0.91},
+                {source: "SK-ES-1", target: "RD-ES", value: 0.88},
+                {source: "RD-ES", target: "TC-71", value: 0.85},
+                {source: "TC-71", target: "EW-7", value: 0.83},
+                {source: "EW-7", target: "A673", value: 0.80},
+                // Glioblastoma — dense
+                {source: "U-87 MG", target: "U-251 MG", value: 0.90},
+                {source: "U-251 MG", target: "T98G", value: 0.86},
+                {source: "T98G", target: "A172", value: 0.84},
+                {source: "A172", target: "LN-229", value: 0.82},
+                {source: "LN-229", target: "U-87 MG", value: 0.78},
+                // Melanoma — dense
+                {source: "A375", target: "SK-MEL-28", value: 0.91},
+                {source: "SK-MEL-28", target: "WM115", value: 0.86},
+                {source: "WM115", target: "MeWo", value: 0.83},
+                {source: "MeWo", target: "SK-MEL-5", value: 0.80},
+                {source: "SK-MEL-5", target: "A375", value: 0.77},
+                // Cross-community bottleneck edges
+                {source: "MDA-MB-231", target: "SH-SY5Y", value: 0.25},
+                {source: "SK-N-AS", target: "Y79", value: 0.30},
+                {source: "U-937", target: "Raji", value: 0.35},
+                {source: "A673", target: "U-87 MG", value: 0.28},
+                {source: "A375", target: "HeLa", value: 0.20},
+                {source: "Jurkat", target: "K-562", value: 0.32},
+                {source: "HEK-293", target: "A172", value: 0.22},
+                {source: "LN-229", target: "WM115", value: 0.26}
+            ]
+        };
 
-        const width = 960;
-        const height = 640;
+        const width = 960;
+        const height = 640;
 
-        const palette = [
-            "#6e7681",
-            "#58a6ff",
-            "#f0883e",
-            "#3fb950",
-            "#bc8cff",
-            "#f778ba",
-            "#d29922",
-            "#ff7b72",
-            "#79c0ff"
-        ];
+        const palette = [
+            "#6e7681",
+            "#58a6ff",
+            "#f0883e",
+            "#3fb950",
+            "#bc8cff",
+            "#f778ba",
+            "#d29922",
+            "#ff7b72",
+            "#79c0ff"
+        ];
 
-        const color = d3.scaleOrdinal()
-            .domain(d3.range(0, 9))
-            .range(palette);
+        const color = d3.scaleOrdinal()
+            .domain(d3.range(0, 9))
+            .range(palette);
 
-        const legendEl = document.getElementById("legend");
-        Object.entries(communityNames).forEach(([key, name]) => {
-            const item = document.createElement("div");
-            item.className = "legend-item";
-            const dot = document.createElement("span");
-            dot.className = "legend-dot";
-            dot.style.backgroundColor = palette[+key];
-            const label = document.createElement("span");
-            label.textContent = name;
-            item.appendChild(dot);
-            item.appendChild(label);
-            legendEl.appendChild(item);
-        });
+        const legendEl = document.getElementById("legend");
+        Object.entries(communityNames).forEach(([key, name]) => {
+            const item = document.createElement("div");
+            item.className = "legend-item";
+            const dot = document.createElement("span");
+            dot.className = "legend-dot";
+            dot.style.backgroundColor = palette[+key];
+            const label = document.createElement("span");
+            label.textContent = name;
+            item.appendChild(dot);
+            item.appendChild(label);
+            legendEl.appendChild(item);
+        });
 
-        const svg = d3.select("#graph")
-            .append("svg")
-            .attr("width", width)
-            .attr("height", height);
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
 
-        const g = svg.append("g");
+        const g = svg.append("g");
 
-        svg.call(d3.zoom()
-            .scaleExtent([0.3, 5])
-            .on("zoom", (event) => g.attr("transform", event.transform)));
+        svg.call(d3.zoom()
+            .scaleExtent([0.3, 5])
+            .on("zoom", (event) => g.attr("transform", event.transform)));
 
-        const simulation = d3.forceSimulation(data.nodes)
-            .force("link", d3.forceLink(data.links).id(d => d.id).distance(d => 70 / d.value))
-            .force("charge", d3.forceManyBody().strength(-250))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius(18))
-            .force("x", d3.forceX(width / 2).strength(0.04))
-            .force("y", d3.forceY(height / 2).strength(0.04));
+        const simulation = d3.forceSimulation(data.nodes)
+            .force("link", d3.forceLink(data.links).id(d => d.id).distance(d => 70 / d.value))
+            .force("charge", d3.forceManyBody().strength(-250))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide().radius(18))
+            .force("x", d3.forceX(width / 2).strength(0.04))
+            .force("y", d3.forceY(height / 2).strength(0.04));
 
-        const link = g.append("g")
-            .selectAll("line")
-            .data(data.links)
-            .join("line")
-            .attr("class", "link")
-            .attr("stroke", d => {
-                if (d.source.group !== undefined && d.source.group === d.target.group)
-                    return palette[d.source.group] || palette[d.source];
-                return "#30363d";
-            })
-            .attr("stroke-width", d => Math.sqrt(d.value) * 2.5);
+        const link = g.append("g")
+            .selectAll("line")
+            .data(data.links)
+            .join("line")
+            .attr("class", "link")
+            .attr("stroke", d => {
+                if (d.source.group !== undefined && d.source.group === d.target.group)
+                    return palette[d.source.group] || palette[d.source];
+                return "#30363d";
+            })
+            .attr("stroke-width", d => Math.sqrt(d.value) * 2.5);
 
-        const node = g.append("g")
-            .selectAll("circle")
-            .data(data.nodes)
-            .join("circle")
-            .attr("class", "node")
-            .attr("r", 7)
-            .attr("fill", d => color(d.group))
-            .attr("stroke", d => d3.color(color(d.group)).brighter(0.6))
-            .call(drag(simulation));
+        const node = g.append("g")
+            .selectAll("circle")
+            .data(data.nodes)
+            .join("circle")
+            .attr("class", "node")
+            .attr("r", 7)
+            .attr("fill", d => color(d.group))
+            .attr("stroke", d => d3.color(color(d.group)).brighter(0.6))
+            .call(drag(simulation));
 
-        const labels = g.append("g")
-            .selectAll("text")
-            .data(data.nodes)
-            .join("text")
-            .attr("class", "label")
-            .attr("dy", -12)
-            .text(d => d.id);
+        const labels = g.append("g")
+            .selectAll("text")
+            .data(data.nodes)
+            .join("text")
+            .attr("class", "label")
+            .attr("dy", -12)
+            .text(d => d.id);
 
-        const tooltip = d3.select("#tooltip");
-        node.on("mouseover", (event, d) => {
-            tooltip.style("opacity", 1)
-                .html(`<strong>${d.id}</strong><br>Community: ${communityNames[d.group]}`)
-                .style("left", (event.pageX + 12) + "px")
-                .style("top", (event.pageY - 24) + "px");
-            d3.select(event.currentTarget)
-                .transition().duration(150)
-                .attr("r", 11)
-                .attr("stroke", "#fff").attr("stroke-width", 2.5);
-        }).on("mousemove", (event) => {
-            tooltip.style("left", (event.pageX + 12) + "px")
-                .style("top", (event.pageY - 24) + "px");
-        }).on("mouseout", (event, d) => {
-            tooltip.style("opacity", 0);
-            d3.select(event.currentTarget)
-                .transition().duration(150)
-                .attr("r", 7)
-                .attr("stroke", d3.color(color(d.group)).brighter(0.6))
-                .attr("stroke-width", 1.5);
-        });
+        const tooltip = d3.select("#tooltip");
+        node.on("mouseover", (event, d) => {
+            tooltip.style("opacity", 1)
+                .html(`<strong>${d.id}</strong><br>Community: ${communityNames[d.group]}`)
+                .style("left", (event.pageX + 12) + "px")
+                .style("top", (event.pageY - 24) + "px");
+            d3.select(event.currentTarget)
+                .transition().duration(150)
+                .attr("r", 11)
+                .attr("stroke", "#fff").attr("stroke-width", 2.5);
+        }).on("mousemove", (event) => {
+            tooltip.style("left", (event.pageX + 12) + "px")
+                .style("top", (event.pageY - 24) + "px");
+        }).on("mouseout", (event, d) => {
+            tooltip.style("opacity", 0);
+            d3.select(event.currentTarget)
+                .transition().duration(150)
+                .attr("r", 7)
+                .attr("stroke", d3.color(color(d.group)).brighter(0.6))
+                .attr("stroke-width", 1.5);
+        });
 
-        simulation.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-            // Re-color intra-cluster links once source/target are resolved
-            link.attr("stroke", d => {
-                if (d.source.group === d.target.group) return palette[d.source.group];
-                return "#30363d";
-            });
-            node.attr("cx", d => d.x).attr("cy", d => d.y);
-            labels.attr("x", d => d.x).attr("y", d => d.y);
-        });
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+            // Re-color intra-cluster links once source/target are resolved
+            link.attr("stroke", d => {
+                if (d.source.group === d.target.group) return palette[d.source.group];
+                return "#30363d";
+            });
+            node.attr("cx", d => d.x).attr("cy", d => d.y);
+            labels.attr("x", d => d.x).attr("y", d => d.y);
+        });
 
-        function drag(simulation) {
-            return d3.drag()
-                .on("start", (event) => {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    event.subject.fx = event.subject.x;
-                    event.subject.fy = event.subject.y;
-                })
-                .on("drag", (event) => {
-                    event.subject.fx = event.x;
-                    event.subject.fy = event.y;
-                })
-                .on("end", (event) => {
-                    if (!event.active) simulation.alphaTarget(0);
-                    event.subject.fx = null;
-                    event.subject.fy = null;
-                });
-        }
+        function drag(simulation) {
+            return d3.drag()
+                .on("start", (event) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                })
+                .on("drag", (event) => {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                })
+                .on("end", (event) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                });
+        }
     </script>
 </body>
 </html>
