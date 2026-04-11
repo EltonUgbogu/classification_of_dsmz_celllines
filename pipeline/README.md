@@ -6,9 +6,9 @@ A portable, HPC-independent pipeline for pan-cancer clustering and tumour neighb
 
 ### Interactive Cell Line Similarity Network
 
-Explore the cell line communities visually — an interactive, force-directed graph showing DSMZ cell line similarity clusters detected via Leiden community detection:
+A conceptual demo illustrating how cell line similarity communities are visualised using a force-directed graph layout:
 
-**[View the Interactive Network](https://eltonugbogu.github.io/classification_of_dsmz_celllines/graph/)**
+**[View the Interactive Demo](https://eltonugbogu.github.io/classification_of_dsmz_celllines/graph/)**
 
 ## Quick Start
 
