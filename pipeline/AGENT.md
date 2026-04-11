@@ -67,7 +67,7 @@ pipeline/
 │   ├── build_dsmz_tcga_pam50matrix.R
 │   ├── comp_tumour_neighbourhoods.R
 │   ├── tumour_neighbourhood_p_consensus.R
-│   ├── compute_dsmz_dsmz_similarity.R
+│   ├── compute_cell_line_similarity.R
 │   ├── summarize_p_consensus_all.R
 │   └── tumour_neighbourhood_qc_umap.R
 ├── R/

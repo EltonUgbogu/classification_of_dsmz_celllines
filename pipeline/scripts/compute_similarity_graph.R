@@ -6,7 +6,7 @@
 # PURPOSE:
 # Standalone helper to compute sample-sample similarity matrices and kNN
 # graphs from an expression matrix (genes × samples). The main Snakefile uses
-# the legacy compute_dsmz_dsmz_similarity.R; this script is optional and not
+# the legacy compute_cell_line_similarity.R; this script is optional and not
 # invoked automatically. Use it if you want to prototype alternative
 # similarity graphs (e.g., on a specific feature-set expression matrix) and
 # then feed those outputs into downstream exploration/visualisation steps.

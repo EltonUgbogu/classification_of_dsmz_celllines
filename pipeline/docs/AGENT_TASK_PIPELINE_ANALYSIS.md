@@ -147,7 +147,7 @@ snakemake consensus_all_directions \
 
 ## STEP 4: DSMZ–DSMZ similarity graph
 
-- **Script:** `scripts/compute_dsmz_dsmz_similarity.R`
+- **Script:** `scripts/compute_cell_line_similarity.R`
 - **Snakemake rule:** `dsmz_dsmz_similarity_graph` (one per direction).
 - **Inputs:** `Final_consensus_tumour_neighbourhoods_<direction>.rds` (and config/profile).
 - **Outputs:**  
@@ -250,7 +250,7 @@ This will:
 | `consensus_ccp_cell_tumour.R` | STEP 2: CCP consensus |
 | `comp_tumour_neighbourhoods.R` | STEP 3b: tumour neighbourhoods |
 | `tumour_neighbourhood_p_consensus.R` | STEP 3c: p-consensus |
-| `compute_dsmz_dsmz_similarity.R` | STEP 4: DSMZ–DSMZ graphs |
+| `compute_cell_line_similarity.R` | STEP 4: DSMZ–DSMZ graphs |
 | `summarize_p_consensus_all.R` | STEP 5: cross-direction summary |
 | `tumour_neighbourhood_qc_umap*.R` | STEP 6: QC/UMAP |
 | `characterize_clusters.R`, `compute_representativeness_score.R` | Layer 3: characterisation |

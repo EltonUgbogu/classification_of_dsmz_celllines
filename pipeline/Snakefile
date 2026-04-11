@@ -1778,7 +1778,7 @@ rule dsmz_dsmz_similarity_graph:
         graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
         graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
     params:
-        script = os.path.join(BASE, "scripts", "compute_dsmz_dsmz_similarity.R"),
+        script = os.path.join(BASE, "scripts", "compute_cell_line_similarity.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "dsmz_dsmz_similarity_graph_{direction}.log")
     conda: CONDA_ENV_R

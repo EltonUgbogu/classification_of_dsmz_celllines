@@ -1512,7 +1512,7 @@ rule dsmz_dsmz_similarity_graph:
         graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
         graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
     params:
-        script = os.path.join(BASE, "scripts", "compute_dsmz_dsmz_similarity.R"),
+        script = os.path.join(BASE, "scripts", "compute_cell_line_similarity.R"),
         config = os.path.join(BASE, "config", "config.yaml")
     log: os.path.join(LOGROOT, "dsmz_dsmz_similarity_graph_{direction}.log")
     conda: CONDA_ENV_R
@@ -2319,7 +2319,7 @@ rule tumour_neighbourhood_p_consensus_pan_featureset:
         '''
 
 # Pan-cancer DSMZ-DSMZ graphs from p-consensus (global + within)
-# Uses patched compute_dsmz_dsmz_similarity.R with pan-cancer support
+# Uses patched compute_cell_line_similarity.R with pan-cancer support
 def pan_pcons_tsv(wc):
     """Helper: path to pan-cancer p-consensus TSV for a direction"""
     return os.path.join(
@@ -2356,7 +2356,7 @@ rule pan_cancer_dsmz_dsmz_graph:
         set -euo pipefail
         mkdir -p "$(dirname "{output.edges_tsv}")" "$(dirname "{log}")"
 
-        Rscript "{SCRIPTS_DIR}/compute_dsmz_dsmz_similarity.R" \
+        Rscript "{SCRIPTS_DIR}/compute_cell_line_similarity.R" \
           --config "{input.cfg}" \
           --profile "{profile_name}" \
           --direction "{wildcards.direction}" \
