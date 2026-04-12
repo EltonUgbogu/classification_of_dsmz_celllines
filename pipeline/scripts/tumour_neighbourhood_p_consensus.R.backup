@@ -219,9 +219,9 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
     # Many-to-many is expected: multiple cell lines and tumours can share a cluster
     cell_clust %>%
       inner_join(tumour_clust, by = "cluster", suffix = c("_cell", "_tumour"), relationship = "many-to-many") %>%
-      select(cell_line = sample_id_cell, tumor_id = sample_id_tumour, cluster) %>%
+      select(cell_line = sample_id_cell, tumour_id = sample_id_tumour, cluster) %>%
       mutate(method = method_name, in_top = TRUE) %>%
-      select(cell_line, tumor_id, method, in_top)
+      select(cell_line, tumour_id, method, in_top)
   }
   
   nh_hc <- compute_neighbourhoods(hc_clusters, "ccp_hc_expr_cell_tumour")
@@ -232,7 +232,7 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
   # Compute p_consensus
   consensus_pairs <- all_long %>%
     filter(in_top) %>%
-    count(cell_line, tumor_id, name = "n_methods") %>%
+    count(cell_line, tumour_id, name = "n_methods") %>%
     mutate(p_consensus = n_methods / n_methods_total) %>%
     arrange(cell_line, desc(p_consensus))
   
@@ -310,7 +310,7 @@ neigh_list <- methods_tbl %>%
         mutate(method = .y) %>%
         # core columns first; keep extras if present (rank, distance, etc.)
         select(
-          method, cell_line, tumor_id, in_top,
+          method, cell_line, tumour_id, in_top,
           any_of(c("rank", "distance")),
           everything()
         ) %>%
@@ -334,7 +334,7 @@ all_long %>%
 # ==============================================================================
 consensus_pairs <- all_long %>%
   filter(in_top) %>%                           # only tumours in top-m neighbourhoods
-  count(cell_line, tumor_id, name = "n_methods") %>%
+  count(cell_line, tumour_id, name = "n_methods") %>%
   mutate(
     p_consensus = n_methods / n_methods_total
   ) %>%

@@ -214,10 +214,10 @@ for (prof in profiles) {
     if (length(top_m_files) > 0) {
       for (f in top_m_files) {
         top_m <- read_csv(f, show_col_types = FALSE)
-        # Top_m_long files have column: tumor_id (American spelling) or variants
+        # Top_m_long files should expose tumour_id (British spelling) but handle legacy variants
         # Look for tumour/tumor ID column with priority order
         tumour_col <- NULL
-        col_priority <- c("tumor_id", "tumour_id", "tumor", "tumour", "sample_id", "tumour_sample_id")
+        col_priority <- c("tumour_id", "tumor_id", "tumor", "tumour", "sample_id", "tumour_sample_id")
         
         # First try exact matches (case-insensitive)
         for (priority_col in col_priority) {

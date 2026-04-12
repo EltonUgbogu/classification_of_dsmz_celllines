@@ -866,7 +866,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   # Results are saved in multiple formats:
   #   - RDS: Native R format for efficient programmatic access
   #   - CSV: Human-readable format for inspection and external tools
-  # TARGET-style output: minimal schema (method, cell_line, tumor_id, rank, distance, in_top, cluster).
+  # TARGET-style output: minimal schema (method, cell_line, tumour_id, rank, distance, in_top, cluster).
 
   # Ensure long_df has a cell identifier column
   if (!"cell_tech_id" %in% colnames(res$long_df)) {
@@ -888,7 +888,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
     dplyr::mutate(
       cell_line = dplyr::coalesce(orig_to_cell[cell_tech_id], sub("^CELL:", "", cell_tech_id), cell_tech_id)
     ) %>%
-    dplyr::select(method, cell_line, tumor_id, rank, distance, in_top, cluster)
+    dplyr::select(method, cell_line, tumour_id, rank, distance, in_top, cluster)
 
   nh_rds   <- file.path(outdir, paste0("Top_m_neighbourhoods_", method_id, ".rds"))
   long_rds <- file.path(outdir, paste0("Top_m_long_", method_id, ".rds"))

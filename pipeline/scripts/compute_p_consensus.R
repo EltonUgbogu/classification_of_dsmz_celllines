@@ -71,7 +71,7 @@ cat("[INFO] tumour_neighbourhoods base_dir: ", base_dir, "\n", sep = "")
 # ------------------------------------------------------------------------------
 # 1) Define the 10 clustering methods contributing to consensus
 # ------------------------------------------------------------------------------
-# Each method produces a neighbourhood file containing (cell_line, tumor_id,
+# Each method produces a neighbourhood file containing (cell_line, tumour_id,
 # in_top) tuples indicating which tumours are in the top neighbourhood.
 
 methods_tbl <- tibble::tribble(
@@ -107,7 +107,17 @@ neigh_list <- methods_tbl %>%
       }
       read_csv(.x, show_col_types = FALSE) %>%
         mutate(method = .y) %>%
-        select(method, cell_line, tumor_id, in_top, rank, distance, everything()) %>%
+        {df <- .
+         if (!"tumour_id" %in% names(df)) {
+           if ("tumor_id" %in% names(df)) {
+             df <- df %>% rename(tumour_id = tumor_id)
+           } else {
+             stop("Neighbourhood file missing tumour_id column: ", .x)
+           }
+         }
+         df
+        } %>%
+        select(method, cell_line, tumour_id, in_top, rank, distance, everything()) %>%
         select(-any_of(c("cluster", "cluster_id", "cluster_label", "subtype")))
     })
   )
@@ -131,7 +141,7 @@ all_long %>%
 
 consensus_pairs <- all_long %>%
   filter(in_top) %>%
-  count(cell_line, tumor_id, name = "n_methods") %>%
+  count(cell_line, tumour_id, name = "n_methods") %>%
   mutate(p_consensus = n_methods / n_methods_total) %>%
   arrange(cell_line, desc(p_consensus))
 

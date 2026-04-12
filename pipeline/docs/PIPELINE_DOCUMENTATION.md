@@ -406,7 +406,7 @@
 # 10.1 Tumour Neighbourhood Results
 #
 # Final_consensus_tumour_neighbourhoods_{direction}.tsv
-# - Columns: cell_line, tumor_id, p_consensus
+# - Columns: cell_line, tumour_id, p_consensus
 # - Interpretation: Higher p_consensus indicates stronger cell line-tumour
 #   relationship
 #

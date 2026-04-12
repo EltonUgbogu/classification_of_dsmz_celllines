@@ -2,14 +2,6 @@
 
 A portable, HPC-independent pipeline for pan-cancer clustering and tumour neighbourhood analysis.
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Interactive_Graph-2ca02c?style=for-the-badge)](https://eltonugbogu.github.io/classification_of_dsmz_celllines/graph/)
-
-### Interactive Cell Line Similarity Network
-
-A conceptual demo illustrating how cell line similarity communities are visualised using a force-directed graph layout:
-
-**[View the Interactive Demo](https://eltonugbogu.github.io/classification_of_dsmz_celllines/graph/)**
-
 ## Quick Start
 
 ### Prerequisites
@@ -33,7 +25,6 @@ conda activate smk
 ### Running the Pipeline
 
 **Basic usage:**
-
 ```bash
 # Local execution (laptop/single machine)
 ./run_pipeline.sh --profile brca --executor local --cores 8
@@ -47,7 +38,6 @@ conda activate smk
 
 **Available profiles:**
 Valid profiles are the keys under `profiles:` in `config/config.yaml`:
-
 - `brca` - Breast cancer analysis
 - `nbl` - Neuroblastoma analysis  
 - `rbl` - Retinoblastoma analysis
@@ -55,7 +45,6 @@ Valid profiles are the keys under `profiles:` in `config/config.yaml`:
 *(The runner will list available profiles if you omit `--profile`)*
 
 **Available executors:**
-
 - `local` - Run on local machine (uses `--cores`)
 - `slurm` - Submit to Slurm cluster (uses `--jobs`)
 
@@ -75,7 +64,6 @@ The multicohort benchmark combines data from multiple disease profiles. **You do
 ```
 
 **Important:** 
-
 - `--profile brca` (or any profile) is still required - it sets log paths and config resolution
 - Multicohort **profiles included** come from `config.multicohort_cancer.profiles` (default: `["brca", "nbl", "rbl", "heme"]`)
 - Multicohort outputs go to `results/multicohort_cancer_benchmark/` (not profile-specific)
@@ -118,7 +106,6 @@ snakemake -n --config pipeline_profile=multicohort_cancer
 The helper script is idempotent and will skip any real inputs that already exist.
 
 **To override which profiles are included** (without editing config):
-
 ```bash
 ./run_pipeline.sh --profile brca --executor local --cores 8 \
   --config "pan_cancer_profiles=['brca','rbl']" \
@@ -128,7 +115,6 @@ The helper script is idempotent and will skip any real inputs that already exist
 ### Smoke Test
 
 Validate your setup with a quick smoke test:
-
 ```bash
 ./run_pipeline.sh --profile brca --executor local --cores 2 smoke_test
 ```
@@ -158,7 +144,6 @@ pipeline/
 ### Profile Selection
 
 Profiles are selected via `--config pipeline_profile=<name>`:
-
 - **Required**: Always specify `--profile <name>` when running
 - **No defaults**: Pipeline will fail with clear error if missing
 - **Available**: `brca`, `nbl`, `rbl`
@@ -166,7 +151,6 @@ Profiles are selected via `--config pipeline_profile=<name>`:
 ### Paths
 
 All paths in `config/config.yaml` are **relative** to the pipeline root:
-
 - Inputs: `data/...`
 - Outputs: `results/...`
 - Logs: `logs/...`
@@ -176,7 +160,6 @@ The pipeline automatically converts these to absolute paths internally.
 ### Pan-Cancer Analysis
 
 Pan-cancer analysis combines data from multiple profiles:
-
 - Configured in `config/config.yaml` under `pan_cancer:`
 - Uses `cosine`/`euclidean` distance metrics (not `euc`/`corr`)
 - Excludes PCA by default (`disable_pca_everywhere: true`)
@@ -186,7 +169,6 @@ Pan-cancer analysis combines data from multiple profiles:
 ### Local Profile (`profiles/local/`)
 
 For running on a single machine:
-
 - Uses `--cores` for parallelization
 - Default: 8 cores (auto-detected from system)
 - Resources: 4GB RAM, 60min runtime per job
@@ -194,7 +176,6 @@ For running on a single machine:
 ### Slurm Profile (`profiles/slurm/`)
 
 For HPC clusters:
-
 - Uses `--jobs` for concurrent job submission
 - Default: 200 jobs
 - Resources: Configurable per rule
@@ -205,7 +186,6 @@ For HPC clusters:
 ### "Profile not found" error
 
 Ensure you're using `--profile <name>` and the profile exists in `config/config.yaml`:
-
 ```bash
 grep -E "^  [a-z]+:" config/config.yaml
 ```
@@ -213,7 +193,6 @@ grep -E "^  [a-z]+:" config/config.yaml
 ### "Missing pipeline_profile" error
 
 Always specify `--profile`:
-
 ```bash
 ./run_pipeline.sh --profile brca --executor local --cores 8
 ```
@@ -221,7 +200,6 @@ Always specify `--profile`:
 ### Conda environment issues
 
 The pipeline uses conda environments automatically. If you see conda errors:
-
 1. Ensure conda is in your PATH
 2. Activate the `smk` environment: `conda activate smk`
 3. Check that `--use-conda` is enabled (default)
@@ -229,7 +207,6 @@ The pipeline uses conda environments automatically. If you see conda errors:
 ### Path issues
 
 All paths are relative to the pipeline root. If you see "file not found" errors:
-
 1. Ensure you're running from the pipeline root directory
 2. Check that `config/config.yaml` paths are correct
 3. Verify input files exist in `data/...`
@@ -239,7 +216,6 @@ All paths are relative to the pipeline root. If you see "file not found" errors:
 ### Adding a New Profile
 
 1. Add profile section to `config/config.yaml`:
-
 ```yaml
 profiles:
   new_profile:
@@ -250,8 +226,7 @@ profiles:
       # ... other paths
 ```
 
-1. Test with smoke test:
-
+2. Test with smoke test:
 ```bash
 ./run_pipeline.sh --profile new_profile --executor local --cores 2 smoke_test
 ```
@@ -259,7 +234,6 @@ profiles:
 ### Adding a New Rule
 
 Follow the standard pattern:
-
 ```python
 rule my_new_rule:
     input: ...
