@@ -161,7 +161,7 @@ if (!is.null(opt$pan_outdir) && nzchar(opt$pan_outdir)) {
 plot_dir <- file.path(out_base, "plots")
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
 
-cat("=== DSMZ-DSMZ similarity from p_consensus ===\n")
+cat("=== Cell-line similarity from p_consensus ===\n")
 cat("Using config file:\n  ", opt$config, "\n")
 cat("Direction: ", direction, "\n", sep = "")
 cat("Input consensus file:\n  ", in_rds, "\n")
@@ -319,15 +319,15 @@ print(dim(mat))
 
 sim_mat <- cor(t(mat), method = "pearson", use = "pairwise.complete.obs")
 
-cat("\nSimilarity matrix dimensions (DSMZ x DSMZ):\n")
+cat("\nSimilarity matrix dimensions (cell line x cell line):\n")
 print(dim(sim_mat))
 
 # ------------------------------------------------------------------------------
 # SECTION 3: EXPORT SIMILARITY DATA
 # ------------------------------------------------------------------------------
 
-out_rds_mat  <- file.path(out_base, sprintf("DSMZ_DSMZ_similarity_matrix_%s.rds", direction))
-out_tsv_long <- file.path(out_base, sprintf("DSMZ_DSMZ_similarity_pairs_%s.tsv", direction))
+out_rds_mat  <- file.path(out_base, sprintf("cell_line_similarity_matrix_%s.rds", direction))
+out_tsv_long <- file.path(out_base, sprintf("cell_line_similarity_pairs_%s.tsv", direction))
 
 saveRDS(sim_mat, out_rds_mat)
 
@@ -341,8 +341,8 @@ sim_long <- as.data.frame(as.table(sim_mat)) %>%
 
 readr::write_tsv(sim_long, out_tsv_long)
 
-cat("\nSaved DSMZ-DSMZ similarity matrix to:\n  ", out_rds_mat, "\n")
-cat("Saved DSMZ-DSMZ pairwise similarities to:\n  ", out_tsv_long, "\n")
+cat("\nSaved cell-line similarity matrix to:\n  ", out_rds_mat, "\n")
+cat("Saved cell-line similarity pairs to:\n  ", out_tsv_long, "\n")
 
 # ------------------------------------------------------------------------------
 # SECTION 3B: DATA-DRIVEN EDGE THRESHOLD
@@ -352,10 +352,10 @@ cat("Saved DSMZ-DSMZ pairwise similarities to:\n  ", out_tsv_long, "\n")
 # that only the strongest associations are represented as edges, while
 # adapting to the specific distribution of the data.
 
-cat("\n=== DSMZ-DSMZ similarity summary ===\n")
+cat("\n=== Cell-line similarity summary ===\n")
 print(summary(sim_long$similarity))
 
-cat("\nTop 10 highest DSMZ-DSMZ similarities:\n")
+cat("\nTop 10 highest cell-line similarities:\n")
 sim_long %>% arrange(desc(similarity)) %>% slice(1:10) %>% print()
 
 cat("\nCount of pairs by threshold (0.7):\n")
@@ -373,7 +373,7 @@ cat("\nData-driven edge threshold (90th percentile):", edge_threshold, "\n")
 #   - The appropriateness of the chosen edge threshold
 #   - Potential outliers or bimodal structure
 
-hist_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_similarity_histogram_%s.pdf", direction))
+hist_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_histogram_%s.pdf", direction))
 
 p_hist <- ggplot(sim_long, aes(x = similarity)) +
   # geom_histogram() creates the histogram
@@ -385,10 +385,10 @@ p_hist <- ggplot(sim_long, aes(x = similarity)) +
   coord_cartesian(xlim = c(-1, 1)) +
   theme_minimal(base_size = 14) +
   labs(
-    title    = sprintf("Distribution of DSMZ-DSMZ similarity (%s)", direction),
+    title    = sprintf("Distribution of cell-line similarity (%s)", direction),
     subtitle = "Pearson correlation of tumour neighbourhood p_consensus(c, t)",
     x = "Similarity (Pearson r)",
-    y = "Number of DSMZ-DSMZ pairs"
+    y = "Number of cell-line pairs"
   ) +
   theme(plot.title = element_text(face = "bold"), panel.grid.minor = element_blank())
 
@@ -572,7 +572,7 @@ canonicalize_ids <- function(ids, name_map = NULL) {
 # This representation enables network analysis techniques such as community
 # detection to identify groups of functionally related cell lines.
 
-edges_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_edges_%s.tsv", direction))
+edges_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_edges_%s.tsv", direction))
 
 # Decide cross-disease flag threshold
 flag_thr <- if (!is.na(opt$cross_threshold)) opt$cross_threshold else edge_threshold
@@ -585,7 +585,7 @@ graph_edges <- sim_long %>%
 
 # Handle edge case of no edges above threshold
 if (nrow(graph_edges) == 0) {
-  cat("\n[WARN] No DSMZ-DSMZ pairs with similarity >= ", edge_threshold, ".\n", sep = "")
+  cat("\n[WARN] No cell-line pairs with similarity >= ", edge_threshold, ".\n", sep = "")
   cat("Skipping graph construction.\n")
   readr::write_tsv(graph_edges, edges_tsv)
   quit(save = "no", status = 0)
@@ -655,11 +655,11 @@ if (!is.null(cell_disease_map)) {
     left_join(cell_disease_map, by = "cell_line")
 }
 
-nodes_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_node_summary_%s.tsv", direction))
+nodes_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_node_summary_%s.tsv", direction))
 readr::write_tsv(node_summary, nodes_tsv)
 cat("Node summary saved to:\n  ", nodes_tsv, "\n")
 
-isolates_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_isolates_%s.tsv", direction))
+isolates_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_isolates_%s.tsv", direction))
 readr::write_tsv(node_summary %>% filter(degree == 0) %>% arrange(cell_line), isolates_tsv)
 cat("[INFO] Isolates saved to:\n  ", isolates_tsv, "\n", sep = "")
 
@@ -677,10 +677,10 @@ cat("[INFO] Isolates saved to:\n  ", isolates_tsv, "\n", sep = "")
 # An improved version of Louvain that guarantees well-connected communities.
 # Generally preferred for biological networks.
 
-nodes_annot_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_node_annotations_%s.tsv", direction))
-comm_summary_tsv <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_community_summary_%s.tsv", direction))
+nodes_annot_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_node_annotations_%s.tsv", direction))
+comm_summary_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_community_summary_%s.tsv", direction))
 
-cat("\n=== Building DSMZ-DSMZ graph ===\n")
+cat("\n=== Building cell-line similarity graph ===\n")
 
 # tbl_graph() creates a tidygraph object from nodes and edges data frames
 graph_tbl <- tidygraph::tbl_graph(
@@ -805,14 +805,14 @@ comm_table <- table(
 )
 
 comm_table_tsv <- file.path(out_base,
-  sprintf("DSMZ_DSMZ_Louvain_vs_Leiden_community_table_%s.tsv", direction))
+  sprintf("cell_line_similarity_louvain_vs_leiden_community_table_%s.tsv", direction))
 readr::write_tsv(as.data.frame(comm_table), comm_table_tsv)
 cat("Louvain vs Leiden contingency table saved to:\n  ", comm_table_tsv, "\n")
 
 # Create heatmap of community overlap
 comm_mat <- as.matrix(comm_table)
 heatmap_pdf <- file.path(plot_dir,
-  sprintf("Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_%s.pdf", direction))
+  sprintf("Fig_cell_line_similarity_Louvain_vs_Leiden_heatmap_%s.pdf", direction))
 
 if (all(dim(comm_mat) > 0)) {
   pdf(heatmap_pdf, width = 7, height = 6)
@@ -841,9 +841,9 @@ subtitle_txt <- sprintf(
   edge_threshold, n_nodes, n_edges, n_iso, 100 * n_iso / n_nodes
 )
 
-graph_leiden_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_graph_Leiden_%s.pdf", direction))
-graph_louvain_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_graph_Louvain_%s.pdf", direction))
-graph_minimal_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_DSMZ_graph_minimal_%s.pdf", direction))
+graph_leiden_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_Leiden_%s.pdf", direction))
+graph_louvain_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_Louvain_%s.pdf", direction))
+graph_minimal_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_minimal_%s.pdf", direction))
 
 # Set seed for reproducible layout
 set.seed(123)
@@ -867,7 +867,7 @@ p_graph_leiden <- ggraph(graph_tbl, layout = "fr") +
   theme_void(base_size = 14) +
   theme(legend.position = "right", plot.title = element_text(face = "bold")) +
   labs(
-    title = sprintf("DSMZ-DSMZ similarity graph (Leiden, %s)", direction),
+    title = sprintf("Cell-line similarity graph (Leiden, %s)", direction),
     subtitle = subtitle_txt
   )
 
@@ -888,7 +888,7 @@ p_graph_louvain <- ggraph(graph_tbl, layout = "fr") +
   theme_void(base_size = 14) +
   theme(legend.position = "right", plot.title = element_text(face = "bold")) +
   labs(
-    title = sprintf("DSMZ-DSMZ similarity graph (Louvain, %s)", direction),
+    title = sprintf("Cell-line similarity graph (Louvain, %s)", direction),
     subtitle = subtitle_txt
   )
 
@@ -907,7 +907,7 @@ p_graph_minimal <- ggraph(graph_tbl, layout = "fr") +
   scale_edge_alpha(range = c(0.2, 0.9)) +
   theme_void(base_size = 12) +
   labs(
-    title = sprintf("DSMZ-DSMZ similarity graph (minimal, %s)", direction),
+    title = sprintf("Cell-line similarity graph (minimal, %s)", direction),
     subtitle = subtitle_txt
   )
 
@@ -930,8 +930,8 @@ if ("community_leid" %in% vertex_attr_names(ig_graphml)) {
   V(ig_graphml)$community_leid <- as.numeric(as.character(V(ig_graphml)$community_leid))
 }
 
-graphml_path <- file.path(out_base, sprintf("DSMZ_DSMZ_graph_%s.graphml", direction))
+graphml_path <- file.path(out_base, sprintf("cell_line_similarity_graph_%s.graphml", direction))
 igraph::write_graph(ig_graphml, graphml_path, format = "graphml")
 cat("\nGraphML saved to:\n  ", graphml_path, "\n")
 
-cat("\n=== Done: DSMZ-DSMZ graph from p_consensus (", direction, ") ===\n", sep = "")
+cat("\n=== Done: Cell-line similarity graph from p_consensus (", direction, ") ===\n", sep = "")
