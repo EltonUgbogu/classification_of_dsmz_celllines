@@ -1758,29 +1758,29 @@ rule tumour_nh_consensus_featureset:
           > {log} 2>&1
         '''
 
-# STEP 4: DSMZ-DSMZ Similarity Graph
+# STEP 4: Cell-line Similarity Graph
 
 rule dsmz_dsmz_similarity_graph:
     input:
         consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction)
     output:
-        sim_mat_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_similarity_matrix_{direction}.rds"),
-        sim_pairs_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_similarity_pairs_{direction}.tsv"),
-        edges_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_edges_{direction}.tsv"),
-        nodes_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_summary_{direction}.tsv"),
-        nodes_annot = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
-        comm_summary = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_graph_community_summary_{direction}.tsv"),
-        comm_table = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "DSMZ_DSMZ_Louvain_vs_Leiden_community_table_{direction}.tsv"),
-        hist_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_similarity_histogram_{direction}.pdf"),
+        sim_mat_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_matrix_{direction}.rds"),
+        sim_pairs_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_pairs_{direction}.tsv"),
+        edges_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_graph_edges_{direction}.tsv"),
+        nodes_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_graph_node_summary_{direction}.tsv"),
+        nodes_annot = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_graph_node_annotations_{direction}.tsv"),
+        comm_summary = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_graph_community_summary_{direction}.tsv"),
+        comm_table = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "cell_line_similarity_louvain_vs_leiden_community_table_{direction}.tsv"),
+        hist_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_cell_line_similarity_histogram_{direction}.pdf"),
         scatter_pdf = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_p_consensus_cell_scatter_{direction}.pdf"),
-        comm_heatmap = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_Louvain_vs_Leiden_heatmap_{direction}.pdf"),
-        graph_leiden = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_Leiden_{direction}.pdf"),
-        graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_Louvain_{direction}.pdf"),
-        graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_DSMZ_DSMZ_graph_minimal_{direction}.pdf")
+        comm_heatmap = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_cell_line_similarity_Louvain_vs_Leiden_heatmap_{direction}.pdf"),
+        graph_leiden = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_cell_line_similarity_graph_Leiden_{direction}.pdf"),
+        graph_louvain = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_cell_line_similarity_graph_Louvain_{direction}.pdf"),
+        graph_minimal = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "plots", "Fig_cell_line_similarity_graph_minimal_{direction}.pdf")
     params:
         script = os.path.join(BASE, "scripts", "compute_cell_line_similarity.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "dsmz_dsmz_similarity_graph_{direction}.log")
+    log: os.path.join(LOGROOT, "cell_line_similarity_graph_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
         direction=AGN_DIRECTION_PATTERN
@@ -1854,7 +1854,7 @@ rule resolve_dsmz_graph_neighbors:
         dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
         graph_edges     = expand(
             os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
-                         "DSMZ_DSMZ_graph_edges_{direction}.tsv"),
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
             direction=CONS_DIRECTIONS
         )
     output:
@@ -1920,7 +1920,7 @@ if DESEQ2_ENABLED:
             dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
             node_annots     = expand(
                 os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
-                             "DSMZ_DSMZ_graph_node_annotations_{direction}.tsv"),
+                             "cell_line_similarity_graph_node_annotations_{direction}.tsv"),
                 direction=CONS_DIRECTIONS
             )
         output:
@@ -1935,7 +1935,7 @@ if DESEQ2_ENABLED:
             best_dir <- dir_sum[order(-dir_sum$frac_ge_thr), ][1, "direction", drop = TRUE]
             cat("Best overall direction:", best_dir, "\n")
             annot_path <- file.path("{TUMOUR_NH_ROOT_ABS}", best_dir, "final_consensus",
-                                    paste0("DSMZ_DSMZ_graph_node_annotations_", best_dir, ".tsv"))
+                                    paste0("cell_line_similarity_graph_node_annotations_", best_dir, ".tsv"))
             annot <- read_tsv(annot_path, show_col_types = FALSE)
             out <- data.frame(
                 cell_line      = annot$cell_line,

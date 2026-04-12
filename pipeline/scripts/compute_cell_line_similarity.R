@@ -63,7 +63,7 @@ option_list <- list(
   make_option("--cross_threshold", type = "double", default = NA,
               help = "Threshold for flagging cross-disease edges (overrides percentile threshold if set)"),
   make_option("--pan_outdir", type = "character", default = NULL,
-              help = "Pan-cancer output directory (PAN_OUTDIR). If set, write outputs under <pan_outdir>/graphs/dsmz_dsmz/<mode>/<direction>/"),
+              help = "Pan-cancer output directory (PAN_OUTDIR). If set, write outputs under <pan_outdir>/graphs/cell_line_similarity/<mode>/<direction>/"),
   make_option("--name_map", type = "character", default = NULL,
               help = "Path to TSV mapping file with columns: long_id, short_id (for canonicalizing cell line IDs)"),
   make_option("--require_short", action = "store_true", default = FALSE,
@@ -143,7 +143,7 @@ if (!is.null(opt$pan_outdir) && nzchar(opt$pan_outdir)) {
   # Pan-cancer: input is under pan_outdir/unsupervised/tumour_neighbourhoods/{direction}/final_consensus/
   pan_cons_dir <- file.path(opt$pan_outdir, "unsupervised", "tumour_neighbourhoods", direction, "final_consensus")
   in_rds <- file.path(pan_cons_dir, sprintf("Final_consensus_tumour_neighbourhoods_%s.rds", direction))
-  out_base <- file.path(opt$pan_outdir, "graphs", "dsmz_dsmz", opt$mode, direction)
+  out_base <- file.path(opt$pan_outdir, "graphs", "cell_line_similarity", opt$mode, direction)
   dir.create(out_base, recursive = TRUE, showWarnings = FALSE)
   cat("[INFO] Pan-cancer mode:\n", sep = "")
   cat("[INFO]   Input consensus dir: ", pan_cons_dir, "\n", sep = "")
@@ -405,7 +405,7 @@ cat("\nHistogram saved to:\n  ", hist_pdf, "\n")
 scatter_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_p_consensus_cell_scatter_%s.pdf", direction))
 
 # Compute summary statistics per cell line
-per_cell <- consensus_pairs %>%
+per_cell <- cp %>%
   group_by(cell_line) %>%
   summarise(
     max_p_consensus = max(p_consensus, na.rm = TRUE),
@@ -586,8 +586,110 @@ graph_edges <- sim_long %>%
 # Handle edge case of no edges above threshold
 if (nrow(graph_edges) == 0) {
   cat("\n[WARN] No cell-line pairs with similarity >= ", edge_threshold, ".\n", sep = "")
-  cat("Skipping graph construction.\n")
-  readr::write_tsv(graph_edges, edges_tsv)
+  cat("[INFO] Writing placeholder outputs for reporting consistency.\n")
+
+  placeholder_edges <- tibble(
+    cell_line1 = character(),
+    cell_line2 = character(),
+    similarity = numeric()
+  )
+  readr::write_tsv(placeholder_edges, edges_tsv)
+
+  all_cell_lines <- rownames(sim_mat)
+  if (!is.null(opt$name_map) && nzchar(opt$name_map)) {
+    all_cell_lines <- canonicalize_ids(all_cell_lines, opt$name_map)
+  }
+  all_cell_lines <- sort(all_cell_lines)
+
+  node_summary <- tibble(
+    cell_line = all_cell_lines,
+    degree = 0L,
+    mean_edge_sim = NA_real_,
+    max_edge_sim = NA_real_,
+    is_outlier = TRUE
+  )
+  if (!is.null(cell_disease_map)) {
+    node_summary <- node_summary %>%
+      left_join(cell_disease_map, by = "cell_line")
+  }
+
+  nodes_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_node_summary_%s.tsv", direction))
+  readr::write_tsv(node_summary, nodes_tsv)
+  cat("Node summary saved to:\n  ", nodes_tsv, "\n")
+
+  isolates_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_isolates_%s.tsv", direction))
+  readr::write_tsv(node_summary %>% arrange(cell_line), isolates_tsv)
+  cat("[INFO] Isolates saved to:\n  ", isolates_tsv, "\n", sep = "")
+
+  nodes_annot_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_node_annotations_%s.tsv", direction))
+  node_annotations <- node_summary %>%
+    transmute(
+      cell_line,
+      degree,
+      betweenness = 0,
+      component = cell_line,
+      community_louv = NA_character_,
+      community_leid = NA_character_,
+      mean_edge_sim,
+      max_edge_sim,
+      is_outlier
+    )
+  readr::write_tsv(node_annotations, nodes_annot_tsv)
+  cat("Node annotations saved to:\n  ", nodes_annot_tsv, "\n")
+
+  comm_summary_tsv <- file.path(out_base, sprintf("cell_line_similarity_graph_community_summary_%s.tsv", direction))
+  readr::write_tsv(
+    tibble(
+      community_leiden = character(),
+      n_members = integer(),
+      members = character(),
+      mean_degree = numeric(),
+      mean_mean_edge_sim = numeric()
+    ),
+    comm_summary_tsv
+  )
+  cat("Community summary saved to:\n  ", comm_summary_tsv, "\n")
+
+  comm_table_tsv <- file.path(out_base, sprintf("cell_line_similarity_louvain_vs_leiden_community_table_%s.tsv", direction))
+  readr::write_tsv(
+    tibble(Louvain = character(), Leiden = character(), Freq = integer()),
+    comm_table_tsv
+  )
+  cat("Louvain vs Leiden contingency table saved to:\n  ", comm_table_tsv, "\n")
+
+  heatmap_pdf <- file.path(plot_dir,
+    sprintf("Fig_cell_line_similarity_Louvain_vs_Leiden_heatmap_%s.pdf", direction))
+  pdf(heatmap_pdf, width = 7, height = 6)
+  plot.new()
+  text(0.5, 0.6, "No cell-line similarity edges", cex = 1.2, font = 2)
+  text(0.5, 0.4, sprintf("Direction: %s", direction), cex = 0.9)
+  dev.off()
+  cat("Community overlap heatmap saved to:\n  ", heatmap_pdf, "\n")
+
+  placeholder_plot <- function(path, title) {
+    pdf(path, width = 8, height = 6)
+    plot.new()
+    text(0.5, 0.6, title, cex = 1.2, font = 2)
+    text(0.5, 0.4, sprintf("No edges (Pearson r >= %.3f)", edge_threshold), cex = 0.9)
+    dev.off()
+  }
+
+  graph_leiden_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_Leiden_%s.pdf", direction))
+  graph_louvain_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_Louvain_%s.pdf", direction))
+  graph_minimal_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_minimal_%s.pdf", direction))
+
+  placeholder_plot(graph_leiden_pdf, sprintf("Cell-line similarity graph (Leiden, %s)", direction))
+  placeholder_plot(graph_louvain_pdf, sprintf("Cell-line similarity graph (Louvain, %s)", direction))
+  placeholder_plot(graph_minimal_pdf, sprintf("Cell-line similarity graph (minimal, %s)", direction))
+
+  graphml_path <- file.path(out_base, sprintf("cell_line_similarity_graph_%s.graphml", direction))
+  empty_graph <- igraph::make_empty_graph(n = length(all_cell_lines), directed = FALSE)
+  if (length(all_cell_lines) > 0) {
+    igraph::V(empty_graph)$name <- all_cell_lines
+  }
+  igraph::write_graph(empty_graph, graphml_path, format = "graphml")
+  cat("\nGraphML saved to:\n  ", graphml_path, "\n")
+
   quit(save = "no", status = 0)
 }
 
@@ -814,17 +916,21 @@ comm_mat <- as.matrix(comm_table)
 heatmap_pdf <- file.path(plot_dir,
   sprintf("Fig_cell_line_similarity_Louvain_vs_Leiden_heatmap_%s.pdf", direction))
 
+pdf(heatmap_pdf, width = 7, height = 6)
 if (all(dim(comm_mat) > 0)) {
-  pdf(heatmap_pdf, width = 7, height = 6)
   # pheatmap() creates annotated heatmaps with optional clustering
   pheatmap::pheatmap(
     comm_mat, cluster_rows = FALSE, cluster_cols = FALSE,
     display_numbers = TRUE, number_format = "%.0f", fontsize_number = 10,
     main = "Overlap of Louvain vs Leiden communities", angle_col = 45
   )
-  dev.off()
-  cat("Community overlap heatmap saved to:\n  ", heatmap_pdf, "\n")
+} else {
+  plot.new()
+  text(0.5, 0.6, "No communities available", cex = 1.2, font = 2)
+  text(0.5, 0.4, sprintf("Direction: %s", direction), cex = 0.9)
 }
+dev.off()
+cat("Community overlap heatmap saved to:\n  ", heatmap_pdf, "\n")
 
 # ------------------------------------------------------------------------------
 # SECTION 8: GRAPH VISUALISATIONS
