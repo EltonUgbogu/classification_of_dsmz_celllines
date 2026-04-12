@@ -77,6 +77,14 @@ if (!file.exists(cons_rds)) {
 
 consensus_pairs <- readRDS(cons_rds)
 
+if (!"tumour_id" %in% colnames(consensus_pairs)) {
+  if ("tumor_id" %in% colnames(consensus_pairs)) {
+    consensus_pairs <- consensus_pairs %>% dplyr::rename(tumour_id = tumor_id)
+  } else {
+    stop("[ERROR] consensus_pairs missing tumour_id column")
+  }
+}
+
 cat("=== 1) Basic structure of consensus_pairs ===\n\n")
 cat("Class: ", class(consensus_pairs), "\n")
 cat("Rows:  ", nrow(consensus_pairs), "\n\n")
@@ -92,12 +100,12 @@ print(utils::head(consensus_pairs, 10))
 # ----------------------------------------------------------------------
 cat("\n=== 2) Unique DSMZ cell lines and TCGA tumours ===\n\n")
 
-if (!all(c("cell_line", "tumor_id", "p_consensus") %in% colnames(consensus_pairs))) {
-  stop("[ERROR] consensus_pairs must contain columns: cell_line, tumor_id, p_consensus.")
+if (!all(c("cell_line", "tumour_id", "p_consensus") %in% colnames(consensus_pairs))) {
+  stop("[ERROR] consensus_pairs must contain columns: cell_line, tumour_id, p_consensus.")
 }
 
 n_cell <- length(unique(consensus_pairs$cell_line))
-n_tum  <- length(unique(consensus_pairs$tumor_id))
+n_tum  <- length(unique(consensus_pairs$tumour_id))
 
 cat("Unique DSMZ cell lines: ", n_cell, "\n")
 cat("Unique TCGA tumours:    ", n_tum,  "\n\n")
@@ -123,7 +131,7 @@ cat("\n=== 4) Per-cell-line anchoring statistics ===\n\n")
 per_cell <- consensus_pairs %>%
   group_by(cell_line) %>%
   summarise(
-    n_tumours       = n_distinct(tumor_id),
+    n_tumours       = n_distinct(tumour_id),
     max_p_consensus = max(p_consensus, na.rm = TRUE),
     mean_p_consensus = mean(p_consensus, na.rm = TRUE),
     frac_ge_0_7     = mean(p_consensus >= 0.7, na.rm = TRUE),
@@ -161,15 +169,19 @@ if (file.exists(example_csv)) {
   cat("Found example Top_m_long CSV:\n  ", example_csv, "\n\n")
   top_long <- readr::read_csv(example_csv, show_col_types = FALSE)
 
+  if (!"tumour_id" %in% colnames(top_long) && "tumor_id" %in% colnames(top_long)) {
+    top_long <- top_long %>% dplyr::rename(tumour_id = tumor_id)
+  }
+
   cat("Top_m_long_HC_PAM50_dynamic: rows =", nrow(top_long), "\n")
   cat("Columns:\n")
   print(colnames(top_long))
 
-  if (all(c("cell_line", "tumor_id", "rank") %in% colnames(top_long))) {
+  if (all(c("cell_line", "tumour_id", "rank") %in% colnames(top_long))) {
     per_cell_top <- top_long %>%
       group_by(cell_line) %>%
       summarise(
-        n_top_tumours = n_distinct(tumor_id),
+        n_top_tumours = n_distinct(tumour_id),
         max_rank      = max(rank, na.rm = TRUE),
         .groups       = "drop"
       ) %>%
@@ -178,7 +190,7 @@ if (file.exists(example_csv)) {
     cat("\nPer-cell stats in this method (HC_PAM50_dynamic):\n")
     print(utils::head(per_cell_top, 10))
   } else {
-    cat("Note: expected columns 'cell_line', 'tumor_id', 'rank' not all found.\n")
+    cat("Note: expected columns 'cell_line', 'tumour_id', 'rank' not all found.\n")
   }
 } else {
   cat("No example Top_m_long file found at:\n  ", example_csv, "\n")

@@ -361,7 +361,7 @@ compute_tumour_neighbourhoods <- function(
     long_records[[cell_tech_id]] <- data.frame(
       method       = method_id,
       cell_tech_id = cell_tech_id,
-      tumor_id     = ranked_tumours,
+      tumour_id     = ranked_tumours,
       rank         = seq_along(ranked_tumours),
       distance     = ranked_dist,
       in_top       = ranked_tumours %in% top_tumours,

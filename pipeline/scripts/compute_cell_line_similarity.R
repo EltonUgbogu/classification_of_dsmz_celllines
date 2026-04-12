@@ -176,7 +176,7 @@ if (!file.exists(in_rds)) {
 # Helper: strip CELL:/TUMOUR:/TUMOR: prefixes from IDs
 strip_prefix <- function(x) sub("^(CELL:|TUMOUR:|TUMOR:)", "", x)
 
-# Load the consensus data (cell_tech_id, tumor_id, p_consensus triplets).
+# Load the consensus data (cell_tech_id, tumour_id, p_consensus triplets).
 # Preserve short cell_line for plots; do not overwrite with cell_tech_id.
 consensus_pairs <- readRDS(in_rds) %>%
   {
@@ -191,11 +191,18 @@ consensus_pairs <- readRDS(in_rds) %>%
     if (!has_short && has_long) {
       df <- df %>% mutate(cell_line = cell_tech_id)
     }
+    if (!"tumour_id" %in% colnames(df)) {
+      if ("tumor_id" %in% colnames(df)) {
+        df <- df %>% rename(tumour_id = tumor_id)
+      } else {
+        stop("Consensus data missing tumour_id column")
+      }
+    }
     df
   } %>%
   mutate(
     cell_line = strip_prefix(as.character(cell_line)),
-    tumor_id  = strip_prefix(as.character(tumor_id))
+    tumour_id  = strip_prefix(as.character(tumour_id))
   )
 if ("cell_tech_id" %in% colnames(consensus_pairs)) {
   consensus_pairs <- consensus_pairs %>%
@@ -229,7 +236,7 @@ if (!is.null(opt$meta_tsv) && nzchar(opt$meta_tsv)) {
 
   tumour_disease_map <- meta %>%
     filter(sample_type == "Tumour") %>%
-    select(tumor_id = sample_id, tumour_disease = cancer_type) %>%
+    select(tumour_id = sample_id, tumour_disease = cancer_type) %>%
     distinct()
 
   cat("[INFO] Loaded metadata for pan-cancer annotation.\n")
@@ -266,7 +273,7 @@ if (opt$mode == "within") {
     stop("--mode within requires --meta_tsv with tumour and DSMZ cell-line annotations.")
   }
   cp <- cp %>%
-    inner_join(tumour_disease_map, by = "tumor_id") %>%
+    inner_join(tumour_disease_map, by = "tumour_id") %>%
     filter(disease == tumour_disease)
   cat("[INFO] Mode 'within': filtered to same-disease tumours only.\n")
   cat("[INFO] Pairs after filtering:", nrow(cp), "\n")
@@ -275,13 +282,13 @@ if (opt$mode == "within") {
 }
 
 mat_wide <- cp %>%
-  select(cell_line, tumor_id, p_consensus) %>%
+  select(cell_line, tumour_id, p_consensus) %>%
   # pivot_wider() transforms long data to wide format
   # names_from: column whose values become new column names
   # values_from: column whose values fill the new columns
   # values_fill: value to use for missing combinations (tumours not in neighbourhood)
   tidyr::pivot_wider(
-    names_from  = tumor_id,
+    names_from  = tumour_id,
     values_from = p_consensus,
     values_fill = 0  # Cell lines with no association to a tumour get 0
   )

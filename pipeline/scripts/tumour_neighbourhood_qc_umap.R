@@ -171,7 +171,7 @@ sample_type <- if (length(cell_ids) == 0) {
 cons <- read_rds_or_stop(opt$consensus_rds)
 
 # Expect the new format: a data.frame with columns:
-# cell_line, tumor_id, p_consensus  (plus n_methods etc.)
+# cell_line, tumour_id, p_consensus  (plus n_methods etc.)
 if (!is.data.frame(cons)) {
   log_stop("consensus_rds is not a data.frame. Expected long table with p_consensus.")
 }
@@ -186,7 +186,15 @@ if (!("cell_line" %in% colnames(cons))) {
   }
 }
 
-need_cols <- c("cell_line","tumor_id","p_consensus")
+if (!"tumour_id" %in% colnames(cons)) {
+  if ("tumor_id" %in% colnames(cons)) {
+    cons <- cons %>% dplyr::rename(tumour_id = tumor_id)
+  } else {
+    log_stop("consensus_rds missing required column: tumour_id")
+  }
+}
+
+need_cols <- c("cell_line","tumour_id","p_consensus")
 miss_cols <- setdiff(need_cols, colnames(cons))
 if (length(miss_cols) > 0) {
   log_stop("consensus_rds missing required columns: %s", paste(miss_cols, collapse=", "))
@@ -209,7 +217,7 @@ cell_sum <- cons2 %>%
 
 # Per-tumour summaries (optional QC: how "claimed" are tumours)
 tum_sum <- cons2 %>%
-  group_by(tumor_id) %>%
+  group_by(tumour_id) %>%
   summarise(
     best_p = max(p_consensus),
     n_cell_lines_ge_0_7 = sum(p_consensus >= 0.7),

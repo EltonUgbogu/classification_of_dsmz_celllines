@@ -494,7 +494,7 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
     #   method_name: A descriptive label for the clustering method
     #
     # Returns:
-    #   A data frame with columns: cell_line, tumor_id, method, in_top
+    #   A data frame with columns: cell_line, tumour_id, method, in_top
     
     # Create data frame with normalised sample IDs.
     clust_df <- data.frame(
@@ -519,9 +519,9 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
       inner_join(tumour_clust, by = "cluster", 
                  suffix = c("_cell", "_tumour"), 
                  relationship = "many-to-many") %>%
-      select(cell_line = sample_id_cell, tumor_id = sample_id_tumour, cluster) %>%
+      select(cell_line = sample_id_cell, tumour_id = sample_id_tumour, cluster) %>%
       mutate(method = method_name, in_top = TRUE) %>%
-      select(cell_line, tumor_id, method, in_top)
+      select(cell_line, tumour_id, method, in_top)
   }
   
   # Compute neighbourhoods for each clustering method.
@@ -544,7 +544,7 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
   
   consensus_pairs <- all_long %>%
     filter(in_top) %>%
-    count(cell_tech_id, tumor_id, name = "n_methods") %>%
+    count(cell_tech_id, tumour_id, name = "n_methods") %>%
     mutate(p_consensus = n_methods / n_methods_total) %>%
     arrange(cell_tech_id, desc(p_consensus))
   
@@ -632,7 +632,7 @@ print(methods_tbl %>% dplyr::select(method_id, subdir, file))
 #
 # The tables are expected to contain:
 #   - cell_line or cell_tech_id: Cell line identifier
-#   - tumor_id: Tumour sample identifier
+#   - tumour_id: Tumour sample identifier
 #   - in_top: Boolean indicating whether the tumour is in the neighbourhood
 #   - Optional: rank, distance, display labels
 
@@ -658,11 +658,22 @@ neigh_list <- methods_tbl %>%
             stop("CSV file missing both cell_tech_id and cell_line columns: ", .x)
           }
         } %>%
-        # Maintain backward compatibility with legacy column name.
+        # Maintain backward compatibility with legacy column names.
+        {
+          df <- .
+          if (!"tumour_id" %in% names(df)) {
+            if ("tumor_id" %in% names(df)) {
+              df <- df %>% rename(tumour_id = tumor_id)
+            } else {
+              stop("CSV file missing tumour_id column: ", .x)
+            }
+          }
+          df
+        } %>%
         mutate(cell_line = cell_tech_id) %>%
         # Standardise column ordering.
         select(
-          method, cell_tech_id, cell_line, tumor_id, in_top,
+          method, cell_tech_id, cell_line, tumour_id, in_top,
           any_of(c("rank", "distance", "cell_line_canonical", "cell_line_display")),
           everything()
         ) %>%
@@ -696,7 +707,7 @@ all_long %>%
 
 consensus_pairs <- all_long %>%
   filter(in_top) %>%                           # Consider only neighbourhood members
-  count(cell_tech_id, tumor_id, name = "n_methods") %>%  # Count contributing methods
+  count(cell_tech_id, tumour_id, name = "n_methods") %>%  # Count contributing methods
   mutate(
     p_consensus = n_methods / n_methods_total  # Compute proportion
   ) %>%
@@ -720,7 +731,7 @@ cell_label   <- cfg$labels$cell_line %||% "DSMZ cell lines"
 
 if (is.na(tumour_label)) {
   # Infer from tumour IDs seen in results (works for TCGA and non-TCGA cohorts)
-  tumour_ids_seen <- unique(consensus_pairs$tumor_id)
+  tumour_ids_seen <- unique(consensus_pairs$tumour_id)
   
   if (length(tumour_ids_seen) == 0) {
     tumour_label <- "tumours"
