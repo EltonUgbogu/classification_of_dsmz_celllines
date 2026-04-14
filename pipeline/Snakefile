@@ -1760,7 +1760,7 @@ rule tumour_nh_consensus_featureset:
 
 # STEP 4: Cell-line Similarity Graph
 
-rule dsmz_dsmz_similarity_graph:
+rule cell_line_similarity_graph:
     input:
         consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction)
     output:
@@ -1842,7 +1842,7 @@ rule resolve_dsmz_graph_neighbors:
     Resolves per-cell-line DSMZ neighbours by intersecting the global best-direction
     graph with each cell line's winner-direction graph. Consumes the cross-direction
     consensus summary outputs and all per-direction DSMZ similarity graph edge files
-    produced by dsmz_dsmz_similarity_graph. The intersection strategy retains only
+    produced by cell_line_similarity_graph. The intersection strategy retains only
     neighbours present in both the global best direction and the cell-line-specific
     winner direction, providing a robust estimate of stable similarity relationships.
     Uses CONS_DIRECTIONS (not AGN_DIRECTIONS) so only configured consensus directions
