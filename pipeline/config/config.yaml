@@ -87,12 +87,12 @@ multicohort_cancer:
 
 profiles:
   # ---------------------------------------------------------------------------
-  # multicohort_cancer — full 9-method × 2-distance grid; no PAM50
+  # multicohort_cancer — full 9-method × 2-distance grid
   # ---------------------------------------------------------------------------
   multicohort_cancer:
     analysis:
       cancer_type: Multicohort Cancer
-      use_pam50: false
+      use_pam50: true
     feature_sets:
       distances:
         - euc
@@ -134,20 +134,21 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
+        - pam50_euc
+        - pam50_corr
     features:
+      pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
       mx_joint_scores_tsv: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # brca — full 9-method × 2-distance grid
-  # PAM50 disabled until tcga_brca_pam50_expr and dsmz_bcc_pam50_expr paths
-  # are configured under paths. Re-enable use_pam50 and restore pam50_euc/
-  # pam50_corr directions once those expression matrices are available.
+  # PAM50 is BRCA-specific in per-disease analyses.
   # ---------------------------------------------------------------------------
   brca:
     analysis:
       cancer_type: BRCA
-      use_pam50: false
+      use_pam50: true
     feature_sets:
       distances:
         - euc
@@ -190,13 +191,15 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
+        - pam50_euc
+        - pam50_corr
     features:
       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
       mx_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # nbl — full 9-method × 2-distance grid; no PAM50
+  # nbl — full 9-method × 2-distance grid (PAM50 is not applicable; non-BRCA per-disease profile)
   # ---------------------------------------------------------------------------
   nbl:
     analysis:
@@ -249,7 +252,7 @@ profiles:
       mx_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # rbl — full 9-method × 2-distance grid; no PAM50
+  # rbl — full 9-method × 2-distance grid (PAM50 is not applicable; non-BRCA per-disease profile)
   # ---------------------------------------------------------------------------
   rbl:
     analysis:
@@ -302,7 +305,7 @@ profiles:
       mx_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # heme — full 9-method × 2-distance grid; no PAM50
+  # heme — full 9-method × 2-distance grid (PAM50 is not applicable; non-BRCA per-disease profile)
   # ---------------------------------------------------------------------------
   heme:
     analysis:
