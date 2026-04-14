@@ -75,40 +75,15 @@ defaults:
       global_gene_regex: "^RPL|^RPS|^MT-|^HIST"
       gene_symbol_map: ""
 
-# Top-level multicohort_cancer block: read by the Snakefile to drive the
-# multicohort joint benchmark (feature_methods, dist_metrics, profiles,
-# outdir, run_validation). Mirrors profiles.multicohort_cancer semantics.
+# Top-level multicohort_cancer block: defines source cohorts and shared output location.
+# The real analysis grid (methods, distances, directions) is under profiles.multicohort_cancer.
 multicohort_cancer:
-  dist_metrics:
-    - euc
-    - corr
-  feature_methods:
-    - Variance
-    - MAD
-    - MeanAbsDev
-    - Entropy
-    - PCA
-    - Spearman
-    - MX
-    - kTotal
-    - HVG
-  outdir: results/multicohort_cancer_benchmark
-  run_validation: true
+  outdir: results/unsupervised/multicohort_cancer
   profiles:
     - brca
     - nbl
     - rbl
     - heme
-  tumour_neighbourhoods:
-    p_consensus_threshold: 0.7
-  validation:
-    outdir: results/unsupervised/pan_cancer
-  paths:
-    unsup_root: results/multicohort_cancer_benchmark/unsupervised
-    vst_joint_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
-  features:
-    mx_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_joint_scores.tsv
-    mx_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_final_gene_list.txt
 
 profiles:
   # ---------------------------------------------------------------------------
@@ -133,12 +108,12 @@ profiles:
         - kTotal
         - HVG
     paths:
-      unsup_root: results/multicohort_cancer_benchmark/unsupervised
-      vst_joint_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
-      cell_vst_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
-      tumour_vst_rds: results/multicohort_cancer_benchmark/inputs/joint_expr_matrix.rds
-      dsmz_meta_csv: results/multicohort_cancer_benchmark/inputs/joint_metadata.tsv
-      meta_tsv: results/multicohort_cancer_benchmark/inputs/joint_metadata.tsv
+      unsup_root: results/unsupervised/multicohort_cancer/unsupervised
+      vst_joint_rds: results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds
+      cell_vst_rds: results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds
+      tumour_vst_rds: results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds
+      dsmz_meta_csv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
+      meta_tsv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
     tumour_neighbourhoods:
       directions:
         - Variance_euc
@@ -160,8 +135,8 @@ profiles:
         - HVG_euc
         - HVG_corr
     features:
-      mx_joint_scores_tsv: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_joint_scores.tsv
-      mx_final_gene_list: results/multicohort_cancer_benchmark/unsupervised/feature_selection/mx_final_gene_list.txt
+      mx_joint_scores_tsv: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_joint_scores.tsv
+      mx_final_gene_list: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
   # brca — full 9-method × 2-distance grid
