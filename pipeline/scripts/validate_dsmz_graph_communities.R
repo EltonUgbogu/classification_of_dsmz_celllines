@@ -18,7 +18,7 @@ shannon_entropy <- function(p) {
 # ------------------------------------------------------------------------------
 option_list <- list(
   make_option("--graph_dir", type = "character", default = NULL,
-              help = "Directory containing DSMZ_DSMZ_graph_node_annotations_*.tsv"),
+              help = "Directory containing cell_line_similarity_graph_node_annotations_*.tsv"),
   make_option("--meta_tsv", type = "character", 
               default = "results/unsupervised/pan_cancer/inputs/joint_metadata.tsv",
               help = "Path to joint_metadata.tsv [default: %default]"),
@@ -55,7 +55,7 @@ cat("[INFO] Metadata:", opt$meta_tsv, "\n")
 # ------------------------------------------------------------------------------
 # Load data
 # ------------------------------------------------------------------------------
-nodes_file <- file.path(opt$graph_dir, sprintf("DSMZ_DSMZ_graph_node_annotations_%s.tsv", opt$direction))
+nodes_file <- file.path(opt$graph_dir, sprintf("cell_line_similarity_graph_node_annotations_%s.tsv", opt$direction))
 
 if (!file.exists(nodes_file)) {
   stop("Node annotations file not found: ", nodes_file)
@@ -149,7 +149,7 @@ final_summary <- bind_rows(louv_summary, leid_summary) %>%
 # ------------------------------------------------------------------------------
 # Write output
 # ------------------------------------------------------------------------------
-out_file <- file.path(opt$graph_dir, sprintf("DSMZ_DSMZ_graph_community_validation_%s.tsv", opt$direction))
+out_file <- file.path(opt$graph_dir, sprintf("cell_line_similarity_graph_community_validation_%s.tsv", opt$direction))
 write_tsv(final_summary, out_file)
 cat("\n[SUCCESS] Community validation table written:\n  ", out_file, "\n")
 

@@ -982,14 +982,14 @@ def main():
                 if direction_dir.is_dir() and direction_dir.name != "final_consensus_all":
                     direction = direction_dir.name
                     edge_file = (direction_dir / "final_consensus" /
-                                 f"DSMZ_DSMZ_graph_edges_{direction}.tsv")
+                                 f"cell_line_similarity_graph_edges_{direction}.tsv")
                     if edge_file.exists():
                         directions_used.add(direction)
 
         # Read and aggregate edge files
         for direction in sorted(directions_used):
             direction_dir = tumour_nh_root / direction / "final_consensus"
-            edge_file = direction_dir / f"DSMZ_DSMZ_graph_edges_{direction}.tsv"
+            edge_file = direction_dir / f"cell_line_similarity_graph_edges_{direction}.tsv"
 
             if edge_file.exists():
                 try:

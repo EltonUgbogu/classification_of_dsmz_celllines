@@ -6,7 +6,7 @@
 # Exports per-direction DSMZ–DSMZ edge TSVs into final_consensus_all/ so that:
 #   - All downstream artifacts live in one stable folder (same style as
 #     resolve_dsmz_graph_neighbors.R → resolved_dsmz_neighbors.tsv).
-#   - Optional: merge into DSMZ_DSMZ_graph_edges_ALL.tsv.
+#   - Optional: merge into cell_line_similarity_graph_edges_ALL.tsv.
 #
 # Usage:
 #   ./scripts/export_direction_edges_to_final_consensus_all.sh PROFILE
@@ -14,8 +14,8 @@
 #
 # Writes:
 #   results/unsupervised/<PROFILE>/tumour_neighbourhoods/final_consensus_all/
-#     DSMZ_DSMZ_graph_edges_<direction>.tsv   (one per direction)
-#     DSMZ_DSMZ_graph_edges_ALL.tsv           (optional merged file)
+#     cell_line_similarity_graph_edges_<direction>.tsv   (one per direction)
+#     cell_line_similarity_graph_edges_ALL.tsv           (optional merged file)
 #
 # Use COPY=1 for real copies instead of symlinks (safer across filesystems).
 # =============================================================================
@@ -39,7 +39,7 @@ mkdir -p "$OUTDIR"
 
 # Adjust glob to where per-direction edge files actually live
 count=0
-for src in "${NH_ROOT}"/*/final_consensus/DSMZ_DSMZ_graph_edges_*.tsv; do
+for src in "${NH_ROOT}"/*/final_consensus/cell_line_similarity_graph_edges_*.tsv; do
   [[ -e "$src" ]] || continue
   bn=$(basename "$src")
   if [[ "${COPY:-0}" == "1" ]]; then
@@ -54,8 +54,8 @@ done
 echo "[OK] Exported $count per-direction edge file(s) to ${OUTDIR}"
 
 # Optional: merged file (requires R or Python; here a simple cat header + body)
-# Uncomment and adapt if you want DSMZ_DSMZ_graph_edges_ALL.tsv
-# ALL="${OUTDIR}/DSMZ_DSMZ_graph_edges_ALL.tsv"
-# head -1 "${NH_ROOT}"/*/final_consensus/DSMZ_DSMZ_graph_edges_*.tsv 2>/dev/null | head -1 > "$ALL"
-# tail -n +2 -q "${NH_ROOT}"/*/final_consensus/DSMZ_DSMZ_graph_edges_*.tsv 2>/dev/null >> "$ALL" || true
+# Uncomment and adapt if you want cell_line_similarity_graph_edges_ALL.tsv
+# ALL="${OUTDIR}/cell_line_similarity_graph_edges_ALL.tsv"
+# head -1 "${NH_ROOT}"/*/final_consensus/cell_line_similarity_graph_edges_*.tsv 2>/dev/null | head -1 > "$ALL"
+# tail -n +2 -q "${NH_ROOT}"/*/final_consensus/cell_line_similarity_graph_edges_*.tsv 2>/dev/null >> "$ALL" || true
 # echo "[OK] Merged edges: $ALL"

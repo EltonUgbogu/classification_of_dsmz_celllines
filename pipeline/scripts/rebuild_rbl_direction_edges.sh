@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rebuild all RBL per-direction DSMZ graph edge TSVs (canonical IDs).
 # Rule: dsmz_dsmz_similarity_graph
-# Output pattern (from Snakefile): {TUMOUR_NH_ROOT}/{direction}/final_consensus/DSMZ_DSMZ_graph_edges_{direction}.tsv
+# Output pattern (from Snakefile): {TUMOUR_NH_ROOT}/{direction}/final_consensus/cell_line_similarity_graph_edges_{direction}.tsv
 # Run from pipeline root: bash scripts/rebuild_rbl_direction_edges.sh
 
 set -euo pipefail
@@ -22,7 +22,7 @@ DIRECTIONS=(
 # Build target list: one edge TSV per direction (same pattern as rule output)
 TARGETS=()
 for d in "${DIRECTIONS[@]}"; do
-  TARGETS+=( "$NH/$d/final_consensus/DSMZ_DSMZ_graph_edges_$d.tsv" )
+  TARGETS+=( "$NH/$d/final_consensus/cell_line_similarity_graph_edges_$d.tsv" )
 done
 
 echo "[INFO] Requesting ${#TARGETS[@]} targets from rule dsmz_dsmz_similarity_graph"

@@ -30,7 +30,7 @@ else:
         print(f"  - {b} -> {v}")
 
 # Find all direction edge files
-edge_files = sorted(tumour_nh_dir.glob("*/final_consensus/DSMZ_DSMZ_graph_edges_*.tsv"))
+edge_files = sorted(tumour_nh_dir.glob("*/final_consensus/cell_line_similarity_graph_edges_*.tsv"))
 if not edge_files:
     raise SystemExit(f"[ERROR] No direction edge files found under: {tumour_nh_dir}")
 

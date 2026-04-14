@@ -47,7 +47,7 @@ def canonicalise_edge_df(df, long2short):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Aggregate DSMZ_DSMZ_graph_edges_<direction>.tsv across all directions into a consensus graph."
+        description="Aggregate cell_line_similarity_graph_edges_<direction>.tsv across all directions into a consensus graph."
     )
     ap.add_argument("--tumour_nh_dir", required=True,
                     help="tumour_neighbourhoods directory (contains direction folders + final_consensus_all)")
@@ -85,12 +85,12 @@ def main():
     dir_sims  = defaultdict(list)
 
     # discover all per-direction edge files
-    edge_files = sorted(root.glob("*/final_consensus/DSMZ_DSMZ_graph_edges_*.tsv"))
+    edge_files = sorted(root.glob("*/final_consensus/cell_line_similarity_graph_edges_*.tsv"))
     if not edge_files:
         raise SystemExit(f"No edge files found under {root}/*/final_consensus/")
 
     for ef in edge_files:
-        direction = ef.name.replace("DSMZ_DSMZ_graph_edges_", "").replace(".tsv", "")
+        direction = ef.name.replace("cell_line_similarity_graph_edges_", "").replace(".tsv", "")
         df = pd.read_csv(ef, sep="\t")
 
         # Canonicalise IDs if mapping provided

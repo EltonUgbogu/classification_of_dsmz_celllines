@@ -146,7 +146,7 @@ option_list <- list(
               help = "Optional: Manually specify best overall direction (overrides direction_summary_tsv)."),
 
   make_option("--graph_root", type = "character", default = NULL,
-              help = "Custom graph root directory. For pan-cancer typically: results/.../graphs/dsmz_dsmz/within"),
+              help = "Custom graph root directory. For pan-cancer typically: results/.../graphs/cell_line_similarity/within"),
 
   make_option("--output_tsv", type = "character", default = NULL,
               help = "Output TSV path")
@@ -196,7 +196,7 @@ resolve_path_if_needed <- function(p, config_path) {
 #
 #   1. Explicit --graph_root argument (highest priority)
 #   2. Profile-specific default paths:
-#      - multicohort_cancer: {outdir}/graphs/dsmz_dsmz/within
+#      - multicohort_cancer: {outdir}/graphs/cell_line_similarity/within
 #      - Other profiles: {unsup_root}/tumour_neighbourhoods
 #
 # The script validates that the resolved directory exists before proceeding.
@@ -217,7 +217,7 @@ if (!is.null(opt$graph_root) && nzchar(opt$graph_root)) {
     outdir <- mc_cfg$outdir %||% "results/multicohort_cancer_benchmark"
     outdir <- resolve_path_if_needed(outdir, opt$config)
 
-    tumour_nh_root <- file.path(outdir, "graphs", "dsmz_dsmz", "within")
+    tumour_nh_root <- file.path(outdir, "graphs", "cell_line_similarity", "within")
   } else {
     # Single-cohort profiles: use unsup_root from paths section
     unsup_root <- cfg$paths$unsup_root %||%
@@ -356,8 +356,8 @@ get_neighbors <- function(edges_df, node) {
 # similarity relationships between DSMZ cell lines.
 #
 # File naming conventions differ by profile:
-#   - Pan-cancer: {direction}/DSMZ_DSMZ_graph_edges_{direction}.tsv
-#   - Single-cohort: {direction}/final_consensus/DSMZ_DSMZ_graph_edges_{direction}.tsv
+#   - Pan-cancer: {direction}/cell_line_similarity_graph_edges_{direction}.tsv
+#   - Single-cohort: {direction}/final_consensus/cell_line_similarity_graph_edges_{direction}.tsv
 #
 # Missing edge files generate warnings but do not halt execution, allowing
 # partial results when some directions are unavailable.
@@ -367,20 +367,20 @@ get_neighbors <- function(edges_df, node) {
 discovered_directions <- character()
 if (dir.exists(tumour_nh_root)) {
   if (profile == "multicohort_cancer") {
-    # Pan-cancer: look for {direction}/DSMZ_DSMZ_graph_edges_{direction}.tsv
+    # Pan-cancer: look for {direction}/cell_line_similarity_graph_edges_{direction}.tsv
     subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
     for (subdir in subdirs) {
-      edge_file <- file.path(tumour_nh_root, subdir, paste0("DSMZ_DSMZ_graph_edges_", subdir, ".tsv"))
+      edge_file <- file.path(tumour_nh_root, subdir, paste0("cell_line_similarity_graph_edges_", subdir, ".tsv"))
       if (file.exists(edge_file)) {
         discovered_directions <- c(discovered_directions, subdir)
       }
     }
   } else {
-    # Single-cohort: look for {direction}/final_consensus/DSMZ_DSMZ_graph_edges_{direction}.tsv
+    # Single-cohort: look for {direction}/final_consensus/cell_line_similarity_graph_edges_{direction}.tsv
     subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
     for (subdir in subdirs) {
       edge_file <- file.path(tumour_nh_root, subdir, "final_consensus",
-                            paste0("DSMZ_DSMZ_graph_edges_", subdir, ".tsv"))
+                            paste0("cell_line_similarity_graph_edges_", subdir, ".tsv"))
       if (file.exists(edge_file)) {
         discovered_directions <- c(discovered_directions, subdir)
       }
@@ -399,10 +399,10 @@ if (length(discovered_directions) > 0) {
 edges_list <- list()
 for (d in directions) {
   edge_file <- if (profile == "multicohort_cancer") {
-    file.path(tumour_nh_root, d, paste0("DSMZ_DSMZ_graph_edges_", d, ".tsv"))
+    file.path(tumour_nh_root, d, paste0("cell_line_similarity_graph_edges_", d, ".tsv"))
   } else {
     file.path(tumour_nh_root, d, "final_consensus",
-              paste0("DSMZ_DSMZ_graph_edges_", d, ".tsv"))
+              paste0("cell_line_similarity_graph_edges_", d, ".tsv"))
   }
 
   if (file.exists(edge_file)) {
