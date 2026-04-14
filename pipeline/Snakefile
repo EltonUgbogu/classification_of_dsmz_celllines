@@ -319,98 +319,51 @@ vprint(f"[Snakefile] UNSUP (final, absolute) = {UNSUP}")
 # Resolves the joint VST-normalised expression matrix (absolute; external input).
 VST_JOINT = cfgabs("paths", "vst_joint_rds")
 
-# Multicohort benchmark inputs (only used when running the multicohort profile).
+# Multicohort input construction (only active when running the multicohort_cancer profile).
 IS_MULTICOHORT_PROFILE = profile_name == "multicohort_cancer"
-MC_BENCH_PROFILES = [str(p) for p in MULTICOHORT_CFG.get("profiles", [])]
-MC_BENCH_FEATURE_METHODS_LIST = list(MULTICOHORT_CFG.get("feature_methods", ["Variance", "MAD", "Entropy"]))
-if DISABLE_PCA_EVERYWHERE:
-    MC_BENCH_FEATURE_METHODS_LIST = [m for m in MC_BENCH_FEATURE_METHODS_LIST if m.lower() != "pca"]
-MC_BENCH_DIST_METRICS_LIST = list(MULTICOHORT_CFG.get("dist_metrics", ["cosine", "euclidean"]))
-MC_BENCH_FEATURE_METHODS = ",".join(MC_BENCH_FEATURE_METHODS_LIST)
-MC_BENCH_DIST_METRICS = ",".join(MC_BENCH_DIST_METRICS_LIST)
-MC_BENCH_OUTDIR_REL = MULTICOHORT_CFG.get("outdir", "results/multicohort_cancer_benchmark")
-MC_BENCH_OUTDIR = abspath(MC_BENCH_OUTDIR_REL)
-MC_BENCH_INPUT_DIR = os.path.join(MC_BENCH_OUTDIR, "inputs")
-MC_BENCH_EXPR = os.path.join(MC_BENCH_INPUT_DIR, "joint_expr_matrix.rds")
-MC_BENCH_META = os.path.join(MC_BENCH_INPUT_DIR, "joint_metadata.tsv")
-MC_BENCH_N_GENES = int(MULTICOHORT_CFG.get("n_genes", 500))
-MC_BENCH_N_NEIGHBORS = int(MULTICOHORT_CFG.get("n_neighbors", 30))
-MC_BENCH_MIN_DIST = float(MULTICOHORT_CFG.get("min_dist", 0.3))
-MC_BENCH_EVAL_K = int(MULTICOHORT_CFG.get("eval_k", 30))
-MC_BENCH_MAX_SAMPLES = int(MULTICOHORT_CFG.get("max_samples", 0))
+MC_PROFILES    = [str(p) for p in MULTICOHORT_CFG.get("profiles", [])]
+MC_OUTDIR_REL  = MULTICOHORT_CFG.get("outdir", "results/unsupervised/multicohort_cancer")
+MC_OUTDIR      = abspath(MC_OUTDIR_REL)
+MC_INPUT_DIR   = os.path.join(MC_OUTDIR, "inputs")
+MC_EXPR        = os.path.join(MC_INPUT_DIR, "joint_expr_matrix.rds")
+MC_META        = os.path.join(MC_INPUT_DIR, "joint_metadata.tsv")
 
-if IS_MULTICOHORT_PROFILE and MC_BENCH_PROFILES:
-    MC_BENCH_VST_INPUTS = [profile_vst_joint_abs(p) for p in MC_BENCH_PROFILES]
-    MC_BENCH_FEATURE_METHODS_LIST_STR = " ".join(MC_BENCH_FEATURE_METHODS_LIST)
-    MC_BENCH_PROFILES_ARG = ",".join(MC_BENCH_PROFILES)
-    MC_BENCH_VST_LIST_STR = " ".join(shlex.quote(p) for p in MC_BENCH_VST_INPUTS)
-    if os.path.abspath(VST_JOINT) != os.path.abspath(MC_BENCH_EXPR):
+if IS_MULTICOHORT_PROFILE and MC_PROFILES:
+    MC_VST_INPUTS    = [profile_vst_joint_abs(p) for p in MC_PROFILES]
+    MC_PROFILES_ARG  = ",".join(MC_PROFILES)
+    MC_VST_LIST_STR  = " ".join(shlex.quote(p) for p in MC_VST_INPUTS)
+    if os.path.abspath(VST_JOINT) != os.path.abspath(MC_EXPR):
         raise ValueError(
-            "multicohort profile expects paths.vst_joint_rds to match the benchmark output"
+            "multicohort profile expects paths.vst_joint_rds to match the multicohort inputs output"
         )
 
-    rule build_multicohort_joint_benchmark:
-        """Build the multicohort joint benchmark inputs from cohort-level VST matrices."""
+    rule build_multicohort_joint_inputs:
+        """Merge cohort-level VST matrices into the joint expression matrix and metadata."""
         input:
-            vst_list = MC_BENCH_VST_INPUTS
+            vst_list = MC_VST_INPUTS
         output:
-            summary = os.path.join(MC_BENCH_OUTDIR, "benchmarks", "summary.tsv"),
             joint_matrix = VST_JOINT,
-            joint_meta = MC_BENCH_META,
-            gene_lists = [
-                os.path.join(
-                    MC_BENCH_OUTDIR,
-                    f"feature_sets_top{MC_BENCH_N_GENES}",
-                    f"genes_top{MC_BENCH_N_GENES}_{method}.txt"
-                )
-                for method in MC_BENCH_FEATURE_METHODS_LIST
-            ],
-            submatrices = [
-                os.path.join(MC_BENCH_OUTDIR, "featuresets", method, "expr_submatrix.rds")
-                for method in MC_BENCH_FEATURE_METHODS_LIST
-            ]
+            joint_meta   = MC_META,
         params:
-            script = os.path.join(SCRIPTS_DIR, "multicohort_cancer_joint_benchmark.R"),
-            pipe_root = PIPE_ROOT,
-            outdir = MC_BENCH_OUTDIR,
-            profiles = MC_BENCH_PROFILES_ARG,
-            feature_methods = MC_BENCH_FEATURE_METHODS,
-            dist_metrics = MC_BENCH_DIST_METRICS,
-            n_genes = MC_BENCH_N_GENES,
-            n_neighbors = MC_BENCH_N_NEIGHBORS,
-            min_dist = MC_BENCH_MIN_DIST,
-            eval_k = MC_BENCH_EVAL_K,
-            max_samples = MC_BENCH_MAX_SAMPLES,
-            feature_methods_list = MC_BENCH_FEATURE_METHODS_LIST_STR,
-            vst_list_str = MC_BENCH_VST_LIST_STR
+            script       = os.path.join(SCRIPTS_DIR, "multicohort_cancer_joint_benchmark.R"),
+            pipe_root    = PIPE_ROOT,
+            outdir       = MC_OUTDIR,
+            profiles     = MC_PROFILES_ARG,
+            vst_list_str = MC_VST_LIST_STR
         log:
-            os.path.join(LOGROOT, "multicohort_joint_benchmark.log")
+            os.path.join(LOGROOT, "multicohort_joint_inputs.log")
         conda: CONDA_ENV_R
         shell:
-            r'''
+            r\'\'\'
             set -euo pipefail
-            mkdir -p \
-              "{params.outdir}/inputs" \
-              "{params.outdir}/benchmarks" \
-              "{params.outdir}/feature_sets_top{params.n_genes}" \
-              "{params.outdir}/featuresets"
-            for m in {params.feature_methods_list}; do
-              mkdir -p "{params.outdir}/featuresets/${{m}}"
-            done
+            mkdir -p "{params.outdir}/inputs"
             Rscript "{params.script}" \
               --pipe_root "{params.pipe_root}" \
-              --outdir "{params.outdir}" \
-              --profiles "{params.profiles}" \
-              --vst_list "{params.vst_list_str}" \
-              --feature_methods "{params.feature_methods}" \
-              --dist_metrics "{params.dist_metrics}" \
-              --n_genes {params.n_genes} \
-              --n_neighbors {params.n_neighbors} \
-              --min_dist {params.min_dist} \
-              --eval_k {params.eval_k} \
-              --max_samples {params.max_samples} \
+              --outdir    "{params.outdir}" \
+              --profiles  "{params.profiles}" \
+              --vst_list  "{params.vst_list_str}" \
               > "{log}" 2>&1
-            '''
+            \'\'\'
 
 # Feature list paths.
 # _REL variant → used in rule output: declarations (relative, for portable DAG tracking).
