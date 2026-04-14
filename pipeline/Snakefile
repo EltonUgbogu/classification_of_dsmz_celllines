@@ -345,7 +345,7 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
             joint_matrix = VST_JOINT,
             joint_meta   = MC_META,
         params:
-            script       = os.path.join(SCRIPTS_DIR, "multicohort_cancer_joint_benchmark.R"),
+            script       = os.path.join(SCRIPTS_DIR, "build_multicohort_joint_inputs.R"),
             pipe_root    = PIPE_ROOT,
             outdir       = MC_OUTDIR,
             profiles     = MC_PROFILES_ARG,
