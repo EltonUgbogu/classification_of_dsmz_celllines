@@ -59,7 +59,7 @@ option_list <- list(
   make_option("--expr-rds", type = "character", default = NULL,
               help = "Optional override: integrated DSMZ+tumour expression RDS"),
   make_option("--mapping-rds", type = "character", default = NULL,
-              help = "Optional override: cell_line → original_sample_id mapping RDS"),
+              help = "Optional override: original_sample_id → cell_line mapping RDS"),
   make_option("--direction", type = "character", default = NULL,
               help = "Direction identifier (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc)"),
   make_option("--unsup-root", type = "character", default = NULL,
@@ -71,6 +71,9 @@ option_list <- list(
 # parse_args() processes the command-line arguments according to the defined
 # option_list and returns a named list containing the parsed values.
 opt <- parse_args(OptionParser(option_list = option_list))
+
+# Define %||% before config loading: the fallback config-merge branch uses it.
+`%||%` <- function(x, y) if (!is.null(x)) x else y
 
 cat("[INFO] Using config file:", opt$config, "\n")
 
@@ -130,16 +133,10 @@ if (!is.null(cfg$paths)) {
 }
 
 # ------------------------------------------------------------------------------
-# SECTION 3: NULL-COALESCING OPERATOR DEFINITION
+# SECTION 3: NULL-COALESCING OPERATOR
 # ------------------------------------------------------------------------------
-# The %||% operator provides a concise syntax for supplying default values
-# when a variable may be NULL. This pattern is commonly used in R for
-# handling optional configuration parameters.
-#
-# USAGE: value %||% default
-#   Returns 'value' if it is not NULL, otherwise returns 'default'.
-
-`%||%` <- function(x, y) if (!is.null(x)) x else y
+# %||% is defined above (before config loading) so the fallback config-merge
+# branch can use it. Nothing to redefine here.
 
 # ------------------------------------------------------------------------------
 # SECTION 4: HELPER FUNCTION LOADING
@@ -196,6 +193,122 @@ direction <- opt$direction
 if (!grepl("_(euc|corr)$", direction)) {
   stop("Invalid --direction: ", direction,
        "\nExpected a direction ending in _euc or _corr (e.g. HVG_euc, pam50_corr, MAD_euc, Spearman_corr).")
+}
+
+# ==============================================================================
+# SECTION 5B: HELPERS FOR SELF-SUFFICIENT NON-PAM50 INPUT CONSTRUCTION
+# ==============================================================================
+# These helpers allow the script to build the expression matrix and DSMZ mapping
+# in memory from the profile's joint VST matrix + gene list + metadata, so that
+# non-PAM50 directions do not require pre-built expr_submatrix.rds files.
+
+# Returns the feature method name from a direction string, e.g. "MX_corr" -> "MX".
+resolve_feature_from_direction <- function(direction) {
+  sub("_(euc|corr)$", "", direction)
+}
+
+# Returns the path to the top-N gene list for a feature method.
+# Path pattern: {unsup_root}/feature_selection_unsupervised/feature_sets/genes_top{N}_{feature}.txt
+resolve_feature_gene_list_path <- function(feature, cfg, unsup_root) {
+  topn_map <- cfg$feature_selection$method_topn %||% list()
+  topn <- topn_map[[feature]]
+  if (is.null(topn)) {
+    # Hard-coded fallback for known methods (matches defaults in config.yaml)
+    fallback <- list(
+      Variance=3000L, MAD=3000L, MeanAbsDev=3000L, Entropy=3000L,
+      PCA=3000L, Spearman=500L, MX=500L, kTotal=500L, HVG=3000L
+    )
+    topn <- fallback[[feature]]
+  }
+  if (is.null(topn)) {
+    stop("Cannot determine top-N for feature '", feature,
+         "'. Add it to defaults.feature_selection.method_topn in config.yaml.")
+  }
+  file.path(unsup_root, "feature_selection_unsupervised", "feature_sets",
+            paste0("genes_top", topn, "_", feature, ".txt"))
+}
+
+# Builds the samples x genes expression matrix and technical-ID → cell-line mapping
+# entirely in memory from the profile's joint VST, gene list, and DSMZ metadata.
+# Returns list(expr_mat, mapping) where mapping is named char vec (tech_id -> cell_line).
+build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
+  feature <- resolve_feature_from_direction(direction)
+
+  # --- VST joint matrix ---
+  vst_path <- cfg$paths$vst_joint_rds %||% stop("cfg$paths$vst_joint_rds not set.")
+  if (!file.exists(vst_path)) stop("Joint VST matrix not found: ", vst_path)
+
+  # --- Gene list ---
+  gene_list_path <- resolve_feature_gene_list_path(feature, cfg, unsup_root)
+  if (!file.exists(gene_list_path)) {
+    stop("Gene list not found: ", gene_list_path,
+         "\nRun feature_selection_unsupervised before Stage 3 for direction: ", direction)
+  }
+
+  # --- Metadata (prefer meta_tsv, fall back to dsmz_meta_csv) ---
+  meta_path <- cfg$paths$meta_tsv %||% cfg$paths$dsmz_meta_csv %||%
+    stop("Neither cfg$paths$meta_tsv nor cfg$paths$dsmz_meta_csv is set.")
+  if (!file.exists(meta_path)) stop("DSMZ metadata not found: ", meta_path)
+
+  # --- Column names from config ---
+  sample_id_col <- cfg$deseq2$sample_id_col %||% "sample_id"
+  cell_col      <- cfg$deseq2$cell_line_col  %||% "cell_line"
+
+  cat("[INFO] Self-sufficient input build for direction: ", direction, "\n", sep = "")
+  cat("[INFO]   Feature:       ", feature,        "\n", sep = "")
+  cat("[INFO]   VST matrix:    ", vst_path,       "\n", sep = "")
+  cat("[INFO]   Gene list:     ", gene_list_path,  "\n", sep = "")
+  cat("[INFO]   Metadata:      ", meta_path,       "\n", sep = "")
+  cat("[INFO]   sample_id_col: ", sample_id_col,   "\n", sep = "")
+  cat("[INFO]   cell_line_col: ", cell_col,        "\n", sep = "")
+
+  # Load VST (genes x samples)
+  vst_joint <- readRDS(vst_path)
+  cat("[INFO] VST dims: ", nrow(vst_joint), " genes x ", ncol(vst_joint), " samples\n", sep = "")
+
+  n_dsmz_vst <- sum(grepl("^NG-", colnames(vst_joint)))
+  cat("[INFO] DSMZ samples (NG- prefix): ", n_dsmz_vst,
+      " | tumour: ", ncol(vst_joint) - n_dsmz_vst, "\n", sep = "")
+  if (n_dsmz_vst == 0L) stop("No DSMZ samples (NG- prefix) in VST matrix columns.")
+
+  # Subset to gene list and transpose to samples x genes
+  genes <- scan(gene_list_path, what = character(), quiet = TRUE)
+  genes <- intersect(genes, rownames(vst_joint))
+  cat("[INFO] Gene list: ", length(genes), " genes present in VST\n", sep = "")
+  if (length(genes) < 50L) stop("Too few genes found in VST matrix: ", length(genes))
+
+  expr_mat <- t(vst_joint[genes, , drop = FALSE])
+
+  # DSMZ sample IDs (rownames after transpose)
+  dsmz_sample_ids <- rownames(expr_mat)[grepl("^NG-", rownames(expr_mat))]
+
+  # Build mapping from metadata
+  meta <- read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  if (!sample_id_col %in% colnames(meta)) {
+    stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
+         paste(colnames(meta), collapse = ", "))
+  }
+
+  if (cell_col %in% colnames(meta)) {
+    mapping_raw <- setNames(meta[[cell_col]], meta[[sample_id_col]])
+  } else {
+    # Derive cell line from technical ID: NG-13640_BC3_lib... -> BC3
+    derived <- sub("^NG-[0-9]+-?[0-9]*_(.+)_lib.*", "\\1", meta[[sample_id_col]])
+    mapping_raw <- setNames(derived, meta[[sample_id_col]])
+    cat("[WARN] cell_line_col '", cell_col, "' not in metadata; labels derived from technical IDs\n")
+  }
+
+  # Restrict to DSMZ samples present in matrix; fill missing with sample ID fallback
+  mapping <- mapping_raw[names(mapping_raw) %in% dsmz_sample_ids]
+  missing_in_meta <- setdiff(dsmz_sample_ids, names(mapping))
+  if (length(missing_in_meta) > 0L) {
+    cat("[WARN] ", length(missing_in_meta),
+        " DSMZ samples not in metadata; using sample ID as cell-line label\n", sep = "")
+    mapping <- c(mapping, setNames(missing_in_meta, missing_in_meta))
+  }
+
+  cat("[INFO] Built mapping: ", length(mapping), " DSMZ samples\n", sep = "")
+  list(expr_mat = expr_mat, mapping = mapping)
 }
 
 # ------------------------------------------------------------------------------
@@ -270,19 +383,48 @@ tn_results_root    <- file.path(unsup_root, "tumour_neighbourhoods", direction)
 #
 # This design allows flexible execution in both interactive and pipeline contexts.
 
-# Both --expr-rds and --mapping-rds are required staged inputs.
-# The upstream preparation step (build_tumour_neighbourhood_input.R or
-# build_dsmz_tcga_pam50matrix.R) is responsible for producing these files;
-# the analysis script does not infer or fall back to PAM50 config paths.
-expr_mat_path <- opt$`expr-rds`
-if (is.null(expr_mat_path) || !nzchar(expr_mat_path)) {
-  stop("--expr-rds is required. Pass the direction-specific joint expression matrix ",
-       "(produced by build_tumour_neighbourhood_input.R or equivalent).")
-}
+# Unified input resolution — three cases:
+#   1. Both --expr-rds and --mapping-rds given: load from disk (legacy / PAM50 path)
+#   2. PAM50 direction without explicit overrides: hard error (PAM50 needs staged files)
+#   3. Non-PAM50 without explicit overrides: self-sufficient build from config
 
-mapping_path <- opt$`mapping-rds`
-if (is.null(mapping_path) || !nzchar(mapping_path)) {
-  stop("--mapping-rds is required. Pass the direction-specific DSMZ cell-line mapping RDS.")
+is_pam50_dir      <- startsWith(direction, "pam50")
+have_expr_override <- !is.null(opt$`expr-rds`)    && nzchar(opt$`expr-rds`)
+have_map_override  <- !is.null(opt$`mapping-rds`) && nzchar(opt$`mapping-rds`)
+
+if (have_expr_override && have_map_override) {
+  # ── Legacy / PAM50 staged-file path ─────────────────────────────────────
+  expr_mat_path <- opt$`expr-rds`
+  mapping_path  <- opt$`mapping-rds`
+  cat("[INFO] Using explicit --expr-rds:", expr_mat_path, "\n")
+  cat("[INFO] Using explicit --mapping-rds:", mapping_path, "\n")
+  if (!file.exists(expr_mat_path)) stop("Expression matrix RDS not found: ", expr_mat_path)
+  if (!file.exists(mapping_path))  stop("Mapping RDS not found: ", mapping_path)
+  expr_mat         <- readRDS(expr_mat_path)
+  orig_to_cellline <- readRDS(mapping_path)
+  cat("[INFO] Expression matrix:", nrow(expr_mat), "samples x", ncol(expr_mat), "genes\n")
+  cat("[INFO] Mapping entries:", length(orig_to_cellline), "\n")
+
+} else if (is_pam50_dir) {
+  # ── PAM50 requires prebuilt staged files ────────────────────────────────
+  if (!have_expr_override) {
+    stop("--expr-rds is required for PAM50 directions (direction: ", direction, ").\n",
+         "PAM50 staged inputs are produced by build_dsmz_tcga_pam50matrix.R.")
+  }
+  if (!have_map_override) {
+    stop("--mapping-rds is required for PAM50 directions (direction: ", direction, ").\n",
+         "PAM50 staged inputs are produced by build_dsmz_tcga_pam50matrix.R.")
+  }
+
+} else {
+  # ── Non-PAM50 self-sufficient mode ──────────────────────────────────────
+  cat("[INFO] Non-PAM50 direction; building inputs from config (unsup_root:", unsup_root, ")\n")
+  .built           <- build_joint_inputs_from_config(cfg, direction, unsup_root)
+  expr_mat         <- .built$expr_mat
+  orig_to_cellline <- .built$mapping
+  rm(.built)
+  cat("[INFO] Expression matrix:", nrow(expr_mat), "samples x", ncol(expr_mat), "genes\n")
+  cat("[INFO] Mapping entries:", length(orig_to_cellline), "\n")
 }
 
 cat("[INFO] Expression matrix path:\n  ", expr_mat_path, "\n", sep = "")
@@ -304,16 +446,9 @@ if (!file.exists(mapping_path)) {
 #   - tumour_nh_io.R: Input/output utilities and path management
 #   - tumour_neighbourhood.R: Core neighbourhood computation algorithm
 
-cat("[INFO] Sourcing base functions from:\n  ", base_functions_dir, "\n", sep = "")
-
-for (f in c("tumour_nh_io.R", "tumour_neighbourhood.R")) {
-  src_path <- file.path(base_functions_dir, f)
-  if (!file.exists(src_path)) {
-    stop("Required helper not found: ", src_path)
-  }
-  # Source without local=TRUE to make functions available in global scope.
-  source(src_path)
-}
+# Helper files were already sourced in Section 4 (all .R files from base_fun_dir).
+# No need to re-source tumour_nh_io.R and tumour_neighbourhood.R here.
+cat("[INFO] Base functions loaded from:", base_functions_dir, "\n")
 
 # --- Robustness: accept either nh_paths or make_nh_paths conventions ---
 # Handle cases where the file defines one but the script expects the other
@@ -443,8 +578,7 @@ extract_cell_line_from_technical_id <- function(x) {
 # and DSMZ cell line samples in a unified feature space. The matrix is stored
 # in RDS format for efficient R-native serialisation.
 
-expr_mat <- readRDS(expr_mat_path)
-cat("[INFO] Expression matrix:", nrow(expr_mat), "samples x", ncol(expr_mat), "genes\n")
+# expr_mat is already loaded by the unified input-resolution block in Section 7.
 
 # ------------------------------------------------------------------------------
 # SECTION 12: SAMPLE IDENTIFIER MAPPING LOADING
@@ -457,24 +591,15 @@ cat("[INFO] Expression matrix:", nrow(expr_mat), "samples x", ncol(expr_mat), "g
 #   names(mapping)  = Original technical identifiers (NG-29643_CAL_120_lib...)
 #   values(mapping) = Canonical cell line names (CAL-120, CAL-51, ...)
 
-orig_to_cellline <- readRDS(mapping_path)
-cat("[INFO] Loaded original_sample_id → cell_line mapping (",
-    length(orig_to_cellline), " entries)\n", sep = "")
-
-# Extract mapping components for processing.
+# orig_to_cellline is already set by the unified input-resolution block in Section 7.
+# Extract mapping components for downstream processing.
 original_ids_raw    <- names(orig_to_cellline)
 cell_line_names_raw <- unname(orig_to_cellline)
 
-# Log example mappings for debugging and verification.
-cat("[DEBUG] Example mapping keys (original IDs):\n")
-print(head(original_ids_raw, 5))
-cat("[DEBUG] Example mapping values (cell lines):\n")
-print(head(cell_line_names_raw, 5))
-# First 10 lines of readRDS(mapping_path) as keys + values.
 n_show <- min(10L, length(orig_to_cellline))
-cat("[DEBUG] First ", n_show, " mapping entries (key → value):\n", sep = "")
+cat("[DEBUG] First ", n_show, " mapping entries (original_id -> cell_line):\n", sep = "")
 for (j in seq_len(n_show)) {
-  cat("  ", original_ids_raw[j], " → ", cell_line_names_raw[j], "\n", sep = "")
+  cat("  ", original_ids_raw[j], " -> ", cell_line_names_raw[j], "\n", sep = "")
 }
 
 current_ids <- rownames(expr_mat)

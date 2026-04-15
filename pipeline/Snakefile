@@ -354,7 +354,7 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
             os.path.join(LOGROOT, "multicohort_joint_inputs.log")
         conda: CONDA_ENV_R
         shell:
-            r\'\'\'
+            r'''
             set -euo pipefail
             mkdir -p "{params.outdir}/inputs"
             Rscript "{params.script}" \
@@ -363,7 +363,7 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
               --profiles  "{params.profiles}" \
               --vst_list  "{params.vst_list_str}" \
               > "{log}" 2>&1
-            \'\'\'
+            '''
 
 # Feature list paths.
 # _REL variant → used in rule output: declarations (relative, for portable DAG tracking).
@@ -492,7 +492,11 @@ CONS_EUC_PATTERN       = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_E
 # Partitions directions into pam50 and all feature-set groups (including HVG).
 PAM50_DIRS       = [d for d in AGN_DIRECTIONS if d.startswith("pam50")]
 FEATURE_SET_DIRS = [d for d in AGN_DIRECTIONS if not d.startswith("pam50")]
-FEATURE_SET_DIR_PATTERN = "|".join(map(re.escape, FEATURE_SET_DIRS)) if FEATURE_SET_DIRS else r"a^"
+FEATURE_SET_DIR_PATTERN  = "|".join(map(re.escape, FEATURE_SET_DIRS))       if FEATURE_SET_DIRS      else r"a^"
+FEATURE_SET_EUC_DIRS    = [d for d in FEATURE_SET_DIRS if d.endswith("_euc")]
+FEATURE_SET_CORR_DIRS   = [d for d in FEATURE_SET_DIRS if d.endswith("_corr")]
+FEATURE_SET_EUC_PATTERN = "|".join(map(re.escape, FEATURE_SET_EUC_DIRS))  if FEATURE_SET_EUC_DIRS  else r"a^"
+FEATURE_SET_CORR_PATTERN= "|".join(map(re.escape, FEATURE_SET_CORR_DIRS)) if FEATURE_SET_CORR_DIRS else r"a^"
 
 # Defines the six HC and six k-means clustering kind identifiers.
 # PCA-prefixed kinds are optionally removed for pan-cancer runs where
@@ -1372,35 +1376,18 @@ else:
 # neighbourhood relationships between cell lines and tumours.
 
 
-def nh_expr_rds(direction):
-    """
-    Returns the absolute path to the expression submatrix RDS for a direction.
-    Routes PAM50 directions to their dedicated matrix, and all other feature-set
-    directions (including HVG and MX) to their method-specific submatrix in the
-    featuresets staging directory.
-    """
-    feature = dir_to_feature(direction)
-    if feature == "pam50":
-        if TUMOUR_NH_EXPR_PAM50:
-            return TUMOUR_NH_EXPR_PAM50
-        raise ValueError("PAM50 expression path missing while use_pam50 is enabled")
-    else:
-        return os.path.join(FEATURE_METHOD_OUTDIR, feature, "expr_submatrix.rds")
+def nh_expr_rds_pam50():
+    """Returns the PAM50 expression matrix path. Only valid when use_pam50 is enabled."""
+    if TUMOUR_NH_EXPR_PAM50:
+        return TUMOUR_NH_EXPR_PAM50
+    raise ValueError("PAM50 expression path missing while use_pam50 is enabled")
 
 
-def nh_map_rds(direction):
-    """
-    Returns the absolute path to the cell-line-to-sample-ID mapping RDS for a direction.
-    Mapping files associate DSMZ cell line identifiers with the original VST sample IDs
-    used in the tumour neighbourhood computation.
-    """
-    feature = dir_to_feature(direction)
-    if feature == "pam50":
-        if TUMOUR_NH_MAP_RDS_PAM50:
-            return TUMOUR_NH_MAP_RDS_PAM50
-        raise ValueError("PAM50 map path missing while use_pam50 is enabled")
-    else:
-        return os.path.join(TUMOUR_NH_INPUT_ROOT, f"cell_line_to_original_sample_id_{feature}.rds")
+def nh_map_rds_pam50():
+    """Returns the PAM50 cell-line mapping path. Only valid when use_pam50 is enabled."""
+    if TUMOUR_NH_MAP_RDS_PAM50:
+        return TUMOUR_NH_MAP_RDS_PAM50
+    raise ValueError("PAM50 map path missing while use_pam50 is enabled")
 
 
 # Path helper functions for tumour neighbourhood outputs (single source of truth).
@@ -1476,46 +1463,6 @@ if USE_PAM50:
             '''
 
 
-rule tumour_nh_build_inputs_featureset:
-    """
-    Constructs the joint expression submatrix and cell-line-to-sample mapping for
-    a given feature method, subsetting to the corresponding top-N gene list produced
-    by feature_selection_unsupervised. Parameterised over the feature wildcard to
-    cover all eight methods without duplication. Uses the explicit conda Rscript
-    binary to avoid environment PATH ambiguity on HPC nodes.
-    """
-    input:
-        vst       = VST_JOINT,
-        gene_list = lambda wc: os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn(wc.feature)}_{wc.feature}.txt"),
-        dsmz_meta = cfgget_path_abs(cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"), "paths", "dsmz_meta_csv"),
-        cfg       = CFGFILE_ABS
-    output:
-        expr_rds = os.path.join(FEATURE_METHOD_OUTDIR, "{feature}", "expr_submatrix.rds"),
-        map_rds  = os.path.join(TUMOUR_NH_INPUT_ROOT, "cell_line_to_original_sample_id_{feature}.rds")
-    log: os.path.join(LOGROOT, "tumour_nh_build_inputs_{feature}.log")
-    conda: CONDA_ENV_R
-    wildcard_constraints:
-        feature="|".join(map(re.escape, FEATURE_METHODS))
-    shell:
-        r'''
-        mkdir -p $(dirname {output.expr_rds}) $(dirname {output.map_rds})
-        echo "[DEBUG] CONDA_PREFIX=${{CONDA_PREFIX:-NA}}" >> {log} 2>&1
-        which Rscript >> {log} 2>&1
-        Rscript --version >> {log} 2>&1
-        echo "[DEBUG] Script path: {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R" >> {log} 2>&1
-        ls -lh {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R >> {log} 2>&1
-        "${{CONDA_PREFIX}}/bin/Rscript" --vanilla {SCRIPTS_DIR}/build_tumour_neighbourhood_input.R \
-          --config {input.cfg} \
-          --vst {input.vst} \
-          --gene-list {input.gene_list} \
-          --dsmz-meta {input.dsmz_meta} \
-          --expr-out {output.expr_rds} \
-          --map-out {output.map_rds} \
-          --direction {wildcards.feature} >> {log} 2>&1
-        test -s {output.expr_rds} || (echo "ERROR: missing {output.expr_rds}" >&2; exit 1)
-        test -s {output.map_rds}  || (echo "ERROR: missing {output.map_rds}"  >&2; exit 1)
-        '''
-
 
 # =============================================================================
 # STAGE 4: TUMOUR NEIGHBOURHOOD ANALYSIS
@@ -1537,8 +1484,8 @@ if USE_PAM50:
         when use_pam50 is enabled.
         """
         input:
-            expr_rds    = TUMOUR_NH_EXPR_PAM50,
-            map_rds     = TUMOUR_NH_MAP_RDS_PAM50,
+            expr_rds    = nh_expr_rds_pam50(),
+            map_rds     = nh_map_rds_pam50(),
             cfg_file    = CFGFILE_ABS,
             cluster_rds = lambda wc: expand(
                 os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
@@ -1578,8 +1525,6 @@ rule tumour_nh_hc_featureset:
     PAM50 rules.
     """
     input:
-        expr_rds    = lambda wc: nh_expr_rds(wc.direction),
-        map_rds     = lambda wc: nh_map_rds(wc.direction),
         cfg_file    = CFGFILE_ABS,
         cluster_rds = lambda wc: expand(
             os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
@@ -1600,8 +1545,6 @@ rule tumour_nh_hc_featureset:
           --config "{input.cfg_file}" \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
-          --expr-rds {input.expr_rds} \
-          --mapping-rds {input.map_rds} \
           --unsup-root {UNSUP} \
           --cluster-family hc \
           > {log} 2>&1
@@ -1609,19 +1552,52 @@ rule tumour_nh_hc_featureset:
         touch {output.done}
         '''
 
-rule tumour_nh_km_euc:
+if USE_PAM50:
+    rule tumour_nh_km_pam50:
+        """
+        k-means neighbourhood pass for pam50_euc. Uses prebuilt staged PAM50 files.
+        Only instantiated when use_pam50 is enabled.
+        """
+        input:
+            hc_done     = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
+            expr_rds    = nh_expr_rds_pam50(),
+            map_rds     = nh_map_rds_pam50(),
+            cfg_file    = CFGFILE_ABS,
+            cluster_rds = lambda wc: expand(
+                os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+                kind=CONS_KM_KINDS
+            )
+        output:
+            done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
+        params:
+            script = os.path.join(BASE, "scripts", "run_tumour_neighbourhood_analysis.R")
+        log: os.path.join(LOGROOT, "tumour_nh_km_pam50_{direction}.log")
+        conda: CONDA_ENV_R
+        wildcard_constraints:
+            direction="pam50_euc"
+        shell:
+            r'''
+            Rscript {params.script} \
+              --config "{input.cfg_file}" \
+              --profile "{profile_name}" \
+              --direction {wildcards.direction} \
+              --expr-rds {input.expr_rds} \
+              --mapping-rds {input.map_rds} \
+              --unsup-root {UNSUP} \
+              --cluster-family km \
+              > {log} 2>&1
+            touch {output.done}
+            '''
+
+
+rule tumour_nh_km_featureset:
     """
-    Extends the tumour neighbourhood analysis to include k-means cluster-based
-    neighbourhoods for Euclidean directions. Depends on the HC sentinel file to
-    ensure HC-based neighbourhood files are present before the k-means pass runs,
-    as both passes write into the same direction output directory. Constrained to
-    Euclidean directions only, consistent with the k-means distance restriction
-    applied throughout Stage 1.
+    k-means neighbourhood pass for all non-PAM50 Euclidean directions.
+    Derives inputs directly from config; no prebuilt submatrix needed.
+    Constrained to Euclidean directions only (consistent with k-means distance restriction).
     """
     input:
         hc_done     = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
-        expr_rds    = lambda wc: nh_expr_rds(wc.direction),
-        map_rds     = lambda wc: nh_map_rds(wc.direction),
         cfg_file    = CFGFILE_ABS,
         cluster_rds = lambda wc: expand(
             os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
@@ -1630,25 +1606,22 @@ rule tumour_nh_km_euc:
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
     params:
-        script = os.path.join(BASE, "scripts", "compute_tumour_neighbourhoods.R")
+        script = os.path.join(BASE, "scripts", "run_tumour_neighbourhood_analysis.R")
     log: os.path.join(LOGROOT, "tumour_nh_km_euc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
-        direction=CONS_EUC_PATTERN
+        direction=FEATURE_SET_EUC_PATTERN
     shell:
         r'''
         Rscript {params.script} \
           --config "{input.cfg_file}" \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
-          --expr-rds {input.expr_rds} \
-          --mapping-rds {input.map_rds} \
           --unsup-root {UNSUP} \
           --cluster-family km \
           > {log} 2>&1
         touch {output.done}
         '''
-
 
 # =============================================================================
 # STAGE 4 (CONTINUED): PROBABILISTIC NEIGHBOURHOOD CONSENSUS
@@ -1687,12 +1660,41 @@ if USE_PAM50:
             '''
 
 
-rule tumour_nh_consensus_featureset:
+rule tumour_nh_consensus_euc_featureset:
     """
-    Aggregates tumour neighbourhood rankings for all non-PAM50 feature-set
-    directions (including HVG and MX) into a probabilistic consensus assignment.
-    Constrained to FEATURE_SET_DIR_PATTERN to prevent DAG ambiguity with the
-    PAM50 consensus rule that shares the same output path template.
+    Probabilistic neighbourhood consensus for Euclidean feature-set directions.
+    Depends on the k-means sentinel (.tumour_neighbourhoods_km_done) so that both
+    HC and KM neighbourhood files are present before consensus aggregation runs.
+    """
+    input:
+        km_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done")
+    output:
+        consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
+        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
+        config = os.path.join(BASE, "config", "config.yaml")
+    log: os.path.join(LOGROOT, "tumour_nh_consensus_{direction}.log")
+    conda: CONDA_ENV_R
+    wildcard_constraints:
+        direction=FEATURE_SET_EUC_PATTERN
+    shell:
+        r'''
+        mkdir -p $(dirname {output.consensus_rds})
+        Rscript {params.script} \
+          --config {params.config} \
+          --profile "{profile_name}" \
+          --direction {wildcards.direction} \
+          --out_rds {output.consensus_rds} \
+          --out_tsv {output.consensus_tsv} \
+          > {log} 2>&1
+        '''
+
+
+rule tumour_nh_consensus_corr_featureset:
+    """
+    Probabilistic neighbourhood consensus for correlation feature-set directions.
+    Depends on the HC sentinel (.tumour_neighbourhoods_done); no KM step for corr.
     """
     input:
         hc_done = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done")
@@ -1705,7 +1707,7 @@ rule tumour_nh_consensus_featureset:
     log: os.path.join(LOGROOT, "tumour_nh_consensus_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
-        direction=FEATURE_SET_DIR_PATTERN
+        direction=FEATURE_SET_CORR_PATTERN
     shell:
         r'''
         mkdir -p $(dirname {output.consensus_rds})
@@ -1713,9 +1715,11 @@ rule tumour_nh_consensus_featureset:
           --config {params.config} \
           --profile "{profile_name}" \
           --direction {wildcards.direction} \
-          --workdir {BASE} \
+          --out_rds {output.consensus_rds} \
+          --out_tsv {output.consensus_tsv} \
           > {log} 2>&1
         '''
+
 
 # STEP 4: Cell-line Similarity Graph
 
