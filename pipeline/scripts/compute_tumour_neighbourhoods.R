@@ -58,7 +58,11 @@ option_list <- list(
   make_option("--mapping-rds", type = "character", default = NULL,
               help = "Optional override: cell_line → original_sample_id mapping RDS"),
   make_option("--direction", type = "character", default = NULL,
-              help = "Direction identifier (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc)")
+              help = "Direction identifier (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc)"),
+  make_option("--unsup-root", type = "character", default = NULL,
+              help = "Optional override for profile unsupervised results root"),
+  make_option("--cluster-family", type = "character", default = "all",
+              help = "Cluster family to process: hc, km, or all [default: %default]")
 )
 
 # parse_args() processes the command-line arguments according to the defined
@@ -191,6 +195,102 @@ if (!grepl("_(euc|corr)$", direction)) {
        "\nExpected a direction ending in _euc or _corr (e.g. HVG_euc, pam50_corr, MAD_euc, Spearman_corr).")
 }
 
+# ==============================================================================
+# SECTION 5B: HELPERS FOR SELF-SUFFICIENT NON-PAM50 INPUT CONSTRUCTION
+# ==============================================================================
+# Non-PAM50 directions build their samples x genes matrix and DSMZ mapping in
+# memory from the profile's joint VST matrix, direction-specific gene list, and
+# metadata. PAM50 remains staged because it uses precomputed PAM50 expression.
+
+resolve_feature_from_direction <- function(direction) {
+  sub("_(euc|corr)$", "", direction)
+}
+
+resolve_feature_gene_list_path <- function(feature, cfg, unsup_root) {
+  topn_map <- cfg$feature_selection$method_topn %||% list()
+  topn <- topn_map[[feature]]
+  if (is.null(topn)) {
+    fallback <- list(
+      Variance=3000L, MAD=3000L, MeanAbsDev=3000L, Entropy=3000L,
+      PCA=3000L, Spearman=500L, MX=500L, kTotal=500L, HVG=3000L
+    )
+    topn <- fallback[[feature]]
+  }
+  if (is.null(topn)) {
+    stop("Cannot determine top-N for feature '", feature,
+         "'. Add it to defaults.feature_selection.method_topn in config.yaml.")
+  }
+  file.path(unsup_root, "feature_selection_unsupervised", "feature_sets",
+            paste0("genes_top", topn, "_", feature, ".txt"))
+}
+
+build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
+  feature <- resolve_feature_from_direction(direction)
+
+  vst_path <- cfg$paths$vst_joint_rds %||% stop("cfg$paths$vst_joint_rds not set.")
+  if (!file.exists(vst_path)) stop("Joint VST matrix not found: ", vst_path)
+
+  gene_list_path <- resolve_feature_gene_list_path(feature, cfg, unsup_root)
+  if (!file.exists(gene_list_path)) {
+    stop("Gene list not found: ", gene_list_path,
+         "\nRun feature_selection_unsupervised before Stage 4 for direction: ", direction)
+  }
+
+  meta_path <- cfg$paths$meta_tsv %||% cfg$paths$dsmz_meta_csv %||%
+    stop("Neither cfg$paths$meta_tsv nor cfg$paths$dsmz_meta_csv is set.")
+  if (!file.exists(meta_path)) stop("DSMZ metadata not found: ", meta_path)
+
+  sample_id_col <- cfg$deseq2$sample_id_col %||% "sample_id"
+  cell_col      <- cfg$deseq2$cell_line_col  %||% "cell_line"
+
+  cat("[INFO] Self-sufficient input build for direction: ", direction, "\n", sep = "")
+  cat("[INFO]   Feature:       ", feature,        "\n", sep = "")
+  cat("[INFO]   VST matrix:    ", vst_path,       "\n", sep = "")
+  cat("[INFO]   Gene list:     ", gene_list_path, "\n", sep = "")
+  cat("[INFO]   Metadata:      ", meta_path,      "\n", sep = "")
+
+  vst_joint <- readRDS(vst_path)
+  cat("[INFO] VST dims: ", nrow(vst_joint), " genes x ", ncol(vst_joint), " samples\n", sep = "")
+
+  n_dsmz_vst <- sum(grepl("^NG-", colnames(vst_joint)))
+  cat("[INFO] DSMZ samples (NG- prefix): ", n_dsmz_vst,
+      " | tumour: ", ncol(vst_joint) - n_dsmz_vst, "\n", sep = "")
+  if (n_dsmz_vst == 0L) stop("No DSMZ samples (NG- prefix) in VST matrix columns.")
+
+  genes <- scan(gene_list_path, what = character(), quiet = TRUE)
+  genes <- intersect(genes, rownames(vst_joint))
+  cat("[INFO] Gene list: ", length(genes), " genes present in VST\n", sep = "")
+  if (length(genes) < 50L) stop("Too few genes found in VST matrix: ", length(genes))
+
+  expr_mat <- t(vst_joint[genes, , drop = FALSE])
+  dsmz_sample_ids <- rownames(expr_mat)[grepl("^NG-", rownames(expr_mat))]
+
+  meta <- read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  if (!sample_id_col %in% colnames(meta)) {
+    stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
+         paste(colnames(meta), collapse = ", "))
+  }
+
+  if (cell_col %in% colnames(meta)) {
+    mapping_raw <- setNames(meta[[cell_col]], meta[[sample_id_col]])
+  } else {
+    derived <- sub("^NG-[0-9]+-?[0-9]*_(.+)_lib.*", "\\1", meta[[sample_id_col]])
+    mapping_raw <- setNames(derived, meta[[sample_id_col]])
+    cat("[WARN] cell_line_col '", cell_col, "' not in metadata; labels derived from technical IDs\n")
+  }
+
+  mapping <- mapping_raw[names(mapping_raw) %in% dsmz_sample_ids]
+  missing_in_meta <- setdiff(dsmz_sample_ids, names(mapping))
+  if (length(missing_in_meta) > 0L) {
+    cat("[WARN] ", length(missing_in_meta),
+        " DSMZ samples not in metadata; using sample ID as cell-line label\n", sep = "")
+    mapping <- c(mapping, setNames(missing_in_meta, missing_in_meta))
+  }
+
+  cat("[INFO] Built mapping: ", length(mapping), " DSMZ samples\n", sep = "")
+  list(expr_mat = expr_mat, mapping = mapping)
+}
+
 # ------------------------------------------------------------------------------
 # SECTION 6: DIRECTION PARSING AND PATH CONFIGURATION
 # ------------------------------------------------------------------------------
@@ -230,7 +330,7 @@ unsup_root <- if (!is.null(unsup_root_expr) && nzchar(unsup_root_expr)) {
 } else if (!is.null(unsup_root_map) && nzchar(unsup_root_map)) {
   unsup_root_map
 } else {
-  cfg$paths$unsup_root %||% "results/unsupervised"
+  opt$`unsup-root` %||% cfg$paths$unsup_root %||% "results/unsupervised"
 }
 
 cat("[INFO] Using unsup_root:", unsup_root, "\n")
@@ -261,38 +361,39 @@ tn_results_root    <- file.path(unsup_root, "tumour_neighbourhoods", direction)
 #
 # This design allows flexible execution in both interactive and pipeline contexts.
 
-# Resolve expression matrix path based on gene set.
-# optparse keeps hyphenated option names, so access with backticks
-expr_mat_path <- opt$`expr-rds` %||%
-  if (gene_set == "PAM50") {
-    cfg$paths$tumour_nh_expr_pam50
-  } else {
-    stop("--expr-rds must be supplied for non-PAM50 directions (direction: ", direction, ")")
-  }
+is_pam50_dir       <- startsWith(direction, "pam50")
+have_expr_override <- !is.null(opt$`expr-rds`)    && nzchar(opt$`expr-rds`)
+have_map_override  <- !is.null(opt$`mapping-rds`) && nzchar(opt$`mapping-rds`)
 
-# Resolve sample ID mapping path.
-# The mapping file links technical sample identifiers to canonical cell line names.
-mapping_path <- opt$`mapping-rds` %||% {
-  # Infer mapping file location from expression matrix directory.
-  map_suffix <- if (startsWith(direction, "pam50")) {
-    "cell_line_to_original_sample_id_pam50.rds"
-  } else {
-    paste0("cell_line_to_original_sample_id_", direction_feature, ".rds")
-  }
-  file.path(dirname(expr_mat_path), map_suffix)
+expr_mat_path <- NA_character_
+mapping_path  <- NA_character_
+expr_mat <- NULL
+orig_to_cellline <- NULL
+
+if (have_expr_override && have_map_override) {
+  expr_mat_path <- opt$`expr-rds`
+  mapping_path  <- opt$`mapping-rds`
+  cat("[INFO] Using explicit --expr-rds: ", expr_mat_path, "\n", sep = "")
+  cat("[INFO] Using explicit --mapping-rds: ", mapping_path, "\n", sep = "")
+  if (!file.exists(expr_mat_path)) stop("Expression matrix RDS not found: ", expr_mat_path)
+  if (!file.exists(mapping_path))  stop("Mapping RDS not found: ", mapping_path)
+  expr_mat         <- readRDS(expr_mat_path)
+  orig_to_cellline <- readRDS(mapping_path)
+} else if (is_pam50_dir) {
+  stop("--expr-rds and --mapping-rds are required for PAM50 directions (direction: ",
+       direction, "). PAM50 staged inputs are produced by build_dsmz_tcga_pam50matrix.R.")
+} else {
+  cat("[INFO] Non-PAM50 direction; building inputs from config in memory.\n")
+  .built           <- build_joint_inputs_from_config(cfg, direction, unsup_root)
+  expr_mat         <- .built$expr_mat
+  orig_to_cellline <- .built$mapping
+  rm(.built)
 }
 
-cat("[INFO] Expression matrix path:\n  ", expr_mat_path, "\n", sep = "")
-cat("[INFO] Cell line mapping path:\n  ", mapping_path, "\n", sep = "")
-
-# Validate that required input files exist before proceeding.
-# Early validation prevents cryptic errors during downstream processing.
-if (!file.exists(expr_mat_path)) {
-  stop("Expression matrix RDS not found at: ", expr_mat_path)
-}
-if (!file.exists(mapping_path)) {
-  stop("cell_line_to_original_sample_id RDS not found at: ", mapping_path)
-}
+cat("[INFO] Expression matrix source:\n  ",
+    ifelse(is.na(expr_mat_path), "in-memory from config", expr_mat_path), "\n", sep = "")
+cat("[INFO] Cell line mapping source:\n  ",
+    ifelse(is.na(mapping_path), "in-memory from config", mapping_path), "\n", sep = "")
 
 # ------------------------------------------------------------------------------
 # SECTION 8: CORE HELPER FUNCTION LOADING
@@ -440,7 +541,6 @@ extract_cell_line_from_technical_id <- function(x) {
 # and DSMZ cell line samples in a unified feature space. The matrix is stored
 # in RDS format for efficient R-native serialisation.
 
-expr_mat <- readRDS(expr_mat_path)
 cat("[INFO] Expression matrix:", nrow(expr_mat), "samples x", ncol(expr_mat), "genes\n")
 
 # ------------------------------------------------------------------------------
@@ -454,7 +554,6 @@ cat("[INFO] Expression matrix:", nrow(expr_mat), "samples x", ncol(expr_mat), "g
 #   names(mapping)  = Original technical identifiers (NG-29643_CAL_120_lib...)
 #   values(mapping) = Canonical cell line names (CAL-120, CAL-51, ...)
 
-orig_to_cellline <- readRDS(mapping_path)
 cat("[INFO] Loaded original_sample_id → cell_line mapping (",
     length(orig_to_cellline), " entries)\n", sep = "")
 
@@ -655,7 +754,22 @@ print(head(data.frame(
 
 methods <- get_nh_methods(unsup_root = unsup_root, direction = direction)
 
-cat("\n[INFO] Methods discovered:\n")
+cluster_family <- tolower(opt$`cluster-family` %||% "all")
+if (!cluster_family %in% c("hc", "km", "all")) {
+  stop("--cluster-family must be one of: hc, km, all (got: ", cluster_family, ")")
+}
+if (cluster_family != "all") {
+  methods <- methods %>% dplyr::filter(grepl(cluster_family, method_id, ignore.case = TRUE))
+  cat(sprintf("[INFO] Filtered to --cluster-family='%s': %d method(s) remain\n",
+              cluster_family, nrow(methods)))
+  if (nrow(methods) == 0) {
+    stop("No methods matched --cluster-family='", cluster_family,
+         "' for direction=", direction,
+         ".\nCheck that the corresponding clustering outputs exist under: ", unsup_root)
+  }
+}
+
+cat("\n[INFO] Methods to process:\n")
 print(methods)
 
 # Filter to only methods with existing cluster files.
