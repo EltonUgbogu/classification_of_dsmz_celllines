@@ -366,7 +366,7 @@ TUMOUR_NH_INPUT_ROOT      = os.path.join(UNSUP,     "tumour_neighbourhoods_input
 
 # Initial pipeline target (Stage 6).  Overridden at end of file after
 # Stage 7 variables are defined so that rule all: includes DESeq2 completion.
-PIPELINE_TARGET = os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbors.tsv")
+PIPELINE_TARGET = os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv")
 
 
 # =============================================================================
@@ -1649,7 +1649,7 @@ rule summarize_p_consensus_all:
 # STAGE 6: GRAPH-BASED CONSENSUS NEIGHBOUR RESOLUTION
 # =============================================================================
 
-rule resolve_dsmz_graph_neighbors:
+rule resolve_dsmz_graph_neighbours:
     """
     Resolves per-cell-line DSMZ neighbours by intersecting the global best-direction
     graph with each cell line's winner-direction graph. Consumes the cross-direction
@@ -1670,11 +1670,11 @@ rule resolve_dsmz_graph_neighbors:
             direction=CONS_DIRECTIONS
         )
     output:
-        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbors.tsv")
+        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv")
     params:
         script = os.path.join(BASE, "scripts", "resolve_dsmz_graph_neighbours.R"),
         config = os.path.join(BASE, "config", "config.yaml")
-    log: os.path.join(LOGROOT, "resolve_dsmz_graph_neighbors.log")
+    log: os.path.join(LOGROOT, "resolve_dsmz_graph_neighbours.log")
     conda: CONDA_ENV_R
     shell:
         r'''
@@ -2275,7 +2275,7 @@ if MARKER_POST_ENABLED:
 
 # Final pipeline terminal target list.
 PIPELINE_TARGET = [
-    os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbors.tsv"),
+    os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
 ]
 if DESEQ2_ENABLED:
     PIPELINE_TARGET.append(NODE_STATS_TSV)
