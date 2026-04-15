@@ -1547,7 +1547,7 @@ if USE_PAM50:
         output:
             done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
         params:
-            script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
+            script = os.path.join(BASE, "scripts", "compute_tumour_neighbourhoods.R")
         log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
         conda: CONDA_ENV_R
         wildcard_constraints:
@@ -1561,6 +1561,8 @@ if USE_PAM50:
               --direction {wildcards.direction} \
               --expr-rds {input.expr_rds} \
               --mapping-rds {input.map_rds} \
+              --unsup-root {UNSUP} \
+              --cluster-family hc \
               > {log} 2>&1
             test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
             touch {output.done}
@@ -1586,7 +1588,7 @@ rule tumour_nh_hc_featureset:
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
     params:
-        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
+        script = os.path.join(BASE, "scripts", "compute_tumour_neighbourhoods.R")
     log: os.path.join(LOGROOT, "tumour_nh_hc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
@@ -1600,6 +1602,8 @@ rule tumour_nh_hc_featureset:
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
           --mapping-rds {input.map_rds} \
+          --unsup-root {UNSUP} \
+          --cluster-family hc \
           > {log} 2>&1
         test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*.csv" | wc -l) -gt 0 || (echo "ERROR: No Top_m_long_*.csv" >&2 && exit 1)
         touch {output.done}
@@ -1626,7 +1630,7 @@ rule tumour_nh_km_euc:
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
     params:
-        script = os.path.join(BASE, "scripts", "comp_tumour_neighbourhoods.R")
+        script = os.path.join(BASE, "scripts", "compute_tumour_neighbourhoods.R")
     log: os.path.join(LOGROOT, "tumour_nh_km_euc_{direction}.log")
     conda: CONDA_ENV_R
     wildcard_constraints:
@@ -1639,6 +1643,8 @@ rule tumour_nh_km_euc:
           --direction {wildcards.direction} \
           --expr-rds {input.expr_rds} \
           --mapping-rds {input.map_rds} \
+          --unsup-root {UNSUP} \
+          --cluster-family km \
           > {log} 2>&1
         touch {output.done}
         '''
