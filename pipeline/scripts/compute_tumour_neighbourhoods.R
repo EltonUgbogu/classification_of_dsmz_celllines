@@ -61,8 +61,8 @@ option_list <- list(
               help = "Direction identifier (e.g. HVG_euc, HVG_corr, MX_euc, pam50_euc)"),
   make_option("--unsup-root", type = "character", default = NULL,
               help = "Optional override for profile unsupervised results root"),
-  make_option("--cluster-family", type = "character", default = "all",
-              help = "Cluster family to process: hc, km, or all [default: %default]")
+  make_option("--cluster-family", type = "character", default = NULL,
+              help = "Cluster family to process: hc or km [required]")
 )
 
 # parse_args() processes the command-line arguments according to the defined
@@ -754,19 +754,25 @@ print(head(data.frame(
 
 methods <- get_nh_methods(unsup_root = unsup_root, direction = direction)
 
-cluster_family <- tolower(opt$`cluster-family` %||% "all")
-if (!cluster_family %in% c("hc", "km", "all")) {
-  stop("--cluster-family must be one of: hc, km, all (got: ", cluster_family, ")")
+cluster_family_raw <- opt$`cluster-family`
+if (is.null(cluster_family_raw) || !nzchar(cluster_family_raw)) {
+  stop("--cluster-family is required. Allowed values: hc, km")
 }
-if (cluster_family != "all") {
-  methods <- methods %>% dplyr::filter(grepl(cluster_family, method_id, ignore.case = TRUE))
-  cat(sprintf("[INFO] Filtered to --cluster-family='%s': %d method(s) remain\n",
-              cluster_family, nrow(methods)))
-  if (nrow(methods) == 0) {
-    stop("No methods matched --cluster-family='", cluster_family,
-         "' for direction=", direction,
-         ".\nCheck that the corresponding clustering outputs exist under: ", unsup_root)
-  }
+cluster_family <- tolower(cluster_family_raw)
+if (!cluster_family %in% c("hc", "km")) {
+  stop("--cluster-family must be 'hc' or 'km' (got: '", cluster_family_raw, "').",
+       " The value 'all' is no longer accepted.")
+}
+methods <- methods %>%
+  dplyr::filter(grepl(paste0("^(AGN|CCP)_", toupper(cluster_family), "_"), method_id))
+cat(sprintf("[INFO] Filtered to --cluster-family='%s': %d method(s) remain\n",
+            cluster_family, nrow(methods)))
+if (nrow(methods) == 0) {
+  stop("No methods matched --cluster-family='", cluster_family,
+       "' for direction=", direction,
+       ".\nExpected patterns: AGN_", toupper(cluster_family), "_* and CCP_",
+       toupper(cluster_family), "_*",
+       "\nCheck clustering outputs under: ", unsup_root)
 }
 
 cat("\n[INFO] Methods to process:\n")
