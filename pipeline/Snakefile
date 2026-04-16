@@ -1531,6 +1531,7 @@ rule tumour_nh_km:
           --unsup-root {UNSUP} \
           --cluster-family km \
           > {log} 2>&1
+        test $(find {TUMOUR_NH_ROOT_ABS}/{wildcards.direction} -maxdepth 2 -type f -name "Top_m_long_*_KM_*.csv" | wc -l) -gt 0 || (echo "ERROR: No KM-derived Top_m_long_*_KM_*.csv for {wildcards.direction}" >&2 && exit 1)
         touch {output.done}
         '''
 

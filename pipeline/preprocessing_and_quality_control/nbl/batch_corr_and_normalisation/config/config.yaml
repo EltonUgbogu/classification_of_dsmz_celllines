@@ -1,0 +1,19 @@
+min_shared_genes: 5000
+tumour_counts: /work/ugbogu/pipeline/data/nbl/tumour_counts.rds  # this should have been passed tumour purity analysis pipeline
+dsmz_raw_counts: /work/ugbogu/pipeline/data/nbl/
+nbl_dsmz_counts: /work/ugbogu/pipeline/data/nbl/nbl_dsmz_counts.rds
+
+dsmz_meta_csv: /work/ugbogu/pipeline/data/nbl/dsmz_nbl_meta.csv
+
+dsmz_disease_filter = c("Neuroblastoma"),
+
+
+config <- list(
+  tcga_se_rds = "/home/chu25/data/final_nbl_count_matrix_hgnc.parquet",
+  dsmz_rds = "/home/chu25/data/dsmz/DSMZ_count_gene.rds",
+  dsmz_meta_csv = "/home/chu25/data/dsmz/DSMZ_metadata.csv",
+  tcga_project_filter = c("TCGA-BRCA"),
+  dsmz_organ_filter = c("Breast"),
+  tcga_nbl_subtype_metadata = "/home/chu25/dsmz/old_scripts/nbl_analysis/nbl/unsupervised/TCGA_BRCA_project_subtype.csv",
+  outdir = "/home/chu25/dsmz/old_scripts/nbl_analysis/nbl/unsupervised/results"
+)
