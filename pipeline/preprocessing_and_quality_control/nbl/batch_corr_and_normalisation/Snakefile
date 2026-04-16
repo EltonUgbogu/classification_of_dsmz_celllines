@@ -1,334 +1,35 @@
-#!/usr/bin/env snakemake
+from snakemake.exceptions import WorkflowError
 
-# NBL Batch Correction and Normalisation Pipeline
-options(stringsAsFactors = FALSE)
+if "profiles" not in config or "nbl" not in config["profiles"]:
+    raise WorkflowError("Provide a config file with --configfile config/config.yaml or --configfile config/config.test.yaml")
 
-suppressPackageStartupMessages({
-  library(uwot)
-  library(ggplot2)
-  library(tibble)
-  library(dplyr)
-  library(tidyr)
-  library(matrixStats)
-  library(sva)
-  library(pheatmap)
-  library(SummarizedExperiment)
-  library(tidyverse)
-  library(DESeq2)
-})
+PROFILE = config["profiles"]["nbl"]
 
-import json
-import os
-import re
-import shlex
-import sys
-from pathlib import Path
-from snakemake.shell import shell
-from snakemake.io import expand, directory
-
-#BASE = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
-#BASE = "/work/ugbogu/pipeline/preprocessing_and_quality_control/nbl/batch_corr_and_normalisation/"
-#SCRIPTS_DIR = os.path.join(BASE, "scripts")
-
-BASE_DIR = /work/ugbogu/pipeline/preprocessing_and_quality_control/nbl/batch_corr_and_normalisation/
-SCRIPTS_DIR = os.path.join(BASE_DIR)
-
-# logs should be saved in /work/ugbogu/pipeline/preprocessing_and_quality_control/nbl/batch_corr_and_normalisation/logs
-LOGROOT = os.path.join(BASE_DIR, "logs")
-
-CFGFILE_ABS = os.path.join(SBASE_DIR, "config", "config.yaml")
-configfile = CFGFILE_ABS
-
-rule all:
-    input:
-        rules.load_data.output,
-        rules.common_gene_subset.output,
-        rules.merge_counts_data.output,
-        rules.build_coldata.output,
-        rules.batch_correction.output,
-        rules.vst_transformation.output,
-        rules.make_plots.output,
-        rules.save_data.output,
-
-
-# a python script that reads the tumour and dsmz data from the config file
-
-# load data is just meant to load the data it is not generating any output
-
-rule load_data:
-    input:
-        tumour_rds = config["tumour_rds"],
-        dsmz_rds = config["dsmz_rds"],
-        dsmz_meta_csv = config["dsmz_meta_csv"],
-    output:
-        tumour_counts_rds = "/work/ugbogu/pipeline/data/nbl/tumour_counts.rds",
-        dsmz_nbl_counts_rds = "/work/ugbogu/pipeline/data/nbl/nbl_dsmz_counts.rds", 
-    log: os.path.join(LOGROOT, "load_data.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        Rscript "{SCRIPTS_DIR}/nbl_io.R" \
-         --tumour_rds {input.tumour_rds} \
-         --dsmz_rds {input.dsmz_rds} \
-         --dsmz_meta_csv {input.dsmz_meta_csv} \
-         --out_rds {output.dsmz_nbl_counts_rds} \
-         > "{log} 2>&1"
-        '''
-
-# /work/ugbogu/pipeline/preprocessing_and_quality_control/nbl/batch_corr_and_normalisation/config/config.yaml
-rule nbl_merge_counts:
-    input:
-        tumour_rds = config["tumour_rds"],
-        dsmz_nbl_counts_rds = "/work/ugbogu/pipeline/data/nbl/nbl_dsmz_counts.rds", 
-        cfg_file = CFGFILE_ABS
-    output:
-        nbl_joint_rawcounts_rds = "/work/ugbogu/pipeline/data/nbl/nbl_joint_raw_counts.rds",
-    log: os.path.join(LOGROOT, "nbl_merge_counts.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        Rscript "{SCRIPTS_DIR}/nbl_tumour_dsmz_base_functions.R" \
-          --config "{config}" \
-         --tumour_rds {input.tumour_rds} \
-         --dsmz_rds {input.dsmz_rds} \
-         --dsmz_meta_csv {input.dsmz_meta_csv} \
-         > "{log} 2>&1"
-        '''
-
-
-
-rule build_coldata:
-    input:
-        merged_counts_rds = rules.merge_counts_data.output.merged_counts_rds,
-    output:
-        coldata_tsv = "results/nbl/preprocess/coldata.tsv",
-    log: os.path.join(LOGROOT, "build_coldata.log")
-    conda: CONDA_ENV_R
-    shell:
-        # ==============================================================================
-# 7. Build coldata + add DSMZ cell line names + TCGA subtypes
-# ==============================================================================
-sample_names <- names(sample_ids)
-
-# --- Build tibble ---
-coldata <- tibble(
-  sample  = sample_ids,
-  dataset = batch_labels[sample_names]  # <-- values + names preserved
-) %>%
-  column_to_rownames("sample")  # rownames = sample names
-
-# --- CRITICAL: Ensure dataset is a NAMED factor ---
-coldata$dataset <- batch_labels[rownames(coldata)]  # <-- RE-ASSIGN WITH NAMES
-
-# --- Add DSMZ cell line names ---
-dsmz_meta <- read.csv(config$dsmz_meta_csv, stringsAsFactors = FALSE)
-dsmz_samples <- rownames(coldata)[coldata$dataset == "DSMZ-NBL"]
-
-if (length(dsmz_samples) > 0) {
-  if (!all(c("Cell_Line", "sample_name") %in% colnames(dsmz_meta))) {
-    stop("Missing 'Cell_Line' or 'sample_name' in DSMZ metadata")
-  }
-  cell_line_map <- setNames(dsmz_meta$Cell_Line, dsmz_meta$sample_name)
-  coldata$cell_line <- NA_character_
-  coldata[dsmz_samples, "cell_line"] <- cell_line_map[dsmz_samples]
-}
-
-# --- Add TCGA PAM50 subtypes ---
-tcga_samples <- rownames(coldata)[coldata$dataset == "TCGA-NBL-Tumour-subtype"]
-coldata$subtype <- NA_character_
-coldata[tcga_samples, "subtype"] <- tcga_subtype_labels[tcga_samples]
-
-# --- DEBUG ---
-cat("\n=== First 5 rows of coldata (FINAL) ===\n")
-print(head(coldata, 5))
-cat("\nNames of coldata$dataset (first 5):\n")
-print(head(names(coldata$dataset), 5))
-cat("Class: ", class(coldata$dataset), "\n")
-
-
-
-rule batch_correction:
-    input:
-        merged_counts_rds = rules.merge_counts_data.output.merged_counts_rds,
-    output:
-        batch_corrected_counts_rds = "results/nbl/preprocess/merged_counts_batch_corrected.rds",
-    log: os.path.join(LOGROOT, "batch_correction.log")
-    conda: CONDA_ENV_R
-    shell:
-    batch_corrected_counts <- batch_adjust(
-  Exp_mat      = counts_raw,
-  batch_factor = batch_labels
-)
-        r'''
-        Rscript "{SCRIPTS_DIR}/normalisation.R" \
-         --merged_counts_rds {input.merged_counts_rds} \
-         > "{log} 2>&1"
-        '''
-
-rule vst_transformation:
-    input:
-        batch_corrected_counts_rds = rules.batch_correction.output.batch_corrected_counts_rds,
-    output:
-        vst_transformed_counts_rds = "results/nbl/preprocess/merged_counts_vst_transformed.rds",
-    log: os.path.join(LOGROOT, "vst_transformation.log")
-    conda: CONDA_ENV_R
-    shell:
-    tcga_nbl_subtype_vst <- vst_normalize(
-  Exp_mat = common$tcga_counts,
-  coldata = tcga_nbl_subtype_coldata
-)
-
-dsmz_nbl_vst <- vst_normalize(
-  Exp_mat = common$dsmz_counts,
-  coldata = dsmz_nbl_coldata
-)
-# merge vst normalized dataset
-vst_non_batch_corrected_counts <- cbind(tcga_nbl_subtype_vst, dsmz_nbl_vst)
-# vst_normalize > normalization.R
-
-# ==============================================================================
-# 12. VST on batch-corrected merged matrix
-# ==============================================================================
-vst_batch_corrected_counts <- vst_normalize(
-  Exp_mat = batch_corrected_counts,
-  coldata = coldata
-)
-
-# ==============================================================================
-# 13. Extract batch-corrected VSTs per dataset
-# ==============================================================================
-tcga_vst_nbl_subtype_batch_corrected <- vst_batch_corrected_counts[
-  , colnames(tcga_nbl_subtype_vst), drop = FALSE
+FINAL_OUTPUTS = [
+    "results/nbl/preprocess/tumour_counts.rds",
+    "results/nbl/preprocess/dsmz_nbl_counts.rds",
+    "results/nbl/preprocess/merged_counts_raw.rds",
+    "results/nbl/preprocess/coldata.tsv",
+    "results/nbl/preprocess/merged_counts_batch_corrected.rds",
+    "results/nbl/preprocess/tumour_vst_pre_bc.rds",
+    "results/nbl/preprocess/dsmz_vst_pre_bc.rds",
+    "results/nbl/preprocess/joint_vst_pre_bc.rds",
+    "results/nbl/preprocess/joint_vst_post_bc.rds",
+    "results/nbl/preprocess/tumour_vst_post_bc.rds",
+    "results/nbl/preprocess/dsmz_vst_post_bc.rds",
+    "results/nbl/preprocess/pca_pre_BC.pdf",
+    "results/nbl/preprocess/pca_post_BC.pdf",
+    "results/nbl/preprocess/umap_pre_BC.pdf",
+    "results/nbl/preprocess/umap_post_BC.pdf",
+    "results/nbl/preprocess/qc_tumour_vst.pdf",
+    "results/nbl/preprocess/qc_dsmz_vst.pdf",
 ]
-
-dsmz_vst_nbl_batch_corrected <- vst_batch_corrected_counts[
-  , colnames(dsmz_nbl_vst), drop = FALSE
-]
-
-        r'''
-        Rscript "{SCRIPTS_DIR}/normalisation.R" \
-         --batch_corrected_counts_rds {input.batch_corrected_counts_rds} \
-         > "{log} 2>&1"
-        '''
-
-rule make_plots:   
-    input:
-        vst_transformed_counts_rds = rules.vst_transformation.output.vst_transformed_counts_rds,
-    output:
-        pca_pdf = "results/nbl/preprocess/pca.pdf",
-        umap_pdf = "results/nbl/preprocess/umap.pdf",
-    log: os.path.join(LOGROOT, "make_plots.log")
-    conda: CONDA_ENV_R
-    shell:
-    pca_pre_BC <- make_pca_plot(
-  Exp_mat      = vst_non_batch_corrected_counts,
-  batch_labels = batch_labels,
-  title        = "PCA Pre-Batch Correction",
-  path_pdf     = file.path(config$outdir, "pca_pre_BC.pdf"),
-  center       = TRUE,
-  scale        = TRUE
-)
-
-pca_post_BC <- make_pca_plot(
-  Exp_mat      = vst_batch_corrected_counts,
-  batch_labels = batch_labels,
-  title        = "PCA Post-Batch Correction",
-  path_pdf     = file.path(config$outdir, "pca_post_BC.pdf"),
-  center       = TRUE,
-  scale        = FALSE
-)
-
-umap_pre_BC <- make_umap(
-  Exp_mat      = counts_raw,
-  title        = "UMAP Pre-Batch Correction",
-  path_pdf     = file.path(config$outdir, "umap_pre_BC.pdf"),
-  batch_labels = batch_labels,
-  center       = TRUE,
-  scale        = TRUE
-)
-
-umap_post_BC <- make_umap(
-  Exp_mat      = vst_batch_corrected_counts,
-  title        = "UMAP Post-Batch Correction",
-  path_pdf     = file.path(config$outdir, "umap_post_BC.pdf"),
-  batch_labels = batch_labels,
-  center       = TRUE,
-  scale        = FALSE
-)
-
-# make_pca_plot > visualisation.R
-# make_umap > visualisation.R
-# ==============================================================================
-# 17. QC diagnostics
-# ==============================================================================
-qc_vst_diagnostics(
-  counts    = common$tcga_counts,
-  coldata   = tcga_nbl_subtype_coldata,
-  title     = "TCGA-NBL-Tumour_ST_RAW",
-  outdir    = config$outdir,
-  full_disp = TRUE
-)
-
-qc_vst_diagnostics(
-  counts    = dsmz_nbl_counts,
-  coldata   = dsmz_nbl_coldata,
-  title     = "DSMZ-NBL_RAW",
-  outdir    = config$outdir,
-  full_disp = TRUE
-)
-
-# qc_vst_diagnostics > visualisation.R
-# ==============================================================================
-# Done
-# ==============================================================================
-message("[SUCCESS] nbl_main.R completed – all outputs in: ", config$outdir)
-        r'''
-        Rscript "{SCRIPTS_DIR}/visualisation.R" \
-         --vst_transformed_counts_rds {input.vst_transformed_counts_rds} \
-         > "{log} 2>&1"
-        '''
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-rule save_data:
-    input:
-        vst_transformed_counts_rds = rules.vst_transformation.output.vst_transformed_counts_rds,
-    output:
-        vst_transformed_counts_rds = "results/nbl/preprocess/merged_counts_vst_transformed.rds",
-    log: os.path.join(LOGROOT, "save_data.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        Rscript "{SCRIPTS_DIR}/normalisation.R" \
-         --vst_transformed_counts_rds {input.vst_transformed_counts_rds} \
-         > "{log} 2>&1"
-        '''
 
 rule preprocess_integrate_nbl:
     input:
-        tumour_rds = config["profiles"]["nbl"]["tumour_rds"],
-        dsmz_rds = config["profiles"]["nbl"]["dsmz_rds"],
-        dsmz_meta_csv = config["profiles"]["nbl"]["dsmz_meta_csv"],
-
-
-rule preprocess_integrate_nbl:
-    input:
-        tumour_rds = config["profiles"]["nbl"]["tumour_rds"],
-        dsmz_rds = config["profiles"]["nbl"]["dsmz_rds"],
-        dsmz_meta_csv = config["profiles"]["nbl"]["dsmz_meta_csv"],
+        tumour_rds = PROFILE["tumour_rds"],
+        dsmz_rds = PROFILE["dsmz_rds"],
+        dsmz_meta_csv = PROFILE["dsmz_meta_csv"],
     output:
         tumour_counts_rds = "results/nbl/preprocess/tumour_counts.rds",
         dsmz_counts_rds = "results/nbl/preprocess/dsmz_nbl_counts.rds",
@@ -348,16 +49,16 @@ rule preprocess_integrate_nbl:
         tumour_qc_pdf = "results/nbl/preprocess/qc_tumour_vst.pdf",
         dsmz_qc_pdf = "results/nbl/preprocess/qc_dsmz_vst.pdf",
     params:
-        min_shared = config["profiles"]["nbl"].get("min_shared_genes", 5000),
-        tumour_label = config["profiles"]["nbl"].get("tumour_label", "NBL_TUMOUR"),
-        dsmz_label = config["profiles"]["nbl"].get("dsmz_label", "DSMZ_NBL"),
-        dsmz_sample_col = config["profiles"]["nbl"].get("dsmz_sample_col", "sample_name"),
-        dsmz_cellline_col = config["profiles"]["nbl"].get("dsmz_cellline_col", "Cell_Line"),
-        dsmz_filter_col = config["profiles"]["nbl"].get("dsmz_filter_col", "Primary_Tissue"),
-        dsmz_filter_values = config["profiles"]["nbl"].get("dsmz_filter_values", ["Neuroblastoma"]),
-        subtype_metadata = config["profiles"]["nbl"].get("subtype_metadata", ""),
-        subtype_sample_col = config["profiles"]["nbl"].get("subtype_sample_col", "sample"),
-        subtype_col = config["profiles"]["nbl"].get("subtype_col", "subtype"),
+        min_shared = PROFILE.get("min_shared_genes", 5000),
+        tumour_label = PROFILE.get("tumour_label", "NBL_TUMOUR"),
+        dsmz_label = PROFILE.get("dsmz_label", "DSMZ_NBL"),
+        dsmz_sample_col = PROFILE.get("dsmz_sample_col", "sample_name"),
+        dsmz_cellline_col = PROFILE.get("dsmz_cellline_col", "Cell_Line"),
+        dsmz_filter_col = PROFILE.get("dsmz_filter_col", "Disease"),
+        dsmz_filter_values = PROFILE.get("dsmz_filter_values", ["Neuroblastoma"]),
+        subtype_metadata = PROFILE.get("subtype_metadata", ""),
+        subtype_sample_col = PROFILE.get("subtype_sample_col", "sample"),
+        subtype_col = PROFILE.get("subtype_col", "subtype"),
     log:
         "logs/nbl/preprocess_integrate_nbl.log"
     conda:
@@ -365,7 +66,6 @@ rule preprocess_integrate_nbl:
     script:
         "scripts/R/nbl_preprocess_snakemake.R"
 
-
-rule nbl_all:
+rule all:
     input:
-        rules.preprocess_integrate_nbl.output
+        FINAL_OUTPUTS
