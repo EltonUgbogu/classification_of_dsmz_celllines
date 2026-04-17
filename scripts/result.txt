@@ -1,0 +1,134 @@
+\section{Results}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Figures/umap_raw_cell_tumour_60616.pdf}
+    \caption{Two-dimensional UMAP projection of DSMZ cell lines and clinical patient tumour samples derived from the unnormalised and uncorrected expression matrix (no normalisation or batch correction applied). Points were coloured by tumour lineage (breast cancer, retinoblastoma, neuroblastoma) and denoted sample origin (cell line vs clinical patient tumour sample). The embedding was computed using 60{,}616 genes across 58 cell lines and 1{,}223 clinical patient tumour samples.}
+    \label{fig:umap_raw_CT}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Figures/umap_batch_corrected_cell_tumour_60616.pdf}
+    \caption{Two-dimensional UMAP projection of DSMZ cell lines and clinical patient tumour samples derived from the normalised and batch-corrected expression matrix. Points were coloured by tumour lineage (breast cancer, retinoblastoma, neuroblastoma) and denoted sample origin (cell line versus clinical patient tumour sample). The embedding was computed using 60{,}616 genes across 58 cell lines and 1{,}223 clinical patient tumour samples.}
+    \label{fig:umap_NB_CT}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Figures/umap_feature_set_breast_cancer_258.pdf}
+    \caption{Two-dimensional UMAP projection of DSMZ cell lines and clinical patient tumour samples based on a selected set of 258 informative genes. Compared to the full transcriptome embedding, the reduced feature space enhanced separation between tumour lineages (breast cancer, retinoblastoma, and neuroblastoma) while preserving alignment between cell lines and their corresponding clinical patient tumour samples. The embedding was computed across 58 cell lines and 1{,}128 clinical patient tumour samples.}
+    \label{fig:umap_featureSet_CT}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Thesis_writeup/Figures/breast_cancer/feature_dis_breast_cancer.pdf}
+    \caption{Comparison of feature selection methods and distance metrics for cell line–clinical patient tumour neighbourhood analysis in the breast cancer cohort. Bars represented the fraction of cell line–clinical patient tumour pairs exhibiting strong neighbourhood consensus ($p_{\text{consensus}} \geq 0.7$) for each direction (feature selection method × distance metric). Values were expressed as percentages.}
+    \label{fig:feature_distance_brca}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Thesis_writeup/Figures/neuroblastoma/feature_dis_neuroblastoma.pdf}
+    \caption{Comparison of feature selection methods and distance metrics for cell line–clinical patient tumour neighbourhood analysis in the neuroblastoma cohort. Bars represented the fraction of cell line–clinical patient tumour pairs exhibiting strong neighbourhood consensus ($p_{\text{consensus}} \geq 0.7$) for each direction (feature selection method × distance metric). Values were expressed as percentages.}
+    \label{fig:feature_distance_NBL}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Thesis_writeup/Figures/retinoblastoma/feature_dis_retinoblastoma.pdf}
+    \caption{Comparison of feature selection methods and distance metrics for cell line–clinical patient tumour neighbourhood analysis in the retinoblastoma cohort. Bars represented the fraction of cell line–clinical patient tumour pairs exhibiting strong neighbourhood consensus ($p_{\text{consensus}} \geq 0.7$) for each direction (feature selection method × distance metric). Values were expressed as percentages.}
+    \label{fig:feature_distance_RBL}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Thesis_writeup/Figures/breast_cancer/per_cellline_feature_dis_breast_cancer.pdf}
+    \caption{Per cell line winning feature–distance representation in the breast cancer cohort. Each row corresponded to a DSMZ breast cancer cell line and the point indicated the direction (feature selection method × distance metric) that maximised neighbourhood agreement with clinical patient tumour samples. Point colour denoted the feature set, and point shape denoted the distance metric (correlation vs Euclidean). Values shown on the right indicated, for each cell line, the best achieved fraction of cell line–clinical patient tumour pairs with strong neighbourhood consensus ($p_{\text{consensus}} \geq 0.7$).}
+    \label{fig:per_cellline_feature_distance_brca}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Thesis_writeup/Figures/neuroblastoma/per_cellline_feature_dis_neuroblastoma.pdf}
+    \caption{Per cell line winning feature–distance representation in the neuroblastoma cohort. Each row corresponded to a DSMZ neuroblastoma cell line and the point indicated the direction (feature selection method × distance metric) that maximised neighbourhood agreement with clinical patient tumour samples. Point colour denoted the feature set, and point shape denoted the distance metric (correlation vs Euclidean). Values shown on the right indicated, for each cell line, the best achieved fraction of cell line–clinical patient tumour pairs with strong neighbourhood consensus ($p_{\text{consensus}} \geq 0.7$).}
+    \label{fig:per_cellline_feature_distance_nbl}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Thesis_writeup/Figures/retinoblastoma/per_cellline_feature_dis_retinoblastoma.pdf}
+    \caption{Per cell line winning feature–distance representation in the retinoblastoma cohort. Each row corresponded to a DSMZ retinoblastoma cell line and the point indicated the direction (feature selection method × distance metric) that maximised neighbourhood agreement with clinical patient tumour samples. Point colour denoted the feature set, and point shape denoted the distance metric (correlation vs Euclidean). Values shown on the right indicated, for each cell line, the best achieved fraction of cell line–clinical patient tumour pairs with strong neighbourhood consensus ($p_{\text{consensus}} \geq 0.7$).}
+    \label{fig:per_cellline_feature_distance_rbl}
+\end{figure}
+
+
+% --- NBL (neuroblastoma) resolved components ---
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{Thesis_writeup/Figures/neuroblastoma/nbl_resolved_components.pdf}
+  \caption{{DSMZ neuroblastoma cell line similarity network after component resolution.}
+  Nodes represented NBL cell lines and edges indicated retained high-confidence similarity links in the final resolved graph; disconnected subgraphs corresponded to resolved components (putative transcriptomic subgroups). Black-outlined nodes denoted the selected representative/anchor cell line for each component, including singleton components (isolated nodes).}
+  \label{fig:nbl_resolved_components}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{Thesis_writeup/Figures/neuroblastoma/Fig_nbl_consensus_dsmz_graph.pdf}
+  \caption{{DSMZ neuroblastoma (NBL) cell line consensus similarity network.}
+ Nodes represented DSMZ neuroblastoma cell lines.  Edges indicated similarity relationships derived from consensus aggregation of cell line to clinical patient sample neighbourhood analysis. 
+ Continuous edges denoted links supported by $\geq 2$ independent feature selection methods (feature-selection and distance metrics).
+ Nodes with a thick outline exhibited high betweenness centrality, highlighting potential hub or bridging cell lines. The network was disconnected and comprised two connected components: a component encompassing the majority of NBL cell lines and a distinct two-node component (GI\_ME\_N and CCLF\_PEDS\_0015\_T).}
+  \label{fig:nbl_consensus_dsmz_graph}
+\end{figure}
+
+
+% --- RBL (retinoblastoma) resolved components ---
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Thesis_writeup/Figures/retinoblastoma/Fig_rbl_dsmz_consensus_graph.pdf}
+    \caption{{DSMZ retinoblastoma (RBL) cell line consensus similarity network.}
+Nodes represented DSMZ retinoblastoma cell lines.
+Edges indicated similarity relationships derived from consensus aggregation of cell line to clinical patient sample neighbourhood analysis. Continuous edges denoted links supported by $\geq 2$ independent feature selection methods (feature-selection and distance metrics). Nodes with a thick outline exhibited high betweenness centrality, indicating potential hub or bridging cell lines. The network was disconnected and comprised two connected components: a component encompassing the majority of RBL cell lines and a single isolated node (RBL\_14).}
+  \label{fig:rbl_consensus_dsmz_graph}
+\end{figure}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{Thesis_writeup/Figures/retinoblastoma/rbl_resolved_components.pdf}
+  \caption{{Retinoblastoma (RBL) DSMZ cell-line similarity network after component resolution.}
+  The resolved graph separated cell lines into disconnected components defined by high-confidence similarity edges. A main multi-node component connected \textit{RBL\_20\_1/RBL\_20\_3} with \textit{RBL\_18}, extending via \textit{RBL\_13} to \textit{RBL\_30}, while \textit{RBL\_15\_4}–\textit{RBL\_15\_2} formed a distinct two-node component. \textit{RBL\_7}, \textit{WERI\_RB1}, \textit{Y\_79}, and \textit{RBL\_14} appeared as singleton components. Black-outlined nodes indicated the representative/anchor selected per component.}
+  \label{fig:rbl_resolved_components}
+\end{figure}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{Figures/breast_cancer/breast_cancer_resolved_components.pdf}
+  \caption{{Resolved DSMZ cell line similarity network for breast cancer.}
+  Nodes represented DSMZ breast cancer cell lines and edges denoted retained high-confidence similarity links following component resolution of the consensus network. 
+  Disconnected components represented distinct transcriptomic groupings. 
+  A large connected subgraph spanned luminal/HER2-like cell lines (e.g., \textit{BT\_474}, \textit{MCF\_7}, \textit{T\_47D}, \textit{SK\_BR\_3} and related lines), while a separate basal-like component was centred on \textit{HDQ\_P1} with \textit{CAL\_120}, \textit{CAL\_85\_1}, \textit{HCC\_1143}, and \textit{HCC\_1599}. 
+  A smaller linear component connected \textit{JIMT\_1}, \textit{COLO\_824}, and \textit{MDA\_MB\_468}, and additional small or singleton components were observed (e.g., \textit{DU\_4475}, \textit{CAL\_51}, \textit{HCC\_1937}). 
+  Black-outlined nodes indicated the representative (anchor) selected for each component, including singleton components.
+  }
+  \label{fig:brca_resolved_components}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{Figures/breast_cancer/Fig_dsmz_brca_consensus_graph.pdf}
+  \caption{{DSMZ breast cancer cell line similarity network.}
+  Nodes represented DSMZ breast cancer cell lines. Edges indicated similarity relationships derived from consensus aggregation of cell line to clinical patient sample neighbourhood analysis. 
+  Continuous edges denoted connections supported by $\geq$2 independent feature selection methods (feature-selection and distance metrics), whereas dashed edges represented connections supported by 1  feature selection methods. 
+  Nodes with a thick outline exhibited high betweenness centrality, highlighting potential hub or bridging cell lines within the network. The network was disconnected and comprised two connected components.
+  }
+  \label{fig:brca_consensus_dsmz}
+\end{figure}

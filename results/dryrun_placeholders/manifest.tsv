@@ -1,0 +1,18 @@
+path	profile	action	reason
+data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds	brca	exists
+data/dsmz/DSMZ_count_gene.rds	brca	exists
+data/dsmz/DSMZ_metadata.csv	brca	exists
+results/unsupervised/brca/deseq2_markers/tables/anchor_brca_placeholder_vs_outside_component_0001.tsv	brca	exists	deseq2_table
+data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds	nbl	exists
+data/dsmz/DSMZ_count_gene.rds	nbl	exists
+data/dsmz/DSMZ_metadata.csv	nbl	exists
+results/unsupervised/nbl/deseq2_markers/tables/anchor_nbl_placeholder_vs_outside_component_0001.tsv	nbl	exists	deseq2_table
+data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds	rbl	exists
+data/dsmz/DSMZ_count_gene.rds	rbl	exists
+data/dsmz/DSMZ_metadata.csv	rbl	exists
+results/unsupervised/rbl/deseq2_markers/tables/anchor_rbl_placeholder_vs_outside_component_0001.tsv	rbl	exists	deseq2_table
+results/unsupervised/heme/integrated/heme_joint_expr_vst_batch_corrected.rds	heme	exists
+data/heme/dsmz_ll100_cellline_vst_batch_corrected.rds	heme	created
+data/heme/laml_cll_tumour_vst_batch_corrected.rds	heme	created
+results/unsupervised/heme/inputs/heme_joint_metadata.tsv	heme	exists
+results/unsupervised/heme/deseq2_markers/tables/anchor_heme_placeholder_vs_outside_component_0001.tsv	heme	exists	deseq2_table

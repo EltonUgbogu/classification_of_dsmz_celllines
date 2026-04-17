@@ -1,0 +1,79 @@
+name: tcga-r-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  # R base
+  - r-base
+  - r-readr
+  
+  # Core CLI + IO + data manipulation
+  - r-optparse
+  - r-tidyverse
+  - r-data.table
+  - r-tidyr
+  - r-tibble
+  - r-dplyr
+  - r-stringr
+  - r-magrittr
+  
+  # Plotting and visualization
+  - r-ggplot2
+  - r-ggrepel
+  - r-viridis
+  - r-rcolorbrewer
+  - r-scales
+  - r-ggthemes
+  - r-cowplot
+  - r-patchwork
+  - r-reshape2
+  - r-pheatmap
+  - r-upsetr
+  - r-tidygraph
+  - r-svglite
+  
+  # Matrix operations and linear algebra
+  - r-matrix
+  - r-matrixstats
+  - r-proxy
+  - r-irlba
+  
+  # Dimensionality reduction and clustering
+  - r-umap
+  - r-uwot
+  - r-rtsne
+  - r-dbscan
+  - r-fpc
+  - r-cluster
+  - r-factoextra
+  
+  # Graph and network analysis
+  - r-igraph
+  - r-ggraph
+  - r-wgcna
+  
+  # Utilities
+  - r-purrr
+  - r-yaml
+  - r-devtools
+  - r-biocmanager
+  
+  # Bioconductor core
+  - bioconductor-biobase
+  - bioconductor-biocgenerics
+  - bioconductor-s4vectors
+  - bioconductor-iranges
+  - bioconductor-genomicranges
+  - bioconductor-summarizedexperiment
+  
+  # Bioconductor differential expression
+  - bioconductor-deseq2
+  - bioconductor-edger
+  - bioconductor-limma
+  
+  # Bioconductor visualization and annotation
+  - bioconductor-complexheatmap
+  - bioconductor-annotationdbi
+  - bioconductor-org.hs.eg.db
+  - bioconductor-consensusclusterplus

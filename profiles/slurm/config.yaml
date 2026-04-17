@@ -1,0 +1,35 @@
+# Slurm execution profile
+executor: slurm
+jobs: 200
+use-conda: true
+rerun-incomplete: true
+printshellcmds: true
+show-failed-logs: true
+latency-wait: 120
+keep-going: true
+
+# Default resources for any rule that doesn't specify them
+default-resources:
+  - mem_mb=4000
+  - runtime=60
+  - threads=1
+
+# Rule-specific overrides (adjust rule names to match your actual rules)
+set-resources:
+  tumour_neighbourhood_p_consensus_pan_featureset:
+    mem_mb: 16000
+    runtime: 240
+    threads: 1
+  pan_cancer_dsmz_dsmz_graph:
+    mem_mb: 8000
+    runtime: 180
+    threads: 1
+  consensus_ccp_cell_tumour_pan:
+    mem_mb: 12000
+    runtime: 300
+    threads: 1
+
+# Slurm-specific settings (customize for your cluster)
+slurm:
+  account: null  # Set your account name if required
+  qos: null      # Set QoS if required

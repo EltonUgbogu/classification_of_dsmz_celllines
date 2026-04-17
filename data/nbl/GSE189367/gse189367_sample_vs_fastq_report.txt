@@ -1,0 +1,104 @@
+GSE189367 Sample Export vs FASTQ Report
+=======================================
+Generated: 2026-03-26 04:11:27 UTC
+
+Input files
+-----------
+- Sample list : /work/ugbogu/pipeline/data/nbl/preprocessing_results/sample_id_exports/GSE189367_sample_ids.tsv
+- FASTQ dir   : /work/ugbogu/pipeline/data/nbl/GSE189367/fastq
+
+Comparison basis
+----------------
+- Sample export IDs were normalised to raw SRR accessions before comparison.
+- FASTQ-derived IDs were extracted from filenames and counted only when both _1.fastq.gz and _2.fastq.gz were present.
+
+Set comparison summary
+----------------------
+- Sample-export SRR IDs : 43
+- FASTQ-derived SRR IDs : 64
+- IDs in both           : 43
+- Only in sample export : 0
+- Only in FASTQ         : 21
+
+Interpretation
+--------------
+- IDs only in sample export are expected by the retained downstream sample set but are missing from the current paired FASTQ directory.
+- IDs only in FASTQ are present on disk but absent from the sample export, which may reflect later downstream filtering such as tumour-purity or other analysis-subset selection.
+
+IDs only in sample export
+-------------------------
+- none
+
+IDs only in FASTQ
+-----------------
+- SRR17010969
+- SRR17010970
+- SRR17010973
+- SRR17010975
+- SRR17010976
+- SRR17010978
+- SRR17010982
+- SRR17010989
+- SRR17010991
+- SRR17010992
+- SRR17010993
+- SRR17010996
+- SRR17010997
+- SRR17010999
+- SRR17011004
+- SRR17011012
+- SRR17011014
+- SRR17011016
+- SRR17011017
+- SRR17011025
+- SRR17011026
+
+IDs in both
+-----------
+- SRR17010968
+- SRR17010971
+- SRR17010972
+- SRR17010974
+- SRR17010977
+- SRR17010979
+- SRR17010980
+- SRR17010981
+- SRR17010983
+- SRR17010984
+- SRR17010985
+- SRR17010986
+- SRR17010987
+- SRR17010988
+- SRR17010990
+- SRR17010994
+- SRR17010995
+- SRR17010998
+- SRR17011000
+- SRR17011001
+- SRR17011002
+- SRR17011003
+- SRR17011005
+- SRR17011006
+- SRR17011007
+- SRR17011008
+- SRR17011009
+- SRR17011010
+- SRR17011011
+- SRR17011013
+- SRR17011015
+- SRR17011018
+- SRR17011019
+- SRR17011020
+- SRR17011021
+- SRR17011022
+- SRR17011023
+- SRR17011024
+- SRR17011027
+- SRR17011028
+- SRR17011029
+- SRR17011030
+- SRR17011031
+
+Conclusion
+----------
+- This report compares the retained GSE189367 sample export against the currently available paired FASTQ files on disk.
