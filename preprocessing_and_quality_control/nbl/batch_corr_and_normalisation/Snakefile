@@ -1,0 +1,71 @@
+from snakemake.exceptions import WorkflowError
+
+if "profiles" not in config or "nbl" not in config["profiles"]:
+    raise WorkflowError("Provide a config file with --configfile config/config.yaml or --configfile config/config.test.yaml")
+
+PROFILE = config["profiles"]["nbl"]
+
+FINAL_OUTPUTS = [
+    "results/nbl/preprocess/tumour_counts.rds",
+    "results/nbl/preprocess/dsmz_nbl_counts.rds",
+    "results/nbl/preprocess/merged_counts_raw.rds",
+    "results/nbl/preprocess/coldata.tsv",
+    "results/nbl/preprocess/merged_counts_batch_corrected.rds",
+    "results/nbl/preprocess/tumour_vst_pre_bc.rds",
+    "results/nbl/preprocess/dsmz_vst_pre_bc.rds",
+    "results/nbl/preprocess/joint_vst_pre_bc.rds",
+    "results/nbl/preprocess/joint_vst_post_bc.rds",
+    "results/nbl/preprocess/tumour_vst_post_bc.rds",
+    "results/nbl/preprocess/dsmz_vst_post_bc.rds",
+    "results/nbl/preprocess/pca_pre_BC.pdf",
+    "results/nbl/preprocess/pca_post_BC.pdf",
+    "results/nbl/preprocess/umap_pre_BC.pdf",
+    "results/nbl/preprocess/umap_post_BC.pdf",
+    "results/nbl/preprocess/qc_tumour_vst.pdf",
+    "results/nbl/preprocess/qc_dsmz_vst.pdf",
+]
+
+rule preprocess_integrate_nbl:
+    input:
+        tumour_rds = PROFILE["tumour_rds"],
+        dsmz_rds = PROFILE["dsmz_rds"],
+        dsmz_meta_csv = PROFILE["dsmz_meta_csv"],
+    output:
+        tumour_counts_rds = "results/nbl/preprocess/tumour_counts.rds",
+        dsmz_counts_rds = "results/nbl/preprocess/dsmz_nbl_counts.rds",
+        merged_counts_rds = "results/nbl/preprocess/merged_counts_raw.rds",
+        coldata_tsv = "results/nbl/preprocess/coldata.tsv",
+        batch_corrected_counts_rds = "results/nbl/preprocess/merged_counts_batch_corrected.rds",
+        tumour_vst_rds = "results/nbl/preprocess/tumour_vst_pre_bc.rds",
+        dsmz_vst_rds = "results/nbl/preprocess/dsmz_vst_pre_bc.rds",
+        joint_vst_pre_bc_rds = "results/nbl/preprocess/joint_vst_pre_bc.rds",
+        joint_vst_post_bc_rds = "results/nbl/preprocess/joint_vst_post_bc.rds",
+        tumour_vst_post_bc_rds = "results/nbl/preprocess/tumour_vst_post_bc.rds",
+        dsmz_vst_post_bc_rds = "results/nbl/preprocess/dsmz_vst_post_bc.rds",
+        pca_pre_pdf = "results/nbl/preprocess/pca_pre_BC.pdf",
+        pca_post_pdf = "results/nbl/preprocess/pca_post_BC.pdf",
+        umap_pre_pdf = "results/nbl/preprocess/umap_pre_BC.pdf",
+        umap_post_pdf = "results/nbl/preprocess/umap_post_BC.pdf",
+        tumour_qc_pdf = "results/nbl/preprocess/qc_tumour_vst.pdf",
+        dsmz_qc_pdf = "results/nbl/preprocess/qc_dsmz_vst.pdf",
+    params:
+        min_shared = PROFILE.get("min_shared_genes", 5000),
+        tumour_label = PROFILE.get("tumour_label", "NBL_TUMOUR"),
+        dsmz_label = PROFILE.get("dsmz_label", "DSMZ_NBL"),
+        dsmz_sample_col = PROFILE.get("dsmz_sample_col", "sample_name"),
+        dsmz_cellline_col = PROFILE.get("dsmz_cellline_col", "Cell_Line"),
+        dsmz_filter_col = PROFILE.get("dsmz_filter_col", "Disease"),
+        dsmz_filter_values = PROFILE.get("dsmz_filter_values", ["Neuroblastoma"]),
+        subtype_metadata = PROFILE.get("subtype_metadata", ""),
+        subtype_sample_col = PROFILE.get("subtype_sample_col", "sample"),
+        subtype_col = PROFILE.get("subtype_col", "subtype"),
+    log:
+        "logs/nbl/preprocess_integrate_nbl.log"
+    conda:
+        "envs/r_nbl_preprocess.yaml"
+    script:
+        "scripts/R/nbl_preprocess_snakemake.R"
+
+rule all:
+    input:
+        FINAL_OUTPUTS

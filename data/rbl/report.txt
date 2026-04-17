@@ -1,0 +1,117 @@
+RBL Data Download Status Report
+===============================
+Report generated: 2026-03-24 05:58:13 UTC
+
+Scope
+-----
+This report is based on the current state of:
+- /work/ugbogu/pipeline/data/rbl/GSE111168_primary_tumours
+- /work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours
+- /work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours
+- /work/ugbogu/pipeline/data/rbl/logs
+- /work/ugbogu/pipeline/data/rbl/removed_rbl_srr_id_primary_tumour_pe.txt
+
+Top-level storage snapshot
+--------------------------
+- /work/ugbogu/pipeline/data/rbl: 1.1T
+- GSE111168_primary_tumours: 44G
+- GSE196420_primary_tumours: 128G
+- GSE268136_primary_tumours: 869G
+- logs: 12K
+- preprocessing_results: 19M
+
+Per-cohort download state
+-------------------------
+1) GSE111168_primary_tumours
+- all_primary_tumour_pe.txt entries: 3
+- sra/ run directories present: 3
+- paired FASTQ (.fastq.gz) complete runs: 3
+- plain .fastq leftovers: 0
+- missing SRRs vs PE list: none
+- log evidence: GSE111168_85693.out ends with "ALL DONE" (Fri Mar 20 00:51:58 UTC 2026)
+
+2) GSE196420_primary_tumours
+- all_primary_tumour_pe.txt entries: 16
+- sra/ run directories present: 16
+- paired FASTQ (.fastq.gz) complete runs: 16
+- plain .fastq leftovers: 0
+- missing SRRs vs PE list: none
+- log evidence: GSE196420_85692.out ends with "ALL DONE" (Fri Mar 20 02:29:33 UTC 2026)
+
+3) GSE268136_primary_tumours
+- all_primary_tumour_pe.txt entries: 50
+- sra/ run directories present: 49
+- paired FASTQ (.fastq.gz) complete runs: 49
+- plain .fastq leftovers: 0
+- missing SRRs vs PE list: SRR29131273
+
+GSE268136 log timeline
+----------------------
+- Initial run (GSE268136_85694.out/.err):
+  - failed at SRR29131273 with:
+    - "Failed to resolve 'SRR29131273'" (stdout)
+    - "cannot resolve remote location of 'SRR29131273'" (stderr)
+- Retry run (GSE268136_primary_tumours_86412.out):
+  - processed remaining targets successfully
+  - summary:
+    - total=49
+    - success=3
+    - skipped=46
+    - failed=0
+  - recovered runs in retry include SRR29131271, SRR29131270, SRR29131269
+  - per-tool retry logs exist under:
+    - logs/prefetch/
+    - logs/fasterq_dump/
+    - logs/pigz/
+
+Top-level unresolved list
+-------------------------
+File: /work/ugbogu/pipeline/data/rbl/removed_rbl_srr_id_primary_tumour_pe.txt
+
+Current entry:
+- SRR29131273    prefetch_failed_unresolvable
+
+This is consistent with the only missing accession in GSE268136.
+
+Global SRR extraction logs
+--------------------------
+File: /work/ugbogu/pipeline/data/rbl/logs/extract_srr_85558.out
+
+Extraction summary at time of run:
+- GSE111168: paired-end tumour RNA-seq runs = 3
+- GSE196420: paired-end tumour RNA-seq runs = 16
+- GSE268136: paired-end tumour RNA-seq runs = 50
+- Job window: Wed Mar 18 09:02:52 UTC 2026 -> Wed Mar 18 09:03:25 UTC 2026
+
+No active downloads detected now
+--------------------------------
+Current Slurm query for user ugbogu returned no active jobs.
+
+Relevant scripts
+----------------
+1) /work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/rbl/download_rbl_tumour_sample_srr_ids.py
+- Builds cohort-specific SRR lists from SRA RunInfo + GEO title filters:
+  - GSE111168 -> tumor1-3
+  - GSE196420 -> "Primary Retinoblastoma - RNA-Seq"
+  - GSE268136 -> RB_* titles
+- Writes all_primary_tumour_srr.txt and all_primary_tumour_pe.txt
+
+2) /work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/rbl/run_download_rbl_srr_ids.sh
+- Slurm wrapper for list extraction across all RBL cohorts.
+- Outputs extraction logs in /work/ugbogu/pipeline/data/rbl/logs.
+
+3) /work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/rbl/download_rbl_primary_pe.sh
+- Performs prefetch -> fasterq-dump -> pigz for cohort PE lists.
+- Supports one cohort or "all" mode.
+- Writes dataset-local logs and records unresolved runs in:
+  - removed_rbl_srr_id_primary_tumour_pe.txt
+
+4) /work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/rbl/list_rbl_tumour_sample_ids_by_cohort.R
+- Reads tumour_vst_rbl_batch_corrected.rds
+- Exports per-cohort sample ID TSV files under preprocessing_results/sample_id_exports
+
+Current conclusion
+------------------
+- GSE111168 and GSE196420 are complete with respect to their current PE lists.
+- GSE268136 is effectively complete except SRR29131273, which remains unresolved at prefetch step.
+- The top-level unresolved file correctly tracks this single outstanding accession.

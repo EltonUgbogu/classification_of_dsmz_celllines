@@ -1,0 +1,11 @@
+name: r-base
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3
+  - r-optparse
+  - r-yaml
+  - r-dplyr
+  - r-data.table
+

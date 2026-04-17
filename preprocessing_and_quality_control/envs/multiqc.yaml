@@ -1,0 +1,9 @@
+name: rnaseq-multiqc
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - multiqc=1.14
+  - setuptools<81

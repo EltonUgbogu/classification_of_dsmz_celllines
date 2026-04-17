@@ -1,0 +1,59 @@
+========================================
+TUMOUR - CELL-LINE MAPPING
+========================================
+
+[1] Loading pan-cancer feature genes...
+  Loaded 257 genes
+
+[2] Loading cell line expression...
+  Cell lines: XXX samples
+  Cell line lineages:
+  (table showing lineage distribution)
+
+[3] Loading tumour expression from joint VST files...
+  Loading BRCA joint VST...
+    BRCA tumours: XXX
+  Loading NBL joint VST...
+    NBL tumours: XXX
+  Loading RBL joint VST...
+    RBL tumours: XXX
+
+  Total tumours: 1128
+  Tumour lineages:
+  (table showing tumour lineage distribution)
+
+[4] Filtering to pan-cancer features...
+  Common genes: XXX
+  Cell line matrix: XXX genes x XXX samples
+  Tumour matrix: XXX genes x XXX samples
+
+[5] Computing Spearman correlation scores...
+  Score matrix: 1128 tumours x XXX cell lines
+  Score range: [X.XXX, X.XXX]
+
+[6] Ranking top-k cell lines per tumour...
+  Generated rankings for 1128 tumours
+
+[7] Computing evaluation metrics...
+  Top-1 accuracy: 99.47%
+  Top-10 accuracy: 99.73%
+  MRR: 0.994
+
+[8] Creating tumour summary table...
+
+[9] Saving outputs...
+  Rankings saved to: results/unsupervised/pan_cancer/tumour_mapping/tumour_to_cellline_rankings.tsv
+  Summary saved to: results/unsupervised/pan_cancer/tumour_mapping/tumour_mapping_summary.tsv
+  Metrics saved to: results/unsupervised/pan_cancer/tumour_mapping/metrics_summary.tsv
+  Per-lineage metrics saved to: results/unsupervised/pan_cancer/tumour_mapping/metrics_by_lineage.tsv
+  Score matrix saved to: results/unsupervised/pan_cancer/tumour_mapping/tumour_cellline_scores.rds
+
+========================================
+MAPPING COMPLETE
+========================================
+
+Summary:
+  Tumours mapped: 1128
+  Top-1 accuracy: 99.47%
+  Top-10 accuracy: 99.73%
+  MRR: 0.994

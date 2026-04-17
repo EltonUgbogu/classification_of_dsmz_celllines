@@ -1,0 +1,49 @@
+TARGET-NBL ID Set Comparison Report
+===================================
+Generated: 2026-03-24 10:34:59 UTC
+
+Input files
+-----------
+- Sample list : /work/ugbogu/pipeline/data/nbl/preprocessing_results/sample_id_exports/TARGET_sample_ids.tsv
+- Aliquot list: /work/ugbogu/pipeline/data/nbl/target_nbl/metadata/target_nbl_aliquot_ids_unique.txt
+
+Set comparison summary
+----------------------
+- Sample IDs (TARGET_sample_ids.tsv style): 148
+- Aliquot IDs (raw metadata list): 162
+- IDs in both: 148
+- Only in sample list: 0
+- Only in aliquot list: 14
+
+Interpretation
+--------------
+- The sample-ID export represents the downstream analysis subset.
+- The aliquot list represents the broader identifier set derived from TARGET-NBL metadata/count downloads.
+- IDs present only in the aliquot list were not retained in the downstream sample-ID export.
+- Their exclusion may reflect tumour-purity filtering and/or other preprocessing or analysis-subset selection steps.
+
+IDs only in sample list
+-----------------------
+- none
+
+IDs only in aliquot list
+------------------------
+- TARGET-30-PAITEG-01A-01R
+- TARGET-30-PALCBW-01A-01R
+- TARGET-30-PALVKK-01A-01R
+- TARGET-30-PANGXK-01A-01R
+- TARGET-30-PANKFE-01A-01R
+- TARGET-30-PANSBN-01A-01R
+- TARGET-30-PANXJL-01A-01R
+- TARGET-30-PAPTCR-01A-01R
+- TARGET-30-PAPZYZ-01A-01R
+- TARGET-30-PARKGJ-01A-01R
+- TARGET-30-PARSBI-01A-01R
+- TARGET-30-PARZCJ-01A-01R
+- TARGET-30-PASMJG-01A-01R
+- TARGET-30-PASZPI-01A-01R
+
+Conclusion
+----------
+- Raw metadata IDs and downstream analysis IDs were compared as related but not necessarily identical sets.
+- IDs absent from TARGET_sample_ids.tsv should be interpreted as excluded from the downstream analysis subset unless a separate purity table confirms the exact exclusion reason.
