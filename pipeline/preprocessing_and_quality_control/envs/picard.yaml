@@ -1,9 +1,0 @@
-name: rnaseq-picard
-channels:
-  - conda-forge
-  - bioconda
-  - defaults
-dependencies:
-  - openjdk=17
-  - samtools=1.17
-  - picard
