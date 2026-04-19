@@ -1,3 +1,13 @@
+study_design:
+  file: config/study_design.yaml
+  outputs_dirname: study_design
+
+validation:
+  shortlist_n: 10
+  permutation_iterations: 1000
+  random_baseline_iterations: 1000
+  seed: 42
+
 defaults:
   paths:
     tumour_nh_base_functions: R/base_functions

@@ -1,15 +1,15 @@
 # Neuroblastoma (NBL) RNA-seq Data — Documentation
 
 **Location:** `/work/ugbogu/pipeline/data/nbl/`  
-**Last updated:** 2026-04-09  
+**Last updated:** 2026-04-17  
 **Maintainer:** Elton Ugbogu
 
 ---
 
 ## Overview
 
-This directory holds all RNA-seq input data for the neuroblastoma cohort pipeline.
-Four independent data sources have been downloaded and are ready for alignment:
+This directory holds the current neuroblastoma RNA-seq working dataset used to construct the merged tumour count matrix.
+The active dataset comprises three GEO cohorts processed from FASTQ plus one TARGET-NBL cohort imported as GDC STAR count files:
 
 | Source | Cohort ID | Repository | FASTQs on disk | Read length | Platform |
 |--------|-----------|------------|----------------|-------------|----------|
@@ -22,11 +22,12 @@ Four independent data sources have been downloaded and are ready for alignment:
 
 All samples are primary tumour, paired-end RNA-seq from *Homo sapiens* (taxid 9606).
 
-> **Pipeline status:** The alignment Snakefile has not yet been run on the current
-> FASTQ data. `count_data/` does not exist. `preprocessing_results/` contains
-> outputs from a **prior analysis run** using different sample sets and should not
-> be treated as reflecting the current data. See the
-> [Preprocessing Results](#preprocessing-results-prior-run) section for details.
+> **Pipeline status:** The current NBL preprocessing workflow has been run for the
+> three GEO cohorts plus TARGET-NBL integration. The final merged object
+> `count_data/nbl_tumour_count.rds` is present and contains a 60,419 gene × 288
+> sample integer count matrix derived from 126 GEO tumours and 162 TARGET-NBL
+> tumours. `preprocessing_results/` still refers to an older analysis branch and
+> should not be used as the provenance record for the current merged matrix.
 
 ---
 
@@ -127,11 +128,11 @@ data/nbl/
 │       ├── all_sample_ids_by_cohort.tsv
 │       └── sample_id_counts_by_cohort.tsv
 │
-└── count_data/              # ⚠ NOT YET GENERATED — pipeline output (Snakefile + merge scripts)
-    ├── nbl_tumour_count.rds
-    ├── nbl_tumour_sample_metadata.csv
-    ├── nbl_tumour_gene_list_hgnc.txt
-    └── nbl_ensembl_to_hgnc.tsv
+└── count_data/              # Current merged tumour-level outputs
+    ├── merge_star_counts.log
+    ├── nbl_tumour_count.rds            # 60,419 genes x 288 tumours integer matrix
+    ├── nbl_tumour_sample_metadata.csv  # GEO + TARGET sample metadata used in the merge
+    └── nbl_tumour_gene_list_hgnc.txt   # Common Ensembl gene IDs retained in the final matrix
 ```
 
 ---
@@ -151,16 +152,11 @@ data/nbl/
 | Library layout | PAIRED |
 | Tissue | Primary tumour |
 
-**Metadata files (`metadata/`):**
-- `SraRunInfo.csv` — full SRA run table (includes both SRR5710xxx and SRR7828xxx series from SRP109627)
-- `SraRunInfo_primary.csv` — filtered to primary tumour samples
-- `SraRunInfo_primary_PE.csv` — further filtered to paired-end only (used for download)
-- `gsm_titles.tsv` — GSM accession → sample title mapping
-- `primary_gsms.tsv` — GSM accessions for primary tumour samples
-
-**Root files:**
-- `all_primary_tumour_srr.txt`, `all_primary_tumour_pe.txt` — pre-exclusion SRR ID lists (15 entries each)
-- `removed_nbl_srr_id_primary_tumour_pe.txt` — (empty; no samples excluded)
+**Key local records:**
+- `metadata/SraRunInfo_primary_PE.csv` — paired-end primary tumour run table used for cohort definition
+- `metadata/gsm_titles.tsv`, `metadata/primary_gsms.tsv` — GEO sample annotation helpers
+- `all_primary_tumour_srr.txt`, `all_primary_tumour_pe.txt` — cohort SRR manifests
+- `removed_nbl_srr_id_primary_tumour_pe.txt` — empty; no exclusions in the final cohort set
 
 ---
 
@@ -177,21 +173,12 @@ data/nbl/
 | Library layout | PAIRED |
 | Tissue | Primary tumour |
 
-**Metadata files (`metadata/`):**
-- `SraRunInfo.csv`, `SraRunInfo_primary.csv`, `SraRunInfo_primary_PE.csv` (64 samples each)
-
-**Root files:**
-- `all_primary_tumour_srr.txt`, `all_primary_tumour_pe.txt`
-- `removed_nbl_srr_id_primary_tumour_pe.txt` — 7 SRRs marked `prefetch_failed_unresolvable_after_retry`
-  (SRR17010968–70, 73–76); all were subsequently recovered via manual retry and are present in `fastq/`
-- `retry_gse189367_missing_srrs.sh` — re-download script used for manual retry
-
-**Diagnostic files:**
-- `gse189367_sample_vs_fastq_report.txt` — comparison of prior-run sample export vs current FASTQ directory
-- `gse189367_ids_only_in_fastq.txt` — 21 SRRs present on disk but absent from the prior-run sample export
-
-**Download retry history (`logs/`):**
-- SLURM retry jobs 88692 and 88705 logs; `retry_fail/success_*.txt` batch retry outcome records
+**Key local records:**
+- `metadata/SraRunInfo_primary_PE.csv` — paired-end primary tumour run table defining the 64-sample cohort
+- `all_primary_tumour_srr.txt`, `all_primary_tumour_pe.txt` — cohort SRR manifests
+- `removed_nbl_srr_id_primary_tumour_pe.txt` — retains an intermediate failure annotation for 7 SRRs, but all were later recovered and are present in `fastq/`
+- `retry_gse189367_missing_srrs.sh` and `logs/retry_*` — download recovery provenance
+- `gse189367_sample_vs_fastq_report.txt` and related comparison files — legacy diagnostics against an older sample export, not the active processing gate
 
 ---
 
@@ -208,12 +195,10 @@ data/nbl/
 | Library layout | PAIRED |
 | Tissue | Primary tumour |
 
-**Metadata files (`metadata/`):**
-- `SraRunInfo.csv`, `SraRunInfo_primary.csv`, `SraRunInfo_primary_PE.csv`
-
-**Root files:**
-- `all_primary_tumour_srr.txt`, `all_primary_tumour_pe.txt`
-- `removed_nbl_srr_id_primary_tumour_pe.txt` — (empty; no samples excluded)
+**Key local records:**
+- `metadata/SraRunInfo_primary_PE.csv` — paired-end primary tumour run table
+- `all_primary_tumour_srr.txt`, `all_primary_tumour_pe.txt` — cohort SRR manifests
+- `removed_nbl_srr_id_primary_tumour_pe.txt` — empty; no exclusions in the final cohort set
 
 ---
 
@@ -246,28 +231,22 @@ ENSG00000000003.15    TSPAN6    protein_coding    1373    679    694    ...
 - `target_nbl_aliquot_ids.txt`, `target_nbl_aliquot_ids_unique.txt` — aliquot ID lists (162 total)
 - `payload_counts.json` — GDC API payload used to query count files (reproducibility record)
 
-**Diagnostic files (root-level):**
-- `target_nbl_id_set_comparison_report.txt` — comparison of aliquot metadata list (162) vs a prior-run
-  sample export (148); the 14-sample difference reflects prior analysis filtering, not current data
-- `target_nbl_ids_in_both.txt` — 148 IDs shared between the two sets
-- `target_nbl_only_in_aliquot_list.txt` — 14 aliquot IDs not in the prior-run sample export
-- `target_nbl_only_in_sample_list.txt` — (empty)
+**Legacy diagnostic files (root-level):**
+- `target_nbl_id_set_comparison_report.txt` and companion ID lists compare the current 162-sample TARGET set against an older 148-sample export
+- these files document prior analytical filtering, not the active merge logic used for `target_nbl_count.rds`
 
 ---
 
 ## Sample Exclusion Files
 
 Each GEO cohort has a `removed_nbl_srr_id_primary_tumour_pe.txt` at its root.
-For GSE100148 and SRP409177 this file is empty (no exclusions). For GSE189367,
-7 SRRs are listed as `prefetch_failed_unresolvable_after_retry` — these were later
-recovered by manual retry and their FASTQs are present in `fastq/`.
+For GSE100148 and SRP409177 this file is empty. For GSE189367 it preserves an intermediate download-failure label for 7 SRRs that were later recovered; the active workflow uses the FASTQ pairs present on disk, not the historical exclusion annotation.
 
-The Snakefile discovers valid samples by scanning `fastq/` for `*_1.fastq.gz` /
-`*_2.fastq.gz` pairs at runtime; this file does not gate pipeline execution.
+The Snakefile discovers valid samples by scanning `fastq/` for `*_1.fastq.gz` / `*_2.fastq.gz` pairs at runtime, so cohort inclusion is determined from current file presence.
 
 ---
 
-## Expected Pipeline Outputs (Not Yet Generated)
+## Current Pipeline Outputs
 
 ### Per-sample (Snakefile outputs)
 
@@ -289,14 +268,15 @@ Strandedness column is detected automatically per sample.
 
 | File | Description |
 |------|-------------|
-| `count_data/nbl_tumour_count.rds` | genes × N samples integer count matrix |
-| `count_data/nbl_tumour_sample_metadata.csv` | cohort, sample ID, strandedness |
-| `count_data/nbl_tumour_gene_list_hgnc.txt` | Ensembl gene IDs (version suffix stripped) |
-| `count_data/nbl_ensembl_to_hgnc.tsv` | Ensembl → HGNC symbol mapping |
+| `count_data/nbl_tumour_count.rds` | 60,419 × 288 integer count matrix |
+| `count_data/nbl_tumour_sample_metadata.csv` | merged sample metadata for GEO and TARGET-NBL |
+| `count_data/nbl_tumour_gene_list_hgnc.txt` | 60,419 common Ensembl gene IDs retained in the final matrix |
 
-**Gene universe:** intersection of GENCODE v44 (GEO cohorts) and GENCODE v36 (TARGET-NBL).
+**Gene universe:** intersection of GEO counts aligned to GENCODE v44 and TARGET-NBL counts quantified against GENCODE v36.
 
-**Sample name conventions (once generated):**
+**Current sample composition:** 126 GEO tumours (15 `GSE100148`, 64 `GSE189367`, 47 `SRP409177`) plus 162 TARGET-NBL tumours.
+
+**Sample name conventions:**
 
 | Cohort | Column name format | Example |
 |--------|--------------------|---------|
@@ -304,6 +284,13 @@ Strandedness column is detected automatically per sample.
 | GSE189367 | SRR accession | `SRR17010968` |
 | SRP409177 | SRR accession | `SRR22373268` |
 | TARGET-NBL | aliquot_submitter_id | `TARGET-30-PARACS-01A-01R` |
+
+### Derivation of `nbl_tumour_count.rds`
+
+1. For each GEO tumour, the Snakefile runs FastQC, STAR alignment, BAM indexing, Picard QC, and writes `results/star/valid_count/{sample}.tab`.
+2. `merge_target_nbl_counts.R` scans `target_nbl/count_data/{file_uuid}/`, maps each GDC `file_id` to `aliquot_submitter_id`, detects the dominant stranded count column, and writes `target_nbl/merged/target_nbl_count.rds` plus metadata.
+3. `merge_star_counts.R` reads the GEO `valid_count/*.tab` files, detects the appropriate STAR count column per sample, strips Ensembl version suffixes, loads the TARGET merged matrix, and restricts both sources to the intersection gene set.
+4. The final object is `count_data/nbl_tumour_count.rds`, with GEO columns named by SRR accession and TARGET columns named by aliquot identifier.
 
 ---
 
@@ -324,8 +311,8 @@ in `fastq/` directories.
 | `tumour_sample_ids.txt` | 244 sample IDs | Mixed cohorts from prior run |
 | `vst_NBL_joint_batch_corrected.rds` | 142 bytes | Placeholder/stub — not a real matrix |
 
-These files should be regenerated once the current Snakefile run completes and
-`merge_star_counts.R` has been executed.
+These files remain useful only as legacy reference material; they do not describe
+how the current `count_data/` products were generated.
 
 ---
 
@@ -346,7 +333,7 @@ TARGET-NBL data was pre-aligned by GDC using GENCODE v36.
 ## Alignment Pipeline
 
 GEO cohorts are processed by:
-`pipeline/preprocessing_and_quality_control/Snakefile`
+`pipeline/preprocessing_and_quality_control/nbl/Snakefile`
 
 Steps per sample:
 1. **FastQC** — per-read QC (R1 and R2 separately)
@@ -385,13 +372,12 @@ Estimates tumour microenvironment signals (stromal, immune, ESTIMATE scores) usi
 the ESTIMATE method, then filters samples below a purity threshold to remove those
 dominated by non-tumour signal.
 
-### Inputs (all pending Snakefile + merge scripts)
+### Inputs
 
 | File | Source |
 |------|--------|
 | `count_data/nbl_tumour_count.rds` | `merge_star_counts.R` |
 | `count_data/nbl_tumour_sample_metadata.csv` | `merge_star_counts.R` |
-| `count_data/nbl_ensembl_to_hgnc.tsv` | Ensembl → HGNC mapping table |
 
 ### Outputs (written to `results/tumour_purity_analysis/nbl/`)
 

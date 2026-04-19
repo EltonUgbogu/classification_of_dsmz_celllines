@@ -1,0 +1,138 @@
+study:
+  title: "Robust transcriptomic prioritisation of representative cancer cell lines"
+  primary_question: >
+    Which DSMZ cell lines most faithfully represent defined primary tumour cohorts,
+    and does consensus across feature-selection and distance choices improve robustness
+    over single-direction similarity analyses?
+  primary_endpoint: "ranked cell-line representativeness per cohort"
+  secondary_endpoints:
+    - "stability across feature-selection and distance choices"
+    - "community context in the DSMZ cell-line similarity graph"
+    - "agreement with cohort-specific post-hoc biological labels when those labels exist on disk"
+  scope_note: >
+    Core inference is unsupervised. Biological labels are used only for post-hoc validation
+    and do not alter the ranking procedure.
+
+candidate_inference:
+  cell_line_panel: "DSMZ"
+  feature_selection_methods:
+    - "Variance"
+    - "MAD"
+    - "MeanAbsDev"
+    - "Entropy"
+    - "PCA"
+    - "Spearman"
+    - "MX"
+    - "kTotal"
+    - "HVG"
+  distance_metrics:
+    - "euc"
+    - "corr"
+  clustering_algorithms:
+    - "hierarchical"
+    - "kmeans"
+  k_grid:
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+  consensus_metric:
+    name: "p_consensus"
+    definition: "proportion of analytical configurations supporting a tumour-cell-line neighbourhood"
+    strong_support_threshold: 0.7
+  final_ranking:
+    summary_table: "tumour_neighbourhoods/final_consensus_all/p_consensus_best_cell_lines_ranked.tsv"
+    ranking_fields:
+      - "composite_score"
+      - "frac_ge_thr"
+      - "median_p"
+      - "max_p"
+    note: >
+      validation/04_model_selection_summary.R only summarises the ranking rule already emitted by
+      summarize_p_consensus_all.R; it does not introduce a new decision system.
+
+validation_framework:
+  biological_validation_axes:
+    - "cohort-specific label concordance when labels exist on disk"
+    - "DSMZ graph community context"
+    - "clustering quality reporting from persisted silhouette artifacts"
+  baseline_analyses:
+    - "aggregated per-direction label permutation null"
+    - "random shortlist baseline"
+
+cohorts:
+  brca:
+    disease: "Breast cancer"
+    tumour_sources:
+      - "TCGA-BRCA"
+    current_analysis_input: "data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds"
+    cell_line_panel: "DSMZ"
+    runtime_labels:
+      - label: "PAM50_Subtype"
+        entity: "tumour"
+        source_file: "data/brca/annotations/TCGA_BRCA_project_subtype.csv"
+        status: "implemented"
+        purpose: "subtype concordance"
+
+  nbl:
+    disease: "Neuroblastoma"
+    tumour_sources:
+      - "GSE100148"
+      - "GSE189367"
+      - "SRP409177"
+      - "TARGET-NBL"
+    current_preprocessing_output: "data/nbl/count_data/nbl_tumour_count.rds"
+    current_analysis_input: "data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds"
+    cell_line_panel: "DSMZ"
+    runtime_labels:
+      - label: "cohort"
+        entity: "tumour"
+        source_file: "data/nbl/count_data/nbl_tumour_sample_metadata.csv"
+        status: "implemented"
+        purpose: "cohort provenance"
+      - label: "MYCN.amplification"
+        entity: "cell_line"
+        source_file: "data/dsmz/DSMZ_metadata.csv"
+        status: "implemented_in_cell_line_metadata"
+        purpose: "cell-line biological context"
+    notes:
+      - "preprocessing_results/GSE49711 entries are legacy and are not part of the active merged cohort"
+
+  rbl:
+    disease: "Retinoblastoma"
+    tumour_sources:
+      - "GSE111168"
+      - "GSE196420"
+      - "GSE268136"
+    current_analysis_input: "data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds"
+    cell_line_panel: "DSMZ"
+    runtime_labels: []
+
+  heme:
+    disease: "Haematological malignancy benchmark"
+    tumour_sources:
+      - "LAML"
+      - "CLL"
+    source_evidence: "data/heme/laml_cll_tumour_vst_batch_corrected.rds"
+    current_analysis_input: "results/unsupervised/heme/integrated/heme_joint_expr_vst_batch_corrected.rds"
+    cell_line_panel: "DSMZ_LL100"
+    runtime_labels: []
+
+  multicohort_cancer:
+    disease: "Pan-cancer joint benchmark"
+    tumour_sources:
+      - "brca"
+      - "nbl"
+      - "rbl"
+      - "heme"
+    current_analysis_input: "results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds"
+    cell_line_panel: "DSMZ"
+    runtime_labels:
+      - label: "cancer_type"
+        entity: "tumour_and_cell_line"
+        source_file: "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"
+        status: "generated_at_runtime"
+        purpose: "lineage-aware post-hoc validation"

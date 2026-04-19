@@ -166,6 +166,7 @@ jarvis_pipeline_data
 .secrets/
 .ssh/
 .vscode-R/
+./claude
 
 .Rprofile
 .bash_history

@@ -219,25 +219,20 @@ cat("  samples =", ncol(combined_mat), "\n")
 # Build combined metadata
 target_meta <- fread(TARGET_META_FILE)
 target_meta[, cohort := "TARGET-NBL"]
-setnames(target_meta, "aliquot_id", "sample", skip_absent = TRUE)
 
-# Align columns between the two metadata tables
-geo_cols    <- c("cohort", "sample", "stranded_col")
-target_cols <- c("cohort", "sample", "count_col")
+if (!"aliquot_id" %in% names(target_meta)) {
+  stop("TARGET metadata is missing required column: aliquot_id")
+}
+
 setnames(target_meta, "count_col", "stranded_col", skip_absent = TRUE)
 
-geo_meta    <- sample_table[, .(cohort, sample, stranded_col = as.character(stranded_col))]
-target_slim <- target_meta[, .(cohort, sample = aliquot_id %||% sample,
-                                stranded_col)]
+geo_meta <- sample_table[, .(cohort, sample, stranded_col = as.character(stranded_col))]
+target_slim <- target_meta[, .(cohort, sample = aliquot_id,
+                               file_id, file, stranded_col)]
+target_slim[, stranded_col := as.character(stranded_col)]
 
-# Use file_id + aliquot columns that exist
-keep_cols <- intersect(c("cohort", "file_id", "aliquot_id", "file", "stranded_col"),
-                       names(target_meta))
-target_slim <- target_meta[, ..keep_cols]
-target_slim[, cohort := "TARGET-NBL"]
-
-combined_meta <- rbindlist(list(sample_table, target_slim),
-                            use.names = TRUE, fill = TRUE)
+combined_meta <- rbindlist(list(geo_meta, target_slim),
+                           use.names = TRUE, fill = TRUE)
 
 # ------------------------------
 # Save outputs
