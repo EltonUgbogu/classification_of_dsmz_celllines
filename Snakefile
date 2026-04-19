@@ -85,6 +85,9 @@ def abspath(p):
     return p if os.path.isabs(p) else os.path.abspath(os.path.join(BASE, p))
 
 
+STUDY_DESIGN_REL = config.get("study_design", {}).get("file", "config/study_design.yaml")
+STUDY_DESIGN_FILE = abspath(STUDY_DESIGN_REL)
+
 def deep_merge(base, override):
     """Recursively merges two configuration dictionaries without mutating either input."""
     merged = dict(base)
@@ -1610,6 +1613,8 @@ rule cell_line_similarity_graph:
         '''
 
 P_CONS_ALL_DIR = os.path.join(TUMOUR_NH_ROOT, "final_consensus_all")
+STUDY_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, config.get("study_design", {}).get("outputs_dirname", "study_design"))
+VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 
 rule summarize_p_consensus_all:
     input:
@@ -1624,6 +1629,7 @@ rule summarize_p_consensus_all:
         ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
         long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv"),
         composite_weights = os.path.join(P_CONS_ALL_DIR, "p_consensus_composite_weights.tsv"),
+        winning_direction = os.path.join(P_CONS_ALL_DIR, "winning_direction.txt"),
         top_fraction = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_top_fraction.tsv"),
         top_score = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_top_score.tsv"),
         fig_pdf = os.path.join(P_CONS_ALL_DIR, "Fig_p_consensus_direction_comparison.pdf"),
@@ -1643,6 +1649,115 @@ rule summarize_p_consensus_all:
           --profile "{profile_name}" \
           --threshold {params.threshold} \
           > {log} 2>&1
+        '''
+
+
+rule materialize_study_design:
+    input:
+        cfg = CFGFILE_ABS,
+        study_design = STUDY_DESIGN_FILE
+    output:
+        question_txt = os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
+        cohort_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
+        labels_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
+        inference_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
+        endpoint_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "materialize_study_design.R"),
+        config = CFGFILE_ABS,
+        study_design = STUDY_DESIGN_FILE
+    log: os.path.join(LOGROOT, "materialize_study_design.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.question_txt})
+        Rscript {params.script}           --config {params.config}           --study-design {params.study_design}           --profile "{profile_name}"           --out-question {output.question_txt}           --out-cohorts {output.cohort_manifest}           --out-labels {output.labels_manifest}           --out-inference {output.inference_manifest}           --out-endpoints {output.endpoint_manifest}           > {log} 2>&1
+        '''
+
+
+rule model_selection_summary:
+    input:
+        cfg = CFGFILE_ABS,
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
+        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv"),
+        winning_direction = os.path.join(P_CONS_ALL_DIR, "winning_direction.txt"),
+        graph_nodes = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_node_annotations_{direction}.tsv"),
+            direction=AGN_DIRECTIONS
+        )
+    output:
+        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
+        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_plot.pdf"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "04_model_selection_summary.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "model_selection_summary.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.summary_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+rule neighbourhood_permutation_validation:
+    input:
+        cfg = CFGFILE_ABS,
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
+        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv")
+    output:
+        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
+        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_plot.pdf"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "01_permutation_test_neighbourhood.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "neighbourhood_permutation_validation.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.summary_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+rule random_baseline_comparison:
+    input:
+        cfg = CFGFILE_ABS,
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv")
+    output:
+        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
+        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_plot.pdf"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "02_random_baseline_comparison.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "random_baseline_comparison.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.summary_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+rule silhouette_report:
+    input:
+        cfg = CFGFILE_ABS
+    output:
+        report_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "03_silhouette_report.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "silhouette_report.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.report_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.report_tsv}           --out-notes {output.notes_txt}           > {log} 2>&1
         '''
 
 
@@ -2277,6 +2392,15 @@ if MARKER_POST_ENABLED:
 # Final pipeline terminal target list.
 PIPELINE_TARGET = [
     os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
+    os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
+    os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
+    os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
+    os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
+    os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv"),
+    os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
+    os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
+    os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
+    os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
 ]
 if DESEQ2_ENABLED:
     PIPELINE_TARGET.append(NODE_STATS_TSV)

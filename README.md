@@ -1,6 +1,8 @@
-# Unsupervised Clustering and Tumour Neighbourhood Analysis Pipeline
+# Representative Cancer Cell Line Prioritisation Pipeline
 
-A portable, HPC-independent pipeline for pan-cancer clustering and tumour neighbourhood analysis.
+A Snakemake workflow for testing whether transcriptomic consensus across multiple analytical choices can identify biologically representative DSMZ cancer cell lines for defined tumour cohorts.
+
+The repository is organised around four explicit study questions: the biological question being tested, the exact cohorts and labels used, how candidate representative cell lines are inferred, and how those candidates are validated against biological context and simple baselines.
 
 ## Quick Start
 
@@ -126,11 +128,13 @@ This runs a minimal end-to-end test that should complete in minutes.
 ```
 pipeline/
 ├── config/
-│   └── config.yaml          # Main configuration (profiles, paths, methods)
+│   ├── config.yaml          # Workflow configuration (profiles, paths, methods)
+│   └── study_design.yaml    # Scientific question, cohorts, labels, and endpoints
 ├── profiles/
 │   ├── local/               # Local execution profile
 │   └── slurm/               # Slurm execution profile
 ├── scripts/                 # R scripts for analysis steps
+├── validation/              # Post-hoc validation and model-selection summaries
 ├── workflow/
 │   └── lib/                 # Python utilities
 ├── run/                     # Snakemake working directories (per profile)
