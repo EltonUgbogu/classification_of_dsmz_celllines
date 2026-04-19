@@ -175,10 +175,10 @@ profiles:
         - HVG
     paths:
       unsup_root: results/unsupervised/brca
-      vst_joint_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
-      cell_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
-      tumour_vst_rds: data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds
-      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
+      vst_joint_rds: data/brca/brca_vst_joint.rds
+      cell_vst_rds: data/brca/tmp/brca_vst_joint_cell_lines.rds
+      tumour_vst_rds: data/brca/tmp/brca_vst_joint_tumours.rds
+      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -231,10 +231,10 @@ profiles:
         - HVG
     paths:
       unsup_root: results/unsupervised/nbl
-      vst_joint_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
-      cell_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
-      tumour_vst_rds: data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds
-      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
+      vst_joint_rds: data/nbl/nbl_vst_joint.rds
+      cell_vst_rds: data/nbl/tmp/nbl_vst_joint_cell_lines.rds
+      tumour_vst_rds: data/nbl/tmp/nbl_vst_joint_tumours.rds
+      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -284,10 +284,10 @@ profiles:
         - HVG
     paths:
       unsup_root: results/unsupervised/rbl
-      vst_joint_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
-      cell_vst_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
-      tumour_vst_rds: data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds
-      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
+      vst_joint_rds: data/rbl/rbl_vst_joint.rds
+      cell_vst_rds: data/rbl/tmp/rbl_vst_joint_cell_lines.rds
+      tumour_vst_rds: data/rbl/tmp/rbl_vst_joint_tumours.rds
+      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
