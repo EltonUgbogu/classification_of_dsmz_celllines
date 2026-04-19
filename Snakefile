@@ -435,6 +435,27 @@ rule feature_selection_unsupervised:
 CELL_VST   = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "cell_vst_rds")
 TUMOUR_VST = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "tumour_vst_rds")
 
+if profile_name in ("brca", "nbl", "rbl"):
+    rule split_profile_joint_vst:
+        input:
+            joint = VST_JOINT
+        output:
+            cell = CELL_VST,
+            tumour = TUMOUR_VST
+        params:
+            script = os.path.join(SCRIPTS_DIR, "split_joint_vst_by_sample_type.R")
+        log: os.path.join(LOGROOT, "split_joint_vst_by_sample_type.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "$(dirname "{output.cell}")" "$(dirname "{output.tumour}")"
+            Rscript "{params.script}" \
+              --joint_rds "{input.joint}" \
+              --out_cell "{output.cell}" \
+              --out_tumour "{output.tumour}" \
+              > "{log}" 2>&1
+            '''
+
 # Resolves agnostic clustering output root.
 # Config override (agnostic_cluster_root) must be a relative path; if absent,
 # the default is derived from the profile-scoped UNSUP_REL directory.
