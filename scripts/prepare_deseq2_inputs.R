@@ -67,8 +67,10 @@ target_canon <- canon_cl(target_cell_lines)
 message(sprintf("[INFO] Found %d cell lines for %s", length(target_cell_lines), opt$profile))
 
 # Read DSMZ counts
-counts_df <- readRDS(opt$dsmz_counts)
-message(sprintf("[INFO] DSMZ counts: %d genes, %d samples", nrow(counts_df), ncol(counts_df) - 3))
+counts_mat <- readRDS(opt$dsmz_counts)
+counts_df <- as.data.frame(counts_mat, check.names = FALSE)
+counts_df <- data.frame(gene_id = rownames(counts_mat), counts_df, check.names = FALSE)
+message(sprintf("[INFO] DSMZ counts: %d genes, %d samples", nrow(counts_df), ncol(counts_df) - 1))
 
 # Read DSMZ metadata
 meta_df <- read_csv(opt$dsmz_meta, show_col_types = FALSE)
@@ -153,8 +155,7 @@ if (length(matched_samples) == 0) {
 }
 
 # Filter counts to matched samples
-counts_subset <- counts_df %>%
-  select(Ensembl_ID_with_version, Ensembl_ID, gene_name, all_of(matched_samples))
+counts_subset <- counts_df[, c("gene_id", matched_samples), drop = FALSE]
 
 # Create metadata for matched samples
 meta_subset <- data.frame(
@@ -165,15 +166,15 @@ meta_subset <- data.frame(
   left_join(
     meta_df %>% select(sample_name, Cell_Line, Disease, Project_id),
     by = c("sample_id" = "sample_name")
-  )
+  ) %>%
+  mutate(cell_line_display = dplyr::coalesce(as.character(Cell_Line), cell_line)) %>%
+  select(sample_id, cell_line, cell_line_display, everything())
 
 # Write outputs
 dir.create(opt$outdir, showWarnings = FALSE, recursive = TRUE)
 
 # Write counts TSV (gene_id as first column, then samples)
-counts_out <- counts_subset %>%
-  rename(gene_id = Ensembl_ID_with_version) %>%
-  select(gene_id, all_of(matched_samples))
+counts_out <- counts_subset[, c("gene_id", matched_samples), drop = FALSE]
 
 write_tsv(counts_out, file.path(opt$outdir, "counts.tsv"))
 message(sprintf("[OK] Wrote counts: %s", file.path(opt$outdir, "counts.tsv")))
@@ -184,11 +185,3 @@ message(sprintf("[OK] Wrote metadata: %s", file.path(opt$outdir, "metadata.tsv")
 
 message(sprintf("[DONE] Prepared inputs for %s: %d samples, %d genes", 
                 opt$profile, length(matched_samples), nrow(counts_out)))
-
-
-
-prepare_deseq2_inputs.R
-add_component_to_metadata.R
-resolve_dsmz_graph_neighbors.R
-deseq2_isolate_degs.R
-deseq2_component_vs_rest.R

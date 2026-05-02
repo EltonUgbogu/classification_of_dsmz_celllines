@@ -80,7 +80,7 @@ dsmz_sample_ids <- rownames(expr_mx)[grepl("^NG-", rownames(expr_mx))]
 # Read DSMZ metadata and build mapping (same logic as PAM50 script)
 meta <- read.csv(dsmz_meta_path, stringsAsFactors = FALSE)
 stopifnot("sample_name" %in% colnames(meta))
-cell_col <- intersect(c("Cell_line", "Cell_Line", "CellLine"), colnames(meta))[1]
+cell_col <- intersect(c("DSMZ_Cell_line_norm", "Cell_line", "Cell_Line", "CellLine"), colnames(meta))[1]
 stopifnot(!is.na(cell_col))
 
 cell_line_of <- setNames(meta[[cell_col]], meta$sample_name)

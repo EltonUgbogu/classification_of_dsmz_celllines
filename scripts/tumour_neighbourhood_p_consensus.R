@@ -443,7 +443,7 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
   }
   
   # Identify the sample ID column.
-  id_col <- pick_col(meta, c("sample_id", "sample", "id", "barcode", "sample_name", "cell_line"))
+  id_col <- pick_col(meta, c("sample_name", "sample_id", "sample", "id", "barcode", "cell_line"))
   if (is.null(id_col)) stop("Could not find sample ID column in metadata")
   
   infer_is_tumour <- function(meta) {
@@ -670,10 +670,26 @@ neigh_list <- methods_tbl %>%
           }
           df
         } %>%
-        mutate(cell_line = cell_tech_id) %>%
+        {
+          df <- .
+          if (!"sample_id" %in% names(df)) {
+            df <- df %>% mutate(sample_id = cell_tech_id)
+          } else {
+            df <- df %>% mutate(sample_id = as.character(sample_id))
+          }
+          if ("cell_line_canonical" %in% names(df)) {
+            df <- df %>% mutate(cell_line = as.character(cell_line_canonical))
+          } else {
+            df <- df %>% mutate(cell_line = as.character(cell_line))
+          }
+          if (!"cell_line_display" %in% names(df)) {
+            df <- df %>% mutate(cell_line_display = cell_line)
+          }
+          df
+        } %>%
         # Standardise column ordering.
         select(
-          method, cell_tech_id, cell_line, tumour_id, in_top,
+          method, sample_id, cell_tech_id, cell_line, tumour_id, in_top,
           any_of(c("rank", "distance", "cell_line_canonical", "cell_line_display")),
           everything()
         ) %>%
@@ -716,7 +732,7 @@ consensus_pairs <- all_long %>%
 # Add display labels for visualisation if available.
 if ("cell_line_canonical" %in% colnames(all_long)) {
   labels <- all_long %>%
-    select(cell_tech_id, cell_line_canonical, cell_line_display) %>%
+    select(sample_id, cell_tech_id, cell_line, cell_line_canonical, cell_line_display) %>%
     distinct()
   consensus_pairs <- consensus_pairs %>% 
     left_join(labels, by = "cell_tech_id")

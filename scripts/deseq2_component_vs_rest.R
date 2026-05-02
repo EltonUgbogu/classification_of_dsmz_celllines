@@ -119,7 +119,7 @@
 #     --meta results/unsupervised/brca/deseq2_inputs/metadata_with_components.tsv \
 #     --component 1 \
 #     --component_col component \
-#     --sample_id_col sample_id \
+#     --sample_id_col sample_name \
 #     --outdir results/unsupervised/brca/component_vs_rest \
 #     --fdr 0.05 --lfc 1.0
 #
@@ -179,7 +179,7 @@ opt_list <- list(
               help = "Component ID to analyse"),
   make_option("--component_col", type = "character", default = "component",
               help = "Component column name"),
-  make_option("--sample_id_col", type = "character", default = "sample_id",
+  make_option("--sample_id_col", type = "character", default = "sample_name",
               help = "Sample ID column name"),
   make_option("--outdir", type = "character",
               help = "Output directory"),
@@ -238,6 +238,13 @@ gene_ids <- counts_df[[1]]
 # Convert remaining columns to numeric matrix
 counts_mat <- as.matrix(counts_df[, -1])
 rownames(counts_mat) <- gene_ids
+# TEMPORARY COMPROMISE: current staged "counts" are VST-like decimals because
+# raw DSMZ counts are unavailable. Coerce to integer only to let DESeq2 run;
+# replace this with true raw integer counts when available.
+if (any(counts_mat != round(counts_mat), na.rm = TRUE)) {
+  warning("Coercing non-integer staged expression values to integer for DESeq2 compatibility; use raw counts for final analysis.")
+}
+storage.mode(counts_mat) <- "integer"
 
 # -----------------------------------------------------------------------------
 # Metadata Loading and Validation

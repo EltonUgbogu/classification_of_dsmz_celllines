@@ -5,6 +5,8 @@
 #SBATCH --mem=64G
 #SBATCH --time=08:00:00
 #SBATCH --requeue
+#SBATCH --output=logs/slurm-%j.out
+#SBATCH --error=logs/slurm-%j.err
 # Note: --output and --error can be overridden at submission:
 #   sbatch --output=/path/to/logs/%j.out --error=/path/to/logs/%j.err unsupervised_pipeline.sh
 
@@ -21,6 +23,23 @@ CONFIGFILE="${CONFIGFILE:-$PROJECT_DIR/config/config.yaml}"
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/logs}"
 PIPELINE_PROFILE="${PIPELINE_PROFILE:-}"
 
+if [[ -z "$PIPELINE_PROFILE" && $# -gt 0 ]]; then
+  PIPELINE_PROFILE="$1"
+  shift
+fi
+
+if [[ -z "$PIPELINE_PROFILE" ]]; then
+  echo "[ERROR] Missing pipeline profile."
+  echo "        Usage: bash unsupervised_pipeline.sh <multicohort_cancer|brca|nbl|rbl|heme> [snakemake targets...]"
+  echo "        Or set PIPELINE_PROFILE in the environment."
+  exit 1
+fi
+
+TARGETS=("$@")
+if [[ ${#TARGETS[@]} -eq 0 ]]; then
+  TARGETS=(all)
+fi
+
 ENVS_DIR="${ENVS_DIR:-$PROJECT_DIR/envs}"
 SMK_ENV_YAML="${SMK_ENV_YAML:-$ENVS_DIR/smk.yaml}"
 
@@ -33,6 +52,7 @@ echo "[INFO] Config:    $CONFIGFILE"
 echo "[INFO] Logs:      $LOG_DIR"
 echo "[INFO] ENVS_DIR:  $ENVS_DIR"
 echo "[INFO] PIPELINE_PROFILE = ${PIPELINE_PROFILE:-NA}"
+echo "[INFO] TARGETS = ${TARGETS[*]}"
 echo "[INFO] SLURM_CPUS_PER_TASK = ${SLURM_CPUS_PER_TASK:-8}"
 echo "[INFO] SLURM_JOB_ID = ${SLURM_JOB_ID:-NA}"
 
@@ -41,9 +61,33 @@ cd "$PROJECT_DIR" || { echo "[ERROR] Failed to cd into: $PROJECT_DIR"; exit 1; }
 # ------------------------------------------------------------------
 # 1. Conda-only setup + create/activate Snakemake env from ./envs/
 # ------------------------------------------------------------------
+# Bootstrap conda for non-interactive HPC batch shells.
+if ! command -v conda >/dev/null 2>&1; then
+  for conda_sh in \
+    "${CONDA_SH_PATH:-}" \
+    "${CONDA_BASE:-}/etc/profile.d/conda.sh" \
+    "${HOME}/miniconda3/etc/profile.d/conda.sh" \
+    "${HOME}/anaconda3/etc/profile.d/conda.sh"
+  do
+    if [ -n "${conda_sh}" ] && [ -f "${conda_sh}" ]; then
+      # shellcheck disable=SC1090
+      source "${conda_sh}"
+      break
+    fi
+  done
+fi
+
+if ! command -v conda >/dev/null 2>&1 && [ -n "${CONDA_EXE:-}" ]; then
+  CONDA_BASE_FROM_EXE="$(cd "$(dirname "${CONDA_EXE}")/.." && pwd)"
+  if [ -f "${CONDA_BASE_FROM_EXE}/etc/profile.d/conda.sh" ]; then
+    # shellcheck disable=SC1090
+    source "${CONDA_BASE_FROM_EXE}/etc/profile.d/conda.sh"
+  fi
+fi
+
 if ! command -v conda >/dev/null 2>&1; then
   echo "[ERROR] 'conda' not found in PATH."
-  echo "        Load/activate conda first (module load / source init)."
+  echo "        Set CONDA_SH_PATH/CONDA_BASE, or load your site conda module before sbatch."
   exit 1
 fi
 
@@ -57,7 +101,7 @@ fi
 SMK_ENV_PATH="${SMK_ENV_PATH:-$ENVS_DIR/.conda/smk}"
 mkdir -p "$(dirname "$SMK_ENV_PATH")"
 
-# Load conda shell function
+# Load conda shell function after bootstrap.
 # shellcheck disable=SC1091
 if [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
   source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -119,7 +163,7 @@ set +e
   --rerun-incomplete \
   --latency-wait 300 \
   --keep-going \
-  all
+  "${TARGETS[@]}"
 STATUS=$?
 set -e
 

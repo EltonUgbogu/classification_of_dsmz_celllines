@@ -26,8 +26,10 @@ defaults:
       kTotal:     500
       HVG:        3000
   deseq2:
-    sample_id_col: sample_id
+    sample_id_col: sample_name
+    staged_sample_id_col: sample_id
     cell_line_col: cell_line
+    raw_cell_line_col: DSMZ_Cell_line_norm
     component_col: component
     fdr_isolate: 0.01
     lfc_isolate: 1.5

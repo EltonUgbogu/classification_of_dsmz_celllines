@@ -32,7 +32,7 @@ shortlist_n <- raw_cfg$validation$shortlist_n %||% 10
 ranked <- read_tsv(file.path(final_dir, "p_consensus_best_cell_lines_ranked.tsv"), show_col_types = FALSE)
 long_tbl <- read_tsv(file.path(final_dir, "p_consensus_cellline_direction_summary.long.tsv"), show_col_types = FALSE)
 winning_direction <- readLines(file.path(final_dir, "winning_direction.txt"), warn = FALSE)[1] %||% NA_character_
-selected <- ranked %>% slice_head(n = min(shortlist_n, n()))
+selected <- ranked %>% slice_head(n = min(shortlist_n, nrow(ranked)))
 
 metric_tbl <- long_tbl %>%
   transmute(

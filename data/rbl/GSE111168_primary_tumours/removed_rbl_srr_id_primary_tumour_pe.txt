@@ -1,2 +1,0 @@
-SRR6785778	pigz_failed
-SRR6785779	pigz_failed

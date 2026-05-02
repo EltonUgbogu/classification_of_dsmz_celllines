@@ -1298,7 +1298,11 @@ rule consensus_cluster_ccp:
         # Resolves direction-specific feature-list file using dir_to_gene_list helper.
         # Each direction (e.g. Variance_euc, PCA_corr, MX_euc) maps to its corresponding
         # method's gene list, ensuring clustering uses the correct feature set.
-        gene_list = lambda wc: dir_to_gene_list(wc.direction)
+        gene_list  = lambda wc: dir_to_gene_list(wc.direction),
+        # Declared so Snakemake tracks split_profile_joint_vst as upstream.
+        # The R script resolves these paths from config; inputs wire the DAG.
+        cell_vst   = CELL_VST,
+        tumour_vst = TUMOUR_VST
     output:
         cluster_rds = os.path.join(CONS_ROOT, "{direction}", "{kind}", "{kind}_clusters_optimal.rds")
     params:
@@ -1888,6 +1892,8 @@ if DESEQ2_ENABLED:
             annot <- read_tsv(annot_path, show_col_types = FALSE)
             out <- data.frame(
                 cell_line      = annot$cell_line,
+                sample_id      = if ("sample_id" %in% colnames(annot)) annot$sample_id else annot$cell_line,
+                cell_line_display = if ("cell_line_display" %in% colnames(annot)) annot$cell_line_display else annot$cell_line,
                 component      = annot$component,
                 is_isolate     = as.logical(annot$is_outlier),
                 degree         = annot$degree,
@@ -2077,7 +2083,7 @@ if DESEQ2_ENABLED:
         params:
             script        = os.path.join(BASE, "scripts", "deseq2_isolate_degs.R"),
             outdir        = DESEQ2_ISOLATE_DIR_ABS,
-            sample_id_col = DESEQ2_CFG.get("sample_id_col", "sample_id"),
+            sample_id_col = DESEQ2_CFG.get("staged_sample_id_col", "sample_id"),
             cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line"),
             component_col = DESEQ2_CFG.get("component_col", "component"),
             fdr           = DESEQ2_CFG.get("fdr_isolate", 0.01),
@@ -2137,7 +2143,7 @@ if DESEQ2_ENABLED:
             script        = os.path.join(BASE, "scripts", "deseq2_component_vs_rest.R"),
             outdir        = DESEQ2_COMP_DIR_ABS,
             component_col = DESEQ2_CFG.get("component_col", "component"),
-            sample_id_col = DESEQ2_CFG.get("sample_id_col", "sample_id"),
+            sample_id_col = DESEQ2_CFG.get("staged_sample_id_col", "sample_id"),
             fdr           = DESEQ2_CFG.get("fdr_component", 0.05),
             lfc           = DESEQ2_CFG.get("lfc_component", 1.0),
             topN          = DESEQ2_CFG.get("topN_component", 500)

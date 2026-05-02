@@ -283,7 +283,11 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
   dsmz_sample_ids <- rownames(expr_mat)[grepl("^NG-", rownames(expr_mat))]
 
   # Build mapping from metadata
-  meta <- read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  meta <- if (grepl("\\.csv$", meta_path, ignore.case = TRUE)) {
+    read.csv(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  } else {
+    read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  }
   if (!sample_id_col %in% colnames(meta)) {
     stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
          paste(colnames(meta), collapse = ", "))
