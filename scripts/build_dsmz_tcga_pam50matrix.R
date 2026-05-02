@@ -92,7 +92,7 @@ dsmz_mat <- dsmz_mat[common_genes, , drop = FALSE]
 # DSMZ metadata
 meta <- read.csv(cfg$paths$dsmz_meta_csv, stringsAsFactors = FALSE)
 stopifnot("sample_name" %in% colnames(meta))
-cell_col <- intersect(c("Cell_line", "Cell_Line", "CellLine"), colnames(meta))[1]
+cell_col <- intersect(c("DSMZ_Cell_line_norm", "Cell_line", "Cell_Line", "CellLine"), colnames(meta))[1]
 stopifnot(!is.na(cell_col))
 
 cell_line_of <- setNames(meta[[cell_col]], meta$sample_name)

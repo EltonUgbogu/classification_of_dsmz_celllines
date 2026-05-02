@@ -11,7 +11,7 @@
 # Rscript scripts/add_component_to_metadata.R \
 #   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/dsmz_cellline_graph_node_stats.tsv \
 #   --meta data/brca/metadata.tsv \
-#   --cell_line_col cell_line \
+#   --cell_line_col DSMZ_Cell_line_norm \
 #   --output data/brca/metadata_with_components.tsv
 #
 # ============================================================
@@ -25,7 +25,7 @@ suppressPackageStartupMessages({
 opt_list <- list(
   make_option("--node_stats", type="character", help="Path to dsmz_cellline_graph_node_stats.tsv"),
   make_option("--meta", type="character", help="Input metadata TSV/CSV"),
-  make_option("--cell_line_col", type="character", default="cell_line", help="Column in meta containing cell line names"),
+  make_option("--cell_line_col", type="character", default="DSMZ_Cell_line_norm", help="Column in meta containing cell line names"),
   make_option("--output", type="character", help="Output metadata with component column"),
   make_option("--meta_sep", type="character", default="\t", help="Separator for input meta (default tab)"),
   make_option("--output_sep", type="character", default="\t", help="Separator for output (default tab)")

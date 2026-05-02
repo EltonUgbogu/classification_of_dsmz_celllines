@@ -1,0 +1,10 @@
+profile	endpoint_class	endpoint
+nbl	primary	ranked cell-line representativeness per cohort
+nbl	secondary	stability across feature-selection and distance choices
+nbl	secondary	community context in the DSMZ cell-line similarity graph
+nbl	secondary	agreement with cohort-specific post-hoc biological labels when those labels exist on disk
+nbl	validation	cohort-specific label concordance when labels exist on disk
+nbl	validation	DSMZ graph community context
+nbl	validation	clustering quality reporting from persisted silhouette artifacts
+nbl	baseline	aggregated per-direction label permutation null
+nbl	baseline	random shortlist baseline

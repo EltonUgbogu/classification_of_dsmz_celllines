@@ -102,9 +102,9 @@ expr <- readRDS(opt$expr_rds)
 if (!is.matrix(expr)) expr <- as.matrix(expr)
 
 # Identify sample id column
-id_col <- pick_col(meta, c("sample_id","sample","id","barcode","sample_name","cell_line","cellline","Sample","CellLine"))
+id_col <- pick_col(meta, c("sample_name","sample_id","sample","id","barcode","cell_line","cellline","Sample","CellLine"))
 if (is.null(id_col)) {
-  stop("[FATAL] Could not find sample ID column in metadata. Tried: sample_id, sample, id, barcode, sample_name, cell_line...")
+  stop("[FATAL] Could not find sample ID column in metadata. Tried: sample_name, sample_id, sample, id, barcode, cell_line...")
 }
 meta_ids <- as.character(meta[[id_col]])
 

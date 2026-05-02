@@ -1,4 +1,4 @@
-# Representative Cancer Cell Line Prioritisation Pipeline
+# Classification of DSMZ Cell Lines to Cancer Types Based on Transcriptomic Analysis
 
 A Snakemake workflow for testing whether transcriptomic consensus across multiple analytical choices can identify biologically representative DSMZ cancer cell lines for defined tumour cohorts.
 

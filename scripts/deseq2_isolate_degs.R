@@ -91,8 +91,8 @@
 #   Rscript deseq2_isolate_degs.R \
 #     --counts counts.tsv \
 #     --meta meta.tsv \
-#     --sample_id_col sample_id \
-#     --cell_line_col cell_line \
+#     --sample_id_col sample_name \
+#     --cell_line_col DSMZ_Cell_line_norm \
 #     --isolate_list CAL_51,COLO_824,DU_4475 \
 #     --outdir results/unsupervised/brca
 #
@@ -100,8 +100,8 @@
 #   Rscript deseq2_isolate_degs.R \
 #     --counts counts.tsv \
 #     --meta meta.tsv \
-#     --sample_id_col sample_id \
-#     --cell_line_col cell_line \
+#     --sample_id_col sample_name \
+#     --cell_line_col DSMZ_Cell_line_norm \
 #     --isolate_list CAL_51,COLO_824 \
 #     --anchor_list MCF7,T47D \
 #     --anchor_components anchor_components.tsv \
@@ -182,9 +182,9 @@ opt_list <- list(
               help = "Separator for meta (default tab)"),
 
   # Column name specifications
-  make_option("--sample_id_col", type = "character", default = "sample_id",
+  make_option("--sample_id_col", type = "character", default = "sample_name",
               help = "Column in meta that matches count column names"),
-  make_option("--cell_line_col", type = "character", default = "cell_line",
+  make_option("--cell_line_col", type = "character", default = "DSMZ_Cell_line_norm",
               help = "Column in meta containing cell line names"),
   make_option("--component_col", type = "character", default = "component",
               help = "Column in meta for component membership (optional)"),
@@ -290,7 +290,12 @@ as_counts_matrix <- function(df) {
   } else {
     mat <- as.matrix(df)
   }
-  # Ensure integer storage mode for DESeq2 compatibility
+  # TEMPORARY COMPROMISE: current staged "counts" may be VST-like decimals
+  # because raw DSMZ counts are unavailable. Coerce to integer only to let
+  # DESeq2 run; replace this with true raw integer counts when available.
+  if (any(mat != round(mat), na.rm = TRUE)) {
+    warning("Coercing non-integer staged expression values to integer for DESeq2 compatibility; use raw counts for final analysis.")
+  }
   storage.mode(mat) <- "integer"
   return(mat)
 }
@@ -845,9 +850,13 @@ if (length(all_marker_sets) == 0) {
 
 # Calculate gene recurrence across all contrasts
 all_genes <- unlist(all_marker_sets, use.names = FALSE)
+if (is.null(all_genes)) {
+  all_genes <- character(0)
+}
+all_genes <- as.character(all_genes)
 gene_freq <- sort(table(all_genes), decreasing = TRUE)
 gene_freq_df <- data.frame(
-  gene_id = names(gene_freq),
+  gene_id = as.character(names(gene_freq)),
   freq = as.integer(gene_freq)
 )
 fwrite(gene_freq_df,
@@ -856,14 +865,14 @@ fwrite(gene_freq_df,
 
 # Apply recurrence threshold
 k <- opt$recurrence_k
-unique_genes <- gene_freq_df$gene_id[gene_freq_df$freq >= k]
+unique_genes <- as.character(gene_freq_df$gene_id[gene_freq_df$freq >= k])
 
 unique_path <- file.path(opt$outdir, "markers",
                          paste0("unique_feature_set_recurrence_ge_", k, ".txt"))
 writeLines(unique_genes, unique_path)
 
 # Also report recurrence >= 1 for context
-unique_genes_k1 <- gene_freq_df$gene_id[gene_freq_df$freq >= 1]
+unique_genes_k1 <- as.character(gene_freq_df$gene_id[gene_freq_df$freq >= 1])
 message(sprintf("[INFO] Recurrence >= 1: %d genes (for context)", length(unique_genes_k1)))
 message(sprintf("[INFO] Recurrence >= %d: %d genes (strict threshold)", k, length(unique_genes)))
 

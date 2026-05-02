@@ -241,7 +241,8 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
   if (!file.exists(meta_path)) stop("DSMZ metadata not found: ", meta_path)
 
   sample_id_col <- cfg$deseq2$sample_id_col %||% "sample_id"
-  cell_col      <- cfg$deseq2$cell_line_col  %||% "cell_line"
+  cell_col      <- cfg$deseq2$raw_cell_line_col %||%
+    cfg$deseq2$cell_line_col %||% "cell_line"
 
   cat("[INFO] Self-sufficient input build for direction: ", direction, "\n", sep = "")
   cat("[INFO]   Feature:       ", feature,        "\n", sep = "")
@@ -265,18 +266,25 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
   expr_mat <- t(vst_joint[genes, , drop = FALSE])
   dsmz_sample_ids <- rownames(expr_mat)[grepl("^NG-", rownames(expr_mat))]
 
-  meta <- read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  meta <- if (grepl("\\.csv$", meta_path, ignore.case = TRUE)) {
+    read.csv(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  } else {
+    read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+  }
   if (!sample_id_col %in% colnames(meta)) {
     stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
          paste(colnames(meta), collapse = ", "))
   }
 
-  if (cell_col %in% colnames(meta)) {
-    mapping_raw <- setNames(meta[[cell_col]], meta[[sample_id_col]])
-  } else {
-    derived <- sub("^NG-[0-9]+-?[0-9]*_(.+)_lib.*", "\\1", meta[[sample_id_col]])
-    mapping_raw <- setNames(derived, meta[[sample_id_col]])
-    cat("[WARN] cell_line_col '", cell_col, "' not in metadata; labels derived from technical IDs\n")
+  if (!cell_col %in% colnames(meta)) {
+    stop("raw_cell_line_col '", cell_col, "' not found in metadata columns: ",
+         paste(colnames(meta), collapse = ", "))
+  }
+  mapping_raw <- setNames(as.character(meta[[cell_col]]), as.character(meta[[sample_id_col]]))
+  invalid_mapping <- is.na(mapping_raw) | !nzchar(trimws(mapping_raw))
+  if (any(invalid_mapping)) {
+    stop("raw_cell_line_col '", cell_col, "' has missing/blank values for sample_name(s): ",
+         paste(head(names(mapping_raw)[invalid_mapping], 10), collapse = ", "))
   }
 
   mapping <- mapping_raw[names(mapping_raw) %in% dsmz_sample_ids]
@@ -730,6 +738,13 @@ dsmz_mask <- dataset_vec == "DSMZ"
 id_to_collapsed <- setNames(sample_id_collapsed, current_ids_raw)
 id_to_collapsed_norm <- setNames(sample_id_collapsed, normalize_id(current_ids_raw))
 
+# Preserve provenance after collapse: collapsed ID -> original technical sample ID(s).
+collapsed_to_sample_ids <- vapply(
+  split(as.character(names(sample_id_collapsed)), as.character(unname(sample_id_collapsed))),
+  function(x) paste(unique(x), collapse = ";"),
+  character(1)
+)
+
 # Canonical and display maps for outputs (DSMZ: strip CELL: prefix for clean names)
 cell_line_canonical <- ifelse(dsmz_mask, sub("^CELL:", "", current_ids), NA_character_)
 names(cell_line_canonical) <- current_ids
@@ -997,18 +1012,37 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
     }
   }
 
-  # Sanity check: if orig_to_cell keys don't match cell_tech_id, canonical mapping will be NA.
+  cell_line_canonical_map <- as.character(cell_line_canonical)
+  names(cell_line_canonical_map) <- names(cell_line_canonical)
+  cell_line_display_map <- as.character(cell_line_display)
+  names(cell_line_display_map) <- names(cell_line_display)
+  sample_id_map <- as.character(collapsed_to_sample_ids)
+  names(sample_id_map) <- names(collapsed_to_sample_ids)
+  missing_sample_map <- setdiff(unique(as.character(res$long_df$cell_tech_id)), names(sample_id_map))
+  if (length(missing_sample_map) > 0L) {
+    stop("Missing sample_id provenance for collapsed ID(s): ",
+         paste(head(missing_sample_map, 10), collapse = ", "))
+  }
+
+  # Sanity check on the collapsed identifiers that will actually be serialized.
   cat("[DEBUG] Example cell_tech_id values:\n")
   print(head(res$long_df$cell_tech_id, 5))
-  cat("[DEBUG] Example mapped canonical values (orig_to_cell):\n")
-  print(head(orig_to_cell[head(res$long_df$cell_tech_id, 5)], 5))
+  cat("[DEBUG] Example mapped canonical values (collapsed map):\n")
+  print(head(cell_line_canonical_map[head(res$long_df$cell_tech_id, 5)], 5))
 
-  # TARGET-style final table: single cell_line column (use orig_to_cell when keys match, else strip CELL: for DSMZ, else tech ID).
+  # Preserve both the technical sample ID and canonical cell-line identity.
   out_long <- res$long_df %>%
     dplyr::mutate(
-      cell_line = dplyr::coalesce(orig_to_cell[cell_tech_id], sub("^CELL:", "", cell_tech_id), cell_tech_id)
+      cell_tech_id = as.character(cell_tech_id),
+      sample_id = as.character(unname(sample_id_map[cell_tech_id])),
+      cell_line_canonical = dplyr::coalesce(as.character(unname(cell_line_canonical_map[cell_tech_id])), cell_tech_id),
+      cell_line_display = dplyr::coalesce(as.character(unname(cell_line_display_map[cell_tech_id])), cell_line_canonical),
+      cell_line = cell_line_canonical
     ) %>%
-    dplyr::select(method, cell_line, tumour_id, rank, distance, in_top, cluster)
+    dplyr::select(
+      method, sample_id, cell_tech_id, cell_line, cell_line_canonical,
+      cell_line_display, tumour_id, rank, distance, in_top, cluster
+    )
 
   nh_rds   <- file.path(outdir, paste0("Top_m_neighbourhoods_", method_id, ".rds"))
   long_rds <- file.path(outdir, paste0("Top_m_long_", method_id, ".rds"))

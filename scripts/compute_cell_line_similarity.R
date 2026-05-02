@@ -208,6 +208,26 @@ if ("cell_tech_id" %in% colnames(consensus_pairs)) {
   consensus_pairs <- consensus_pairs %>%
     mutate(cell_tech_id = strip_prefix(as.character(cell_tech_id)))
 }
+if (!"sample_id" %in% colnames(consensus_pairs)) {
+  consensus_pairs <- consensus_pairs %>%
+    mutate(sample_id = dplyr::coalesce(.data$cell_tech_id, .data$cell_line))
+} else {
+  consensus_pairs <- consensus_pairs %>%
+    mutate(sample_id = strip_prefix(as.character(sample_id)))
+}
+if (!"cell_line_display" %in% colnames(consensus_pairs)) {
+  consensus_pairs <- consensus_pairs %>%
+    mutate(cell_line_display = cell_line)
+}
+
+cell_label_map <- consensus_pairs %>%
+  transmute(
+    cell_line = as.character(cell_line),
+    sample_id = as.character(sample_id),
+    cell_tech_id = dplyr::coalesce(as.character(.data$cell_tech_id), as.character(sample_id)),
+    cell_line_display = as.character(cell_line_display)
+  ) %>%
+  distinct()
 
 cat("Summary of consensus_pairs:\n")
 print(dplyr::glimpse(consensus_pairs))
@@ -221,9 +241,16 @@ tumour_disease_map <- NULL
 if (!is.null(opt$meta_tsv) && nzchar(opt$meta_tsv)) {
   if (!file.exists(opt$meta_tsv)) stop("meta_tsv not found: ", opt$meta_tsv)
 
-  meta <- readr::read_tsv(opt$meta_tsv, show_col_types = FALSE) %>%
+  meta <- readr::read_tsv(opt$meta_tsv, show_col_types = FALSE)
+  meta_cell_col <- dplyr::case_when(
+    "DSMZ_Cell_line_norm" %in% colnames(meta) ~ "DSMZ_Cell_line_norm",
+    "Cell_Line" %in% colnames(meta) ~ "Cell_Line",
+    TRUE ~ "sample_id"
+  )
+  meta <- meta %>%
     mutate(
       sample_id = strip_prefix(as.character(sample_id)),
+      cell_line = as.character(.data[[meta_cell_col]]),
       cancer_type = as.character(cancer_type),
       sample_type = as.character(sample_type),
       cohort = as.character(cohort)
@@ -231,7 +258,7 @@ if (!is.null(opt$meta_tsv) && nzchar(opt$meta_tsv)) {
 
   cell_disease_map <- meta %>%
     filter(sample_type == "Cell Line", cohort == "DSMZ") %>%
-    select(cell_line = sample_id, disease = cancer_type) %>%
+    select(cell_line, disease = cancer_type) %>%
     distinct()
 
   tumour_disease_map <- meta %>%
@@ -337,6 +364,8 @@ saveRDS(sim_mat, out_rds_mat)
 sim_long <- as.data.frame(as.table(sim_mat)) %>%
   mutate(across(c(Var1, Var2), as.character)) %>%
   rename(cell_line1 = Var1, cell_line2 = Var2, similarity = Freq) %>%
+  left_join(cell_label_map %>% select(cell_line1 = cell_line, sample_id1 = sample_id, cell_line1_display = cell_line_display), by = "cell_line1") %>%
+  left_join(cell_label_map %>% select(cell_line2 = cell_line, sample_id2 = sample_id, cell_line2_display = cell_line_display), by = "cell_line2") %>%
   filter(cell_line1 < cell_line2)
 
 readr::write_tsv(sim_long, out_tsv_long)
@@ -751,6 +780,9 @@ node_summary <- tibble(cell_line = all_cell_lines) %>%
   mutate(degree = dplyr::coalesce(degree, 0L), is_outlier = degree == 0L) %>%
   arrange(desc(degree), desc(mean_edge_sim))
 
+node_summary <- node_summary %>%
+  left_join(cell_label_map, by = "cell_line")
+
 # Add disease labels if metadata exists
 if (!is.null(cell_disease_map)) {
   node_summary <- node_summary %>%
@@ -854,7 +886,11 @@ graph_tbl %>% as_tibble() %>% count(community_leid, name = "n") %>%
 node_annotations <- graph_tbl %>%
   as_tibble() %>%
   transmute(
-    cell_line = name, degree, betweenness,
+    cell_line = name,
+    sample_id,
+    cell_tech_id,
+    cell_line_display,
+    degree, betweenness,
     component = as.character(component),
     community_louv = as.character(community_louv),
     community_leid = as.character(community_leid),

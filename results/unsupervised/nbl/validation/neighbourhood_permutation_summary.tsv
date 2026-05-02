@@ -1,0 +1,2 @@
+cohort	shortlist_n	permutation_iterations	observed_mean_selection_score	null_mean_selection_score	null_sd_selection_score	empirical_p_mean	observed_median_selection_score	empirical_p_median
+nbl	10	1000	0.7101523466374987	0.7101523466374987	0	1	0.7101523466374987	1

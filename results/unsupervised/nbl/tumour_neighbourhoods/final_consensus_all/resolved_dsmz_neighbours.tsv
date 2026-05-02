@@ -1,0 +1,19 @@
+cell_line	final_neighbors	n_final	reps_used	best_overall_dir	winner_dir
+CHP_134	LS;SK_N_BE_2;KELLY;GI_ME_N	4	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
+CCLF_PEDS_0051_T	GI_ME_N;SK_N_BE_2;LAN2	3	best_overall=kTotal_euc;winner=Spearman_corr;MX_euc;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_euc;kTotal_euc;kTotal_corr
+CHP_126	LAN1;IMR_32;LAN5	3	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
+GI_ME_N	SK_N_BE_2;CCLF_PEDS_0051_T;CHP_134	3	best_overall=kTotal_euc;winner=Spearman_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;kTotal_euc;kTotal_corr
+IMR_32	LAN5;LAN1;CHP_126	3	best_overall=kTotal_euc;winner=Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr
+LAN1	NGP;CHP_126;IMR_32	3	best_overall=kTotal_euc;winner=Variance_euc;PCA_euc;Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Variance_euc;PCA_euc;Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr
+LAN5	NMB;IMR_32;CHP_126	3	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
+SK_N_BE_2	GI_ME_N;CCLF_PEDS_0051_T;CHP_134	3	best_overall=kTotal_euc;winner=Spearman_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;kTotal_euc;kTotal_corr
+KELLY	LS;CHP_134	2	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
+LS	CHP_134;KELLY	2	best_overall=kTotal_euc;winner=Spearman_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;kTotal_euc;kTotal_corr
+NGP	NBL_S;LAN1	2	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
+LAN2	CCLF_PEDS_0051_T	1	best_overall=kTotal_euc;winner=MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	MX_corr;kTotal_euc;kTotal_corr
+NBL_S	NGP	1	best_overall=kTotal_euc;winner=MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	MX_corr;kTotal_euc;kTotal_corr
+NMB	LAN5	1	best_overall=kTotal_euc;winner=Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr
+LAN6		0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
+MHH_NB_11		0	best_overall=kTotal_euc;winner=PCA_euc;PCA_corr;Spearman_euc;MX_euc;MX_corr;kTotal_euc;kTotal_corr;HVG_corr	kTotal_euc	PCA_euc;PCA_corr;Spearman_euc;MX_euc;MX_corr;kTotal_euc;kTotal_corr;HVG_corr
+SH_SY5Y		0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
+SIMA		0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr

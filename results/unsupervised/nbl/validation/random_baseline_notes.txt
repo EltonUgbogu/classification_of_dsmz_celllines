@@ -1,0 +1,5 @@
+Profile: nbl
+Random baseline iterations: 1000.
+Observed shortlist size: top 10 cell lines by the existing composite score.
+The comparator is a random cell-line set of the same size sampled from the ranked output table.
+This baseline is descriptive only; it does not replace the consensus ranking procedure.
