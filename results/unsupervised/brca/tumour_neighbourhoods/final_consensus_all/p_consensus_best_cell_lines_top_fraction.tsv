@@ -1,0 +1,4 @@
+rank	cell_line	best_direction	CPI	composite_score	frac_ge_thr	median_p	max_p	frac_eq_1
+1	CAL_120	MAD_euc	0.8490595251550175	0.8490595251550175	1	1	1	1
+2	CAL_85_1	Variance_corr	0.8490595251550175	0.8490595251550175	1	1	1	1
+3	COLO_824	Variance_euc	0.8490595251550175	0.8490595251550175	1	1	1	1

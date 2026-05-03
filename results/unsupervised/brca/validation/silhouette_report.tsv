@@ -1,0 +1,2 @@
+cohort	silhouette_artifacts_found	status	note
+brca	0	no_persisted_silhouette_artifacts	Silhouette is used in clustering code, but no standalone silhouette files were found under the profile output root.

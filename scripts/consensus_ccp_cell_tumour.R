@@ -612,7 +612,7 @@ build_expr_mat <- function(feature, cfg, kind) {
   # from RDS files. These matrices are generated upstream in the pipeline
   # to ensure consistent gene selection across analyses.
   
-  if (feature == "PAM50") {
+  if (feature == "PAM50" && (is.null(opt$feature_list) || !nzchar(opt$feature_list))) {
     tcga_path <- cfg$paths$tcga_brca_pam50_expr
     dsmz_path <- cfg$paths$dsmz_bcc_pam50_expr
     

@@ -1,0 +1,697 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns
+         http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+<!-- Created by igraph -->
+  <key id="v_name" for="node" attr.name="name" attr.type="string"/>
+  <key id="v_degree" for="node" attr.name="degree" attr.type="double"/>
+  <key id="v_mean_edge_sim" for="node" attr.name="mean_edge_sim" attr.type="double"/>
+  <key id="v_max_edge_sim" for="node" attr.name="max_edge_sim" attr.type="double"/>
+  <key id="v_is_outlier" for="node" attr.name="is_outlier" attr.type="boolean"/>
+  <key id="v_sample_id" for="node" attr.name="sample_id" attr.type="string"/>
+  <key id="v_cell_tech_id" for="node" attr.name="cell_tech_id" attr.type="string"/>
+  <key id="v_cell_line_display" for="node" attr.name="cell_line_display" attr.type="string"/>
+  <key id="v_betweenness" for="node" attr.name="betweenness" attr.type="double"/>
+  <key id="v_component" for="node" attr.name="component" attr.type="double"/>
+  <key id="v_community_louv" for="node" attr.name="community_louv" attr.type="double"/>
+  <key id="v_community_leid" for="node" attr.name="community_leid" attr.type="double"/>
+  <key id="e_similarity" for="edge" attr.name="similarity" attr.type="double"/>
+  <key id="e_sample_id1" for="edge" attr.name="sample_id1" attr.type="string"/>
+  <key id="e_cell_line1_display" for="edge" attr.name="cell_line1_display" attr.type="string"/>
+  <key id="e_sample_id2" for="edge" attr.name="sample_id2" attr.type="string"/>
+  <key id="e_cell_line2_display" for="edge" attr.name="cell_line2_display" attr.type="string"/>
+  <graph id="G" edgedefault="undirected">
+    <node id="n0">
+      <data key="v_name">KPL_1</data>
+      <data key="v_degree">9</data>
+      <data key="v_mean_edge_sim">0.824313115816514</data>
+      <data key="v_max_edge_sim">0.941089108910891</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="v_cell_tech_id">KPL_1</data>
+      <data key="v_cell_line_display">KPL_1</data>
+      <data key="v_betweenness">9.19761904761905</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">2</data>
+      <data key="v_community_leid">1</data>
+    </node>
+    <node id="n1">
+      <data key="v_name">MFM_223</data>
+      <data key="v_degree">9</data>
+      <data key="v_mean_edge_sim">0.818322234364628</data>
+      <data key="v_max_edge_sim">0.941089108910891</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="v_cell_tech_id">MFM_223</data>
+      <data key="v_cell_line_display">MFM_223</data>
+      <data key="v_betweenness">9.19761904761905</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">2</data>
+      <data key="v_community_leid">2</data>
+    </node>
+    <node id="n2">
+      <data key="v_name">SK_BR_3</data>
+      <data key="v_degree">7</data>
+      <data key="v_mean_edge_sim">0.804540123620096</data>
+      <data key="v_max_edge_sim">0.849455037734012</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="v_cell_tech_id">SK_BR_3</data>
+      <data key="v_cell_line_display">SK_BR_3</data>
+      <data key="v_betweenness">1.76904761904762</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">1</data>
+      <data key="v_community_leid">3</data>
+    </node>
+    <node id="n3">
+      <data key="v_name">MCF_7</data>
+      <data key="v_degree">7</data>
+      <data key="v_mean_edge_sim">0.80274140764601</data>
+      <data key="v_max_edge_sim">0.885125286508336</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="v_cell_tech_id">MCF_7</data>
+      <data key="v_cell_line_display">MCF_7</data>
+      <data key="v_betweenness">4.81904761904762</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">1</data>
+      <data key="v_community_leid">4</data>
+    </node>
+    <node id="n4">
+      <data key="v_name">T_47D</data>
+      <data key="v_degree">7</data>
+      <data key="v_mean_edge_sim">0.796269047823577</data>
+      <data key="v_max_edge_sim">0.849455037734012</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="v_cell_tech_id">T_47D</data>
+      <data key="v_cell_line_display">T_47D</data>
+      <data key="v_betweenness">5.77142857142857</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">3</data>
+      <data key="v_community_leid">5</data>
+    </node>
+    <node id="n5">
+      <data key="v_name">EFM_192C</data>
+      <data key="v_degree">7</data>
+      <data key="v_mean_edge_sim">0.792440603431821</data>
+      <data key="v_max_edge_sim">0.845339785985454</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="v_cell_tech_id">EFM_192C</data>
+      <data key="v_cell_line_display">EFM_192C</data>
+      <data key="v_betweenness">2.71190476190476</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">1</data>
+      <data key="v_community_leid">6</data>
+    </node>
+    <node id="n6">
+      <data key="v_name">CAL_148</data>
+      <data key="v_degree">7</data>
+      <data key="v_mean_edge_sim">0.771333605685309</data>
+      <data key="v_max_edge_sim">0.807877282517326</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="v_cell_tech_id">CAL_148</data>
+      <data key="v_cell_line_display">CAL_148</data>
+      <data key="v_betweenness">13.0952380952381</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">3</data>
+      <data key="v_community_leid">7</data>
+    </node>
+    <node id="n7">
+      <data key="v_name">EVSA_T</data>
+      <data key="v_degree">6</data>
+      <data key="v_mean_edge_sim">0.801699109698442</data>
+      <data key="v_max_edge_sim">0.845339785985454</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="v_cell_tech_id">EVSA_T</data>
+      <data key="v_cell_line_display">EVSA_T</data>
+      <data key="v_betweenness">3.09523809523809</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">1</data>
+      <data key="v_community_leid">8</data>
+    </node>
+    <node id="n8">
+      <data key="v_name">MDA_MB_453</data>
+      <data key="v_degree">4</data>
+      <data key="v_mean_edge_sim">0.786617707211829</data>
+      <data key="v_max_edge_sim">0.827915478925074</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_MDA_MB_453_lib581289_7997_4</data>
+      <data key="v_cell_tech_id">MDA_MB_453</data>
+      <data key="v_cell_line_display">MDA_MB_453</data>
+      <data key="v_betweenness">0.476190476190476</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">2</data>
+      <data key="v_community_leid">9</data>
+    </node>
+    <node id="n9">
+      <data key="v_name">BT_474</data>
+      <data key="v_degree">3</data>
+      <data key="v_mean_edge_sim">0.814185063162581</data>
+      <data key="v_max_edge_sim">0.835049504950495</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_BT_474_lib581288_7997_4</data>
+      <data key="v_cell_tech_id">BT_474</data>
+      <data key="v_cell_line_display">BT_474</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">2</data>
+      <data key="v_community_leid">10</data>
+    </node>
+    <node id="n10">
+      <data key="v_name">EFM_192B</data>
+      <data key="v_degree">3</data>
+      <data key="v_mean_edge_sim">0.788871951274399</data>
+      <data key="v_max_edge_sim">0.807877282517326</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_EFM_192B_lib581293_7997_4</data>
+      <data key="v_cell_tech_id">EFM_192B</data>
+      <data key="v_cell_line_display">EFM_192B</data>
+      <data key="v_betweenness">0.666666666666667</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">3</data>
+      <data key="v_community_leid">11</data>
+    </node>
+    <node id="n11">
+      <data key="v_name">EFM_19</data>
+      <data key="v_degree">3</data>
+      <data key="v_mean_edge_sim">0.767186927570123</data>
+      <data key="v_max_edge_sim">0.783390426733313</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_EFM_19_lib581291_7997_4</data>
+      <data key="v_cell_tech_id">EFM_19</data>
+      <data key="v_cell_line_display">EFM_19</data>
+      <data key="v_betweenness">0.2</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">1</data>
+      <data key="v_community_leid">12</data>
+    </node>
+    <node id="n12">
+      <data key="v_name">ETCC_007</data>
+      <data key="v_degree">2</data>
+      <data key="v_mean_edge_sim">0.864</data>
+      <data key="v_max_edge_sim">0.879111111111111</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_ETCC_007_lib581312_7997_4</data>
+      <data key="v_cell_tech_id">ETCC_007</data>
+      <data key="v_cell_line_display">ETCC_007</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">2</data>
+      <data key="v_community_louv">4</data>
+      <data key="v_community_leid">13</data>
+    </node>
+    <node id="n13">
+      <data key="v_name">HS_578T</data>
+      <data key="v_degree">2</data>
+      <data key="v_mean_edge_sim">0.841333333333333</data>
+      <data key="v_max_edge_sim">0.879111111111111</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-30919_HS_578T_B_lib628473_10098_2</data>
+      <data key="v_cell_tech_id">HS_578T</data>
+      <data key="v_cell_line_display">HS_578T</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">2</data>
+      <data key="v_community_louv">4</data>
+      <data key="v_community_leid">14</data>
+    </node>
+    <node id="n14">
+      <data key="v_name">ETCC_006</data>
+      <data key="v_degree">2</data>
+      <data key="v_mean_edge_sim">0.826222222222222</data>
+      <data key="v_max_edge_sim">0.848888888888889</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_ETCC_006_lib581311_8005_3</data>
+      <data key="v_cell_tech_id">ETCC_006</data>
+      <data key="v_cell_line_display">ETCC_006</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">2</data>
+      <data key="v_community_louv">4</data>
+      <data key="v_community_leid">15</data>
+    </node>
+    <node id="n15">
+      <data key="v_name">EFM_192A</data>
+      <data key="v_degree">2</data>
+      <data key="v_mean_edge_sim">0.756015219868805</data>
+      <data key="v_max_edge_sim">0.761070607473085</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_EFM_192A_lib581292_7997_4</data>
+      <data key="v_cell_tech_id">EFM_192A</data>
+      <data key="v_cell_line_display">EFM_192A</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">1</data>
+      <data key="v_community_louv">3</data>
+      <data key="v_community_leid">16</data>
+    </node>
+    <node id="n16">
+      <data key="v_name">CAL_120</data>
+      <data key="v_degree">1</data>
+      <data key="v_mean_edge_sim">0.758222222222222</data>
+      <data key="v_max_edge_sim">0.758222222222222</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_CAL_120_lib581301_8005_3</data>
+      <data key="v_cell_tech_id">CAL_120</data>
+      <data key="v_cell_line_display">CAL_120</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">3</data>
+      <data key="v_community_louv">5</data>
+      <data key="v_community_leid">17</data>
+    </node>
+    <node id="n17">
+      <data key="v_name">CAL_51</data>
+      <data key="v_degree">1</data>
+      <data key="v_mean_edge_sim">0.758222222222222</data>
+      <data key="v_max_edge_sim">0.758222222222222</data>
+      <data key="v_is_outlier">false</data>
+      <data key="v_sample_id">NG-29643_CAL_51_lib581295_7997_4</data>
+      <data key="v_cell_tech_id">CAL_51</data>
+      <data key="v_cell_line_display">CAL_51</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">3</data>
+      <data key="v_community_louv">5</data>
+      <data key="v_community_leid">18</data>
+    </node>
+    <node id="n18">
+      <data key="v_name">CAL_85_1</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_CAL_85_1_lib581300_7997_4</data>
+      <data key="v_cell_tech_id">CAL_85_1</data>
+      <data key="v_cell_line_display">CAL_85_1</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">4</data>
+      <data key="v_community_louv">6</data>
+      <data key="v_community_leid">19</data>
+    </node>
+    <node id="n19">
+      <data key="v_name">COLO_824</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_COLO_824_lib581290_7997_4</data>
+      <data key="v_cell_tech_id">COLO_824</data>
+      <data key="v_cell_line_display">COLO_824</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">5</data>
+      <data key="v_community_louv">7</data>
+      <data key="v_community_leid">20</data>
+    </node>
+    <node id="n20">
+      <data key="v_name">DU_4475</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_DU_4475_lib581298_7997_4</data>
+      <data key="v_cell_tech_id">DU_4475</data>
+      <data key="v_cell_line_display">DU_4475</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">6</data>
+      <data key="v_community_louv">8</data>
+      <data key="v_community_leid">21</data>
+    </node>
+    <node id="n21">
+      <data key="v_name">HCC_1143</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_HCC_1143_lib581306_7997_4</data>
+      <data key="v_cell_tech_id">HCC_1143</data>
+      <data key="v_cell_line_display">HCC_1143</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">7</data>
+      <data key="v_community_louv">9</data>
+      <data key="v_community_leid">22</data>
+    </node>
+    <node id="n22">
+      <data key="v_name">HCC_1599</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_HCC_1599_lib581304_7997_4</data>
+      <data key="v_cell_tech_id">HCC_1599</data>
+      <data key="v_cell_line_display">HCC_1599</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">8</data>
+      <data key="v_community_louv">10</data>
+      <data key="v_community_leid">23</data>
+    </node>
+    <node id="n23">
+      <data key="v_name">HCC_1937</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_HCC_1937_lib581305_7997_4</data>
+      <data key="v_cell_tech_id">HCC_1937</data>
+      <data key="v_cell_line_display">HCC_1937</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">9</data>
+      <data key="v_community_louv">11</data>
+      <data key="v_community_leid">24</data>
+    </node>
+    <node id="n24">
+      <data key="v_name">HDQ_P1</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_HDQ_P1_lib581303_8005_3</data>
+      <data key="v_cell_tech_id">HDQ_P1</data>
+      <data key="v_cell_line_display">HDQ_P1</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">10</data>
+      <data key="v_community_louv">12</data>
+      <data key="v_community_leid">25</data>
+    </node>
+    <node id="n25">
+      <data key="v_name">IPH_926</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_IPH_926_lib581313_7997_4</data>
+      <data key="v_cell_tech_id">IPH_926</data>
+      <data key="v_cell_line_display">IPH_926</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">11</data>
+      <data key="v_community_louv">13</data>
+      <data key="v_community_leid">26</data>
+    </node>
+    <node id="n26">
+      <data key="v_name">JIMT_1</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_JIMT_1_B_lib581287_7997_4</data>
+      <data key="v_cell_tech_id">JIMT_1</data>
+      <data key="v_cell_line_display">JIMT_1</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">12</data>
+      <data key="v_community_louv">14</data>
+      <data key="v_community_leid">27</data>
+    </node>
+    <node id="n27">
+      <data key="v_name">MDA_MB_231</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-29643_MDA_MB_231_lib581314_8005_3</data>
+      <data key="v_cell_tech_id">MDA_MB_231</data>
+      <data key="v_cell_line_display">MDA_MB_231</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">13</data>
+      <data key="v_community_louv">15</data>
+      <data key="v_community_leid">28</data>
+    </node>
+    <node id="n28">
+      <data key="v_name">MDA_MB_468</data>
+      <data key="v_degree">0</data>
+      <data key="v_is_outlier">true</data>
+      <data key="v_sample_id">NG-30919_MDA_MB_468_B_lib628474_10098_2</data>
+      <data key="v_cell_tech_id">MDA_MB_468</data>
+      <data key="v_cell_line_display">MDA_MB_468</data>
+      <data key="v_betweenness">0</data>
+      <data key="v_component">14</data>
+      <data key="v_community_louv">16</data>
+      <data key="v_community_leid">29</data>
+    </node>
+    <edge source="n0" target="n1">
+      <data key="e_similarity">0.941089108910891</data>
+      <data key="e_sample_id1">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line1_display">KPL_1</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n0" target="n3">
+      <data key="e_similarity">0.885125286508336</data>
+      <data key="e_sample_id1">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line1_display">KPL_1</data>
+      <data key="e_sample_id2">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line2_display">MCF_7</data>
+    </edge>
+    <edge source="n12" target="n13">
+      <data key="e_similarity">0.879111111111111</data>
+      <data key="e_sample_id1">NG-29643_ETCC_007_lib581312_7997_4</data>
+      <data key="e_cell_line1_display">ETCC_007</data>
+      <data key="e_sample_id2">NG-30919_HS_578T_B_lib628473_10098_2</data>
+      <data key="e_cell_line2_display">HS_578T</data>
+    </edge>
+    <edge source="n1" target="n3">
+      <data key="e_similarity">0.87361130431611</data>
+      <data key="e_sample_id1">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line1_display">MCF_7</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n2" target="n4">
+      <data key="e_similarity">0.849455037734012</data>
+      <data key="e_sample_id1">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line1_display">SK_BR_3</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n12" target="n14">
+      <data key="e_similarity">0.848888888888889</data>
+      <data key="e_sample_id1">NG-29643_ETCC_006_lib581311_8005_3</data>
+      <data key="e_cell_line1_display">ETCC_006</data>
+      <data key="e_sample_id2">NG-29643_ETCC_007_lib581312_7997_4</data>
+      <data key="e_cell_line2_display">ETCC_007</data>
+    </edge>
+    <edge source="n5" target="n7">
+      <data key="e_similarity">0.845339785985454</data>
+      <data key="e_sample_id1">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192C</data>
+      <data key="e_sample_id2">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="e_cell_line2_display">EVSA_T</data>
+    </edge>
+    <edge source="n1" target="n9">
+      <data key="e_similarity">0.835049504950495</data>
+      <data key="e_sample_id1">NG-29643_BT_474_lib581288_7997_4</data>
+      <data key="e_cell_line1_display">BT_474</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n0" target="n2">
+      <data key="e_similarity">0.834391836081681</data>
+      <data key="e_sample_id1">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line1_display">KPL_1</data>
+      <data key="e_sample_id2">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line2_display">SK_BR_3</data>
+    </edge>
+    <edge source="n7" target="n8">
+      <data key="e_similarity">0.827915478925074</data>
+      <data key="e_sample_id1">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="e_cell_line1_display">EVSA_T</data>
+      <data key="e_sample_id2">NG-29643_MDA_MB_453_lib581289_7997_4</data>
+      <data key="e_cell_line2_display">MDA_MB_453</data>
+    </edge>
+    <edge source="n2" target="n5">
+      <data key="e_similarity">0.824689999568074</data>
+      <data key="e_sample_id1">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192C</data>
+      <data key="e_sample_id2">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line2_display">SK_BR_3</data>
+    </edge>
+    <edge source="n0" target="n9">
+      <data key="e_similarity">0.823267326732673</data>
+      <data key="e_sample_id1">NG-29643_BT_474_lib581288_7997_4</data>
+      <data key="e_cell_line1_display">BT_474</data>
+      <data key="e_sample_id2">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line2_display">KPL_1</data>
+    </edge>
+    <edge source="n0" target="n4">
+      <data key="e_similarity">0.818398081296064</data>
+      <data key="e_sample_id1">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line1_display">KPL_1</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n6" target="n10">
+      <data key="e_similarity">0.807877282517326</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_EFM_192B_lib581293_7997_4</data>
+      <data key="e_cell_line2_display">EFM_192B</data>
+    </edge>
+    <edge source="n1" target="n4">
+      <data key="e_similarity">0.807011506798901</data>
+      <data key="e_sample_id1">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line1_display">MFM_223</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n13" target="n14">
+      <data key="e_similarity">0.803555555555556</data>
+      <data key="e_sample_id1">NG-29643_ETCC_006_lib581311_8005_3</data>
+      <data key="e_cell_line1_display">ETCC_006</data>
+      <data key="e_sample_id2">NG-30919_HS_578T_B_lib628473_10098_2</data>
+      <data key="e_cell_line2_display">HS_578T</data>
+    </edge>
+    <edge source="n4" target="n10">
+      <data key="e_similarity">0.797667963832785</data>
+      <data key="e_sample_id1">NG-29643_EFM_192B_lib581293_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192B</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n1" target="n6">
+      <data key="e_similarity">0.792896203707559</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n0" target="n7">
+      <data key="e_similarity">0.789816020820752</data>
+      <data key="e_sample_id1">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="e_cell_line1_display">EVSA_T</data>
+      <data key="e_sample_id2">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line2_display">KPL_1</data>
+    </edge>
+    <edge source="n1" target="n7">
+      <data key="e_similarity">0.789816020820752</data>
+      <data key="e_sample_id1">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="e_cell_line1_display">EVSA_T</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n1" target="n2">
+      <data key="e_similarity">0.789816020820752</data>
+      <data key="e_sample_id1">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line1_display">MFM_223</data>
+      <data key="e_sample_id2">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line2_display">SK_BR_3</data>
+    </edge>
+    <edge source="n2" target="n7">
+      <data key="e_similarity">0.789193976970771</data>
+      <data key="e_sample_id1">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="e_cell_line1_display">EVSA_T</data>
+      <data key="e_sample_id2">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line2_display">SK_BR_3</data>
+    </edge>
+    <edge source="n3" target="n4">
+      <data key="e_similarity">0.78864162011654</data>
+      <data key="e_sample_id1">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line1_display">MCF_7</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n3" target="n5">
+      <data key="e_similarity">0.788066990898807</data>
+      <data key="e_sample_id1">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192C</data>
+      <data key="e_sample_id2">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line2_display">MCF_7</data>
+    </edge>
+    <edge source="n0" target="n5">
+      <data key="e_similarity">0.784591074174871</data>
+      <data key="e_sample_id1">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192C</data>
+      <data key="e_sample_id2">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line2_display">KPL_1</data>
+    </edge>
+    <edge source="n8" target="n9">
+      <data key="e_similarity">0.784238357804576</data>
+      <data key="e_sample_id1">NG-29643_BT_474_lib581288_7997_4</data>
+      <data key="e_cell_line1_display">BT_474</data>
+      <data key="e_sample_id2">NG-29643_MDA_MB_453_lib581289_7997_4</data>
+      <data key="e_cell_line2_display">MDA_MB_453</data>
+    </edge>
+    <edge source="n5" target="n11">
+      <data key="e_similarity">0.783390426733313</data>
+      <data key="e_sample_id1">NG-29643_EFM_19_lib581291_7997_4</data>
+      <data key="e_cell_line1_display">EFM_19</data>
+      <data key="e_sample_id2">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line2_display">EFM_192C</data>
+    </edge>
+    <edge source="n2" target="n3">
+      <data key="e_similarity">0.782727838108547</data>
+      <data key="e_sample_id1">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line1_display">MCF_7</data>
+      <data key="e_sample_id2">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line2_display">SK_BR_3</data>
+    </edge>
+    <edge source="n0" target="n6">
+      <data key="e_similarity">0.780674099013103</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line2_display">KPL_1</data>
+    </edge>
+    <edge source="n1" target="n8">
+      <data key="e_similarity">0.772851783307413</data>
+      <data key="e_sample_id1">NG-29643_MDA_MB_453_lib581289_7997_4</data>
+      <data key="e_cell_line1_display">MDA_MB_453</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n7" target="n11">
+      <data key="e_similarity">0.768113374667848</data>
+      <data key="e_sample_id1">NG-29643_EFM_19_lib581291_7997_4</data>
+      <data key="e_cell_line1_display">EFM_19</data>
+      <data key="e_sample_id2">NG-29643_EVSA_T_lib581299_7997_4</data>
+      <data key="e_cell_line2_display">EVSA_T</data>
+    </edge>
+    <edge source="n1" target="n5">
+      <data key="e_similarity">0.762758655648784</data>
+      <data key="e_sample_id1">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192C</data>
+      <data key="e_sample_id2">NG-29643_MFM_223_lib581297_7997_4</data>
+      <data key="e_cell_line2_display">MFM_223</data>
+    </edge>
+    <edge source="n2" target="n6">
+      <data key="e_similarity">0.761506156056835</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_SK_BR_3_lib581307_7997_4</data>
+      <data key="e_cell_line2_display">SK_BR_3</data>
+    </edge>
+    <edge source="n0" target="n8">
+      <data key="e_similarity">0.761465208810251</data>
+      <data key="e_sample_id1">NG-29643_KPL_1_lib581296_7997_4</data>
+      <data key="e_cell_line1_display">KPL_1</data>
+      <data key="e_sample_id2">NG-29643_MDA_MB_453_lib581289_7997_4</data>
+      <data key="e_cell_line2_display">MDA_MB_453</data>
+    </edge>
+    <edge source="n10" target="n15">
+      <data key="e_similarity">0.761070607473085</data>
+      <data key="e_sample_id1">NG-29643_EFM_192A_lib581292_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192A</data>
+      <data key="e_sample_id2">NG-29643_EFM_192B_lib581293_7997_4</data>
+      <data key="e_cell_line2_display">EFM_192B</data>
+    </edge>
+    <edge source="n4" target="n5">
+      <data key="e_similarity">0.758247291013445</data>
+      <data key="e_sample_id1">NG-29643_EFM_192C_lib581294_7997_4</data>
+      <data key="e_cell_line1_display">EFM_192C</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n16" target="n17">
+      <data key="e_similarity">0.758222222222222</data>
+      <data key="e_sample_id1">NG-29643_CAL_120_lib581301_8005_3</data>
+      <data key="e_cell_line1_display">CAL_120</data>
+      <data key="e_sample_id2">NG-29643_CAL_51_lib581295_7997_4</data>
+      <data key="e_cell_line2_display">CAL_51</data>
+    </edge>
+    <edge source="n4" target="n6">
+      <data key="e_similarity">0.75446183397329</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_T_47D_lib581309_8005_3</data>
+      <data key="e_cell_line2_display">T_47D</data>
+    </edge>
+    <edge source="n6" target="n15">
+      <data key="e_similarity">0.750959832264524</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_EFM_192A_lib581292_7997_4</data>
+      <data key="e_cell_line2_display">EFM_192A</data>
+    </edge>
+    <edge source="n3" target="n6">
+      <data key="e_similarity">0.750959832264524</data>
+      <data key="e_sample_id1">NG-29643_CAL_148_lib581302_7997_4</data>
+      <data key="e_cell_line1_display">CAL_148</data>
+      <data key="e_sample_id2">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line2_display">MCF_7</data>
+    </edge>
+    <edge source="n3" target="n11">
+      <data key="e_similarity">0.750056981309208</data>
+      <data key="e_sample_id1">NG-29643_EFM_19_lib581291_7997_4</data>
+      <data key="e_cell_line1_display">EFM_19</data>
+      <data key="e_sample_id2">NG-29643_MCF_7_lib581315_7997_4</data>
+      <data key="e_cell_line2_display">MCF_7</data>
+    </edge>
+  </graph>
+</graphml>

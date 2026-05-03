@@ -1,0 +1,15 @@
+node1	node2	reciprocal	support_directions	support_weight_mean	support_weight_sum	support_weight_max	methods_union
+IMR_32	LAN5	1	17	0.8088716815155338	13.750818585764074	0.914102866024542	Entropy_corr;Entropy_euc;HVG_corr;HVG_euc;MAD_corr;MAD_euc;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;PCA_euc;Spearman_corr;Spearman_euc;Variance_corr;Variance_euc;kTotal_corr;kTotal_euc
+CHP_134	IMR_32	1	16	0.8242661433073699	13.188258292917919	0.904481607318022	Entropy_corr;Entropy_euc;HVG_corr;HVG_euc;MAD_corr;MAD_euc;MX_corr;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;Spearman_corr;Spearman_euc;Variance_corr;Variance_euc;kTotal_corr
+CHP_126	IMR_32	1	16	0.7314394590854828	11.703031345367725	0.8694676696542012	Entropy_corr;Entropy_euc;HVG_corr;HVG_euc;MAD_euc;MX_corr;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;Spearman_corr;Spearman_euc;Variance_corr;Variance_euc;kTotal_corr;kTotal_euc
+CHP_126	LAN5	1	14	0.7676926684465599	10.74769735825184	0.8836900335288647	Entropy_euc;HVG_corr;HVG_euc;MAD_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;PCA_euc;Spearman_corr;Spearman_euc;Variance_corr;Variance_euc;kTotal_corr;kTotal_euc
+IMR_32	LAN1	1	14	0.7332545749244022	10.26556404894163	0.8798521256931608	Entropy_corr;Entropy_euc;HVG_corr;HVG_euc;MAD_corr;MX_corr;MX_euc;MeanAbsDev_corr;PCA_corr;Spearman_euc;Variance_corr;Variance_euc;kTotal_corr;kTotal_euc
+CHP_134	LAN1	1	13	0.7902141605708242	10.272784087420714	0.8683297696190431	Entropy_corr;Entropy_euc;HVG_euc;MAD_corr;MX_corr;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;PCA_euc;Spearman_corr;Variance_corr;Variance_euc
+LAN6	NBL_S	1	12	0.8105022654776007	9.726027185731208	0.9110345813066476	Entropy_corr;Entropy_euc;MAD_corr;MAD_euc;MX_corr;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;PCA_euc;Spearman_corr;Variance_corr
+KELLY	NBL_S	1	12	0.7972192986617036	9.566631583940444	0.8973428644202258	Entropy_corr;Entropy_euc;MAD_corr;MAD_euc;MX_corr;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_corr;PCA_euc;Variance_corr;Variance_euc
+CHP_126	NMB	1	11	0.7862232669338485	8.648455936272333	0.905289287760168	Entropy_corr;Entropy_euc;HVG_euc;MAD_corr;MAD_euc;MeanAbsDev_corr;PCA_corr;PCA_euc;Spearman_corr;Variance_corr;kTotal_corr
+LAN5	MHH_NB_11	1	10	0.7960652129126607	7.960652129126608	0.8750516940891953	Entropy_euc;HVG_corr;HVG_euc;MAD_euc;MX_corr;MX_euc;MeanAbsDev_euc;PCA_euc;Variance_corr;Variance_euc
+NBL_S	SIMA	1	9	0.8310769219842086	7.479692297857877	0.8708095104858342	Entropy_corr;Entropy_euc;MAD_corr;MAD_euc;MX_corr;MX_euc;PCA_corr;PCA_euc;Variance_corr
+CHP_126	NGP	1	9	0.8076347152174034	7.268712436956631	0.8715899292718513	HVG_corr;HVG_euc;MAD_corr;MAD_euc;MX_euc;MeanAbsDev_euc;PCA_euc;Variance_corr;Variance_euc
+LAN5	NGP	1	9	0.8070670472844186	7.263603425559767	0.8871324585617182	HVG_corr;HVG_euc;MAD_euc;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;PCA_euc;Variance_corr;Variance_euc
+IMR_32	NGP	1	9	0.7890033964636292	7.101030568172662	0.8495857552500313	HVG_corr;HVG_euc;MAD_corr;MAD_euc;MX_corr;MX_euc;MeanAbsDev_corr;MeanAbsDev_euc;Variance_corr

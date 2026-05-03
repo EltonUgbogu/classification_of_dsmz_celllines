@@ -1638,6 +1638,13 @@ rule cell_line_similarity_graph:
         '''
 
 P_CONS_ALL_DIR = os.path.join(TUMOUR_NH_ROOT, "final_consensus_all")
+P_CONS_PLOTS_DIR = os.path.join(P_CONS_ALL_DIR, "plots")
+P_CONS_THESIS_RESOLUTION_PREFIX = os.path.join(P_CONS_PLOTS_DIR, "Fig_DSMZ_similarity_network_resolution")
+P_CONS_THESIS_CONSENSUS_PREFIX = os.path.join(P_CONS_PLOTS_DIR, "Fig_DSMZ_similarity_network_consensus")
+P_CONS_SHORTNAMES_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_shortnames.tsv")
+P_CONS_RESOLVED_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_graph_edges.tsv")
+P_CONS_RESOLVED_NODE_STATS_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_graph_node_stats.tsv")
+P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_similarity_consensus_edges.tsv")
 STUDY_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, config.get("study_design", {}).get("outputs_dirname", "study_design"))
 VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 
@@ -1829,6 +1836,107 @@ rule resolve_dsmz_graph_neighbours:
           --output_tsv {output.resolved_tsv} \
           > {log} 2>&1
         test -s {output.resolved_tsv} || (echo "ERROR: missing {output.resolved_tsv}" >&2; exit 1)
+        '''
+
+
+rule plot_resolved_dsmz_similarity_network:
+    """
+    Thesis figure for the resolved DSMZ similarity network after graph-based
+    neighbour resolution. The helper also writes short-name, edge-list, and
+    node-stat TSVs into the plot directory for figure provenance.
+    """
+    input:
+        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv")
+    output:
+        png = P_CONS_THESIS_RESOLUTION_PREFIX + ".png",
+        pdf = P_CONS_THESIS_RESOLUTION_PREFIX + ".pdf",
+        svg = P_CONS_THESIS_RESOLUTION_PREFIX + ".svg",
+        shortnames = P_CONS_SHORTNAMES_TSV,
+        edges = P_CONS_RESOLVED_EDGES_TSV,
+        node_stats = P_CONS_RESOLVED_NODE_STATS_TSV
+    params:
+        script = os.path.join(BASE, "scripts", "visualize_resolved_dsmz_graph.py"),
+        out_prefix = P_CONS_THESIS_RESOLUTION_PREFIX,
+        label = profile_name.upper()
+    log: os.path.join(LOGROOT, "plot_resolved_dsmz_similarity_network.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        python {params.script} \
+          {input.resolved_tsv} \
+          {params.out_prefix} \
+          {params.label} \
+          > {log} 2>&1
+        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        '''
+
+
+rule build_dsmz_similarity_network_consensus:
+    """
+    Aggregates per-direction DSMZ similarity graph edge files into a single
+    consensus edge table for the thesis consensus-network figure.
+    """
+    input:
+        shortnames = P_CONS_SHORTNAMES_TSV,
+        graph_edges = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        edges = P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV
+    params:
+        script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
+        tumour_nh_dir = TUMOUR_NH_ROOT_ABS,
+        min_support = cfg.get(
+            "tumour_neighbourhoods", {}
+        ).get("similarity_consensus_min_support", max(2, (len(CONS_DIRECTIONS) + 1) // 2))
+    log: os.path.join(LOGROOT, "build_dsmz_similarity_network_consensus.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        python {params.script} \
+          --tumour_nh_dir {params.tumour_nh_dir} \
+          --out_edges {output.edges} \
+          --min_support {params.min_support} \
+          --name_map {input.shortnames} \
+          --require_short \
+          > {log} 2>&1
+        test -s {output.edges} || (echo "ERROR: missing {output.edges}" >&2; exit 1)
+        '''
+
+
+rule plot_dsmz_similarity_network_consensus:
+    """
+    Thesis figure for the consensus DSMZ similarity network aggregated across
+    configured similarity-network directions.
+    """
+    input:
+        edges = P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV,
+        shortnames = P_CONS_SHORTNAMES_TSV
+    output:
+        png = P_CONS_THESIS_CONSENSUS_PREFIX + ".png",
+        pdf = P_CONS_THESIS_CONSENSUS_PREFIX + ".pdf",
+        svg = P_CONS_THESIS_CONSENSUS_PREFIX + ".svg"
+    params:
+        script = os.path.join(BASE, "scripts", "plot_consensus_graph.py"),
+        out_prefix = P_CONS_THESIS_CONSENSUS_PREFIX,
+        label = profile_name.upper()
+    log: os.path.join(LOGROOT, "plot_dsmz_similarity_network_consensus.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        python {params.script} \
+          --edges {input.edges} \
+          --nodes {input.shortnames} \
+          --nodes-col short_id \
+          --out {params.out_prefix} \
+          --label {params.label} \
+          > {log} 2>&1
+        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
         '''
 
 
@@ -2079,7 +2187,8 @@ if DESEQ2_ENABLED:
             manifest     = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
             recurrence   = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "gene_recurrence_across_contrasts.tsv"),
             unique_set   = os.path.join(DESEQ2_ISOLATE_DIR, "markers",
-                               f"unique_feature_set_recurrence_ge_{DESEQ2_CFG.get('recurrence_k', 2)}.txt")
+                               f"unique_feature_set_recurrence_ge_{DESEQ2_CFG.get('recurrence_k', 2)}.txt"),
+            session_info = os.path.join(DESEQ2_ISOLATE_DIR, "sessionInfo.txt")
         params:
             script        = os.path.join(BASE, "scripts", "deseq2_isolate_degs.R"),
             outdir        = DESEQ2_ISOLATE_DIR_ABS,
@@ -2103,6 +2212,7 @@ if DESEQ2_ENABLED:
                 echo -e "contrast\tmarker_file\tn_markers" > {output.manifest}
                 echo -e "gene_id\tn_contrasts" > {output.recurrence}
                 touch {output.unique_set}
+                touch {output.session_info}
                 exit 0
             fi
             mkdir -p {params.outdir}
@@ -2419,6 +2529,10 @@ if MARKER_POST_ENABLED:
 # Final pipeline terminal target list.
 PIPELINE_TARGET = [
     os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
+    P_CONS_THESIS_RESOLUTION_PREFIX + ".pdf",
+    P_CONS_THESIS_RESOLUTION_PREFIX + ".png",
+    P_CONS_THESIS_CONSENSUS_PREFIX + ".pdf",
+    P_CONS_THESIS_CONSENSUS_PREFIX + ".png",
     os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
     os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
     os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
@@ -2436,3 +2550,7 @@ if DESEQ2_ENABLED:
 if MARKER_POST_ENABLED:
     PIPELINE_TARGET.append(PAN_EXPR_RDS)
     PIPELINE_TARGET.append(mapping_metrics_summary())
+
+
+
+

@@ -1,0 +1,4 @@
+Profile: brca
+No persisted silhouette artifacts were found under the current unsupervised output root.
+This does not mean silhouette was unused; the clustering code uses silhouette during model selection.
+It means the present profile outputs do not expose a dedicated silhouette report that can be summarised post hoc.

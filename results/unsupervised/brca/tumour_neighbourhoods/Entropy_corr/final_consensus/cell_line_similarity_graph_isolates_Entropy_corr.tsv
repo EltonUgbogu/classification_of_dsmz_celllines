@@ -1,0 +1,4 @@
+cell_line	degree	mean_edge_sim	max_edge_sim	is_outlier	sample_id	cell_tech_id	cell_line_display
+DU_4475	0	NA	NA	TRUE	NG-29643_DU_4475_lib581298_7997_4	DU_4475	DU_4475
+JIMT_1	0	NA	NA	TRUE	NG-29643_JIMT_1_B_lib581287_7997_4	JIMT_1	JIMT_1
+SK_BR_3	0	NA	NA	TRUE	NG-29643_SK_BR_3_lib581307_7997_4	SK_BR_3	SK_BR_3

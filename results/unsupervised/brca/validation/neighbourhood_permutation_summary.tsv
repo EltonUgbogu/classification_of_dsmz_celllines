@@ -1,0 +1,2 @@
+cohort	shortlist_n	permutation_iterations	observed_mean_selection_score	null_mean_selection_score	null_sd_selection_score	empirical_p_mean	observed_median_selection_score	empirical_p_median
+brca	10	1000	0.8490595251550175	0.8490595251550175	0	1	0.8490595251550175	1

@@ -1,0 +1,2 @@
+profile	label	entity	source_file	status	purpose
+brca	PAM50_Subtype	tumour	data/brca/annotations/TCGA_BRCA_project_subtype.csv	implemented	subtype concordance

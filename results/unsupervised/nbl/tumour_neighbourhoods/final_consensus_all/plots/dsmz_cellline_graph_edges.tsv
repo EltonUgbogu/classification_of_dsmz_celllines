@@ -1,0 +1,18 @@
+node1	node2	support_directions	support_weight_mean	support_weight_sum	support_weight_max	methods_union	node1_short	node2_short
+CHP_134	LS					fallback=resolved_neighbors	CHP_134	LS
+CHP_134	SK_N_BE_2					fallback=resolved_neighbors	CHP_134	SK_N_BE_2
+CHP_134	KELLY					fallback=resolved_neighbors	CHP_134	KELLY
+CHP_134	GI_ME_N					fallback=resolved_neighbors	CHP_134	GI_ME_N
+CCLF_PEDS_0051_T	GI_ME_N					fallback=resolved_neighbors	CCLF_PEDS_0051_T	GI_ME_N
+CCLF_PEDS_0051_T	SK_N_BE_2					fallback=resolved_neighbors	CCLF_PEDS_0051_T	SK_N_BE_2
+CCLF_PEDS_0051_T	LAN2					fallback=resolved_neighbors	CCLF_PEDS_0051_T	LAN2
+CHP_126	LAN1					fallback=resolved_neighbors	CHP_126	LAN1
+CHP_126	IMR_32					fallback=resolved_neighbors	CHP_126	IMR_32
+CHP_126	LAN5					fallback=resolved_neighbors	CHP_126	LAN5
+GI_ME_N	SK_N_BE_2					fallback=resolved_neighbors	GI_ME_N	SK_N_BE_2
+IMR_32	LAN5					fallback=resolved_neighbors	IMR_32	LAN5
+IMR_32	LAN1					fallback=resolved_neighbors	IMR_32	LAN1
+LAN1	NGP					fallback=resolved_neighbors	LAN1	NGP
+LAN5	NMB					fallback=resolved_neighbors	LAN5	NMB
+KELLY	LS					fallback=resolved_neighbors	KELLY	LS
+NBL_S	NGP					fallback=resolved_neighbors	NBL_S	NGP

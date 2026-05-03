@@ -136,12 +136,13 @@ suppressPackageStartupMessages({
   library(DESeq2)
 })
 
-# Try to load apeglm for LFC shrinkage (optional but recommended)
-has_apeglm <- requireNamespace("apeglm", quietly = TRUE)
-if (!has_apeglm) {
-  message("[WARN] apeglm package not available. LFC shrinkage will be skipped.")
-  message("[INFO] Install via: BiocManager::install('apeglm')")
+# Preflight: fail fast before expensive DESeq2 runs if required packages are absent
+required_pkgs <- c("DESeq2", "apeglm")
+missing_pkgs  <- required_pkgs[!vapply(required_pkgs, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing_pkgs) > 0) {
+  stop("Missing required R packages: ", paste(missing_pkgs, collapse = ", "), call. = FALSE)
 }
+has_apeglm <- TRUE
 
 # -----------------------------------------------------------------------------
 # Command-Line Argument Definitions
@@ -669,23 +670,36 @@ for (iso in isolates) {
     minReplicatesForReplace = Inf  # Disable outlier replacement (requires replicates)
   )
 
-  # Extract results for the isolate vs REST contrast
-  res <- results(dds_tmp, contrast = c("grp_tmp", iso, "REST"))
-  
-  # Apply LFC shrinkage to reduce noise in effect size estimates
-  # This is especially important when n=1 in one group
-  if (has_apeglm) {
-    tryCatch({
-      res <- lfcShrink(dds_tmp, contrast = c("grp_tmp", iso, "REST"), 
-                       res = res, type = "apeglm", quiet = TRUE)
-      message(sprintf("[INFO] Applied apeglm LFC shrinkage for %s", iso))
-    }, error = function(e) {
-      message(sprintf("[WARN] apeglm shrinkage failed for %s: %s", iso, e$message))
-    })
-  }
-  res_df <- as.data.frame(res)
-  res_df$gene_id <- rownames(res_df)
-  res_df <- res_df[, c("gene_id", setdiff(colnames(res_df), "gene_id"))]
+  # Extract raw results then apply shrinkage, keeping stat/pvalue/padj from DESeq2
+  res_raw <- results(dds_tmp, contrast = c("grp_tmp", iso, "REST"))
+
+  res_df <- as.data.frame(res_raw)
+  res_df$gene_id               <- rownames(res_df)
+  res_df$log2FoldChange_raw    <- res_df$log2FoldChange
+  res_df$log2FoldChange_shrunk <- NA_real_
+  res_df$lfc_shrinkage_method  <- NA_character_
+  res_df$lfc_shrinkage_applied <- FALSE
+
+  tryCatch({
+    res_shrunk <- lfcShrink(dds_tmp, contrast = c("grp_tmp", iso, "REST"),
+                            res = res_raw, type = "apeglm", quiet = TRUE)
+    res_df$log2FoldChange_shrunk <- as.data.frame(res_shrunk)$log2FoldChange
+    res_df$lfc_shrinkage_method  <- "apeglm"
+    res_df$lfc_shrinkage_applied <- TRUE
+    message(sprintf("[INFO] Applied apeglm LFC shrinkage for %s", iso))
+  }, error = function(e) {
+    message(sprintf("[WARN] apeglm shrinkage failed for %s: %s", iso, e$message))
+  })
+
+  # Use shrunken LFC for ranking; retain raw stat/pvalue/padj from DESeq2
+  res_df$log2FoldChange <- ifelse(res_df$lfc_shrinkage_applied,
+                                  res_df$log2FoldChange_shrunk,
+                                  res_df$log2FoldChange_raw)
+
+  col_order <- c("gene_id", "baseMean", "log2FoldChange", "log2FoldChange_raw",
+                 "log2FoldChange_shrunk", "lfc_shrinkage_method", "lfc_shrinkage_applied",
+                 "lfcSE", "stat", "pvalue", "padj")
+  res_df <- res_df[, intersect(col_order, colnames(res_df)), drop = FALSE]
 
   # Get sample ID for the isolate (for expression filtering)
   iso_sample_id <- rownames(meta_tmp)[meta_tmp[[opt$cell_line_col]] == iso][1]
@@ -788,22 +802,36 @@ if (length(anchors) > 0) {
       minReplicatesForReplace = Inf  # Disable outlier replacement
     )
 
-    # Extract results
-    res <- results(dds_k, contrast = c("grp_tmp", anc, "OUTSIDE_COMP"))
-    
-    # Apply LFC shrinkage
-    if (has_apeglm) {
-      tryCatch({
-        res <- lfcShrink(dds_k, contrast = c("grp_tmp", anc, "OUTSIDE_COMP"),
-                         res = res, type = "apeglm", quiet = TRUE)
-        message(sprintf("[INFO] Applied apeglm LFC shrinkage for anchor %s", anc))
-      }, error = function(e) {
-        message(sprintf("[WARN] apeglm shrinkage failed for anchor %s: %s", anc, e$message))
-      })
-    }
-    res_df <- as.data.frame(res)
-    res_df$gene_id <- rownames(res_df)
-    res_df <- res_df[, c("gene_id", setdiff(colnames(res_df), "gene_id"))]
+    # Extract raw results then apply shrinkage, keeping stat/pvalue/padj from DESeq2
+    res_raw <- results(dds_k, contrast = c("grp_tmp", anc, "OUTSIDE_COMP"))
+
+    res_df <- as.data.frame(res_raw)
+    res_df$gene_id               <- rownames(res_df)
+    res_df$log2FoldChange_raw    <- res_df$log2FoldChange
+    res_df$log2FoldChange_shrunk <- NA_real_
+    res_df$lfc_shrinkage_method  <- NA_character_
+    res_df$lfc_shrinkage_applied <- FALSE
+
+    tryCatch({
+      res_shrunk <- lfcShrink(dds_k, contrast = c("grp_tmp", anc, "OUTSIDE_COMP"),
+                              res = res_raw, type = "apeglm", quiet = TRUE)
+      res_df$log2FoldChange_shrunk <- as.data.frame(res_shrunk)$log2FoldChange
+      res_df$lfc_shrinkage_method  <- "apeglm"
+      res_df$lfc_shrinkage_applied <- TRUE
+      message(sprintf("[INFO] Applied apeglm LFC shrinkage for anchor %s", anc))
+    }, error = function(e) {
+      message(sprintf("[WARN] apeglm shrinkage failed for anchor %s: %s", anc, e$message))
+    })
+
+    # Use shrunken LFC for ranking; retain raw stat/pvalue/padj from DESeq2
+    res_df$log2FoldChange <- ifelse(res_df$lfc_shrinkage_applied,
+                                    res_df$log2FoldChange_shrunk,
+                                    res_df$log2FoldChange_raw)
+
+    col_order <- c("gene_id", "baseMean", "log2FoldChange", "log2FoldChange_raw",
+                   "log2FoldChange_shrunk", "lfc_shrinkage_method", "lfc_shrinkage_applied",
+                   "lfcSE", "stat", "pvalue", "padj")
+    res_df <- res_df[, intersect(col_order, colnames(res_df)), drop = FALSE]
 
     # Get sample ID for the anchor (for expression filtering)
     anc_sample_id <- rownames(meta_k)[meta_k[[opt$cell_line_col]] == anc][1]
@@ -893,3 +921,7 @@ fwrite(manifest,
 message(sprintf("[DONE] Unique feature set: %d genes (recurrence >= %d)",
                 length(unique_genes), k))
 message(sprintf("[OUT] %s", unique_path))
+
+# Write session info for reproducibility
+writeLines(capture.output(sessionInfo()), file.path(opt$outdir, "sessionInfo.txt"))
+message("[INFO] Session info written to sessionInfo.txt")
