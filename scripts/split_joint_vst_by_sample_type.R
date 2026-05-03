@@ -46,13 +46,13 @@ if (is.null(colnames(mat))) {
 
 sample_ids <- colnames(mat)
 cell_idx <- grepl("^NG-", sample_ids)
-tumour_idx <- grepl("^(GSE|SRP|TARGET-)", sample_ids)
+tumour_idx <- grepl("^(GSE|SRP|TARGET-|TCGA-|SRR|GDC-)", sample_ids)
 
 if (sum(cell_idx) == 0) {
   stop("No cell-line columns matched '^NG-'.")
 }
 if (sum(tumour_idx) == 0) {
-  stop("No tumour columns matched '^(GSE|SRP|TARGET-)'.")
+  stop("No tumour columns matched '^(GSE|SRP|TARGET-|TCGA-|SRR|GDC-)'.")
 }
 
 overlap_idx <- cell_idx & tumour_idx
