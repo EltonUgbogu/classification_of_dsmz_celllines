@@ -1951,9 +1951,8 @@ DESEQ2_PROFILE_CFG = cfg.get("deseq2", {})
 DESEQ2_CFG = deep_merge(config.get("defaults", {}).get("deseq2", {}), DESEQ2_PROFILE_CFG)
 DESEQ2_INPUT_DIR     = os.path.join(UNSUP_REL, "deseq2_inputs")
 DESEQ2_INPUT_DIR_ABS = os.path.join(UNSUP,     "deseq2_inputs")
-DESEQ2_MARKER_OUTDIR_NAME = DESEQ2_CFG.get("marker_outdir_name", "deseq2_markers")
-DESEQ2_ISOLATE_DIR     = os.path.join(UNSUP_REL, DESEQ2_MARKER_OUTDIR_NAME)
-DESEQ2_ISOLATE_DIR_ABS = os.path.join(UNSUP,     DESEQ2_MARKER_OUTDIR_NAME)
+DESEQ2_ISOLATE_DIR     = os.path.join(UNSUP_REL, "deseq2", "isolate_degs")
+DESEQ2_ISOLATE_DIR_ABS = os.path.join(UNSUP,     "deseq2", "isolate_degs")
 DESEQ2_COMP_DIR     = os.path.join(UNSUP_REL, "deseq2", "component_vs_rest")
 DESEQ2_COMP_DIR_ABS = os.path.join(UNSUP,     "deseq2", "component_vs_rest")
 
@@ -2305,156 +2304,6 @@ if DESEQ2_ENABLED:
 
 
 # =============================================================================
-# STAGE 7B: GENE SET ENRICHMENT ANALYSIS
-# =============================================================================
-
-ENRICH_PROFILE_CFG = cfg.get("enrichment", {})
-ENRICH_CFG = deep_merge(config.get("defaults", {}).get("enrichment", {}), ENRICH_PROFILE_CFG)
-
-ENRICH_ENABLED = bool(ENRICH_CFG.get("enabled", False)) and DESEQ2_ENABLED
-
-ENRICH_DIR_REL = os.path.join(UNSUP_REL, ENRICH_CFG.get("output_dir_name", "enrichment"))
-ENRICH_DIR_ABS = os.path.join(UNSUP, ENRICH_CFG.get("output_dir_name", "enrichment"))
-
-_ENRICH_DISEASE_PROFILES = ENRICH_CFG.get(
-    "disease_profiles",
-    config.get("defaults", {}).get("marker_postprocessing", {}).get("pan_cancer", {}).get(
-        "disease_profiles",
-        sorted(DESEQ2_ENABLED_PROFILES)
-    )
-)
-_ENRICH_DISEASE_PROFILES = [str(p) for p in _ENRICH_DISEASE_PROFILES]
-
-if ENRICH_ENABLED:
-
-    rule build_enrichment_query_sets:
-        """
-        Build enrichment query gene sets and matched custom backgrounds from
-        DESeq2 isolate and component outputs. The script discovers contrasts,
-        components, and disease-level recurrence sets from manifests and files.
-        """
-        input:
-            isolate_manifest = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
-            isolate_recurrence = os.path.join(
-                DESEQ2_ISOLATE_DIR,
-                "markers",
-                f"unique_feature_set_recurrence_ge_{DESEQ2_CFG.get('recurrence_k', 2)}.txt"
-            ),
-            component_done = os.path.join(DESEQ2_COMP_DIR, ".done")
-        output:
-            query_manifest = os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"),
-            skipped_queries = os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"),
-            done = touch(os.path.join(ENRICH_DIR_REL, "query_sets", ".done"))
-        params:
-            script = os.path.join(SCRIPTS_DIR, "build_enrichment_query_sets.R"),
-            isolate_dir = DESEQ2_ISOLATE_DIR_ABS,
-            component_dir = DESEQ2_COMP_DIR_ABS,
-            outdir = os.path.join(ENRICH_DIR_ABS, "query_sets"),
-            profile = profile_name,
-            min_query_genes = ENRICH_CFG.get("min_query_genes", 5),
-            recurrence_k = DESEQ2_CFG.get("recurrence_k", 2),
-            component_marker_pooling = ENRICH_CFG.get("component_marker_pooling", "union"),
-            component_recurrence_min = ENRICH_CFG.get("component_recurrence_min", 1),
-            component_rank_stat = ENRICH_CFG.get("component_rank_stat", "median_abs_log2fc"),
-            operative_feature_set_gene_file = abspath(ENRICH_CFG.get("operative_feature_set_gene_file", "")) if ENRICH_CFG.get("operative_feature_set_gene_file", "") else "",
-            operative_feature_set_rank_tsv = abspath(ENRICH_CFG.get("operative_feature_set_rank_tsv", "")) if ENRICH_CFG.get("operative_feature_set_rank_tsv", "") else "",
-            strict_union_primary = "TRUE" if ENRICH_CFG.get("strict_union_primary", True) else "FALSE",
-            operative_feature_set_primary = "TRUE" if ENRICH_CFG.get("operative_feature_set_primary", True) else "FALSE",
-            compare_strict_vs_operative = "TRUE" if ENRICH_CFG.get("compare_strict_vs_operative", True) else "FALSE",
-            ordered_strict_union = "TRUE" if ENRICH_CFG.get("ordered_strict_union", True) else "FALSE",
-            ordered_operative_feature_set = "TRUE" if ENRICH_CFG.get("ordered_operative_feature_set", False) else "FALSE",
-            disease_profiles = ",".join(_ENRICH_DISEASE_PROFILES)
-        log:
-            os.path.join(LOGROOT, "build_enrichment_query_sets.log")
-        conda:
-            CONDA_ENV_R
-        shell:
-            r'''
-            set -euo pipefail
-            mkdir -p "{params.outdir}"
-
-            Rscript "{params.script}" \
-              --profile "{params.profile}" \
-              --isolate-dir "{params.isolate_dir}" \
-              --component-dir "{params.component_dir}" \
-              --outdir "{params.outdir}" \
-              --min-query-genes {params.min_query_genes} \
-              --recurrence-k {params.recurrence_k} \
-              --component-marker-pooling "{params.component_marker_pooling}" \
-              --component-recurrence-min {params.component_recurrence_min} \
-              --component-rank-stat "{params.component_rank_stat}" \
-              --operative-feature-set-gene-file "{params.operative_feature_set_gene_file}" \
-              --operative-feature-set-rank-tsv "{params.operative_feature_set_rank_tsv}" \
-              --strict-union-primary {params.strict_union_primary} \
-              --operative-feature-set-primary {params.operative_feature_set_primary} \
-              --compare-strict-vs-operative {params.compare_strict_vs_operative} \
-              --ordered-strict-union {params.ordered_strict_union} \
-              --ordered-operative-feature-set {params.ordered_operative_feature_set} \
-              --disease-profiles "{params.disease_profiles}" \
-              > "{log}" 2>&1
-
-            test -s "{output.query_manifest}" || (echo "ERROR: missing {output.query_manifest}" >&2; exit 1)
-            '''
-
-    rule run_gprofiler_enrichment:
-        """
-        Run g:Profiler enrichment for all non-skipped query sets listed in the
-        query manifest. Produces primary IEA-included results and optional IEA
-        excluded sensitivity summaries.
-        """
-        input:
-            query_manifest = os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"),
-            query_sets_done = os.path.join(ENRICH_DIR_REL, "query_sets", ".done")
-        output:
-            corpus_manifest = os.path.join(ENRICH_DIR_REL, "gprofiler", "corpus_manifest.tsv"),
-            top_terms = os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"),
-            iea_sensitivity_summary = os.path.join(ENRICH_DIR_REL, "gprofiler", "iea_sensitivity_summary.tsv"),
-            version_info = os.path.join(ENRICH_DIR_REL, "gprofiler", "gprofiler_version.tsv"),
-            done = touch(os.path.join(ENRICH_DIR_REL, "gprofiler", ".done"))
-        params:
-            script = os.path.join(SCRIPTS_DIR, "run_gprofiler_from_manifest.R"),
-            outdir = os.path.join(ENRICH_DIR_ABS, "gprofiler"),
-            organism = ENRICH_CFG.get("organism", "hsapiens"),
-            sources = ",".join(ENRICH_CFG.get(
-                "sources",
-                ["GO:BP", "GO:MF", "GO:CC", "KEGG", "REAC", "WP", "TF", "HPA", "CORUM"]
-            )),
-            alpha = ENRICH_CFG.get("alpha", 0.05),
-            correction_method = ENRICH_CFG.get("correction_method", "g_SCS"),
-            archive_url = ENRICH_CFG.get("archive_url", ""),
-            require_archive = "TRUE" if ENRICH_CFG.get("require_archive", True) else "FALSE",
-            run_iea_sensitivity = "TRUE" if ENRICH_CFG.get("run_iea_sensitivity", True) else "FALSE",
-            as_short_link = "TRUE" if ENRICH_CFG.get("as_short_link", False) else "FALSE",
-            top_terms_per_source = ENRICH_CFG.get("top_terms_per_source", 5)
-        log:
-            os.path.join(LOGROOT, "run_gprofiler_enrichment.log")
-        conda:
-            CONDA_ENV_R
-        shell:
-            r'''
-            set -euo pipefail
-            mkdir -p "{params.outdir}"
-
-            Rscript "{params.script}" \
-              --query-manifest "{input.query_manifest}" \
-              --outdir "{params.outdir}" \
-              --organism "{params.organism}" \
-              --sources "{params.sources}" \
-              --alpha {params.alpha} \
-              --correction-method "{params.correction_method}" \
-              --archive-url "{params.archive_url}" \
-              --require-archive {params.require_archive} \
-              --run-iea-sensitivity {params.run_iea_sensitivity} \
-              --as-short-link {params.as_short_link} \
-              --top-terms-per-source {params.top_terms_per_source} \
-              > "{log}" 2>&1
-
-            test -s "{output.corpus_manifest}" || (echo "ERROR: missing {output.corpus_manifest}" >&2; exit 1)
-            test -s "{output.top_terms}" || (echo "ERROR: missing {output.top_terms}" >&2; exit 1)
-            '''
-
-
-# =============================================================================
 # STAGE 8: MARKER POST-PROCESSING (CONSENSUS → FEATURES → EXPRESSION → MAPPING)
 # =============================================================================
 
@@ -2478,7 +2327,7 @@ if MARKER_POST_ENABLED:
         return unsup
 
     def profile_consensus_tables_dir(profile):
-        return os.path.join("results", "unsupervised", profile, "deseq2_markers", "tables")
+        return os.path.join(profile_unsup_root_abs(profile), "deseq2_markers", "tables")
 
     def profile_consensus_outdir(profile):
         return os.path.join(profile_unsup_root_abs(profile), "deseq2_markers", CONSENSUS_OUTDIR_NAME)
@@ -2492,61 +2341,10 @@ if MARKER_POST_ENABLED:
             "deseq2_markers", CONSENSUS_OUTDIR_NAME, "summary"
         )
 
-    def profile_marker_manifest_rel(profile):
-        return os.path.join(
-            "results", "unsupervised", profile,
-            "deseq2_markers", "markers", "marker_sets_manifest.tsv"
-        )
-
-    def profile_marker_tables_rel(profile):
-        return os.path.join("results", "unsupervised", profile, "deseq2_markers", "tables")
-
-    rule ensure_profile_deseq2_markers:
-        """
-        Build graph-derived isolate-vs-rest DESeq2 marker outputs for a disease
-        profile by invoking the same Snakefile with pipeline_profile set to that
-        disease. This lets the multicohort pan-cancer target depend on tracked
-        disease-level DESeq2 outputs without hardcoded cell-line or gene lists.
-        """
-        output:
-            tables_dir = directory(os.path.join(
-                "results", "unsupervised", "{profile}", "deseq2_markers", "tables"
-            )),
-            marker_manifest = os.path.join(
-                "results", "unsupervised", "{profile}", "deseq2_markers",
-                "markers", "marker_sets_manifest.tsv"
-            ),
-            session_info = os.path.join(
-                "results", "unsupervised", "{profile}", "deseq2_markers",
-                "sessionInfo.txt"
-            )
-        params:
-            snakemake_bin = os.path.join(BASE, "envs", ".conda", "smk", "bin", "snakemake"),
-            snakefile = os.path.join(BASE, "Snakefile"),
-            configfile = os.path.join(BASE, "config", "config.yaml")
-        log:
-            os.path.join(LOGROOT, "ensure_profile_deseq2_markers_{profile}.log")
-        shell:
-            r'''
-            "{params.snakemake_bin}" \
-              --snakefile "{params.snakefile}" \
-              --configfile "{params.configfile}" \
-              --config pipeline_profile="{wildcards.profile}" \
-              --use-conda \
-              --nolock \
-              --cores 1 \
-              deseq2_isolate_degs \
-              > "{log}" 2>&1
-            test -d "{output.tables_dir}" || (echo "ERROR: missing {output.tables_dir}" >&2; exit 1)
-            test -s "{output.marker_manifest}" || (echo "ERROR: missing {output.marker_manifest}" >&2; exit 1)
-            test -s "{output.session_info}" || (echo "ERROR: missing {output.session_info}" >&2; exit 1)
-            '''
-
     rule build_component_consensus_markers:
         """Build per-profile consensus markers and summary exports."""
         input:
-            tables_dir=lambda wc: profile_marker_tables_rel(wc.profile),
-            marker_manifest=lambda wc: profile_marker_manifest_rel(wc.profile)
+            tables_dir=lambda wc: profile_consensus_tables_dir(wc.profile)
         output:
             summary_done=os.path.join(
                 "results", "unsupervised", "{profile}",
@@ -2615,6 +2413,12 @@ if MARKER_POST_ENABLED:
             marker_dir = os.path.join(profile_unsup_root_abs(prof), "deseq2_markers", "markers")
             args.append(f"--profile-marker-dir {prof}={shlex.quote(marker_dir)}")
         return " ".join(args)
+
+    def profile_marker_manifest_rel(profile):
+        return os.path.join(
+            "results", "unsupervised", profile,
+            "deseq2_markers", "markers", "marker_sets_manifest.tsv"
+        )
 
     def profile_marker_manifest_abs(profile):
         return os.path.join(
@@ -2799,14 +2603,6 @@ PIPELINE_TARGET = [
 if DESEQ2_ENABLED:
     PIPELINE_TARGET.append(NODE_STATS_TSV)
     PIPELINE_TARGET.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
-
-if ENRICH_ENABLED:
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "corpus_manifest.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "iea_sensitivity_summary.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "gprofiler_version.tsv"))
 
 if MARKER_POST_ENABLED:
     PIPELINE_TARGET.append(PAN_EXPR_RDS)

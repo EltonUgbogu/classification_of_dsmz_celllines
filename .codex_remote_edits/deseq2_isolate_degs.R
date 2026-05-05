@@ -368,19 +368,6 @@ write_deg_outputs <- function(res_df, prefix, outdir_tables, outdir_markers,
                               fdr, lfc, topN, min_baseMean, 
                               dds_obj = NULL, test_sample_id = NULL) {
 
-  test_expr <- NULL
-  if (!is.null(dds_obj) && !is.null(test_sample_id)) {
-    norm_counts <- counts(dds_obj, normalized = TRUE)
-    if (test_sample_id %in% colnames(norm_counts)) {
-      test_expr <- norm_counts[, test_sample_id]
-      res_df$normalised_count_in_test_sample <- as.numeric(test_expr[res_df$gene_id])
-    } else {
-      res_df$normalised_count_in_test_sample <- NA_real_
-    }
-  } else {
-    res_df$normalised_count_in_test_sample <- NA_real_
-  }
-
   # Write full results table for comprehensive downstream analysis
   full_path <- file.path(outdir_tables, paste0(prefix, ".tsv"))
   fwrite(res_df, full_path, sep = "\t")
@@ -406,10 +393,14 @@ write_deg_outputs <- function(res_df, prefix, outdir_tables, outdir_markers,
     (!is.na(res_df$baseMean) & res_df$baseMean >= min_baseMean)
   
   # Additional filter: require expression in test sample (isolate/anchor)
-  if (!is.null(test_expr)) {
-    # Require at least 10 normalized counts in test sample
-    keep <- keep & (res_df$normalised_count_in_test_sample >= 10)
-    message(sprintf("[INFO] Applied expression filter: >=10 normalized counts in test sample"))
+  if (!is.null(dds_obj) && !is.null(test_sample_id)) {
+    norm_counts <- counts(dds_obj, normalized = TRUE)
+    if (test_sample_id %in% colnames(norm_counts)) {
+      test_expr <- norm_counts[, test_sample_id]
+      # Require at least 10 normalized counts in test sample
+      keep <- keep & (test_expr >= 10)
+      message(sprintf("[INFO] Applied expression filter: >=10 normalized counts in test sample"))
+    }
   }
 
   markers <- res_df[keep, , drop = FALSE]

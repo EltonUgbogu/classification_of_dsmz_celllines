@@ -1,0 +1,375 @@
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(optparse)
+  library(data.table)
+})
+
+option_list <- list(
+  make_option("--profile", type = "character"),
+  make_option("--isolate-dir", type = "character"),
+  make_option("--component-dir", type = "character"),
+  make_option("--outdir", type = "character"),
+  make_option("--min-query-genes", type = "integer", default = 5),
+  make_option("--recurrence-k", type = "integer", default = 2),
+  make_option("--component-marker-pooling", type = "character", default = "union"),
+  make_option("--component-recurrence-min", type = "integer", default = 1),
+  make_option("--component-rank-stat", type = "character", default = "median_abs_log2fc"),
+  make_option("--operative-feature-set-gene-file", type = "character", default = ""),
+  make_option("--operative-feature-set-rank-tsv", type = "character", default = ""),
+  make_option("--strict-union-primary", type = "logical", default = TRUE),
+  make_option("--operative-feature-set-primary", type = "logical", default = TRUE),
+  make_option("--compare-strict-vs-operative", type = "logical", default = TRUE),
+  make_option("--ordered-strict-union", type = "logical", default = TRUE),
+  make_option("--ordered-operative-feature-set", type = "logical", default = FALSE),
+  make_option("--disease-profiles", type = "character", default = "")
+)
+opt <- parse_args(OptionParser(option_list = option_list))
+
+if (is.null(opt$profile) || is.null(opt$`isolate-dir`) ||
+    is.null(opt$`component-dir`) || is.null(opt$outdir)) {
+  stop("--profile, --isolate-dir, --component-dir, and --outdir are required", call. = FALSE)
+}
+
+dir.create(opt$outdir, recursive = TRUE, showWarnings = FALSE)
+gene_root <- file.path(opt$outdir, "gene_sets")
+dir.create(gene_root, recursive = TRUE, showWarnings = FALSE)
+
+msg <- function(...) message(sprintf(...))
+clean_gene <- function(x) sub("\\.[0-9]+$", "", trimws(as.character(x)))
+present <- function(x) !is.null(x) && length(x) == 1 && !is.na(x) && nzchar(x)
+sanitize_id <- function(x) gsub("[^A-Za-z0-9_.-]+", "_", x)
+empty_dt <- function() data.table(gene_id = character(), log2FoldChange = numeric(),
+                                  padj = numeric(), normalised_count_in_test_sample = numeric())
+
+read_table <- function(path) {
+  if (!file.exists(path) || file.info(path)$size == 0) return(empty_dt())
+  x <- fread(path)
+  if (!"gene_id" %in% names(x)) names(x)[1] <- "gene_id"
+  if (!"normalised_count_in_test_sample" %in% names(x)) {
+    alt <- intersect(names(x), c("normalized_count_in_test_sample", "test_sample_normalised_count",
+                                 "test_sample_normalized_count"))
+    if (length(alt) > 0) {
+      setnames(x, alt[1], "normalised_count_in_test_sample")
+    } else {
+      x[, normalised_count_in_test_sample := NA_real_]
+    }
+  }
+  x[, gene_clean := clean_gene(gene_id)]
+  x
+}
+
+background_from_table <- function(tbl) {
+  if (nrow(tbl) == 0 || !"normalised_count_in_test_sample" %in% names(tbl)) return(character())
+  unique(tbl[!is.na(padj) & !is.na(normalised_count_in_test_sample) &
+               normalised_count_in_test_sample >= 10, gene_clean])
+}
+
+read_gene_list <- function(path) {
+  if (!present(path) || !file.exists(path) || file.info(path)$size == 0) return(character())
+  unique(clean_gene(readLines(path, warn = FALSE)))
+}
+
+resolve_path <- function(path, base_dir) {
+  if (!present(path)) return("")
+  if (grepl("^/", path)) return(path)
+  file.path(base_dir, path)
+}
+
+find_marker_file <- function(markers_dir, contrast) {
+  hits <- list.files(markers_dir, pattern = paste0("^", gsub("([.|()\\^{}+$*?\\[\\]\\\\])", "\\\\\\1", contrast), ".*\\.txt$"),
+                     full.names = TRUE)
+  if (length(hits) == 0) return("")
+  hits[1]
+}
+
+write_query_files <- function(query_id, genes, background, ranks = NULL) {
+  qdir <- file.path(gene_root, query_id)
+  dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
+  genes_dt <- data.table(gene_id = unique(genes))
+  bg_dt <- data.table(gene_id = unique(background))
+  genes_path <- file.path(qdir, "genes.tsv")
+  bg_path <- file.path(qdir, "background.tsv")
+  fwrite(genes_dt, genes_path, sep = "\t")
+  fwrite(bg_dt, bg_path, sep = "\t")
+  ranked_path <- file.path(qdir, "ranked_genes.tsv")
+  if (!is.null(ranks) && nrow(ranks) > 0) {
+    ranks <- unique(ranks[order(-rank_stat)], by = "gene_id")
+    fwrite(ranks[, .(gene_id, rank_stat)], ranked_path, sep = "\t")
+  } else {
+    fwrite(data.table(gene_id = character(), rank_stat = numeric()), ranked_path, sep = "\t")
+  }
+  list(genes = genes_path, background = bg_path, ranked = ranked_path)
+}
+
+rows <- list()
+add_manifest_row <- function(query_id, family, profile, disease, group_id, contrast_id,
+                             direction, ordered, rank_source, genes, background,
+                             ranks = NULL, skip_reason = "") {
+  query_id <- sanitize_id(query_id)
+  genes <- unique(genes[nzchar(genes)])
+  background <- unique(background[nzchar(background)])
+  skip <- FALSE
+  if (!present(skip_reason)) {
+    if (length(genes) < opt$`min-query-genes`) {
+      skip <- TRUE
+      skip_reason <- "fewer_than_min_genes"
+    } else if (length(background) == 0) {
+      skip <- TRUE
+      skip_reason <- "missing_background"
+    } else if (ordered && (is.null(ranks) || nrow(ranks) == 0)) {
+      skip <- TRUE
+      skip_reason <- "missing_rank_statistics"
+    }
+  } else {
+    skip <- TRUE
+  }
+  files <- write_query_files(query_id, genes, background, ranks)
+  rows[[length(rows) + 1]] <<- data.table(
+    query_id = query_id,
+    query_family = family,
+    profile = profile,
+    disease = disease,
+    group_id = group_id,
+    contrast_id = contrast_id,
+    direction = direction,
+    ordered = ordered,
+    rank_source = rank_source,
+    genes_tsv = files$genes,
+    background_tsv = files$background,
+    ranked_genes_tsv = files$ranked,
+    gene_count = length(genes),
+    background_count = length(background),
+    skip = skip,
+    skip_reason = ifelse(skip, skip_reason, "")
+  )
+}
+
+collect_profile <- function(profile, profile_root) {
+  isolate_dir <- file.path(profile_root, "deseq2_markers")
+  component_dir <- file.path(profile_root, "deseq2", "component_vs_rest")
+  out <- list(contrasts = list(), strict = character(), backgrounds = character(),
+              up = character(), down = character(), ranks_up = data.table(), ranks_down = data.table())
+
+  manifest_path <- file.path(isolate_dir, "markers", "marker_sets_manifest.tsv")
+  if (file.exists(manifest_path)) {
+    manifest <- fread(manifest_path, fill = TRUE)
+    markers_dir <- file.path(isolate_dir, "markers")
+    tables_dir <- file.path(isolate_dir, "tables")
+    for (i in seq_len(nrow(manifest))) {
+      contrast <- manifest$contrast[i]
+      table_path <- if ("table_file" %in% names(manifest) && present(manifest$table_file[i])) {
+        resolve_path(manifest$table_file[i], isolate_dir)
+      } else {
+        file.path(tables_dir, paste0(contrast, ".tsv"))
+      }
+      marker_path <- if ("marker_file" %in% names(manifest) && present(manifest$marker_file[i])) {
+        resolve_path(manifest$marker_file[i], isolate_dir)
+      } else {
+        find_marker_file(markers_dir, contrast)
+      }
+      tbl <- read_table(table_path)
+      bg <- background_from_table(tbl)
+      genes <- read_gene_list(marker_path)
+      signed <- tbl[gene_clean %in% genes]
+      up <- unique(signed[log2FoldChange > 0, gene_clean])
+      down <- unique(signed[log2FoldChange < 0, gene_clean])
+      out$contrasts[[length(out$contrasts) + 1]] <- list(
+        profile = profile, family = "per_contrast", group = "isolate",
+        contrast = contrast, background = bg, all = genes, up = up, down = down,
+        ranks_up = signed[log2FoldChange > 0, .(gene_id = gene_clean, rank_stat = abs(log2FoldChange))],
+        ranks_down = signed[log2FoldChange < 0, .(gene_id = gene_clean, rank_stat = abs(log2FoldChange))]
+      )
+    }
+  }
+
+  comp_marker_dir <- file.path(component_dir, "markers")
+  comp_files <- list.files(comp_marker_dir, pattern = "^component_[^/]+_vs_rest_(UP|DOWN)_top[0-9]+\\.tsv$",
+                           full.names = TRUE)
+  if (length(comp_files) > 0) {
+    comp_groups <- split(comp_files, sub("^component_([^_]+)_vs_rest_.*$", "\\1", basename(comp_files)))
+    for (comp in names(comp_groups)) {
+      bg <- character()
+      comp_up <- character()
+      comp_down <- character()
+      ranks_up <- data.table()
+      ranks_down <- data.table()
+      for (fp in comp_groups[[comp]]) {
+        table_path <- file.path(component_dir, "tables", paste0("component_", comp, "_vs_rest.tsv"))
+        tbl <- read_table(table_path)
+        bg <- union(bg, background_from_table(tbl))
+        markers <- fread(fp)
+        if (!"gene_id" %in% names(markers)) names(markers)[1] <- "gene_id"
+        markers[, gene_clean := clean_gene(gene_id)]
+        markers <- merge(markers[, .(gene_clean)], tbl, by = "gene_clean", all.x = TRUE)
+        if (grepl("_UP_", basename(fp))) {
+          comp_up <- c(comp_up, markers$gene_clean)
+          ranks_up <- rbind(ranks_up, markers[, .(gene_id = gene_clean, rank_stat = abs(log2FoldChange))],
+                            fill = TRUE)
+        } else {
+          comp_down <- c(comp_down, markers$gene_clean)
+          ranks_down <- rbind(ranks_down, markers[, .(gene_id = gene_clean, rank_stat = abs(log2FoldChange))],
+                              fill = TRUE)
+        }
+      }
+      summarise_ranks <- function(x) {
+        if (nrow(x) == 0) return(x)
+        x[!is.na(rank_stat), .(rank_stat = median(rank_stat, na.rm = TRUE)), by = gene_id]
+      }
+      up_counts <- table(comp_up)
+      down_counts <- table(comp_down)
+      comp_up <- names(up_counts)[up_counts >= opt$`component-recurrence-min`]
+      comp_down <- names(down_counts)[down_counts >= opt$`component-recurrence-min`]
+      out$contrasts[[length(out$contrasts) + 1]] <- list(
+        profile = profile, family = "component_or_isolate", group = paste0("component_", comp),
+        contrast = paste0("component_", comp, "_vs_rest"), background = bg,
+        all = union(comp_up, comp_down), up = unique(comp_up), down = unique(comp_down),
+        ranks_up = summarise_ranks(ranks_up[gene_id %in% comp_up]),
+        ranks_down = summarise_ranks(ranks_down[gene_id %in% comp_down])
+      )
+    }
+  }
+
+  strict_file <- file.path(isolate_dir, "markers", paste0("unique_feature_set_recurrence_ge_", opt$`recurrence-k`, ".txt"))
+  out$strict <- read_gene_list(strict_file)
+  for (x in out$contrasts) {
+    out$backgrounds <- union(out$backgrounds, x$background)
+    out$up <- union(out$up, x$up)
+    out$down <- union(out$down, x$down)
+    out$ranks_up <- rbind(out$ranks_up, x$ranks_up, fill = TRUE)
+    out$ranks_down <- rbind(out$ranks_down, x$ranks_down, fill = TRUE)
+  }
+  rank_collapse <- function(x) {
+    if (nrow(x) == 0) return(x)
+    x[!is.na(rank_stat), .(rank_stat = median(rank_stat, na.rm = TRUE)), by = gene_id]
+  }
+  out$ranks_up <- rank_collapse(out$ranks_up)
+  out$ranks_down <- rank_collapse(out$ranks_down)
+  out
+}
+
+profile_root <- dirname(opt$`isolate-dir`)
+unsup_root <- dirname(profile_root)
+disease_profiles <- strsplit(opt$`disease-profiles`, ",", fixed = TRUE)[[1]]
+disease_profiles <- disease_profiles[nzchar(disease_profiles)]
+if (length(disease_profiles) == 0) disease_profiles <- opt$profile
+
+profiles <- list()
+for (p in disease_profiles) {
+  p_root <- file.path(unsup_root, p)
+  if (dir.exists(p_root)) profiles[[p]] <- collect_profile(p, p_root)
+}
+if (!opt$profile %in% names(profiles)) {
+  profiles[[opt$profile]] <- collect_profile(opt$profile, profile_root)
+}
+
+current <- profiles[[opt$profile]]
+for (x in current$contrasts) {
+  base_id <- paste(opt$profile, x$family, x$contrast, sep = "__")
+  add_manifest_row(paste(base_id, "all", sep = "__"), x$family, opt$profile, opt$profile,
+                   x$group, x$contrast, "all", FALSE, "", x$all, x$background)
+  add_manifest_row(paste(base_id, "up", sep = "__"), x$family, opt$profile, opt$profile,
+                   x$group, x$contrast, "up", FALSE, "", x$up, x$background)
+  add_manifest_row(paste(base_id, "down", sep = "__"), x$family, opt$profile, opt$profile,
+                   x$group, x$contrast, "down", FALSE, "", x$down, x$background)
+}
+
+for (p in names(profiles)) {
+  pr <- profiles[[p]]
+  add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "all", sep = "__"),
+                   "disease_recurrent", opt$profile, p, paste0("recurrence_ge_", opt$`recurrence-k`),
+                   "", "all", FALSE, "", pr$strict, pr$backgrounds)
+  add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "up", sep = "__"),
+                   "disease_recurrent", opt$profile, p, paste0("recurrence_ge_", opt$`recurrence-k`),
+                   "", "up", FALSE, "", intersect(pr$strict, pr$up), pr$backgrounds)
+  add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "down", sep = "__"),
+                   "disease_recurrent", opt$profile, p, paste0("recurrence_ge_", opt$`recurrence-k`),
+                   "", "down", FALSE, "", intersect(pr$strict, pr$down), pr$backgrounds)
+}
+
+strict_union <- Reduce(union, lapply(profiles, `[[`, "strict"))
+strict_bg <- Reduce(union, lapply(profiles, `[[`, "backgrounds"))
+strict_up <- Reduce(union, lapply(profiles, `[[`, "up"))
+strict_down <- Reduce(union, lapply(profiles, `[[`, "down"))
+strict_ranks_up <- rbindlist(lapply(profiles, `[[`, "ranks_up"), fill = TRUE)
+strict_ranks_down <- rbindlist(lapply(profiles, `[[`, "ranks_down"), fill = TRUE)
+collapse_ranks <- function(x, genes) {
+  if (nrow(x) == 0) return(data.table(gene_id = character(), rank_stat = numeric()))
+  x[gene_id %in% genes & !is.na(rank_stat), .(rank_stat = median(rank_stat, na.rm = TRUE)), by = gene_id]
+}
+strict_ranks_up <- collapse_ranks(strict_ranks_up, intersect(strict_union, strict_up))
+strict_ranks_down <- collapse_ranks(strict_ranks_down, intersect(strict_union, strict_down))
+
+if (isTRUE(opt$`strict-union-primary`)) {
+  add_manifest_row("strict_union__all", "strict_union", opt$profile, "pan_cancer",
+                   "strict_union", "", "all", FALSE, "", strict_union, strict_bg)
+  add_manifest_row("strict_union__up", "strict_union", opt$profile, "pan_cancer",
+                   "strict_union", "", "up", FALSE, "", intersect(strict_union, strict_up), strict_bg)
+  add_manifest_row("strict_union__down", "strict_union", opt$profile, "pan_cancer",
+                   "strict_union", "", "down", FALSE, "", intersect(strict_union, strict_down), strict_bg)
+}
+if (isTRUE(opt$`ordered-strict-union`) && isTRUE(opt$`strict-union-primary`)) {
+  add_manifest_row("ordered_strict_union__up_ordered", "ordered_strict_union", opt$profile,
+                   "pan_cancer", "strict_union", "", "up_ordered", TRUE,
+                   opt$`component-rank-stat`, strict_ranks_up$gene_id, strict_bg, strict_ranks_up)
+  add_manifest_row("ordered_strict_union__down_ordered", "ordered_strict_union", opt$profile,
+                   "pan_cancer", "strict_union", "", "down_ordered", TRUE,
+                   opt$`component-rank-stat`, strict_ranks_down$gene_id, strict_bg, strict_ranks_down)
+}
+
+operative_genes <- read_gene_list(opt$`operative-feature-set-gene-file`)
+if (length(operative_genes) > 0) {
+  if (isTRUE(opt$`operative-feature-set-primary`)) {
+    add_manifest_row("operative_feature_set__all", "operative_feature_set", opt$profile, "pan_cancer",
+                     "operative_feature_set", "", "all", FALSE, "", operative_genes, strict_bg)
+  }
+  if (isTRUE(opt$`compare-strict-vs-operative`)) {
+    add_manifest_row("comparison_strict_vs_operative__operative_minus_strict", "comparison_strict_vs_operative",
+                     opt$profile, "pan_cancer", "operative_minus_strict", "", "all", FALSE, "",
+                     setdiff(operative_genes, strict_union), strict_bg)
+  }
+} else if (isTRUE(opt$`operative-feature-set-primary`)) {
+  add_manifest_row("operative_feature_set__all", "operative_feature_set", opt$profile, "pan_cancer",
+                   "operative_feature_set", "", "all", FALSE, "", character(), strict_bg,
+                   skip_reason = "missing_operative_feature_set_gene_file")
+}
+
+if (isTRUE(opt$`ordered-operative-feature-set`) && isTRUE(opt$`operative-feature-set-primary`)) {
+  if (present(opt$`operative-feature-set-rank-tsv`) && file.exists(opt$`operative-feature-set-rank-tsv`)) {
+    ranks <- fread(opt$`operative-feature-set-rank-tsv`)
+    if (!all(c("gene_id", "rank_stat", "direction") %in% names(ranks))) {
+      add_manifest_row("ordered_operative_feature_set__up_ordered", "ordered_operative_feature_set",
+                       opt$profile, "pan_cancer", "operative_feature_set", "", "up_ordered",
+                       TRUE, "initial_run_log2fc", character(), strict_bg,
+                       skip_reason = "missing_rank_statistics")
+    } else {
+      ranks[, gene_id := clean_gene(gene_id)]
+      add_manifest_row("ordered_operative_feature_set__up_ordered", "ordered_operative_feature_set",
+                       opt$profile, "pan_cancer", "operative_feature_set", "", "up_ordered",
+                       TRUE, "initial_run_log2fc", ranks[direction == "up", gene_id], strict_bg,
+                       ranks[direction == "up", .(gene_id, rank_stat)])
+      add_manifest_row("ordered_operative_feature_set__down_ordered", "ordered_operative_feature_set",
+                       opt$profile, "pan_cancer", "operative_feature_set", "", "down_ordered",
+                       TRUE, "initial_run_log2fc", ranks[direction == "down", gene_id], strict_bg,
+                       ranks[direction == "down", .(gene_id, rank_stat)])
+    }
+  } else {
+    add_manifest_row("ordered_operative_feature_set__up_ordered", "ordered_operative_feature_set",
+                     opt$profile, "pan_cancer", "operative_feature_set", "", "up_ordered",
+                     TRUE, "initial_run_log2fc", character(), strict_bg,
+                     skip_reason = "missing_rank_statistics")
+    add_manifest_row("ordered_operative_feature_set__down_ordered", "ordered_operative_feature_set",
+                     opt$profile, "pan_cancer", "operative_feature_set", "", "down_ordered",
+                     TRUE, "initial_run_log2fc", character(), strict_bg,
+                     skip_reason = "missing_rank_statistics")
+  }
+}
+
+manifest <- rbindlist(rows, fill = TRUE)
+setorder(manifest, query_family, disease, group_id, contrast_id, direction)
+manifest_path <- file.path(opt$outdir, "query_manifest.tsv")
+skipped_path <- file.path(opt$outdir, "skipped_queries.tsv")
+fwrite(manifest, manifest_path, sep = "\t")
+fwrite(manifest[skip == TRUE], skipped_path, sep = "\t")
+msg("Wrote %d query manifest rows to %s", nrow(manifest), manifest_path)
+msg("Wrote %d skipped query rows to %s", nrow(manifest[skip == TRUE]), skipped_path)
