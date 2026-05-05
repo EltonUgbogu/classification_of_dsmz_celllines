@@ -1,5 +1,12 @@
 #!/usr/bin/env Rscript
 
+# Build g:Profiler-ready enrichment inputs from DESeq2 marker outputs.
+#
+# The script converts isolate-vs-rest and component-vs-rest DESeq2 results into
+# query gene sets, matched custom backgrounds, and a manifest consumed by
+# run_gprofiler_from_manifest.R. Query sets use DESeq2-derived markers; VST
+# expression values are not used for enrichment testing.
+
 suppressPackageStartupMessages({
   library(optparse)
   library(data.table)
@@ -36,12 +43,15 @@ gene_root <- file.path(opt$outdir, "gene_sets")
 dir.create(gene_root, recursive = TRUE, showWarnings = FALSE)
 
 msg <- function(...) message(sprintf(...))
+
+# Remove Ensembl version suffixes so marker and background IDs match g:Profiler.
 clean_gene <- function(x) sub("\\.[0-9]+$", "", trimws(as.character(x)))
 present <- function(x) !is.null(x) && length(x) == 1 && !is.na(x) && nzchar(x)
 sanitize_id <- function(x) gsub("[^A-Za-z0-9_.-]+", "_", x)
 empty_dt <- function() data.table(gene_id = character(), log2FoldChange = numeric(),
                                   padj = numeric(), normalised_count_in_test_sample = numeric())
 
+# Read a DESeq2 table while tolerating older column naming variants.
 read_table <- function(path) {
   if (!file.exists(path) || file.info(path)$size == 0) return(empty_dt())
   x <- fread(path)
@@ -59,6 +69,8 @@ read_table <- function(path) {
   x
 }
 
+# Custom background: genes tested by DESeq2 and sufficiently expressed in the
+# test sample. This avoids comparing markers against an unrelated genome-wide set.
 background_from_table <- function(tbl) {
   if (nrow(tbl) == 0 || !"normalised_count_in_test_sample" %in% names(tbl)) return(character())
   unique(tbl[!is.na(padj) & !is.na(normalised_count_in_test_sample) &
@@ -83,6 +95,8 @@ find_marker_file <- function(markers_dir, contrast) {
   hits[1]
 }
 
+# Write one query directory containing the submitted genes, custom background,
+# and optional rank statistics for ordered enrichment.
 write_query_files <- function(query_id, genes, background, ranks = NULL) {
   qdir <- file.path(gene_root, query_id)
   dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
@@ -103,6 +117,9 @@ write_query_files <- function(query_id, genes, background, ranks = NULL) {
 }
 
 rows <- list()
+
+# Add one row to the query manifest and record whether it is analyzable. Skipped
+# rows are still written so downstream reports can explain absent results.
 add_manifest_row <- function(query_id, family, profile, disease, group_id, contrast_id,
                              direction, ordered, rank_source, genes, background,
                              ranks = NULL, skip_reason = "") {
@@ -140,11 +157,18 @@ add_manifest_row <- function(query_id, family, profile, disease, group_id, contr
     ranked_genes_tsv = files$ranked,
     gene_count = length(genes),
     background_count = length(background),
+    interpretation_hint = paste(
+      family,
+      direction,
+      ifelse(ordered, "ordered enrichment; rank_stat is used", "over-representation query"),
+      sep = " | "
+    ),
     skip = skip,
     skip_reason = ifelse(skip, skip_reason, "")
   )
 }
 
+# Collect all DESeq2-derived query ingredients for one disease profile.
 collect_profile <- function(profile, profile_root) {
   isolate_dir <- file.path(profile_root, "deseq2_markers")
   component_dir <- file.path(profile_root, "deseq2", "component_vs_rest")
@@ -156,6 +180,9 @@ collect_profile <- function(profile, profile_root) {
     manifest <- fread(manifest_path, fill = TRUE)
     markers_dir <- file.path(isolate_dir, "markers")
     tables_dir <- file.path(isolate_dir, "tables")
+
+    # Isolate queries preserve directionality: positive log2FC means enriched
+    # in the isolate cell line relative to the remaining DSMZ samples.
     for (i in seq_len(nrow(manifest))) {
       contrast <- manifest$contrast[i]
       table_path <- if ("table_file" %in% names(manifest) && present(manifest$table_file[i])) {
@@ -187,6 +214,8 @@ collect_profile <- function(profile, profile_root) {
   comp_files <- list.files(comp_marker_dir, pattern = "^component_[^/]+_vs_rest_(UP|DOWN)_top[0-9]+\\.tsv$",
                            full.names = TRUE)
   if (length(comp_files) > 0) {
+    # Component queries pool markers across UP/DOWN component marker files. The
+    # recurrence threshold controls how often a marker must appear to be retained.
     comp_groups <- split(comp_files, sub("^component_([^_]+)_vs_rest_.*$", "\\1", basename(comp_files)))
     for (comp in names(comp_groups)) {
       bg <- character()
@@ -232,6 +261,8 @@ collect_profile <- function(profile, profile_root) {
 
   strict_file <- file.path(isolate_dir, "markers", paste0("unique_feature_set_recurrence_ge_", opt$`recurrence-k`, ".txt"))
   out$strict <- read_gene_list(strict_file)
+
+  # Disease-level summaries combine contrast-level query sets and backgrounds.
   for (x in out$contrasts) {
     out$backgrounds <- union(out$backgrounds, x$background)
     out$up <- union(out$up, x$up)
@@ -248,6 +279,7 @@ collect_profile <- function(profile, profile_root) {
   out
 }
 
+# Disease profiles are resolved relative to the unsupervised-results root.
 profile_root <- dirname(opt$`isolate-dir`)
 unsup_root <- dirname(profile_root)
 disease_profiles <- strsplit(opt$`disease-profiles`, ",", fixed = TRUE)[[1]]
@@ -263,6 +295,8 @@ if (!opt$profile %in% names(profiles)) {
   profiles[[opt$profile]] <- collect_profile(opt$profile, profile_root)
 }
 
+# Per-contrast queries for the active profile support cell-line- or
+# component-specific biological interpretation.
 current <- profiles[[opt$profile]]
 for (x in current$contrasts) {
   base_id <- paste(opt$profile, x$family, x$contrast, sep = "__")
@@ -274,6 +308,8 @@ for (x in current$contrasts) {
                    x$group, x$contrast, "down", FALSE, "", x$down, x$background)
 }
 
+# Disease-level recurrent queries summarise markers repeatedly observed across
+# isolate contrasts within each disease profile.
 for (p in names(profiles)) {
   pr <- profiles[[p]]
   add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "all", sep = "__"),
@@ -300,6 +336,8 @@ collapse_ranks <- function(x, genes) {
 strict_ranks_up <- collapse_ranks(strict_ranks_up, intersect(strict_union, strict_up))
 strict_ranks_down <- collapse_ranks(strict_ranks_down, intersect(strict_union, strict_down))
 
+# Pan-cancer strict union queries test recurrent disease marker sets against the
+# combined DESeq2-tested background.
 if (isTRUE(opt$`strict-union-primary`)) {
   add_manifest_row("strict_union__all", "strict_union", opt$profile, "pan_cancer",
                    "strict_union", "", "all", FALSE, "", strict_union, strict_bg)
@@ -317,6 +355,8 @@ if (isTRUE(opt$`ordered-strict-union`) && isTRUE(opt$`strict-union-primary`)) {
                    opt$`component-rank-stat`, strict_ranks_down$gene_id, strict_bg, strict_ranks_down)
 }
 
+# The operative feature set is the downstream selected gene panel, tested
+# separately from the strict recurrent-marker union.
 operative_genes <- read_gene_list(opt$`operative-feature-set-gene-file`)
 if (length(operative_genes) > 0) {
   if (isTRUE(opt$`operative-feature-set-primary`)) {
@@ -369,7 +409,39 @@ manifest <- rbindlist(rows, fill = TRUE)
 setorder(manifest, query_family, disease, group_id, contrast_id, direction)
 manifest_path <- file.path(opt$outdir, "query_manifest.tsv")
 skipped_path <- file.path(opt$outdir, "skipped_queries.tsv")
+summary_path <- file.path(opt$outdir, "query_summary.tsv")
+readme_path <- file.path(opt$outdir, "README_enrichment_queries.txt")
+
+query_summary <- manifest[, .(
+  n_queries = .N,
+  n_run = sum(skip == FALSE),
+  n_skipped = sum(skip == TRUE),
+  median_gene_count = as.numeric(stats::median(gene_count, na.rm = TRUE)),
+  median_background_count = as.numeric(stats::median(background_count, na.rm = TRUE))
+), by = .(query_family, disease, direction, ordered)]
+setorder(query_summary, query_family, disease, direction, ordered)
+
 fwrite(manifest, manifest_path, sep = "\t")
 fwrite(manifest[skip == TRUE], skipped_path, sep = "\t")
+fwrite(query_summary, summary_path, sep = "\t")
+writeLines(c(
+  "Enrichment query-set build report",
+  "",
+  "Purpose:",
+  "  Converts DESeq2 marker outputs into g:Profiler query sets with matched custom backgrounds.",
+  "",
+  "Key files:",
+  paste0("  query_manifest.tsv: all candidate enrichment queries, including skipped queries."),
+  paste0("  skipped_queries.tsv: queries not submitted and the reason."),
+  paste0("  query_summary.tsv: counts of runnable/skipped queries by family, disease, and direction."),
+  paste0("  gene_sets/<query_id>/: genes.tsv, background.tsv, and ranked_genes.tsv for each query."),
+  "",
+  "Interpretation notes:",
+  "  direction=up means markers with positive log2FC in the tested group.",
+  "  direction=down means markers with negative log2FC in the tested group.",
+  "  ordered=TRUE means g:Profiler receives genes ranked by rank_stat.",
+  "  Backgrounds are DESeq2-tested genes with sufficient normalized expression in the test sample."
+), readme_path)
 msg("Wrote %d query manifest rows to %s", nrow(manifest), manifest_path)
 msg("Wrote %d skipped query rows to %s", nrow(manifest[skip == TRUE]), skipped_path)
+msg("Wrote query summary to %s", summary_path)
