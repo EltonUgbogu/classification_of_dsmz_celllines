@@ -19,7 +19,6 @@ Outputs:
   pan_cancer_features.DOWN.txt
   pan_cancer_features_clean.txt
   pan_cancer_feature_build_summary.tsv
-  pan_cancer_feature_build_report.md
   pan_cancer_features_done.txt
 """
 
@@ -557,74 +556,7 @@ def main():
         })
 
     summary_path = outdir / "pan_cancer_feature_build_summary.tsv"
-    summary_df = pd.DataFrame(summary_rows)
-    summary_df.to_csv(summary_path, sep="\t", index=False)
-
-    report_path = outdir / "pan_cancer_feature_build_report.md"
-    by_class = (
-        features_df.groupby(["feature_class", "owner_profile"], sort=True)
-        .size()
-        .reset_index(name="n_genes")
-        .sort_values(["feature_class", "owner_profile"])
-    )
-    with open(report_path, "w") as handle:
-        handle.write("# Pan-cancer feature build report\n\n")
-        handle.write("## Inputs\n\n")
-        handle.write("| Profile | Consensus summary directory | Isolate marker manifest |\n")
-        handle.write("|---|---|---|\n")
-        for profile in sorted(profile_dirs.keys()):
-            manifest = profile_marker_manifests.get(profile, "")
-            handle.write(f"| {profile} | `{profile_dirs[profile]}` | `{manifest}` |\n")
-
-        handle.write("\n## Selection rule\n\n")
-        handle.write(
-            f"- PAN_CORE: genes recurrent in at least {min_cross} disease profiles "
-            "using the consensus recurrence tables.\n"
-        )
-        handle.write(
-            f"- PROFILE_SPECIFIC: disease-specific recurrent genes not already selected "
-            f"as PAN_CORE, capped at {cap_specific} genes per profile per direction.\n"
-        )
-        if cap_isolate > 0:
-            handle.write(
-                f"- ISOLATE_RESCUE: graph-derived isolate-vs-rest marker genes from "
-                f"`marker_sets_manifest.tsv`, excluding already selected genes and capped "
-                f"at {cap_isolate} genes per profile.\n"
-            )
-            handle.write(
-                "- Isolate rescue ranking: number of supporting isolate contrasts desc, "
-                "best adjusted P value asc, max absolute shrunken log2FC desc, marker "
-                "rank asc, Ensembl gene ID asc.\n"
-            )
-        else:
-            handle.write("- ISOLATE_RESCUE: disabled by `cap_isolate = 0`.\n")
-        handle.write(
-            "- The final clean list preserves first selection order and removes duplicate "
-            "gene IDs after Ensembl version stripping.\n"
-        )
-
-        handle.write("\n## Build summary\n\n")
-        handle.write(f"- Feature rows: {len(features_df)}\n")
-        handle.write(f"- Unique clean genes: {len(clean_genes)}\n")
-        handle.write(f"- UP genes: {len(up_genes_ordered)}\n")
-        handle.write(f"- DOWN genes: {len(down_genes_ordered)}\n")
-        if filtering_applied:
-            handle.write(f"- Ribosomal/mitochondrial/histone genes removed: {len(removed_ribo_mt)}\n")
-        elif args.remove_ribo_mt:
-            handle.write("- Ribosomal/mitochondrial/histone filtering requested but not applied because annotation was unavailable.\n")
-        else:
-            handle.write("- Ribosomal/mitochondrial/histone filtering: not requested.\n")
-
-        handle.write("\n## Counts by feature class\n\n")
-        handle.write("| Feature class | Owner profile | Genes |\n")
-        handle.write("|---|---:|---:|\n")
-        for _, row in by_class.iterrows():
-            handle.write(f"| {row['feature_class']} | {row['owner_profile']} | {int(row['n_genes'])} |\n")
-
-        handle.write("\n## Output files\n\n")
-        handle.write(f"- `{features_path}`: full feature manifest with provenance columns.\n")
-        handle.write(f"- `{outdir / 'pan_cancer_features_clean.txt'}`: ordered unique gene list for expression extraction.\n")
-        handle.write(f"- `{summary_path}`: compact machine-readable count summary.\n")
+    pd.DataFrame(summary_rows).to_csv(summary_path, sep="\t", index=False)
 
     done_path = outdir / "pan_cancer_features_done.txt"
     with open(done_path, "w") as handle:
@@ -635,7 +567,6 @@ def main():
     print(f"  pan_cancer_features.UP.txt    ({len(up_genes_ordered)} genes)", file=sys.stderr)
     print(f"  pan_cancer_features.DOWN.txt  ({len(down_genes_ordered)} genes)", file=sys.stderr)
     print(f"  pan_cancer_features_clean.txt ({len(clean_genes)} genes)", file=sys.stderr)
-    print(f"  pan_cancer_feature_build_report.md", file=sys.stderr)
     if filtering_applied:
         print(f"  Ribo/MT filtering: {len(removed_ribo_mt)} genes removed", file=sys.stderr)
     elif args.remove_ribo_mt:

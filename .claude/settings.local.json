@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ssh jarvis:*)"
+      "Bash(ssh jarvis:*)",
+      "Bash(xargs ls *)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(python3 *)"
     ]
   }
 }

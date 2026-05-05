@@ -424,6 +424,20 @@ res_df <- as.data.frame(res) %>%
   rownames_to_column("gene_id") %>%
   arrange(padj, pvalue)
 
+norm_counts <- counts(dds, normalized = TRUE)
+component_sample_ids <- meta_df[[opt$sample_id_col]][
+  meta_df$group == paste0("Component_", opt$component)
+]
+if (length(component_sample_ids) > 0) {
+  component_expr <- rowMeans(
+    norm_counts[, component_sample_ids, drop = FALSE],
+    na.rm = TRUE
+  )
+  res_df$normalised_count_in_test_sample <- as.numeric(component_expr[res_df$gene_id])
+} else {
+  res_df$normalised_count_in_test_sample <- NA_real_
+}
+
 # -----------------------------------------------------------------------------
 # Full Results Export
 # -----------------------------------------------------------------------------
@@ -462,11 +476,15 @@ cat(sprintf("[OK] Full results written to: %s\n", out_file))
 # DOWN marker iff p_adj < tau_FDR and LFC < -tau_LFC
 
 markers_up <- res_df %>%
-  filter(!is.na(padj), padj < opt$fdr, log2FoldChange > opt$lfc) %>%
+  filter(!is.na(padj), padj < opt$fdr, log2FoldChange > opt$lfc,
+         !is.na(normalised_count_in_test_sample),
+         normalised_count_in_test_sample >= 10) %>%
   arrange(desc(log2FoldChange))
 
 markers_down <- res_df %>%
-  filter(!is.na(padj), padj < opt$fdr, log2FoldChange < -opt$lfc) %>%
+  filter(!is.na(padj), padj < opt$fdr, log2FoldChange < -opt$lfc,
+         !is.na(normalised_count_in_test_sample),
+         normalised_count_in_test_sample >= 10) %>%
   arrange(log2FoldChange)
 
 cat(sprintf("[INFO] UP markers: %d\n", nrow(markers_up)))

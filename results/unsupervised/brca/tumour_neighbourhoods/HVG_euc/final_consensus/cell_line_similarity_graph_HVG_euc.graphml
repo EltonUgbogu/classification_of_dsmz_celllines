@@ -47,7 +47,7 @@
       <data key="v_cell_line_display">BT_474</data>
       <data key="v_betweenness">13.5833333333333</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">1</data>
+      <data key="v_community_louv">2</data>
       <data key="v_community_leid">2</data>
     </node>
     <node id="n2">
@@ -61,7 +61,7 @@
       <data key="v_cell_line_display">KPL_1</data>
       <data key="v_betweenness">2.75</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">1</data>
+      <data key="v_community_louv">2</data>
       <data key="v_community_leid">3</data>
     </node>
     <node id="n3">
@@ -75,7 +75,7 @@
       <data key="v_cell_line_display">CAL_148</data>
       <data key="v_betweenness">6.36666666666667</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">1</data>
+      <data key="v_community_louv">2</data>
       <data key="v_community_leid">4</data>
     </node>
     <node id="n4">
@@ -89,7 +89,7 @@
       <data key="v_cell_line_display">T_47D</data>
       <data key="v_betweenness">2.5</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">1</data>
+      <data key="v_community_louv">2</data>
       <data key="v_community_leid">5</data>
     </node>
     <node id="n5">
@@ -103,7 +103,7 @@
       <data key="v_cell_line_display">EFM_192B</data>
       <data key="v_betweenness">5.48333333333333</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">2</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">6</data>
     </node>
     <node id="n6">
@@ -117,7 +117,7 @@
       <data key="v_cell_line_display">EFM_192A</data>
       <data key="v_betweenness">2.03333333333333</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">2</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">7</data>
     </node>
     <node id="n7">
@@ -145,7 +145,7 @@
       <data key="v_cell_line_display">SK_BR_3</data>
       <data key="v_betweenness">2.83333333333333</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">2</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">9</data>
     </node>
     <node id="n9">
@@ -159,7 +159,7 @@
       <data key="v_cell_line_display">IPH_926</data>
       <data key="v_betweenness">6.36666666666667</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">2</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">10</data>
     </node>
     <node id="n10">
@@ -215,7 +215,7 @@
       <data key="v_cell_line_display">MFM_223</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">1</data>
+      <data key="v_community_louv">2</data>
       <data key="v_community_leid">14</data>
     </node>
     <node id="n14">
@@ -229,7 +229,7 @@
       <data key="v_cell_line_display">MCF_7</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">1</data>
+      <data key="v_community_louv">2</data>
       <data key="v_community_leid">15</data>
     </node>
     <node id="n15">
@@ -243,7 +243,7 @@
       <data key="v_cell_line_display">EVSA_T</data>
       <data key="v_betweenness">3.2</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">2</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">16</data>
     </node>
     <node id="n16">
@@ -313,7 +313,7 @@
       <data key="v_cell_line_display">MDA_MB_453</data>
       <data key="v_betweenness">4.03333333333333</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">2</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">21</data>
     </node>
     <node id="n21">

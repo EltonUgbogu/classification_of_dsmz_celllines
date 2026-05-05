@@ -299,7 +299,7 @@
       <data key="v_cell_line_display">EVSA_T</data>
       <data key="v_betweenness">12</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">6</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">20</data>
     </node>
     <node id="n20">
@@ -341,7 +341,7 @@
       <data key="v_cell_line_display">MDA_MB_453</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">1</data>
-      <data key="v_community_louv">6</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">23</data>
     </node>
     <node id="n23">
@@ -381,7 +381,7 @@
       <data key="v_cell_line_display">CAL_51</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">5</data>
-      <data key="v_community_louv">7</data>
+      <data key="v_community_louv">6</data>
       <data key="v_community_leid">26</data>
     </node>
     <node id="n26">
@@ -393,7 +393,7 @@
       <data key="v_cell_line_display">DU_4475</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">6</data>
-      <data key="v_community_louv">8</data>
+      <data key="v_community_louv">7</data>
       <data key="v_community_leid">27</data>
     </node>
     <node id="n27">
@@ -405,7 +405,7 @@
       <data key="v_cell_line_display">HCC_1937</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">7</data>
-      <data key="v_community_louv">9</data>
+      <data key="v_community_louv">8</data>
       <data key="v_community_leid">28</data>
     </node>
     <node id="n28">
@@ -417,7 +417,7 @@
       <data key="v_cell_line_display">MDA_MB_468</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">8</data>
-      <data key="v_community_louv">10</data>
+      <data key="v_community_louv">9</data>
       <data key="v_community_leid">29</data>
     </node>
     <edge source="n1" target="n13">

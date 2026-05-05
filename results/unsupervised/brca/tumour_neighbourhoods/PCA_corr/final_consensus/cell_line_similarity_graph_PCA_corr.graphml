@@ -271,7 +271,7 @@
       <data key="v_cell_line_display">EFM_192B</data>
       <data key="v_betweenness">10</data>
       <data key="v_component">2</data>
-      <data key="v_community_louv">4</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">18</data>
     </node>
     <node id="n18">
@@ -341,7 +341,7 @@
       <data key="v_cell_line_display">EFM_192A</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">2</data>
-      <data key="v_community_louv">4</data>
+      <data key="v_community_louv">1</data>
       <data key="v_community_leid">23</data>
     </node>
     <node id="n23">
@@ -355,7 +355,7 @@
       <data key="v_cell_line_display">HCC_1937</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">3</data>
-      <data key="v_community_louv">5</data>
+      <data key="v_community_louv">4</data>
       <data key="v_community_leid">24</data>
     </node>
     <node id="n24">
@@ -369,7 +369,7 @@
       <data key="v_cell_line_display">MDA_MB_468</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">3</data>
-      <data key="v_community_louv">5</data>
+      <data key="v_community_louv">4</data>
       <data key="v_community_leid">25</data>
     </node>
     <node id="n25">
@@ -395,7 +395,7 @@
       <data key="v_cell_line_display">DU_4475</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">4</data>
-      <data key="v_community_louv">6</data>
+      <data key="v_community_louv">5</data>
       <data key="v_community_leid">27</data>
     </node>
     <node id="n27">
@@ -407,7 +407,7 @@
       <data key="v_cell_line_display">IPH_926</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">5</data>
-      <data key="v_community_louv">7</data>
+      <data key="v_community_louv">6</data>
       <data key="v_community_leid">28</data>
     </node>
     <node id="n28">
@@ -419,7 +419,7 @@
       <data key="v_cell_line_display">SK_BR_3</data>
       <data key="v_betweenness">0</data>
       <data key="v_component">6</data>
-      <data key="v_community_louv">8</data>
+      <data key="v_community_louv">7</data>
       <data key="v_community_leid">29</data>
     </node>
     <edge source="n2" target="n3">
