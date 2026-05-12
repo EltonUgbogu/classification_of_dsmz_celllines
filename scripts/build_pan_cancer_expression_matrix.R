@@ -19,7 +19,7 @@ suppressPackageStartupMessages({
 })
 
 strip_version <- function(x) {
-  sub("\\\.[0-9]+$", "", x)
+  sub("\\.[0-9]+$", "", x)
 }
 
 ensure_sample_id <- function(dt) {
@@ -55,7 +55,8 @@ derive_lineage <- function(dt, default_lineage) {
     idx <- is.na(lineage) | lineage == ""
     lineage[idx] <- as.character(dt$lineage_fbk[idx])
   }
-  for (col in c("cancer_type", "cancer_type_fbk", "Disease", "Disease_fbk", "group2", "group2_fbk")) {
+  for (col in c("cancer_type", "cancer_type_fbk", "Disease", "Disease_fbk",
+                "group2", "group2_fbk", "organ", "organ_fbk")) {
     if (col %in% names(dt)) {
       guess <- lineage_from_values(dt[[col]])
       idx <- is.na(lineage) | lineage == ""
@@ -144,7 +145,7 @@ load_fallback_metadata <- function(path) {
   dt <- fread(path)
   dt <- ensure_sample_id(dt)
   keep_cols <- intersect(c("sample_id", "lineage", "cancer_type", "Disease",
-                           "group2", "sample_type", "type"), names(dt))
+                           "group2", "organ", "sample_type", "type"), names(dt))
   unique(dt[, ..keep_cols])
 }
 

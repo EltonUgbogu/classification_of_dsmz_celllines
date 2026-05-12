@@ -88,11 +88,11 @@ defaults:
       enabled: true
       outdir_name: consensus_markers
       padj: 0.05
-      basemean: 1.0
-      lfc: 0.5
+      basemean: 10.0
+      lfc: 1.0
       core_support_min: 2
       core_support_frac: 0.30
-      min_anchor_genes: 25
+      min_anchor_genes: 0
       fallback_topn: 200
       flip_policy: remove
       recurrence_k: 2
@@ -217,7 +217,7 @@ profiles:
       vst_joint_rds: data/brca/brca_vst_joint.rds
       cell_vst_rds: data/brca/tmp/brca_vst_joint_cell_lines.rds
       tumour_vst_rds: data/brca/tmp/brca_vst_joint_tumours.rds
-      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -273,7 +273,7 @@ profiles:
       vst_joint_rds: data/nbl/nbl_vst_joint.rds
       cell_vst_rds: data/nbl/tmp/nbl_vst_joint_cell_lines.rds
       tumour_vst_rds: data/nbl/tmp/nbl_vst_joint_tumours.rds
-      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -326,7 +326,7 @@ profiles:
       vst_joint_rds: data/rbl/rbl_vst_joint.rds
       cell_vst_rds: data/rbl/tmp/rbl_vst_joint_cell_lines.rds
       tumour_vst_rds: data/rbl/tmp/rbl_vst_joint_tumours.rds
-      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+      dsmz_counts_rds: data/dsmz/DSMZ_count_gene.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:

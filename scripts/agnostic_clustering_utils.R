@@ -349,8 +349,9 @@ hc_optimal <- function(X,
     mean_sil <- mean(sil[, "sil_width"])              # Scalar summary of partition quality.
     info("HC k=%d -> mean silhouette = %.4f", k, mean_sil)
 
-    # Retain the partition with the highest mean silhouette width.
-    if (mean_sil > best_sil) {
+    # Retain the highest mean silhouette; resolve exact ties to smaller k.
+    if (mean_sil > best_sil ||
+        (isTRUE(all.equal(mean_sil, best_sil)) && (is.na(best_k) || k < best_k))) {
       best_sil      <- mean_sil
       best_k        <- k
       best_clusters <- cl
@@ -424,7 +425,8 @@ kmeans_optimal <- function(X,
     mean_sil <- mean(sil[, "sil_width"])
     info("k-means k=%d -> mean silhouette = %.4f", k, mean_sil)
 
-    if (mean_sil > best_sil) {
+    if (mean_sil > best_sil ||
+        (isTRUE(all.equal(mean_sil, best_sil)) && (is.na(best_k) || k < best_k))) {
       best_sil      <- mean_sil
       best_k        <- k
       best_clusters <- km$cluster

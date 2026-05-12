@@ -274,7 +274,7 @@ def main():
                     help="Minimum number of profiles required for PAN_CORE status")
     ap.add_argument("--cap-specific", type=int, default=300,
                     help="Max PROFILE_SPECIFIC genes per profile per direction")
-    ap.add_argument("--cap-isolate", type=int, default=0,
+    ap.add_argument("--cap-isolate", type=int, default=50,
                     help="Max ISOLATE_RESCUE genes per profile. 0 disables isolate rescue.")
     ap.add_argument("--remove-ribo-mt", action="store_true", default=False,
                     help="Drop RPL/RPS/MRPL/MRPS/MT-/HIST genes when annotation provided")
@@ -408,8 +408,9 @@ def main():
     selected_genes = set(features_df["gene_id"])
 
     isolate_records = []
+    isolate_audit_records = []
     if cap_isolate > 0:
-        print(f"[INFO] Loading isolate rescue markers (cap={cap_isolate} per profile)",
+        print(f"[INFO] isolate rescue cap = {cap_isolate} per profile",
               file=sys.stderr)
         for profile in sorted(profile_dirs.keys()):
             marker_dir = profile_marker_dirs.get(profile)
@@ -437,6 +438,18 @@ def main():
             ).head(cap_isolate)
 
             for source_rank, (_, row) in enumerate(candidates.iterrows(), start=1):
+                isolate_audit_records.append({
+                    "profile": profile,
+                    "gene_id": row["gene_id"],
+                    "direction": row["direction"],
+                    "n_isolate_contrasts": int(row["n_isolate_contrasts"]),
+                    "best_padj": float(row["best_padj"]),
+                    "max_abs_log2FC": float(row["max_abs_log2FC"]),
+                    "best_marker_rank": int(row["best_marker_rank"]),
+                    "source_rank": source_rank,
+                    "source_contrast": row["source_contrast"],
+                    "source_file": row["source_file"],
+                })
                 isolate_records.append({
                     "gene_id": row["gene_id"],
                     "direction": row["direction"],
@@ -457,6 +470,16 @@ def main():
     if isolate_records:
         features_df = pd.concat([features_df, pd.DataFrame(isolate_records)],
                                 ignore_index=True)
+
+    isolate_audit_path = outdir / "isolate_rescue_audit.tsv"
+    isolate_audit_columns = [
+        "profile", "gene_id", "direction", "n_isolate_contrasts",
+        "best_padj", "max_abs_log2FC", "best_marker_rank", "source_rank",
+        "source_contrast", "source_file",
+    ]
+    pd.DataFrame(isolate_audit_records, columns=isolate_audit_columns).to_csv(
+        isolate_audit_path, sep="\t", index=False
+    )
 
     annotation = {}
     filtering_applied = False
@@ -625,6 +648,7 @@ def main():
         handle.write(f"- `{features_path}`: full feature manifest with provenance columns.\n")
         handle.write(f"- `{outdir / 'pan_cancer_features_clean.txt'}`: ordered unique gene list for expression extraction.\n")
         handle.write(f"- `{summary_path}`: compact machine-readable count summary.\n")
+        handle.write(f"- `{isolate_audit_path}`: selected isolate-rescue candidates and deterministic ranking fields.\n")
 
     done_path = outdir / "pan_cancer_features_done.txt"
     with open(done_path, "w") as handle:
@@ -635,6 +659,7 @@ def main():
     print(f"  pan_cancer_features.UP.txt    ({len(up_genes_ordered)} genes)", file=sys.stderr)
     print(f"  pan_cancer_features.DOWN.txt  ({len(down_genes_ordered)} genes)", file=sys.stderr)
     print(f"  pan_cancer_features_clean.txt ({len(clean_genes)} genes)", file=sys.stderr)
+    print(f"  isolate_rescue_audit.tsv      ({len(isolate_audit_records)} rows)", file=sys.stderr)
     print(f"  pan_cancer_feature_build_report.md", file=sys.stderr)
     if filtering_applied:
         print(f"  Ribo/MT filtering: {len(removed_ribo_mt)} genes removed", file=sys.stderr)

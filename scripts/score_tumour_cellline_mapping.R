@@ -342,6 +342,22 @@ meta_all <- as.data.table(pan_obj$meta)
 
 strip_version <- function(x) sub("\\.[0-9]+$", "", x)
 
+fwrite_gz_safe <- function(x, file, sep = "\t") {
+  tryCatch(
+    data.table::fwrite(x, file = file, sep = sep),
+    error = function(e) {
+      if (grepl("\\.gz$", file) && grepl("Compression in fwrite", e$message, fixed = TRUE)) {
+        con <- gzfile(file, open = "wt")
+        on.exit(close(con), add = TRUE)
+        utils::write.table(x, file = con, sep = sep, quote = FALSE,
+                           row.names = FALSE, col.names = TRUE)
+      } else {
+        stop(e)
+      }
+    }
+  )
+}
+
 required_meta_cols <- c("sample_id", "lineage", "type")
 missing <- setdiff(required_meta_cols, colnames(meta_all))
 if (length(missing) > 0) {
@@ -541,6 +557,54 @@ if (nrow(meta_tum) == 0) {
     confidence_delta = numeric(),
     confidence_frac_same_lineage = numeric()
   )
+  empty_t2c_full <- data.table(
+    tumour = character(),
+    tum_lineage = character(),
+    cell_line = character(),
+    cell_lineage = character(),
+    score = numeric(),
+    rank_in_tumour = integer(),
+    source_cell_lines = character(),
+    n_cell_line_profiles = integer(),
+    is_correct = logical()
+  )
+  empty_c2t_full <- data.table(
+    cell_line = character(),
+    cell_lineage = character(),
+    tumour = character(),
+    tum_lineage = character(),
+    score = numeric(),
+    rank = integer(),
+    source_cell_lines = character(),
+    n_cell_line_profiles = integer(),
+    is_correct = logical()
+  )
+  empty_c2t_summary_metrics <- data.table(
+    metric = character(),
+    value = numeric(),
+    ci_low = numeric(),
+    ci_high = numeric()
+  )
+  empty_reciprocal <- data.table(
+    tumour = character(),
+    cell_line = character(),
+    tum_lineage = character(),
+    cell_lineage = character(),
+    t2c_rank = integer(),
+    c2t_rank = integer(),
+    t2c_score = numeric(),
+    c2t_score = numeric()
+  )
+  empty_top50_components <- data.table(
+    cell_line = character(),
+    cell_lineage = character(),
+    component_id = character(),
+    n_top50 = integer(),
+    frac_top50 = numeric(),
+    component_size = integer(),
+    component_purity = numeric(),
+    dominant_tumour_lineage = character()
+  )
 
   fwrite(empty_rank_t2c, file = file.path(t2c_dir, "tumour_to_cellline_rankings.tsv"), sep = "\t")
   fwrite(empty_summary_t2c, file = file.path(t2c_dir, "tumour_mapping_summary.tsv"), sep = "\t")
@@ -548,7 +612,8 @@ if (nrow(meta_tum) == 0) {
   fwrite(empty_metrics_by_lineage, file = file.path(t2c_dir, "metrics_by_lineage.tsv"), sep = "\t")
   fwrite(empty_metrics_extended, file = file.path(t2c_dir, "metrics_summary_extended.tsv"), sep = "\t")
   fwrite(empty_metrics_by_tumour_lineage, file = file.path(t2c_dir, "metrics_by_tumour_lineage_extended.tsv"), sep = "\t")
-  fwrite(empty_scores_long_t2c, file = file.path(t2c_dir, "tumour_cellline_scores_long.tsv.gz"), sep = "\t")
+  fwrite_gz_safe(empty_scores_long_t2c, file = file.path(t2c_dir, "tumour_cellline_scores_long.tsv.gz"), sep = "\t")
+  fwrite(empty_t2c_full, file = file.path(t2c_dir, "tumour_to_cellline_full_rankings.tsv"), sep = "\t")
   saveRDS(matrix(numeric(0), nrow = 0, ncol = 0),
           file = file.path(t2c_dir, "tumour_cellline_scores.rds"))
 
@@ -556,7 +621,8 @@ if (nrow(meta_tum) == 0) {
   fwrite(empty_summary_c2t, file = file.path(c2t_dir, "cellline_mapping_summary.tsv"), sep = "\t")
   fwrite(empty_metrics, file = file.path(c2t_dir, "metrics_summary.tsv"), sep = "\t")
   fwrite(empty_metrics_by_lineage_cl, file = file.path(c2t_dir, "metrics_by_lineage.tsv"), sep = "\t")
-  fwrite(empty_scores_long_c2t, file = file.path(c2t_dir, "cellline_tumour_scores_long.tsv.gz"), sep = "\t")
+  fwrite_gz_safe(empty_scores_long_c2t, file = file.path(c2t_dir, "cellline_tumour_scores_long.tsv.gz"), sep = "\t")
+  fwrite(empty_c2t_full, file = file.path(c2t_dir, "cellline_to_tumour_full_rankings.tsv"), sep = "\t")
   saveRDS(matrix(numeric(0), nrow = 0, ncol = 0),
           file = file.path(c2t_dir, "cellline_tumour_scores.rds"))
 
@@ -565,6 +631,9 @@ if (nrow(meta_tum) == 0) {
   fwrite(empty_topk_enrich, file = file.path(c2t_dir, "cellline_topk_lineage_enrichment.tsv"), sep = "\t")
   fwrite(empty_topk_consistency, file = file.path(c2t_dir, "topk_lineage_consistency.tsv"), sep = "\t")
   fwrite(empty_low_confidence, file = file.path(c2t_dir, "low_confidence_cases.tsv"), sep = "\t")
+  fwrite(empty_c2t_summary_metrics, file = file.path(c2t_dir, "cellline_centred_summary_metrics.tsv"), sep = "\t")
+  fwrite(empty_reciprocal, file = file.path(c2t_dir, "reciprocal_pairs_k10.tsv"), sep = "\t")
+  fwrite(empty_top50_components, file = file.path(c2t_dir, "top50_component_composition.tsv"), sep = "\t")
 
   quit(status = 0)
 }
@@ -798,6 +867,21 @@ setnames(dt, c("tumour", "cell_line", "score"))
 meta_cell_map <- setNames(meta_cell$lineage, meta_cell$sample_id)
 meta_tum_map  <- setNames(meta_tum$lineage,  meta_tum$sample_id)
 
+biological_cell_line_group <- function(x) {
+  y <- gsub("^NG-[0-9]+_", "", as.character(x))
+  y <- gsub("_lib.*$", "", y)
+  y
+}
+
+wilson_ci <- function(x, n, z = 1.96) {
+  if (is.na(n) || n <= 0) return(c(NA_real_, NA_real_))
+  p <- x / n
+  denom <- 1 + z^2 / n
+  centre <- (p + z^2 / (2 * n)) / denom
+  half <- z * sqrt((p * (1 - p) / n) + (z^2 / (4 * n^2))) / denom
+  c(max(0, centre - half), min(1, centre + half))
+}
+
 # Annotate each tumour-cell line pair with lineage information
 dt[, tum_lineage  := meta_tum_map[tumour]]
 dt[, cell_lineage := meta_cell_map[cell_line]]
@@ -819,7 +903,7 @@ dt[, rank_in_tumour := frank(-score, ties.method = "average"), by = tumour]
 # For each tumour, identify the single best-matching cell line (highest score)
 # Using .I[which.max(score)] ensures robust tie handling
 
-top1_dt <- dt[dt[, .I[which.max(score)], by = tumour]$V1]
+top1_dt <- dt[order(tumour, -score, cell_line), .SD[1], by = tumour]
 top1_dt[, is_correct := (cell_lineage == tum_lineage)]
 
 
@@ -1277,7 +1361,7 @@ cellline_overall <- dt[, .(
 
 cellline_topk_list <- lapply(colnames(score_cor), function(cid) {
   scores <- score_cor[, cid]
-  ord <- order(scores, decreasing = TRUE, na.last = NA)
+  ord <- order(-as.numeric(scores), names(scores), na.last = NA)
   top_n <- min(top_k_val, length(ord))
   if (top_n == 0) return(NULL)
   top_idx <- ord[seq_len(top_n)]
@@ -1338,9 +1422,9 @@ cat("  Saved:", cellline_overall_file, "\n")
 
 # Tumour -> cell line (primary direction)
 dt_file <- file.path(t2c_dir, "tumour_cellline_scores_long.tsv.gz")
-fwrite(dt[, .(tumour, tum_lineage, cell_line, cell_lineage, score,
-              rank_in_tumour, in_topk)],
-       dt_file, sep = "\t")
+fwrite_gz_safe(dt[, .(tumour, tum_lineage, cell_line, cell_lineage, score,
+                      rank_in_tumour, in_topk)],
+               dt_file, sep = "\t")
 cat("  Saved:", dt_file, "\n")
 
 # Cell line -> tumour (flipped direction)
@@ -1354,7 +1438,7 @@ dt_rev <- dt[, .(
   in_topk
 )]
 dt_rev_file <- file.path(c2t_dir, "cellline_tumour_scores_long.tsv.gz")
-fwrite(dt_rev, dt_rev_file, sep = "\t")
+fwrite_gz_safe(dt_rev, dt_rev_file, sep = "\t")
 cat("  Saved:", dt_rev_file, "\n")
 
 cat("  [5.5] Extended metrics computation complete.\n")
@@ -1389,7 +1473,7 @@ cat("\n[6] Ranking top-k cell lines per tumour...\n")
 
 # Helper function to extract top-k cell line names by score
 top_k <- function(score_row, k) {
-  ord <- order(score_row, decreasing = TRUE)
+  ord <- order(-as.numeric(score_row), names(score_row), na.last = NA)
   names(score_row)[ord][seq_len(min(k, length(ord)))]
 }
 
@@ -1505,6 +1589,46 @@ rank_df_cl_eval <- rank_df_cl_eval[
   !(cell_lineage == "NBL" & !grepl("^NG-", cell_line))
 ]
 
+# Full biological cell-line rankings for evaluation and cell-line-centred outputs.
+score_eval_long <- as.data.table(as.table(score_cor_eval))
+setnames(score_eval_long, c("tumour", "cell_line", "score"))
+score_eval_long[, tumour := as.character(tumour)]
+score_eval_long[, cell_line := as.character(cell_line)]
+
+cell_sample_lookup <- data.table(
+  cell_line = eval_cell_ids,
+  cell_line_group = biological_cell_line_group(eval_cell_ids),
+  cell_lineage = meta_cell_map[eval_cell_ids]
+)
+cell_group_lookup <- cell_sample_lookup[, .(
+  cell_lineage = sort(unique(cell_lineage))[1],
+  source_cell_lines = paste(sort(unique(cell_line)), collapse = ";"),
+  n_cell_line_profiles = .N
+), by = cell_line_group]
+
+tumour_lookup <- data.table(
+  tumour = eval_tumour_ids,
+  tum_lineage = meta_tum_map[eval_tumour_ids]
+)
+
+score_eval_long <- merge(score_eval_long, cell_sample_lookup, by = "cell_line", all.x = TRUE)
+score_eval_long <- merge(score_eval_long, tumour_lookup, by = "tumour", all.x = TRUE)
+group_score_dt <- score_eval_long[, .(
+  score = median(score, na.rm = TRUE),
+  source_cell_lines = paste(sort(unique(cell_line)), collapse = ";"),
+  n_cell_line_profiles = uniqueN(cell_line)
+), by = .(tumour, tum_lineage, cell_line_group, cell_lineage)]
+group_score_dt <- group_score_dt[!is.na(score)]
+group_score_dt[, is_correct := cell_lineage == tum_lineage]
+
+t2c_group_full <- copy(group_score_dt)
+setorder(t2c_group_full, tumour, -score, cell_line_group)
+t2c_group_full[, rank_in_tumour := seq_len(.N), by = tumour]
+
+c2t_full <- copy(group_score_dt)
+setorder(c2t_full, cell_line_group, -score, tumour)
+c2t_full[, rank := seq_len(.N), by = cell_line_group]
+
 
 # =============================================================================
 # STEP 7: Compute Evaluation Metrics
@@ -1545,17 +1669,27 @@ rank_df_cl_eval <- rank_df_cl_eval[
 cat("\n[7] Computing evaluation metrics...\n")
 
 # Top-1 accuracy: fraction of tumours with correct lineage at rank 1
-top1 <- rank_df_eval[rank == 1]
+top1 <- t2c_group_full[rank_in_tumour == 1]
 top1_acc <- mean(top1$is_correct, na.rm = TRUE)
 
 # Top-k accuracy: fraction of tumours with any correct lineage in top-k
-topk_acc <- mean(tapply(rank_df_eval$is_correct, rank_df_eval$tumour, any), na.rm = TRUE)
+topk_acc <- mean(t2c_group_full[rank_in_tumour <= opt$`top-k`,
+                                .(hit = any(is_correct, na.rm = TRUE)),
+                                by = tumour]$hit,
+                 na.rm = TRUE)
 
 # Mean Reciprocal Rank: average of 1/rank for first correct match
-mrr <- mean(tapply(rank_df_eval$is_correct, rank_df_eval$tumour, function(v) {
-  hit <- which(v)[1]  # Position of first TRUE
-  if (is.na(hit)) 0 else 1 / hit  # 0 if no correct match in top-k
-}), na.rm = TRUE)
+mrr_full_dt <- t2c_group_full[, {
+  hits <- rank_in_tumour[is_correct %in% TRUE]
+  first <- if (length(hits) == 0) NA_integer_ else min(hits, na.rm = TRUE)
+  list(
+    first_correct_rank = first,
+    rr = ifelse(is.na(first), 0, 1 / first),
+    rr_at_k = ifelse(is.na(first) || first > opt$`top-k`, 0, 1 / first)
+  )
+}, by = tumour]
+mrr <- mean(mrr_full_dt$rr, na.rm = TRUE)
+mrr_at_k <- mean(mrr_full_dt$rr_at_k, na.rm = TRUE)
 
 # -----------------------------------------------------------------------------
 # Per-Lineage Metrics
@@ -1580,6 +1714,7 @@ lineage_metrics <- rbindlist(lineage_metrics)
 cat("  Top-1 accuracy: ", round(top1_acc * 100, 2), "%\n", sep = "")
 cat("  Top-", opt$`top-k`, " accuracy: ", round(topk_acc * 100, 2), "%\n", sep = "")
 cat("  MRR: ", round(mrr, 3), "\n", sep = "")
+cat("  MRR@", opt$`top-k`, ": ", round(mrr_at_k, 3), "\n", sep = "")
 
 
 # =============================================================================
@@ -1704,34 +1839,24 @@ cellline_summary <- merge(
 # -----------------------------------------------------------------------------
 # Cell line -> tumour evaluation metrics (reverse direction)
 # -----------------------------------------------------------------------------
-rank_df_cl_eval[, cell_line_group := ifelse(
-  cell_lineage == "RBL",
-  cell_line,
-  sub("_lib.*$", "", cell_line)
-)]
-
-# Collapse library-level replicates before C2T evaluation metrics
-rank_df_cl_collapsed <- rank_df_cl_eval[
-  order(cell_line_group, -score),
-  .SD[1],
-  by = .(cell_line_group, tumour)
-]
-rank_df_cl_collapsed[, rank_eval := frank(-score, ties.method = "first"),
-                     by = cell_line_group]
-rank_df_cl_collapsed[, is_correct := (tumour_lineage == cell_lineage)]
+rank_df_cl_collapsed <- copy(c2t_full)
+setnames(rank_df_cl_collapsed, "cell_line_group", "cell_line")
+rank_df_cl_collapsed[, rank_eval := rank]
+rank_df_cl_collapsed[, tumour_lineage := tum_lineage]
 
 top1_cl <- rank_df_cl_collapsed[rank_eval == 1]
 top1_acc_cl <- mean(top1_cl$is_correct, na.rm = TRUE)
 
-topk_acc_cl <- mean(tapply(rank_df_cl_collapsed$is_correct,
-                           rank_df_cl_collapsed$cell_line_group, any),
+topk_acc_cl <- mean(rank_df_cl_collapsed[rank_eval <= opt$`top-k`,
+                                         .(hit = any(is_correct, na.rm = TRUE)),
+                                         by = cell_line]$hit,
                     na.rm = TRUE)
 
-mrr_cl <- mean(tapply(rank_df_cl_collapsed$is_correct,
-                      rank_df_cl_collapsed$cell_line_group, function(v) {
-  hit <- which(v)[1]
-  if (is.na(hit)) 0 else 1 / hit
-}), na.rm = TRUE)
+mrr_cl <- mean(rank_df_cl_collapsed[, {
+  hits <- rank_eval[is_correct %in% TRUE]
+  first <- if (length(hits) == 0) NA_integer_ else min(hits, na.rm = TRUE)
+  list(rr = ifelse(is.na(first), 0, 1 / first))
+}, by = cell_line]$rr, na.rm = TRUE)
 
 lineage_metrics_cl <- lapply(eval_lineages, function(lin) {
   cl_subset <- top1_cl[cell_lineage == lin]
@@ -1749,30 +1874,99 @@ topk_consistency_cl <- rank_df_cl_collapsed[rank_eval <= opt$`top-k`, .(
   n_total = .N,
   n_same_lineage = sum(tumour_lineage == cell_lineage, na.rm = TRUE),
   frac_same = mean(tumour_lineage == cell_lineage, na.rm = TRUE)
-), by = .(cell_line_group, cell_lineage)]
+), by = .(cell_line, cell_lineage)]
 topk_consistency_cl[, all_same := n_same_lineage == n_total]
 
 # Low confidence cases (cell-line -> tumour) on collapsed units
 confidence_cl_group <- rank_df_cl_collapsed[, {
-  ord <- order(-score)
+  ord <- order(-score, tumour)
   s1 <- score[ord][1]
   sk <- score[ord][min(opt$`top-k`, .N)]
   list(s1 = s1, sk = sk, confidence_delta = s1 - sk)
-}, by = cell_line_group]
+}, by = cell_line]
 frac_same_cl_group <- rank_df_cl_collapsed[rank_eval <= opt$`top-k`,
   .(confidence_frac_same_lineage = mean(is_correct, na.rm = TRUE)),
-  by = cell_line_group]
+  by = cell_line]
 cellline_summary_group <- merge(confidence_cl_group, frac_same_cl_group,
-                                by = "cell_line_group", all.x = TRUE)
+                                by = "cell_line", all.x = TRUE)
 cellline_summary_group <- merge(cellline_summary_group, top1_cl[, .(
-  cell_line_group,
+  cell_line,
   cell_lineage,
   best_tumour = tumour,
   best_tumour_lineage = tumour_lineage,
   is_correct
-)], by = "cell_line_group", all.x = TRUE)
+)], by = "cell_line", all.x = TRUE)
 
 low_confidence_cl <- cellline_summary_group[confidence_delta < 0.03]
+
+top1_ci <- wilson_ci(sum(top1_cl$is_correct, na.rm = TRUE), nrow(top1_cl))
+topk_hits_cl <- rank_df_cl_collapsed[rank_eval <= opt$`top-k`,
+                                     .(hit = any(is_correct, na.rm = TRUE)),
+                                     by = cell_line]
+topk_ci <- wilson_ci(sum(topk_hits_cl$hit, na.rm = TRUE), nrow(topk_hits_cl))
+balanced_accuracy_cl <- mean(lineage_metrics_cl$top1_accuracy, na.rm = TRUE)
+cellline_centred_summary_metrics <- data.table(
+  metric = c("top1_accuracy", paste0("top", opt$`top-k`, "_accuracy"),
+             "mrr", "balanced_accuracy_top1"),
+  value = c(top1_acc_cl, topk_acc_cl, mrr_cl, balanced_accuracy_cl),
+  ci_low = c(top1_ci[1], topk_ci[1], NA_real_, NA_real_),
+  ci_high = c(top1_ci[2], topk_ci[2], NA_real_, NA_real_)
+)
+
+reciprocal_pairs_k10 <- merge(
+  t2c_group_full[rank_in_tumour <= 10,
+                 .(tumour, cell_line = cell_line_group, tum_lineage,
+                   cell_lineage, t2c_rank = rank_in_tumour, t2c_score = score)],
+  rank_df_cl_collapsed[rank_eval <= 10,
+                       .(tumour, cell_line, c2t_rank = rank_eval, c2t_score = score)],
+  by = c("tumour", "cell_line"),
+  all = FALSE
+)
+
+component_candidates <- c("patient_consensus_component", "consensus_component",
+                          "component", "cluster", "cluster_id", "component_id")
+component_col <- component_candidates[component_candidates %in% colnames(meta_tum)][1]
+if (!is.na(component_col)) {
+  tumour_components <- data.table(
+    tumour = meta_tum$sample_id,
+    component_id = as.character(meta_tum[[component_col]])
+  )
+  comp_sizes <- tumour_components[!is.na(component_id) & component_id != "",
+                                  .(component_size = .N), by = component_id]
+  top50 <- merge(
+    rank_df_cl_collapsed[rank_eval <= 50,
+                         .(cell_line, cell_lineage, tumour, tum_lineage)],
+    tumour_components,
+    by = "tumour",
+    all.x = TRUE
+  )
+  top50[is.na(component_id) | component_id == "", component_id := "UNAVAILABLE"]
+  top50_component_composition <- top50[, {
+    lineage_counts <- sort(table(tum_lineage), decreasing = TRUE)
+    list(
+      n_top50 = .N,
+      frac_top50 = .N / min(50, nrow(rank_df_cl_collapsed[cell_line == .BY$cell_line])),
+      dominant_tumour_lineage = names(lineage_counts)[1],
+      component_purity = as.numeric(lineage_counts[1]) / .N
+    )
+  }, by = .(cell_line, cell_lineage, component_id)]
+  top50_component_composition <- merge(
+    top50_component_composition, comp_sizes, by = "component_id", all.x = TRUE
+  )
+} else {
+  top50_component_composition <- rank_df_cl_collapsed[rank_eval <= 50, .(
+    n_top50 = .N,
+    frac_top50 = .N / min(50, nrow(rank_df_cl_collapsed[cell_line == .BY$cell_line])),
+    component_size = NA_integer_,
+    component_purity = NA_real_,
+    dominant_tumour_lineage = NA_character_
+  ), by = .(cell_line, cell_lineage)]
+  top50_component_composition[, component_id := "UNAVAILABLE"]
+  setcolorder(top50_component_composition,
+              c("cell_line", "cell_lineage", "component_id", "n_top50",
+                "frac_top50", "component_size", "component_purity",
+                "dominant_tumour_lineage"))
+}
 
 
 # =============================================================================
@@ -1827,6 +2021,20 @@ rank_cl_file <- file.path(c2t_dir, "cellline_to_tumour_rankings.tsv")
 fwrite(rank_df_cl_filtered, file = rank_cl_file, sep = "\t")
 cat("  Cell line rankings saved to:", rank_cl_file, "\n")
 
+t2c_full_file <- file.path(t2c_dir, "tumour_to_cellline_full_rankings.tsv")
+fwrite(t2c_group_full[, .(
+  tumour, tum_lineage, cell_line = cell_line_group, cell_lineage,
+  score, rank_in_tumour, source_cell_lines, n_cell_line_profiles, is_correct
+)], file = t2c_full_file, sep = "\t")
+cat("  Full tumour-to-cell-line rankings saved to:", t2c_full_file, "\n")
+
+c2t_full_file <- file.path(c2t_dir, "cellline_to_tumour_full_rankings.tsv")
+fwrite(rank_df_cl_collapsed[, .(
+  cell_line, cell_lineage, tumour, tumour_lineage, score, rank,
+  source_cell_lines, n_cell_line_profiles, is_correct
+)], file = c2t_full_file, sep = "\t")
+cat("  Full cell-line rankings saved to:", c2t_full_file, "\n")
+
 # Per-cell-line summary
 # Filter NBL to only DSMZ cell lines (starting with NG-) for consistency with figure validation
 cellline_summary_filtered <- cellline_summary[
@@ -1854,13 +2062,12 @@ if (nrow(lineage_metrics_cl) > 0) {
 # Cell line -> tumour top-k consistency and low-confidence cases
 topk_cl_file <- file.path(c2t_dir, "topk_lineage_consistency.tsv")
 topk_consistency_cl_out <- copy(topk_consistency_cl)
-setnames(topk_consistency_cl_out, "cell_line_group", "cell_line")
 fwrite(topk_consistency_cl_out, file = topk_cl_file, sep = "\t")
 cat("  Cell line top-k consistency saved to:", topk_cl_file, "\n")
 
 low_conf_cl_file <- file.path(c2t_dir, "low_confidence_cases.tsv")
 fwrite(low_confidence_cl[, .(
-  cell_line = cell_line_group,
+  cell_line,
   cell_lineage,
   best_tumour_lineage,
   is_correct,
@@ -1869,10 +2076,23 @@ fwrite(low_confidence_cl[, .(
 )], file = low_conf_cl_file, sep = "\t")
 cat("  Cell line low-confidence cases saved to:", low_conf_cl_file, "\n")
 
+cellline_centred_metrics_file <- file.path(c2t_dir, "cellline_centred_summary_metrics.tsv")
+fwrite(cellline_centred_summary_metrics, file = cellline_centred_metrics_file, sep = "\t")
+cat("  Cell-line-centred summary metrics saved to:", cellline_centred_metrics_file, "\n")
+
+reciprocal_file <- file.path(c2t_dir, "reciprocal_pairs_k10.tsv")
+fwrite(reciprocal_pairs_k10, file = reciprocal_file, sep = "\t")
+cat("  Reciprocal pairs saved to:", reciprocal_file, "\n")
+
+top50_comp_file <- file.path(c2t_dir, "top50_component_composition.tsv")
+fwrite(top50_component_composition, file = top50_comp_file, sep = "\t")
+cat("  Top-50 component composition saved to:", top50_comp_file, "\n")
+
 # Overall metrics
 metrics <- data.table(
-  metric = c("top1_accuracy", paste0("top", opt$`top-k`, "_accuracy"), "mrr"),
-  value = c(top1_acc, topk_acc, mrr)
+  metric = c("top1_accuracy", paste0("top", opt$`top-k`, "_accuracy"),
+             "mrr", paste0("mrr_at_", opt$`top-k`)),
+  value = c(top1_acc, topk_acc, mrr, mrr_at_k)
 )
 metrics_file <- file.path(t2c_dir, "metrics_summary.tsv")
 fwrite(metrics, file = metrics_file, sep = "\t")

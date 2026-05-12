@@ -1578,7 +1578,8 @@ rule tumour_nh_consensus:
         done = lambda wc: nh_consensus_dependency(wc.direction)
     output:
         consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
-        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
+        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv"),
+        denominator_audit = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "p_consensus_denominator_audit_{direction}.tsv")
     params:
         script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
         config = os.path.join(BASE, "config", "config.yaml")
@@ -1596,6 +1597,7 @@ rule tumour_nh_consensus:
           --out_rds {output.consensus_rds} \
           --out_tsv {output.consensus_tsv} \
           > {log} 2>&1
+        test -s {output.denominator_audit} || (echo "ERROR: missing {output.denominator_audit}" >&2; exit 1)
         '''
 
 
@@ -1941,6 +1943,96 @@ rule plot_dsmz_similarity_network_consensus:
 
 
 # =============================================================================
+# STAGE 6b: PUBLICATION CELL LINE COMPONENT NETWORK FIGURE (CROSS-COHORT)
+# =============================================================================
+# Combines resolved component graphs from BRCA, NBL, and (optionally) RBL into
+# a single 4-panel manuscript figure with unified visual grammar.  RBL inputs
+# are passed only when the per-cohort plots directory exists at run time.
+# Old per-cohort diagnostic rules (plot_resolved_dsmz_similarity_network,
+# plot_dsmz_similarity_network_consensus) are retained as QC outputs.
+
+_PUB_NET_ROOT = os.path.join(PIPE_ROOT, "results", "unsupervised")
+_PUB_NET_OUTDIR = os.path.join(_PUB_NET_ROOT, "publication", "cell_line_component_networks")
+_PUB_NET_LOG = os.path.join(PIPE_ROOT, "logs", "publication")
+
+def _cohort_cons_plots(cohort):
+    return os.path.join(_PUB_NET_ROOT, cohort,
+                        "tumour_neighbourhoods", "final_consensus_all", "plots")
+
+def _cohort_resolved(cohort):
+    return os.path.join(_PUB_NET_ROOT, cohort,
+                        "tumour_neighbourhoods", "final_consensus_all",
+                        "resolved_dsmz_neighbours.tsv")
+
+def _cohort_node_stats(cohort):
+    return os.path.join(_cohort_cons_plots(cohort), "dsmz_cellline_graph_node_stats.tsv")
+
+def _cohort_edges(cohort):
+    return os.path.join(_cohort_cons_plots(cohort), "dsmz_cellline_graph_edges.tsv")
+
+
+rule plot_publication_cell_line_component_networks:
+    """
+    Publication-level cell line similarity component network figure spanning
+    BRCA, NBL, and RBL cohorts.  Produces a combined 4-panel figure, input
+    validation report, component community summary, component annotation tables,
+    layout coordinates, consensus vs resolved comparison, supplementary table,
+    and figure provenance record.
+
+    BRCA and NBL inputs are required DAG dependencies.  RBL inputs are
+    supplied via params and passed to the script only when the files exist
+    (handled by the conditional shell logic below), so the rule can run even
+    if the RBL profile has not yet been processed.
+
+    Do not use this rule's outputs as primary manuscript figures until all
+    three cohorts have been processed.
+    """
+    input:
+        brca_resolved   = _cohort_resolved("brca"),
+        brca_node_stats = _cohort_node_stats("brca"),
+        brca_edges      = _cohort_edges("brca"),
+        nbl_resolved    = _cohort_resolved("nbl"),
+        nbl_node_stats  = _cohort_node_stats("nbl"),
+        nbl_edges       = _cohort_edges("nbl"),
+    output:
+        validation   = os.path.join(_PUB_NET_OUTDIR, "network_input_validation.tsv"),
+        summary      = os.path.join(_PUB_NET_OUTDIR, "cell_line_component_community_summary.tsv"),
+        annotations  = os.path.join(_PUB_NET_OUTDIR, "cell_line_component_annotations.tsv"),
+        fig_pdf      = os.path.join(_PUB_NET_OUTDIR, "Fig_cell_line_similarity_components_combined.pdf"),
+        fig_svg      = os.path.join(_PUB_NET_OUTDIR, "Fig_cell_line_similarity_components_combined.svg"),
+        fig_png      = os.path.join(_PUB_NET_OUTDIR, "Fig_cell_line_similarity_components_combined.png"),
+        layout_coords = os.path.join(_PUB_NET_OUTDIR, "cell_line_network_layout_coordinates.tsv"),
+        comparison   = os.path.join(_PUB_NET_OUTDIR, "consensus_resolved_comparison.tsv"),
+        supp         = os.path.join(_PUB_NET_OUTDIR, "supp_cell_line_component_annotations.tsv"),
+        provenance   = os.path.join(_PUB_NET_OUTDIR, "figure_provenance.tsv"),
+    params:
+        script        = os.path.join(SCRIPTS_DIR, "plot_publication_cell_line_component_networks.py"),
+        outdir        = _PUB_NET_OUTDIR,
+        rbl_resolved  = _cohort_resolved("rbl"),
+        rbl_node_stats = _cohort_node_stats("rbl"),
+        rbl_edges     = _cohort_edges("rbl"),
+    log: os.path.join(_PUB_NET_LOG, "plot_publication_cell_line_component_networks.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {params.outdir} {_PUB_NET_LOG}
+        python {params.script} \
+          --brca-resolved   {input.brca_resolved} \
+          --brca-node-stats {input.brca_node_stats} \
+          --brca-edges      {input.brca_edges} \
+          --nbl-resolved    {input.nbl_resolved} \
+          --nbl-node-stats  {input.nbl_node_stats} \
+          --nbl-edges       {input.nbl_edges} \
+          $([ -f "{params.rbl_resolved}"   ] && echo "--rbl-resolved {params.rbl_resolved}"     || true) \
+          $([ -f "{params.rbl_node_stats}" ] && echo "--rbl-node-stats {params.rbl_node_stats}" || true) \
+          $([ -f "{params.rbl_edges}"      ] && echo "--rbl-edges {params.rbl_edges}"           || true) \
+          --out-dir {params.outdir} \
+          > {log} 2>&1
+        test -s {output.fig_pdf} || (echo "ERROR: missing {output.fig_pdf}" >&2; exit 1)
+        '''
+
+
+# =============================================================================
 # STAGE 7: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS
 # =============================================================================
 # Gated to brca, nbl, and rbl only — the three profiles that have
@@ -1967,6 +2059,7 @@ else:
 
 # Cross-direction aggregated graph node stats (produced by aggregate_graph_node_stats)
 NODE_STATS_TSV = os.path.join(P_CONS_ALL_DIR, "dsmz_cellline_graph_node_stats.tsv")
+DESEQ2_NODE_STATS_TSV = P_CONS_RESOLVED_NODE_STATS_TSV
 
 if DESEQ2_ENABLED:
 
@@ -2037,7 +2130,7 @@ if DESEQ2_ENABLED:
         input:
             dsmz_counts = DSMZ_COUNTS_RDS,
             dsmz_meta   = DSMZ_META_CSV,
-            node_stats  = NODE_STATS_TSV
+            node_stats  = DESEQ2_NODE_STATS_TSV
         output:
             counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
             metadata_tsv = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv")
@@ -2072,7 +2165,7 @@ if DESEQ2_ENABLED:
         """
         input:
             meta       = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv"),
-            node_stats = NODE_STATS_TSV
+            node_stats = DESEQ2_NODE_STATS_TSV
         output:
             meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
         params:
@@ -2183,6 +2276,60 @@ if DESEQ2_ENABLED:
 
 
     # -----------------------------------------------------------------------------
+    # RULE: derive_anchor_list
+    # -----------------------------------------------------------------------------
+    rule derive_anchor_list:
+        """
+        Selects one deterministic bridge-like anchor per non-isolate component.
+        Anchors are ranked by betweenness descending, degree descending, and
+        cell-line identifier ascending.
+        """
+        input:
+            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+        output:
+            anchor_csv = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
+            anchor_components = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv"),
+            anchor_tsv = os.path.join(DESEQ2_INPUT_DIR, "bridge_like_anchor_cell_lines.tsv")
+        log: os.path.join(LOGROOT, "derive_anchor_list.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript -e '
+            suppressPackageStartupMessages({{
+              library(readr)
+              library(dplyr)
+            }})
+            meta <- read_tsv("{input.meta_comp}", show_col_types = FALSE)
+            req <- c("cell_line", "component", "is_isolate", "degree", "betweenness")
+            miss <- setdiff(req, colnames(meta))
+            if (length(miss) > 0) stop("metadata_with_components missing columns: ", paste(miss, collapse = ", "))
+            anchors <- meta %>%
+              mutate(
+                cell_line = as.character(cell_line),
+                component = as.character(component),
+                is_isolate = tolower(as.character(is_isolate)) %in% c("true", "1", "yes"),
+                degree = suppressWarnings(as.numeric(degree)),
+                betweenness = suppressWarnings(as.numeric(betweenness))
+              ) %>%
+              distinct(cell_line, component, is_isolate, degree, betweenness) %>%
+              filter(!is_isolate, !is.na(component), component != "", tolower(component) != "na") %>%
+              group_by(component) %>%
+              filter(n() >= 2) %>%
+              arrange(desc(betweenness), desc(degree), cell_line, .by_group = TRUE) %>%
+              slice(1) %>%
+              ungroup() %>%
+              transmute(anchor = cell_line, component, degree, betweenness)
+            write_lines(paste(anchors$anchor, collapse = ","), "{output.anchor_csv}")
+            write_tsv(anchors %>% select(anchor, component), "{output.anchor_components}")
+            write_tsv(anchors %>% rename(cell_line = anchor), "{output.anchor_tsv}")
+            ' > {log} 2>&1
+            test -s {output.anchor_components} || (echo -e "anchor\tcomponent" > {output.anchor_components})
+            test -f {output.anchor_csv} || touch {output.anchor_csv}
+            test -s {output.anchor_tsv} || (echo -e "cell_line\tcomponent\tdegree\tbetweenness" > {output.anchor_tsv})
+            '''
+
+
+    # -----------------------------------------------------------------------------
     # RULE: deseq2_isolate_degs
     # -----------------------------------------------------------------------------
     rule deseq2_isolate_degs:
@@ -2190,15 +2337,15 @@ if DESEQ2_ENABLED:
         Runs DESeq2 isolate-vs-rest contrasts for each isolate cell line identified
         by the graph resolution stage.  Produces per-contrast DEG tables, filtered
         marker gene lists, size-factor QC, and a recurrence-based unique feature set.
-        Anchor analysis is disabled for now (no anchor_list or anchor_components
-        provided) pending verification that the node-stats schema supports anchor
-        identification.
         """
         input:
             counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
             meta_comp    = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
             isolate_csv  = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv"),
-            isolate_tsv  = os.path.join(DESEQ2_INPUT_DIR, "isolate_cell_lines.tsv")
+            isolate_tsv  = os.path.join(DESEQ2_INPUT_DIR, "isolate_cell_lines.tsv"),
+            anchor_csv   = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
+            anchor_components = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv"),
+            anchor_tsv   = os.path.join(DESEQ2_INPUT_DIR, "bridge_like_anchor_cell_lines.tsv")
         output:
             size_factors = os.path.join(DESEQ2_ISOLATE_DIR, "qc", "size_factors.tsv"),
             manifest     = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
@@ -2215,6 +2362,9 @@ if DESEQ2_ENABLED:
             fdr           = DESEQ2_CFG.get("fdr_isolate", 0.01),
             lfc           = DESEQ2_CFG.get("lfc_isolate", 1.5),
             topN          = DESEQ2_CFG.get("topN_isolate", 50),
+            fdr_anchor    = DESEQ2_CFG.get("fdr_anchor", 0.05),
+            lfc_anchor    = DESEQ2_CFG.get("lfc_anchor", 1.0),
+            topN_anchor   = DESEQ2_CFG.get("topN_anchor", 200),
             min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10),
             recurrence_k  = DESEQ2_CFG.get("recurrence_k", 2)
         log: os.path.join(LOGROOT, "deseq2_isolate_degs.log")
@@ -2232,6 +2382,7 @@ if DESEQ2_ENABLED:
                 touch {output.session_info}
                 exit 0
             fi
+            ANCHOR_LIST=$(cat {input.anchor_csv})
             mkdir -p {params.outdir}
             Rscript {params.script} \
               --counts {input.counts_tsv} \
@@ -2240,10 +2391,15 @@ if DESEQ2_ENABLED:
               --cell_line_col {params.cell_line_col} \
               --component_col {params.component_col} \
               --isolate_list "$ISOLATE_LIST" \
+              --anchor_list "$ANCHOR_LIST" \
+              --anchor_components {input.anchor_components} \
               --outdir {params.outdir} \
               --fdr_isolate {params.fdr} \
               --lfc_isolate {params.lfc} \
               --topN_isolate {params.topN} \
+              --fdr_anchor {params.fdr_anchor} \
+              --lfc_anchor {params.lfc_anchor} \
+              --topN_anchor {params.topN_anchor} \
               --min_baseMean {params.min_baseMean} \
               --recurrence_k {params.recurrence_k} \
               > {log} 2>&1
@@ -2274,7 +2430,8 @@ if DESEQ2_ENABLED:
             sample_id_col = DESEQ2_CFG.get("staged_sample_id_col", "sample_id"),
             fdr           = DESEQ2_CFG.get("fdr_component", 0.05),
             lfc           = DESEQ2_CFG.get("lfc_component", 1.0),
-            topN          = DESEQ2_CFG.get("topN_component", 500)
+            topN          = DESEQ2_CFG.get("topN_component", 500),
+            min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10)
         log: os.path.join(LOGROOT, "deseq2_component_vs_rest_all.log")
         conda: CONDA_ENV_R
         shell:
@@ -2298,6 +2455,7 @@ if DESEQ2_ENABLED:
                   --fdr {params.fdr} \
                   --lfc {params.lfc} \
                   --topN {params.topN} \
+                  --min_baseMean {params.min_baseMean} \
                   >> {log} 2>&1
             done < {input.comp_list}
             echo "[DONE] All components processed" >> {log}
@@ -2557,11 +2715,11 @@ if MARKER_POST_ENABLED:
             script=os.path.join(SCRIPTS_DIR, "build_component_consensus_markers_v2.py"),
             outdir=lambda wc: profile_consensus_outdir(wc.profile),
             padj=CONSENSUS_CFG.get("padj", 0.05),
-            basemean=CONSENSUS_CFG.get("basemean", 1.0),
-            lfc=CONSENSUS_CFG.get("lfc", 0.5),
+            basemean=CONSENSUS_CFG.get("basemean", 10.0),
+            lfc=CONSENSUS_CFG.get("lfc", 1.0),
             core_support_min=CONSENSUS_CFG.get("core_support_min", 2),
             core_support_frac=CONSENSUS_CFG.get("core_support_frac", 0.30),
-            min_anchor_genes=CONSENSUS_CFG.get("min_anchor_genes", 25),
+            min_anchor_genes=CONSENSUS_CFG.get("min_anchor_genes", 0),
             fallback_topn=CONSENSUS_CFG.get("fallback_topn", 200),
             flip_policy=CONSENSUS_CFG.get("flip_policy", "remove"),
             recurrence_k=CONSENSUS_CFG.get("recurrence_k", 2)
@@ -2658,7 +2816,7 @@ if MARKER_POST_ENABLED:
             profile_marker_manifests=_profile_marker_manifest_args(),
             min_cross=PAN_CANCER_MP_CFG.get("min_cross_disease", 2),
             cap_specific=PAN_CANCER_MP_CFG.get("cap_specific", 300),
-            cap_isolate=PAN_CANCER_MP_CFG.get("cap_isolate", 0),
+            cap_isolate=PAN_CANCER_MP_CFG.get("cap_isolate", 50),
             remove_ribo_mt="--remove-ribo-mt" if PAN_CANCER_MP_CFG.get("remove_ribo_mt", False) else "",
             gene_annot=("--gene-annotation-tsv " + abspath(PAN_CANCER_MP_CFG["gene_annotation_tsv"]))
                         if PAN_CANCER_MP_CFG.get("gene_annotation_tsv") else ""

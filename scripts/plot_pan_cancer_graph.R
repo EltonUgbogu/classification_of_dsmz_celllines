@@ -35,10 +35,16 @@ option_list <- list(
               help="Path to pan_cancer_components.tsv"),
   make_option(c("--meta"), type="character", default=NULL,
               help="Path to pan_cancer_expr.rds (contains $meta with sample_id, lineage, type; and optionally expr)"),
+  make_option(c("--meta-fallback"), type="character", default=NULL,
+              help="Optional fallback metadata CSV/TSV used to fill blank lineage labels"),
   make_option(c("--outdir"), type="character", default=".",
               help="Output directory for plots"),
   make_option(c("--layout"), type="character", default="fr",
-              help="Layout: fr (Fruchterman-Reingold), kk (Kamada-Kawai), lgl"),
+              help="Layout: fr (Fruchterman-Reingold), kk (Kamada-Kawai), lgl, archived"),
+  make_option(c("--layout-coords"), type="character", default=NULL,
+              help="Optional archived layout TSV with sample_id, x, y columns"),
+  make_option(c("--save-layout-coords"), type="character", default=NULL,
+              help="Optional path to save the layout coordinates used for plotting"),
   make_option(c("--seed"), type="integer", default=1,
               help="Random seed for layout reproducibility"),
   make_option(c("--label-top-hubs"), type="integer", default=0,
@@ -59,6 +65,37 @@ dir.create(opt$outdir, recursive=TRUE, showWarnings=FALSE)
 
 is_ng <- function(x) {
   !is.na(x) & grepl("^NG-", x)
+}
+
+lineage_from_values <- function(values) {
+  out <- rep(NA_character_, length(values))
+  if (is.null(values)) {
+    return(out)
+  }
+  out[grepl("BRCA|Breast", values, ignore.case = TRUE)] <- "BRCA"
+  out[grepl("NBL|Neuroblastoma", values, ignore.case = TRUE)] <- "NBL"
+  out[grepl("RBL|Retinoblastoma", values, ignore.case = TRUE)] <- "RBL"
+  out[grepl("HEME|Hema|LL-100|Leukemia|Lymphoma", values, ignore.case = TRUE)] <- "HEME"
+  out
+}
+
+derive_lineage <- function(dt, default_lineage = "UNKNOWN") {
+  lineage <- if ("lineage" %in% names(dt)) as.character(dt$lineage) else rep(NA_character_, nrow(dt))
+  lineage[is.na(lineage) | lineage == ""] <- NA_character_
+  if ("lineage_fbk" %in% names(dt)) {
+    idx <- is.na(lineage) | lineage == ""
+    lineage[idx] <- as.character(dt$lineage_fbk[idx])
+  }
+  for (col in c("cancer_type", "cancer_type_fbk", "Disease", "Disease_fbk",
+                "group2", "group2_fbk", "organ", "organ_fbk")) {
+    if (col %in% names(dt)) {
+      guess <- lineage_from_values(dt[[col]])
+      idx <- is.na(lineage) | lineage == ""
+      lineage[idx] <- guess[idx]
+    }
+  }
+  lineage[is.na(lineage) | lineage == ""] <- default_lineage
+  toupper(lineage)
 }
 
 # -----------------------------------------------------------------------------
@@ -90,6 +127,17 @@ if (!("meta" %in% names(cell_dat))) {
   stop("RDS object must contain $meta.")
 }
 meta <- as.data.table(cell_dat$meta)
+fallback_meta <- NULL
+if (!is.null(opt$`meta-fallback`) && file.exists(opt$`meta-fallback`)) {
+  fallback_meta <- fread(opt$`meta-fallback`)
+  if (!("sample_id" %in% names(fallback_meta))) {
+    stop("Fallback metadata must contain sample_id")
+  }
+  keep_cols <- intersect(c("sample_id", "lineage", "cancer_type", "Disease", "group2", "organ"), names(fallback_meta))
+  fallback_meta <- unique(fallback_meta[, ..keep_cols])
+  fallback_cols <- setdiff(names(fallback_meta), "sample_id")
+  setnames(fallback_meta, fallback_cols, paste0(fallback_cols, "_fbk"))
+}
 
 # -----------------------------------------------------------------------------
 # Enforce: cell lines only + NG- prefix
@@ -108,6 +156,11 @@ if (isTRUE(opt$require_ng_prefix)) {
   meta <- meta[is_ng(sample_id)]
 }
 
+meta <- unique(meta, by = "sample_id")
+if (!is.null(fallback_meta)) {
+  meta <- merge(meta, fallback_meta, by = "sample_id", all.x = TRUE, sort = FALSE)
+}
+meta[, lineage := derive_lineage(meta)]
 meta <- unique(meta[, .(sample_id, lineage)])
 
 # -----------------------------------------------------------------------------
@@ -171,13 +224,49 @@ V(g)$degree <- deg
 # Layout
 # -----------------------------------------------------------------------------
 set.seed(opt$seed)
-lay <- switch(
-  opt$layout,
-  "kk"  = layout_with_kk(g),
-  "lgl" = layout_with_lgl(g),
-  "fr"  = layout_with_fr(g),
-  layout_with_fr(g)
-)
+if (!is.null(opt$`layout-coords`) && file.exists(opt$`layout-coords`)) {
+  coords <- fread(opt$`layout-coords`)
+  req <- c("sample_id", "x", "y")
+  if (!all(req %in% names(coords))) {
+    stop("--layout-coords must contain columns: sample_id, x, y")
+  }
+  coords <- unique(coords[, .(sample_id = as.character(sample_id),
+                              x = as.numeric(x), y = as.numeric(y))],
+                   by = "sample_id")
+  missing_coords <- setdiff(V(g)$name, coords$sample_id)
+  if (length(missing_coords) > 0) {
+    stop("Archived layout missing coordinates for nodes: ",
+         paste(head(missing_coords, 20), collapse = ", "))
+  }
+  coords <- coords[match(V(g)$name, sample_id)]
+  lay <- as.matrix(coords[, .(x, y)])
+  rownames(lay) <- coords$sample_id
+  opt$layout <- "archived"
+  message("[INFO] Using archived fixed layout coordinates: ", opt$`layout-coords`)
+} else {
+  if (identical(opt$layout, "archived")) {
+    stop("--layout archived requires --layout-coords")
+  }
+  message("[INFO] Using exploratory stochastic layout: ", opt$layout,
+          " with seed=", opt$seed,
+          ". Provide --layout-coords for publication fixed-layout reproduction.")
+  lay <- switch(
+    opt$layout,
+    "kk"  = layout_with_kk(g),
+    "lgl" = layout_with_lgl(g),
+    "fr"  = layout_with_fr(g),
+    layout_with_fr(g)
+  )
+}
+
+if (!is.null(opt$`save-layout-coords`) && nzchar(opt$`save-layout-coords`)) {
+  dir.create(dirname(opt$`save-layout-coords`), recursive = TRUE, showWarnings = FALSE)
+  fwrite(
+    data.table(sample_id = V(g)$name, x = lay[, 1], y = lay[, 2]),
+    opt$`save-layout-coords`,
+    sep = "\t"
+  )
+}
 
 # -----------------------------------------------------------------------------
 # Plot helper (base plotting to avoid extra deps)
