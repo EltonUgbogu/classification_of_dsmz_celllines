@@ -1,0 +1,7 @@
+check	value
+patient tumour samples	1128
+ranked cell line models per tumour	58
+biological cell line groups	56
+top-1 correct biological cell line groups	54
+retinoblastoma biological cell line groups	9
+feature genes exported	257
