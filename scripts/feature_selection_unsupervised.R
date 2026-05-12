@@ -382,6 +382,19 @@ run_unsupervised_feature_selection <- function(
   write_vec <- function(vec, filename) {
     writeLines(vec, file.path(subdir, filename))
   }
+
+  rank_named_scores <- function(scores, decreasing = TRUE) {
+    if (is.null(names(scores))) stop("rank_named_scores requires a named vector")
+    score_num <- as.numeric(scores)
+    keep <- !is.na(score_num) & !is.na(names(scores)) & names(scores) != ""
+    score_num <- score_num[keep]
+    gene_id <- names(scores)[keep]
+    if (decreasing) {
+      gene_id[order(-score_num, gene_id, na.last = NA)]
+    } else {
+      gene_id[order(score_num, gene_id, na.last = NA)]
+    }
+  }
   
   # ---------------------------------------------------------------------------
   # HELPER: Save UpSet plot with explanatory legend
@@ -498,7 +511,9 @@ run_unsupervised_feature_selection <- function(
   # The rowVars() function from matrixStats is used for efficiency (~10× faster
   # than apply(counts, 1, var)).
   
-  top_var <- names(sort(rowVars(counts, na.rm = TRUE), decreasing = TRUE))[1:top_n_method]
+  variance_score <- rowVars(counts, na.rm = TRUE)
+  names(variance_score) <- rownames(counts)
+  top_var <- head(rank_named_scores(variance_score), top_n_method)
 
   # ---------------------------------------------------------------------------
   # METHOD 1b: HVG (MEAN-VARIANCE TREND ADJUSTED)
@@ -540,7 +555,7 @@ run_unsupervised_feature_selection <- function(
   names(hvg_score) <- rownames(counts)
   hvg_score[!is.finite(hvg_score)] <- -Inf
 
-  top_hvg <- names(sort(hvg_score, decreasing = TRUE))[1:top_n_method]
+  top_hvg <- head(rank_named_scores(hvg_score), top_n_method)
 
   # ---------------------------------------------------------------------------
   # METHOD 2: MEDIAN ABSOLUTE DEVIATION (MAD)
@@ -563,7 +578,9 @@ run_unsupervised_feature_selection <- function(
   #   - Less efficient than variance for normal distributions
   #   - May miss genes with important outlier expression patterns
   
-  top_mad <- names(sort(apply(counts, 1, mad, na.rm = TRUE), decreasing = TRUE))[1:top_n_method]
+  mad_score <- apply(counts, 1, mad, na.rm = TRUE)
+  names(mad_score) <- rownames(counts)
+  top_mad <- head(rank_named_scores(mad_score), top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 3: MEAN ABSOLUTE DEVIATION FROM MEAN
@@ -583,7 +600,8 @@ run_unsupervised_feature_selection <- function(
   
   mean_vals <- rowMeans(counts, na.rm = TRUE)
   absdev <- rowMeans(abs(sweep(counts, 1, mean_vals, "-")), na.rm = TRUE)
-  top_mean_absdev <- names(sort(absdev, decreasing = TRUE))[1:top_n_method]
+  names(absdev) <- rownames(counts)
+  top_mean_absdev <- head(rank_named_scores(absdev), top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 4: SHANNON ENTROPY
@@ -618,7 +636,7 @@ run_unsupervised_feature_selection <- function(
   #   - Sensitive to binning strategy (number of bins, bin edges)
   #   - Computationally more expensive than variance-based methods
   
-  top_entropy <- names(sort(apply(counts, 1, function(x) {
+  entropy_score <- apply(counts, 1, function(x) {
     x <- x[!is.na(x)]  # Remove missing values
     
     # Genes with no variation (constant expression) have zero entropy
@@ -633,7 +651,9 @@ run_unsupervised_feature_selection <- function(
     
     # Apply Shannon entropy formula: H = -Σ p × log₂(p)
     -sum(p * log2(p))
-  }), decreasing = TRUE))[1:top_n_method]
+  })
+  names(entropy_score) <- rownames(counts)
+  top_entropy <- head(rank_named_scores(entropy_score), top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 5: PCA LOADINGS
@@ -680,7 +700,7 @@ run_unsupervised_feature_selection <- function(
   
   # Sum absolute loadings across PCs to get an overall importance score
   gene_scores <- rowSums(loadings)
-  top_pca <- names(sort(gene_scores, decreasing = TRUE))[1:top_n_method]
+  top_pca <- head(rank_named_scores(gene_scores), top_n_method)
   
   # ===========================================================================
 # SECTION 4: COMBINE CANDIDATES FROM ALL METHODS
@@ -804,8 +824,8 @@ run_unsupervised_feature_selection <- function(
                       paste(head(names(avg_corr), 5), collapse = ", "))
   
   # Select top genes by Spearman connectivity
-  final_top500_spearman <- names(sort(avg_corr, decreasing = TRUE))[1:final_top]
-  final_top3000_spearman <- names(sort(avg_corr, decreasing = TRUE))[1:top_n_method]
+  final_top500_spearman <- head(rank_named_scores(avg_corr), final_top)
+  final_top3000_spearman <- head(rank_named_scores(avg_corr), top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 7: MX SCORE (SPEARMAN × VARIANCE)
@@ -864,8 +884,8 @@ run_unsupervised_feature_selection <- function(
                       paste(head(names(mx_score), 5), collapse = ", "))
   
   # Select top genes by MX score
-  final_top500_mx <- names(sort(mx_score, decreasing = TRUE))[1:final_top]
-  final_top3000_mx <- names(sort(mx_score, decreasing = TRUE))[1:top_n_method]
+  final_top500_mx <- head(rank_named_scores(mx_score), final_top)
+  final_top3000_mx <- head(rank_named_scores(mx_score), top_n_method)
   
   if (!quiet) message("[DEBUG] final_top500_mx length: ", length(final_top500_mx))
   
@@ -1131,7 +1151,7 @@ run_unsupervised_feature_selection <- function(
         # The 0.001 factor ensures product only affects ties
         Rank_Combo = rank(Rank_Sum + 0.001 * sqrt(Rank_Prod))
       ) %>%
-      dplyr::arrange(Rank_Combo)  # Sort by combined rank (best first)
+      dplyr::arrange(Rank_Combo, Gene)  # Sort by combined rank (best first)
   }
   
   if (!quiet) message("[DEBUG] scores_df dimensions: ",
@@ -1143,16 +1163,16 @@ run_unsupervised_feature_selection <- function(
   
   if (nrow(scores_df) > 0) {
     # Top genes by kTotal (WGCNA connectivity)
-    top500_kTotal <- dplyr::arrange(scores_df, Rank_kTotal) %>%
+    top500_kTotal <- dplyr::arrange(scores_df, Rank_kTotal, Gene) %>%
       dplyr::slice_head(n = min(final_top, nrow(scores_df))) %>%
       dplyr::pull(Gene)
     
-    top3000_kTotal <- dplyr::arrange(scores_df, Rank_kTotal) %>%
+    top3000_kTotal <- dplyr::arrange(scores_df, Rank_kTotal, Gene) %>%
       dplyr::slice_head(n = min(top_n_method, nrow(scores_df))) %>%
       dplyr::pull(Gene)
     
     # Top genes by MX score
-    top500_MX <- dplyr::arrange(scores_df, Rank_MX) %>%
+    top500_MX <- dplyr::arrange(scores_df, Rank_MX, Gene) %>%
       dplyr::slice_head(n = min(final_top, nrow(scores_df))) %>%
       dplyr::pull(Gene)
     
@@ -1311,13 +1331,13 @@ run_unsupervised_feature_selection <- function(
     PCA        = top_pca,
     Spearman   = final_top3000_spearman,   # full ranked vector; sliced below
     MX         = c(final_top500_mx,        # MX canonical = top-500
-                   names(sort(mx_score, decreasing = TRUE))),  # extend for safety
+                   rank_named_scores(mx_score)),  # extend for safety
     kTotal     = c(top500_kTotal,
-                   names(sort(kTotal,    decreasing = TRUE)))
+                   rank_named_scores(kTotal))
   )
   # Re-rank MX and kTotal from their score vectors (already sorted) for safety.
-  all_method_vectors[["MX"]]     <- names(sort(mx_score, decreasing = TRUE))
-  all_method_vectors[["kTotal"]] <- names(sort(kTotal,   decreasing = TRUE))
+  all_method_vectors[["MX"]]     <- rank_named_scores(mx_score)
+  all_method_vectors[["kTotal"]] <- rank_named_scores(kTotal)
 
   # Default per-method top-N (matches Snakefile defaults when --method_topn absent).
   default_topn <- list(
@@ -1464,8 +1484,8 @@ run_unsupervised_feature_selection <- function(
   # ---------------------------------------------------------------------------
   # TOP 200 ANALYSIS (Higher Confidence Subset)
   # ---------------------------------------------------------------------------
-  top200_spearman <- names(sort(avg_corr, decreasing = TRUE))[1:200]
-  top200_mx <- names(sort(mx_score, decreasing = TRUE))[1:200]
+  top200_spearman <- head(rank_named_scores(avg_corr), 200)
+  top200_mx <- head(rank_named_scores(mx_score), 200)
   intersection_200 <- intersect(top200_spearman, top200_mx)
   
   write_vec(top200_spearman, "top200_spearman.txt")

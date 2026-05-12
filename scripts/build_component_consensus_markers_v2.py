@@ -99,7 +99,7 @@ def topn_fallback(df: pd.DataFrame, n: int) -> pd.DataFrame:
         return df2
     df2["abs_lfc"] = df2["log2FoldChange"].abs()
     df2 = df2.sort_values(
-        ["padj", "abs_lfc"], ascending=[True, False]
+        ["padj", "abs_lfc", "gene_id"], ascending=[True, False, True]
     ).head(n).drop(columns=["abs_lfc"])
     return df2
 
@@ -129,8 +129,8 @@ def aggregate_consensus(anchor_dfs: list, direction: str, n_anchors: int) -> pd.
     g["rank_score"] = g["support_n"] * g["median_abs_log2FC"]
     g["direction"] = direction
     g = g.sort_values(
-        ["support_n", "rank_score", "best_padj"],
-        ascending=[False, False, True]
+        ["support_n", "rank_score", "best_padj", "gene_id"],
+        ascending=[False, False, True, True]
     ).reset_index(drop=True)
     return g
 
@@ -236,6 +236,12 @@ def process_profile(profile: str, tables_dir: Path, outdir: Path, args: argparse
     ensure_dir(outdir)
 
     print(f"[INFO] Processing profile={profile} tables_dir={tables_dir}")
+    print(
+        "[INFO] Active consensus thresholds: "
+        f"padj<={args.padj:g}, baseMean>={args.basemean:g}, "
+        f"absLFC>={args.lfc:g}, min_anchor_genes={args.min_anchor_genes}, "
+        f"fallback_topn={args.fallback_topn}"
+    )
 
     anchors_by_comp = {}
     for f in tables_dir.glob("anchor_*_vs_outside_component_*.tsv"):
@@ -277,11 +283,11 @@ def process_profile(profile: str, tables_dir: Path, outdir: Path, args: argparse
 
             fb_up = False
             fb_down = False
-            if len(up_sig) < args.min_anchor_genes:
+            if args.min_anchor_genes > 0 and len(up_sig) < args.min_anchor_genes:
                 up_sig = topn_fallback(up, args.fallback_topn)
                 fb_up = True
                 fallback_up_anchors.append(anchor_name)
-            if len(down_sig) < args.min_anchor_genes:
+            if args.min_anchor_genes > 0 and len(down_sig) < args.min_anchor_genes:
                 down_sig = topn_fallback(down, args.fallback_topn)
                 fb_down = True
                 fallback_down_anchors.append(anchor_name)
@@ -480,7 +486,7 @@ def process_profile(profile: str, tables_dir: Path, outdir: Path, args: argparse
     catalog_path = outdir / "disease_consensus_catalog.tsv"
     catalog.to_csv(catalog_path, sep="\t", index=False)
 
-    write_summary_exports(profile, catalog, processed_components, summary_dir, args.recurrence_k)
+    write_summary_exports(profile, catalog, summary_dir, processed_components, args.recurrence_k)
 
     print(f"[OK] Consensus outputs for profile={profile} in {outdir}")
     print(f"[OK] component_consensus_summary.tsv: {len(comp_summary_rows)} components")
@@ -504,13 +510,13 @@ def main():
     ap.add_argument("--outdir", required=True,
                     help="Output directory for profile-specific consensus results")
     ap.add_argument("--padj", type=float, default=0.05)
-    ap.add_argument("--basemean", type=float, default=1.0)
-    ap.add_argument("--lfc", type=float, default=0.5)
+    ap.add_argument("--basemean", type=float, default=10.0)
+    ap.add_argument("--lfc", type=float, default=1.0)
     ap.add_argument("--core-support-min", type=int, default=2,
                     help="Minimum anchor count for core markers")
     ap.add_argument("--core-support-frac", type=float, default=0.30,
                     help="Minimum support fraction for core markers")
-    ap.add_argument("--min-anchor-genes", type=int, default=25)
+    ap.add_argument("--min-anchor-genes", type=int, default=0)
     ap.add_argument("--fallback-topn", type=int, default=200)
     ap.add_argument("--flip-policy", choices=["remove", "majority"], default="remove",
                     help="How to handle genes appearing UP in some anchors, DOWN in others")

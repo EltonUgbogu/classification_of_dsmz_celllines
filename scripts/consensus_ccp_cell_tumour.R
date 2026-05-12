@@ -1060,13 +1060,17 @@ auc_values <- vapply(k_grid_effective, auc_at_k, numeric(1))
 # Compute delta AUC (improvement in AUC between successive k values).
 delta_auc <- diff(auc_values)
 
-# Select k with maximum delta AUC.
-best_k <- k_grid_effective[which.max(delta_auc) + 1]
+# Select k with maximum delta AUC; resolve ties to the smaller k.
+delta_tbl <- data.frame(
+  k = k_grid_effective[-1],
+  delta_auc = delta_auc
+)
+best_k <- delta_tbl[order(-delta_tbl$delta_auc, delta_tbl$k), "k"][1]
 
 info("k_grid: %s", paste(k_grid_effective, collapse = ","))
 info("AUC:    %s", paste(round(auc_values, 4), collapse = " "))
 info("delta_AUC: %s", paste(round(delta_auc, 4), collapse = " "))
-info("best_k: %d", best_k)
+info("best_k: %d (delta AUC ties resolved to smaller k)", best_k)
 
 # ------------------------------------------------------------------------------
 # SECTION 14: FINAL CLUSTER ASSIGNMENT EXTRACTION

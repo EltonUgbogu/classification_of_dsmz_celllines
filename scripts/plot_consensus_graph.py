@@ -2,7 +2,7 @@
 """
 plot_consensus_dsmz_graph.py
 -------------------------------------------------
-Visualises the undirected consensus DSMZ cell-line similarity graph.
+Visualises the undirected consensus DSMZ cell line similarity graph.
 
 Key improvements over the previous version
 -------------------------------------------
@@ -20,7 +20,7 @@ Key improvements over the previous version
 Edge semantics
 --------------
   Solid edges   — reciprocal (supported by ≥2 independent tags/methods).
-  Dashed edges  — one-way (supported by exactly 1 tag/method).
+  Dashed edges  — single supported (supported by exactly 1 tag/method).
   Edge width    — scales with support_directions when available.
 
 Node highlighting
@@ -32,6 +32,8 @@ import argparse
 import math
 import sys
 
+import matplotlib.lines as mlines
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -176,7 +178,6 @@ def pack_components(G: nx.Graph, pad: float, seed: int,
         sub = G.subgraph(nodes).copy()
         n = sub.number_of_nodes()
 
-        # --- per-component layout ---
         if n == 1:
             local_pos = {nodes[0]: np.array([0.0, 0.0])}
         else:
@@ -184,17 +185,14 @@ def pack_components(G: nx.Graph, pad: float, seed: int,
             local_pos = nx.spring_layout(sub, seed=seed, k=k, iterations=300)
             target = _target_halfbox(n, t_min=t_min, t_max=t_max)
             local_pos = _scale_up_only(local_pos, target)
-            # Repulsion: min separation = 55% of target halfbox
             local_pos = _repel(
                 local_pos, nodes,
                 min_dist=0.55 * target,
                 iters=160, step=0.12, seed=seed
             )
 
-        # --- grid offset ---
         row = idx // cols
         col = idx % cols
-        # Pad scales with component size so large components don't collide
         pad_i = pad * (1.0 + 0.18 * math.log(max(n, 2)))
         offset = np.array([col * pad_i, -row * pad_i], dtype=float)
         for node, p in local_pos.items():
@@ -214,7 +212,7 @@ def main():
     ap = argparse.ArgumentParser(
         description=(
             "Plot consensus DSMZ graph with solid (reciprocal) and "
-            "dashed (one-way) edges. Improved component-aware layout."
+            "dashed (single supported) edges. Improved component-aware layout."
         )
     )
     ap.add_argument("--edges", required=True,
@@ -231,7 +229,7 @@ def main():
 
     # Nodes / labels
     ap.add_argument("--nodes", default=None,
-                    help="Optional TSV with a list of nodes to include (e.g. dsmz_cellline_shortnames.tsv). "
+                    help="Optional TSV with a list of nodes to include. "
                          "If provided, isolates (degree 0) will appear in the plot.")
     ap.add_argument("--nodes-col", default="short_id",
                     help="Column name in --nodes TSV to use as node IDs (default: short_id).")
@@ -259,7 +257,13 @@ def main():
 
     # Centrality
     ap.add_argument("--top-betw-frac", type=float, default=0.15,
-                    help="Fraction of nodes highlighted as high-betweenness (default 0.15).")
+                    help="Fraction of nodes highlighted as high betweenness (default 0.15).")
+
+    # Optional output exports
+    ap.add_argument("--out-node-stats", type=str, default=None,
+                    help="Optional path to write a node stats TSV.")
+    ap.add_argument("--out-layout-coords", type=str, default=None,
+                    help="Optional path to write layout coordinates TSV.")
 
     args = ap.parse_args()
 
@@ -280,7 +284,6 @@ def main():
     G = nx.Graph()
     support_map: dict = {}
 
-    # Add all nodes from optional node list first (so isolates appear)
     if args.nodes:
         nodes_df = pd.read_csv(args.nodes, sep="\t")
         if args.nodes_col not in nodes_df.columns:
@@ -335,7 +338,7 @@ def main():
     dashed_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get("reciprocal", 0) == 0]
 
     def _ew(u, v, base: float) -> float:
-        """Scale edge width by support_directions; fall back to base."""
+        # Scale edge width by support_directions; fall back to base
         if support_map:
             s = support_map.get(tuple(sorted((u, v))), 1)
             return base + 0.4 * (s - 1)
@@ -352,41 +355,40 @@ def main():
     ax.set_facecolor("white")
     ax.axis("off")
 
-    # --- Solid (reciprocal) edges — black, minimum weight, continuous ---
+    # Solid (multi supported) edges
     if solid_edges:
         nx.draw_networkx_edges(
             G, pos, ax=ax,
             edgelist=solid_edges,
-            width=1.0,             # minimum readable line weight
+            width=1.0,
             alpha=1.0,
             edge_color="black",
             style="solid"
         )
 
-    # --- Dashed (one-way) edges — black, minimum weight, dashed ---
+    # Dashed (single supported) edges
     if dashed_edges:
         nx.draw_networkx_edges(
             G, pos, ax=ax,
             edgelist=dashed_edges,
-            width=1.0,             # same minimum weight as solid
+            width=1.0,
             alpha=1.0,
             edge_color="black",
-            style=(0, (6, 4))      # 6pt on / 4pt off dash pattern
+            style=(0, (6, 4))
         )
 
-    # --- Normal nodes ---
+    # Normal nodes
     nx.draw_networkx_nodes(
         G, pos, ax=ax,
         nodelist=normal_nodes,
         node_size=args.node_size,
-        node_color="#a8d8ea",              # calm mid-blue
+        node_color="#a8d8ea",
         edgecolors="#2d4059",
         linewidths=1.5,
         alpha=0.95
     )
 
-    # --- Central (high-betweenness) nodes ---
-    # Drawn on top with thicker outline to mark bridge nodes
+    # Central (high betweenness) nodes drawn on top with thicker outline
     if central_nodes:
         nx.draw_networkx_nodes(
             G, pos, ax=ax,
@@ -398,9 +400,7 @@ def main():
             alpha=1.0
         )
 
-    # --- Labels ---
-    # White background box with tight padding improves legibility in
-    # dense regions; font weight bold ensures readability at small sizes.
+    # Labels with white background box for readability in dense regions
     nx.draw_networkx_labels(
         G, pos, ax=ax,
         font_size=args.font_size,
@@ -410,20 +410,20 @@ def main():
             facecolor="white",
             edgecolor="none",
             boxstyle="round,pad=0.15",
-            alpha=0.75                     # semi-transparent: shows node colour beneath
+            alpha=0.75
         )
     )
 
     # --- Title ---
     ax.set_title(
-        f"DSMZ Cell-line Consensus Graph — {args.label}\n"
-        "(Solid = multi-supported (≥2 tags); dashed = single-supported; thick outline = high betweenness)",
+        f"DSMZ Cell line Consensus Graph — {args.label}\n"
+        "(Solid = multi supported (≥2 tags); dashed = single supported; thick outline = high betweenness)",
         fontsize=args.font_size + 5,
         pad=20,
         color="#1a1a2e"
     )
 
-    # Auto-scale axes with a small margin so edge labels are not clipped
+    # Auto-scale axes with a small margin
     pts = np.array(list(pos.values()), dtype=float)
     mn, mx = pts.min(axis=0), pts.max(axis=0)
     margin_x = (mx[0] - mn[0]) * 0.06
@@ -431,6 +431,27 @@ def main():
     ax.set_xlim(mn[0] - margin_x, mx[0] + margin_x)
     ax.set_ylim(mn[1] - margin_y, mx[1] + margin_y)
     ax.set_aspect("equal")
+
+    # --- Legend ---
+    legend_handles = [
+        mlines.Line2D([], [], color="black", linewidth=1.5, linestyle="solid",
+                      label="Multi supported edge (≥2 directions)"),
+        mlines.Line2D([], [], color="black", linewidth=1.5, linestyle=(0, (6, 4)),
+                      label="Single supported edge (1 direction)"),
+        mpatches.Patch(facecolor="#a8d8ea", edgecolor="#2d4059", linewidth=1.5,
+                       label="Regular node"),
+        mpatches.Patch(facecolor="#a8d8ea", edgecolor="#2d4059", linewidth=4.5,
+                       label="High betweenness node"),
+    ]
+    ax.legend(
+        handles=legend_handles,
+        loc="lower left",
+        fontsize=args.font_size - 1,
+        framealpha=0.85,
+        frameon=True,
+        title="Visual encoding",
+        title_fontsize=args.font_size,
+    )
 
     # ------------------------------------------------------------------
     # Step 7 — Save
@@ -442,6 +463,57 @@ def main():
     fig.savefig(f"{args.out}.svg", **save_kw)
     plt.close(fig)
     print(f"[OK] Saved: {args.out}.png / .pdf / .svg")
+
+    # ------------------------------------------------------------------
+    # Optional: write node stats TSV
+    # ------------------------------------------------------------------
+    if args.out_node_stats:
+        from pathlib import Path as _Path
+        _Path(args.out_node_stats).parent.mkdir(parents=True, exist_ok=True)
+
+        # Map each node to its component index
+        comp_index = {}
+        for ci, comp in enumerate(comps):
+            for node in comp:
+                comp_index[node] = ci
+
+        node_rows = []
+        for node in sorted(G.nodes()):
+            x, y = float(pos[node][0]), float(pos[node][1])
+            node_rows.append({
+                "node_id": node,
+                "degree": G.degree(node),
+                "betweenness": bet.get(node, 0.0),
+                "is_high_betweenness": node in central,
+                "component_index": comp_index.get(node, -1),
+                "x": x,
+                "y": y,
+            })
+        pd.DataFrame(node_rows).to_csv(args.out_node_stats, sep="\t", index=False)
+        print(f"[OK] Wrote node stats: {args.out_node_stats}")
+
+    # ------------------------------------------------------------------
+    # Optional: write layout coordinates TSV
+    # ------------------------------------------------------------------
+    if args.out_layout_coords:
+        from pathlib import Path as _Path
+        _Path(args.out_layout_coords).parent.mkdir(parents=True, exist_ok=True)
+
+        coord_rows = []
+        for node in sorted(G.nodes()):
+            x, y = float(pos[node][0]), float(pos[node][1])
+            coord_rows.append({
+                "cohort": args.label,
+                "graph_type": "consensus",
+                "node_id": node,
+                "display_label": node,
+                "layout_method": "spring_weighted_fixed_seed",
+                "layout_seed": args.seed,
+                "x": x,
+                "y": y,
+            })
+        pd.DataFrame(coord_rows).to_csv(args.out_layout_coords, sep="\t", index=False)
+        print(f"[OK] Wrote layout coords: {args.out_layout_coords}")
 
 
 # ---------------------------------------------------------------------------

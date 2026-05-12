@@ -633,6 +633,7 @@ if (nrow(graph_edges) == 0) {
   node_summary <- tibble(
     cell_line = all_cell_lines,
     degree = 0L,
+    weighted_strength = 0,
     mean_edge_sim = NA_real_,
     max_edge_sim = NA_real_,
     is_outlier = TRUE
@@ -655,6 +656,7 @@ if (nrow(graph_edges) == 0) {
     transmute(
       cell_line,
       degree,
+      weighted_strength,
       betweenness = 0,
       component = cell_line,
       community_louv = NA_character_,
@@ -771,14 +773,20 @@ node_summary_edge <- bind_rows(
 ) %>%
   group_by(cell_line) %>%
   summarise(degree = n(), mean_edge_sim = mean(similarity),
-            max_edge_sim = max(similarity), .groups = "drop")
+            max_edge_sim = max(similarity),
+            weighted_strength = sum(similarity, na.rm = TRUE),
+            .groups = "drop")
 
 # Join with all cell lines to include isolated nodes (degree 0)
 node_summary <- tibble(cell_line = all_cell_lines) %>%
   left_join(node_summary_edge, by = "cell_line") %>%
   # coalesce() replaces NA with specified value (0 for isolated nodes)
-  mutate(degree = dplyr::coalesce(degree, 0L), is_outlier = degree == 0L) %>%
-  arrange(desc(degree), desc(mean_edge_sim))
+  mutate(
+    degree = dplyr::coalesce(degree, 0L),
+    weighted_strength = dplyr::coalesce(weighted_strength, 0),
+    is_outlier = degree == 0L
+  ) %>%
+  arrange(desc(degree), desc(weighted_strength), desc(mean_edge_sim))
 
 node_summary <- node_summary %>%
   left_join(cell_label_map, by = "cell_line")
@@ -890,7 +898,7 @@ node_annotations <- graph_tbl %>%
     sample_id,
     cell_tech_id,
     cell_line_display,
-    degree, betweenness,
+    degree, weighted_strength, betweenness,
     component = as.character(component),
     community_louv = as.character(community_louv),
     community_leid = as.character(community_leid),

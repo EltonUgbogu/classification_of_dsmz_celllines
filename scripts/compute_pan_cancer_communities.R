@@ -233,6 +233,8 @@ opt_list <- list(
               help = "Path to pan_cancer_graph_edges.tsv"),
   make_option("--meta", type = "character", default = NULL,
               help = "Optional metadata TSV with sample_id + lineage"),
+  make_option("--meta-fallback", type = "character", default = NULL,
+              help = "Optional fallback metadata CSV/TSV used to fill blank lineage labels"),
   make_option("--out", type = "character", default = "pan_cancer_communities.tsv",
               help = "Output TSV for community assignments"),
   make_option("--outdir", type = "character", default = NULL,
@@ -268,6 +270,37 @@ dir.create(opt$outdir, recursive = TRUE, showWarnings = FALSE)
 
 # Set random seed for reproducibility of stochastic community detection
 set.seed(opt$seed)
+
+lineage_from_values <- function(values) {
+  out <- rep(NA_character_, length(values))
+  if (is.null(values)) {
+    return(out)
+  }
+  out[grepl("BRCA|Breast", values, ignore.case = TRUE)] <- "BRCA"
+  out[grepl("NBL|Neuroblastoma", values, ignore.case = TRUE)] <- "NBL"
+  out[grepl("RBL|Retinoblastoma", values, ignore.case = TRUE)] <- "RBL"
+  out[grepl("HEME|Hema|LL-100|Leukemia|Lymphoma", values, ignore.case = TRUE)] <- "HEME"
+  out
+}
+
+derive_lineage <- function(dt, default_lineage = "UNKNOWN") {
+  lineage <- if ("lineage" %in% names(dt)) as.character(dt$lineage) else rep(NA_character_, nrow(dt))
+  lineage[is.na(lineage) | lineage == ""] <- NA_character_
+  if ("lineage_fbk" %in% names(dt)) {
+    idx <- is.na(lineage) | lineage == ""
+    lineage[idx] <- as.character(dt$lineage_fbk[idx])
+  }
+  for (col in c("cancer_type", "cancer_type_fbk", "Disease", "Disease_fbk",
+                "group2", "group2_fbk", "organ", "organ_fbk")) {
+    if (col %in% names(dt)) {
+      guess <- lineage_from_values(dt[[col]])
+      idx <- is.na(lineage) | lineage == ""
+      lineage[idx] <- guess[idx]
+    }
+  }
+  lineage[is.na(lineage) | lineage == ""] <- default_lineage
+  toupper(lineage)
+}
 
 cat("========================================\n")
 cat("PAN-CANCER COMMUNITY DETECTION\n")
@@ -395,6 +428,17 @@ meta <- NULL
 if (!is.null(opt$meta) && file.exists(opt$meta)) {
   cat("[2] Loading metadata...\n")
   meta <- fread(opt$meta)
+  fallback_meta <- NULL
+  if (!is.null(opt$`meta-fallback`) && file.exists(opt$`meta-fallback`)) {
+    fallback_meta <- fread(opt$`meta-fallback`)
+    if (!("sample_id" %in% names(fallback_meta))) {
+      stop("Fallback metadata must contain sample_id")
+    }
+    keep_cols <- intersect(c("sample_id", "lineage", "cancer_type", "Disease", "group2", "organ"), names(fallback_meta))
+    fallback_meta <- unique(fallback_meta[, ..keep_cols])
+    fallback_cols <- setdiff(names(fallback_meta), "sample_id")
+    setnames(fallback_meta, fallback_cols, paste0(fallback_cols, "_fbk"))
+  }
   
   # Normalize lineage column if provided as cancer_type
   if (!("lineage" %in% names(meta)) && ("cancer_type" %in% names(meta))) {
@@ -411,6 +455,13 @@ if (!is.null(opt$meta) && file.exists(opt$meta)) {
   if (!all(c("sample_id", "lineage") %in% names(meta))) {
     stop("meta must contain columns: sample_id, lineage")
   }
+  
+  meta <- unique(meta, by = "sample_id")
+  if (!is.null(fallback_meta)) {
+    meta <- merge(meta, fallback_meta, by = "sample_id", all.x = TRUE, sort = FALSE)
+  }
+  meta[, lineage := derive_lineage(meta)]
+  meta[lineage == "", lineage := "UNKNOWN"]
   
   # Create unique sample-to-lineage mapping
   # Deduplication handles cases where samples appear multiple times in metadata

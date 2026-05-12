@@ -7,19 +7,16 @@ from collections import defaultdict
 from pathlib import Path
 
 def looks_long(x: str) -> bool:
-    """Check if an ID looks like a long ID (starts with NG-<digits>_)."""
     return bool(re.match(r"^NG-\d+_", str(x)))
 
 def load_name_map(path):
-    """Load long_id -> short_id mapping from TSV file."""
     m = pd.read_csv(path, sep="\t")
     if not {"long_id", "short_id"}.issubset(m.columns):
         raise SystemExit("[ERROR] name_map must have columns: long_id, short_id")
     return dict(zip(m["long_id"].astype(str), m["short_id"].astype(str)))
 
-
 def ambiguous_bases_from_name_map(path):
-    """Bases that have >1 short_id (e.g. RBL_15 -> RBL_15_2, RBL_15_4). These must never appear as bare IDs."""
+    # Bases with >1 short_id must never appear as bare IDs
     m = pd.read_csv(path, sep="\t", dtype=str)
     if "short_id" not in m.columns:
         return set()
@@ -28,18 +25,12 @@ def ambiguous_bases_from_name_map(path):
     return set(counts[counts > 1].index.tolist())
 
 def canonicalise_edge_df(df, long2short):
-    """
-    Canonicalise edge dataframe by mapping long IDs to short IDs.
-    Supports either (node1,node2) or (cell_line1,cell_line2) columns.
-    Returns: (canonicalised_df, col1_name, col2_name)
-    """
     if {"node1", "node2"}.issubset(df.columns):
         a, b = "node1", "node2"
     elif {"cell_line1", "cell_line2"}.issubset(df.columns):
         a, b = "cell_line1", "cell_line2"
     else:
         raise SystemExit(f"[ERROR] edge df missing node columns. Found: {list(df.columns)}")
-
     df = df.copy()
     df[a] = df[a].astype(str).map(lambda x: long2short.get(x, x))
     df[b] = df[b].astype(str).map(lambda x: long2short.get(x, x))
@@ -49,25 +40,18 @@ def main():
     ap = argparse.ArgumentParser(
         description="Aggregate cell_line_similarity_graph_edges_<direction>.tsv across all directions into a consensus graph."
     )
-    ap.add_argument("--tumour_nh_dir", required=True,
-                    help="tumour_neighbourhoods directory (contains direction folders + final_consensus_all)")
-    ap.add_argument("--out_edges", required=True,
-                    help="Output TSV for consensus edges")
-    ap.add_argument("--min_support", type=int, default=1,
-                    help="Minimum number of directions supporting an edge (default 1)")
-    ap.add_argument("--min_mean_sim", type=float, default=None,
-                    help="Optional: minimum mean similarity across supporting directions")
-    ap.add_argument("--name_map", type=str, default=None,
-                    help="Path to TSV mapping file with columns: long_id, short_id")
-    ap.add_argument("--require_short", action="store_true",
-                    help="Fail if long IDs remain after mapping")
+    ap.add_argument("--tumour_nh_dir", required=True)
+    ap.add_argument("--out_edges", required=True)
+    ap.add_argument("--min_support", type=int, default=1)
+    ap.add_argument("--min_mean_sim", type=float, default=None)
+    ap.add_argument("--name_map", type=str, default=None)
+    ap.add_argument("--require_short", action="store_true")
     args = ap.parse_args()
 
     root = Path(args.tumour_nh_dir)
     if not root.exists():
         raise SystemExit(f"Not found: {root}")
 
-    # Load name mapping and ambiguous bases if provided
     long2short = None
     ambiguous_bases = set()
     if args.name_map:
@@ -80,11 +64,9 @@ def main():
             print(f"[INFO] Ambiguous bases (must NOT appear as bare IDs): {sorted(ambiguous_bases)}")
         print(f"[INFO] Loaded {len(long2short)} ID mappings from {name_map_path}")
 
-    # (u,v) directed calls -> set(directions), list(similarities)
     dir_calls = defaultdict(set)
     dir_sims  = defaultdict(list)
 
-    # discover all per-direction edge files
     edge_files = sorted(root.glob("*/final_consensus/cell_line_similarity_graph_edges_*.tsv"))
     if not edge_files:
         raise SystemExit(f"No edge files found under {root}/*/final_consensus/")
@@ -93,11 +75,9 @@ def main():
         direction = ef.name.replace("cell_line_similarity_graph_edges_", "").replace(".tsv", "")
         df = pd.read_csv(ef, sep="\t")
 
-        # Canonicalise IDs if mapping provided
         if long2short:
             df, c1, c2 = canonicalise_edge_df(df, long2short)
         else:
-            # expect either (cell_line1, cell_line2) or (node1, node2)
             if {"cell_line1", "cell_line2"}.issubset(df.columns):
                 c1, c2 = "cell_line1", "cell_line2"
             elif {"node1", "node2"}.issubset(df.columns):
@@ -105,14 +85,12 @@ def main():
             else:
                 raise SystemExit(f"{ef}: cannot find edge columns. Columns={list(df.columns)}")
 
-        # Check for remaining long IDs if required
         if args.require_short:
             nodes = set(df[c1]).union(df[c2])
             bad = sorted([n for n in nodes if looks_long(str(n))])
             if bad:
                 raise SystemExit(f"[ERROR] Long IDs still present after mapping in {ef.name}: {bad[:10]}")
 
-        # Fail if any ambiguous bare base IDs present (e.g. RBL_15, RBL_20)
         if ambiguous_bases:
             nodes = set(df[c1]).union(df[c2])
             bare = sorted([n for n in nodes if str(n) in ambiguous_bases])
@@ -131,7 +109,6 @@ def main():
             v = str(r[c2]).strip()
             if not u or not v or u == v:
                 continue
-
             dir_calls[(u, v)].add(direction)
             if has_sim:
                 try:
@@ -139,7 +116,6 @@ def main():
                 except Exception:
                     pass
 
-    # aggregate to undirected edges
     und_rows = []
     seen = set()
 
@@ -152,7 +128,6 @@ def main():
         dirs_vu = dir_calls.get((v, u), set())
         reciprocal = 1 if len(dirs_uv | dirs_vu) >= 2 else 0
 
-        # support across directions = directions that had uv or vu
         dirs_union = sorted(dirs_uv.union(dirs_vu))
         support = len(dirs_union)
 
@@ -166,6 +141,9 @@ def main():
         if args.min_mean_sim is not None and (np.isnan(mean_sim) or mean_sim < args.min_mean_sim):
             continue
 
+        # support_type labels whether an edge has multi direction consensus or not
+        support_type = "multi supported" if support >= 2 else "single supported"
+
         und_rows.append({
             "node1": key[0],
             "node2": key[1],
@@ -175,6 +153,8 @@ def main():
             "support_weight_sum": sum_sim,
             "support_weight_max": max_sim,
             "methods_union": ";".join(dirs_union),
+            "direction_list": ";".join(dirs_union),
+            "support_type": support_type,
         })
 
     out = pd.DataFrame(und_rows).sort_values(

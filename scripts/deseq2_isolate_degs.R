@@ -283,20 +283,39 @@ read_table_auto <- function(path, sep) {
 #   An integer matrix with gene IDs as rownames
 
 as_counts_matrix <- function(df) {
-  # Detect whether first column contains gene identifiers
-  if (!all(sapply(df[, 1], is.numeric))) {
+  first_col <- names(df)[1]
+  first_col_num <- suppressWarnings(as.numeric(as.character(df[[1]])))
+  first_col_is_gene <- first_col %in% c("gene_id", "gene", "ensembl_gene_id", "Geneid") ||
+    any(is.na(first_col_num))
+
+  if (first_col_is_gene) {
     gene_id <- as.character(df[[1]])
-    mat <- as.matrix(df[, -1, drop = FALSE])
-    rownames(mat) <- gene_id
+    mat_df <- as.data.frame(df[, -1, drop = FALSE], check.names = FALSE)
   } else {
-    mat <- as.matrix(df)
+    gene_id <- rownames(df)
+    mat_df <- as.data.frame(df, check.names = FALSE)
   }
-  # TEMPORARY COMPROMISE: current staged "counts" may be VST-like decimals
-  # because raw DSMZ counts are unavailable. Coerce to integer only to let
-  # DESeq2 run; replace this with true raw integer counts when available.
-  if (any(mat != round(mat), na.rm = TRUE)) {
-    warning("Coercing non-integer staged expression values to integer for DESeq2 compatibility; use raw counts for final analysis.")
+
+  mat_df[] <- lapply(mat_df, function(x) suppressWarnings(as.numeric(as.character(x))))
+  mat <- as.matrix(mat_df)
+  if (!is.null(gene_id) && length(gene_id) == nrow(mat)) {
+    rownames(mat) <- gene_id
   }
+
+  if (any(is.na(mat))) {
+    stop("Counts contain NA")
+  }
+  if (any(mat < 0)) {
+    stop("Counts contain negative values")
+  }
+  if (any(abs(mat - round(mat)) > sqrt(.Machine$double.eps), na.rm = TRUE)) {
+    stop(
+      "DESeq2 requires raw integer counts; received non-integer expression values. Check input path/config.",
+      call. = FALSE
+    )
+  }
+
+  mat <- round(mat)
   storage.mode(mat) <- "integer"
   return(mat)
 }
@@ -416,9 +435,9 @@ write_deg_outputs <- function(res_df, prefix, outdir_tables, outdir_markers,
 
   # Rank by effect size (absLFC or abs(stat)), then significance (padj)
   if (use_stat_for_ranking) {
-    markers <- markers[order(-abs(markers$stat), markers$padj), , drop = FALSE]
+    markers <- markers[order(-abs(markers$stat), markers$padj, markers$gene_id), , drop = FALSE]
   } else {
-    markers <- markers[order(-markers$absLFC, markers$padj), , drop = FALSE]
+    markers <- markers[order(-markers$absLFC, markers$padj, markers$gene_id), , drop = FALSE]
   }
 
   # Enforce topN limit if necessary
@@ -464,6 +483,15 @@ if (!(opt$cell_line_col %in% colnames(meta_df))) {
 
 counts_mat <- as_counts_matrix(counts_df)
 
+message(sprintf(
+  "[INFO] Active isolate thresholds: FDR<=%.4g, baseMean>=%.4g, absLFC>=%.4g, normalised count>=10, topN=%d",
+  opt$fdr_isolate, opt$min_baseMean, opt$lfc_isolate, opt$topN_isolate
+))
+message(sprintf(
+  "[INFO] Active anchor thresholds: FDR<=%.4g, baseMean>=%.4g, absLFC>=%.4g, normalised count>=10, topN=%d",
+  opt$fdr_anchor, opt$min_baseMean, opt$lfc_anchor, opt$topN_anchor
+))
+
 # -----------------------------------------------------------------------------
 # Sample Alignment
 # -----------------------------------------------------------------------------
@@ -508,14 +536,11 @@ rownames(meta_sub) <- meta_sub[[opt$sample_id_col]]
 # These checks catch common errors such as accidentally providing TPM or
 # log-transformed data instead of raw counts.
 
-if (any(is.na(counts_mat))) {
-  stop("Counts contain NA")
-}
-if (any(counts_mat < 0)) {
-  stop("Counts contain negative values")
-}
-if (any(counts_mat != round(counts_mat))) {
-  stop("Counts are not integers. DESeq2 requires raw integer counts.")
+if (storage.mode(counts_mat) != "integer") {
+  stop(
+    "DESeq2 requires raw integer counts; received non-integer expression values. Check input path/config.",
+    call. = FALSE
+  )
 }
 
 # -----------------------------------------------------------------------------
