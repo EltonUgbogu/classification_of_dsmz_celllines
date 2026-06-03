@@ -1,0 +1,184 @@
+\section{Discussion}
+
+\subsection{Similarity ranking and model-level interpretation}
+
+Cell-line-to-tumour similarity ranking achieved top-1 same-lineage matching
+accuracy of 54/56 biological cell-line groups (96.4\%; 95\% Wilson CI,
+87.9--99.0\%) (Fig.~\ref{fig:cellline_centred_tumour_class_similarity}).
+This result was computed after grouping replicate libraries into 56 biological
+cell-line groups; the complementary patient-to-cell-line analysis ranked 58
+candidate cell-line models for each patient tumour. The cell-line-to-tumour
+result supports lineage-level transcriptomic fidelity, whereas the
+patient-to-cell-line ranking provides the practical model-prioritisation view.
+
+This bidirectional design addresses two complementary ranking questions.
+The patient-to-cell-line direction ranks candidate cell-line models for each
+patient tumour, yielding rank distributions across the cohorts. The
+cell-line-to-tumour direction ranks patient tumour contexts for each biological
+cell-line group and yielded the top-1 same-lineage matching accuracy reported
+above. Patient-to-cell-line ranking should therefore be interpreted as model
+prioritisation rather than functional validation. The broader breast cancer
+ranking pattern is consistent with greater cohort size and within-lineage
+heterogeneity. Same-lineage rank concentration also differed by cohort, with
+retinoblastoma showing tighter similarity ranking than breast cancer. This cohort
+dependence means that top-ranked lineage agreement should not be interpreted as
+equivalent model-selection confidence across diseases. The confidence-score analysis further shows that
+correct top-ranked lineage assignment does not imply equal match strength
+across cohorts; downstream model selection should therefore consider both rank
+position and the supporting similarity score
+(Fig.~\ref{fig:cellline_centred_confidence_scores}).
+
+Beyond the aggregate matching result, the framework identified model-specific
+patterns that were consistent across ranking and graph analyses. The two
+cell-line-to-tumour top-1 exceptions were also graph-resolved atypical
+neuroblastoma profiles (Fig.~\ref{fig:per_cellline_feature_distance_combined}b).
+Taken together, these recurrent atypical placements indicate that model
+selection should consider transcriptomic neighbourhood structure in addition to
+nominal lineage labels.
+
+The graph framework also identified positive model-selection signals.
+Bridge-like or high-betweenness anchors occupied central positions within
+patient-referenced neighbourhood structure and may serve as candidate reference
+models for component-level interpretation. In contrast, graph isolates provided
+context-specific cautionary cases rather than lineage-label-based selection
+alone; the full component annotation table reports the remaining anchors and
+isolates in \suppTableRef{tab:supp_component_annotations}. The multiple resolved
+breast cancer components are consistent with the well-established intrinsic
+molecular heterogeneity of breast cancer
+\citep{Parker2009PAM50,Perou2000Portraits} and could motivate PAM50-aware or
+receptor-status-stratified validation rather than a single lineage-level
+interpretation.
+
+
+The 167-profile pan-cancer cell-line network extends this model-level view. Its
+single connected component and high lineage assortativity suggest that the
+cell-line profiles occupied structured but connected transcriptomic regions
+rather than fully disconnected lineage-specific spaces, with HEME profiles
+functioning as an auxiliary comparator lineage rather than a primary validation
+target. Beyond individual-model atypical placement, the NBL--RBL community
+co-assignment indicates incomplete lineage separability in the curated feature
+space, and the assignment of GI\_ME\_N and CCLF\_PEDS\_0051\_T to a
+BRCA-majority community shows that cross-lineage discordance was not restricted
+to retinoblastoma. The separation of haematological comparator profiles into
+multiple high-purity communities is consistent with substantial transcriptomic
+subdivision within the auxiliary HEME set and reinforces that these profiles
+should be interpreted as comparators rather than primary validation lineages.
+This NBL--RBL graph adjacency is consistent with overlapping embryonal neural,
+developmental, and proliferative transcriptomic programmes rather than a shared
+terminal lineage, reflecting developmental states described in neuroblastoma
+sympathoblasts and retinoblastoma cone photoreceptor precursors
+\citep{Jansky2021NeuroblastomaDevelopment,Yang2021RetinoblastomaSingleCell}
+(Fig.~\ref{fig:network}). This interpretation is limited to transcriptomic
+co-assignment, because the analysis does not distinguish shared lineage biology,
+cell-line-specific adaptation, profile or library effects, or limitations of
+bulk transcriptomic similarity.
+
+\subsection{Feature--distance sensitivity and molecular context}
+
+These biological patterns depended on feature--distance choices and graph-based
+resolution. Feature-selection performance varied with tumour lineage:
+dispersion-based features under the Euclidean metric attained the highest
+consensus fractions in breast cancer and retinoblastoma, whereas
+co-expression-network-derived features under correlation distance attained the
+highest consensus fractions in neuroblastoma. This representation dependence
+indicates that no single feature--distance representation generalised uniformly
+across lineages (Fig.~\ref{fig:feature_distance_combined}). Representation
+choice was therefore consequential rather than a minor tuning parameter: the
+best and weakest representations differed substantially within cohorts, and the
+preferred metric pattern inverted across lineages. The
+Euclidean-versus-correlation inversion across lineages suggests that the
+dominant similarity signal differed by cohort: absolute expression differences
+were more informative in breast cancer and retinoblastoma, whereas relative
+co-expression structure was more informative in neuroblastoma.
+Graph-based resolution organised the patient-referenced similarity graph into
+connected components, isolates, and high-betweenness anchor nodes
+(Fig.~\ref{fig:nbl_resolved_components}).
+
+The molecular context for the graph and ranking patterns was obtained through
+differential expression analysis, recurrence filtering, isolate-associated
+marker rescue, and enrichment analysis. Recurrence filtering retained genes
+that recurred above threshold across independent differential expression
+contrasts, while isolate-associated marker rescue separately retained
+additional genes associated with isolated profiles. Recurrence filtering
+produced a smaller recurrent core, especially in retinoblastoma, where
+only one recurrent-core gene remained. Isolate-associated marker rescue helped
+preserve model-specific signal that strict recurrence criteria would otherwise
+discard; this matters because smaller lineages and isolated graph structures
+provide fewer independent contrasts and may under-represent divergent models
+under strict recurrence alone. Because the retinoblastoma contribution to the
+final 257-gene pan-cancer feature set depended strongly on isolate rescue rather
+than recurrence alone, RBL-specific signals should be interpreted partly as
+model-specific structure rather than broadly recurrent signal across multiple
+contrasts.
+
+The final 257-gene pan-cancer feature set was not only statistically stable; it
+retained interpretable tumour-associated biology. The enrichment analysis linked
+disease-specific marker programmes with shared developmental, adhesion, and
+migration-related signals in the pan-cancer feature space
+(Fig.~\ref{fig:enrichment_top_terms_heatmap}). Curated gene-set labels and TF
+motif inferences remain descriptive functional annotations rather than
+definitive evidence of direct disease modelling or causal regulatory mechanisms
+\citep{Khatri2012PathwayAnalysis}. This conceptual limitation can be compounded
+in practice when enrichment workflows use inappropriate background gene
+universes or incomplete multiple-testing correction
+\citep{Wijesooriya2022Enrichment}.
+
+\subsection{Data comparability and relation to existing transcriptomic mapping frameworks}
+
+Tumour-purity filtering used expression-derived estimates of tumour purity and
+immune or stromal admixture \citep{Yoshihara2013}, whereas source harmonisation
+used count-aware ComBat-seq modelling for RNA-seq count matrices
+\citep{Leek2010BatchEffects,Zhang2020ComBatSeq}.
+The purity-filtering and source-harmonisation design reduced admixture- and
+source-associated structure in the retained solid-tumour cohorts. Because ESTIMATE infers tumour
+purity from expression-derived stromal and immune signatures
+\citep{Yoshihara2013}, the purity-filtering design was most appropriate for the
+retained solid-tumour cohorts and did not support extending the main ranking and
+matching claims to the lymphoma datasets. The weaker
+purity--immune/stromal associations in retinoblastoma also indicate that tumour
+purity may reflect different biological or technical structure across cohorts,
+so purity-filtered similarity results should not be compared as if all cohorts
+had identical admixture behaviour. After preprocessing, UMAP projection was
+used as a qualitative check of data-origin and lineage structure
+\citep{McInnes2020}. The projection showed weaker clustering by data origin and
+was not used as a quantitative batch-integration test.
+
+The comparison with existing mapping approaches is methodological rather than a
+direct benchmark. Celligner aligns tumour and cell-line transcriptomes using
+contrastive PCA and mutual-nearest-neighbour correction
+\citep{Warren2021GlobalAlignment}, whereas MFmap uses a semi-supervised
+generative latent-space model integrating expression, copy-number, and mutation
+features to relate cell lines to tumours and cancer subtypes
+\citep{Zhang2021MFmap}. In contrast, the present framework preserves the
+curated expression feature space and evaluates bidirectional,
+multi-representation similarity rankings and patient-referenced graph
+structure. Classification models such as OncoNPC address a different task,
+using targeted sequencing-derived mutation features to predict tumour origin
+rather than prioritising cell-line models by continuous transcriptomic
+similarity \citep{Moon2023CUP}.
+
+\subsection{Limitations and future validation}
+
+The findings should be interpreted within the constraints of the data and
+validation design. The current study was restricted to three solid-tumour
+lineages and depended on available public bulk RNA-seq cohorts. The findings
+are sensitive to threshold and feature--distance choices, and the UMAP
+projection served only as a visual aid rather than quantitative integration
+evidence. More broadly, transcriptomic similarity does not establish drug
+response, essentiality, proteomic state, clonal composition,
+microenvironmental interaction, or xenograft behaviour.
+
+The most immediate next steps are testing these rankings against external
+tumour cohorts and against pharmacogenomic or dependency resources
+\citep{Barretina2012CCLE,Ghandi2019CCLE,Pacini2024DependencyMap}. Proteomic
+maps \citep{Goncalves2022ProteomicMap}, single-cell datasets
+\citep{Jansky2021NeuroblastomaDevelopment,Yang2021RetinoblastomaSingleCell,Qian2020PanCancerTME},
+and patient-derived xenograft models \citep{Liu2023PDXModels} would provide
+orthogonal tests of whether transcriptomic proximity aligns with response
+phenotypes and \textit{in vivo} model behaviour.
+
+Overall, this study supports transcriptomic model prioritisation as a
+patient-referenced ranking problem. The main implication is that cell-line
+model selection should be based on transcriptomic proximity to patient tumour
+states, with graph structure and marker-gene context used to identify models
+whose neighbourhoods require careful interpretation.

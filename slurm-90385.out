@@ -1,89 +1,0 @@
-[INFO] Running from directory: /work/ugbogu/pipeline
-[INFO] Snakefile: /work/ugbogu/pipeline/Snakefile
-[INFO] Config:    /work/ugbogu/pipeline/config/config.yaml
-[INFO] Logs:      /work/ugbogu/pipeline/logs
-[INFO] ENVS_DIR:  /work/ugbogu/pipeline/envs
-[INFO] PIPELINE_PROFILE = nbl
-[INFO] SLURM_CPUS_PER_TASK = 8
-[INFO] SLURM_JOB_ID = 90385
-[INFO] Creating Snakemake env at: /work/ugbogu/pipeline/envs/.conda/smk
-Retrieving notices: - done
-Channels:
- - conda-forge
- - bioconda
-Platform: linux-64
-Collecting package metadata (repodata.json): | / - \ | / - \ | / - \ | / - \ | / - \ | done
-Solving environment: - \ | done
-
-
-==> WARNING: A newer version of conda exists. <==
-    current version: 25.11.1
-    latest version: 26.3.2
-
-Please update conda by running
-
-    $ conda update -n base -c conda-forge conda
-
-
-
-Downloading and Extracting Packages: ...working...pydantic-core-2.46.2 | 1.8 MB    |            |   0% 
-snakemake-minimal-9. | 863 KB    |            |   0% [A
-
-pydantic-2.13.2      | 338 KB    |            |   0% [A[A
-
-
-r-glue-1.8.1         | 168 KB    |            |   0% [A[A[Apydantic-core-2.46.2 | 1.8 MB    |            |   1% 
-snakemake-minimal-9. | 863 KB    | 1          |   2% [A
-
-pydantic-2.13.2      | 338 KB    | #8         |  19% [A[A
-
-pydantic-2.13.2      | 338 KB    | ########## | 100% [A[A
-snakemake-minimal-9. | 863 KB    | ########## | 100% [A
-
-
-r-glue-1.8.1         | 168 KB    | 9          |  10% [A[A[A
-
-
-r-glue-1.8.1         | 168 KB    | ########## | 100% [A[A[Apydantic-core-2.46.2 | 1.8 MB    | ########## | 100% 
-
-
-r-glue-1.8.1         | 168 KB    | ########## | 100% [A[A[A
-
-
-r-glue-1.8.1         | 168 KB    | ########## | 100% [A[A[Apydantic-core-2.46.2 | 1.8 MB    | ########## | 100% pydantic-core-2.46.2 | 1.8 MB    | ########## | 100% 
-
-pydantic-2.13.2      | 338 KB    | ########## | 100% [A[A
-
-pydantic-2.13.2      | 338 KB    | ########## | 100% [A[A
-snakemake-minimal-9. | 863 KB    | ########## | 100% [A
-snakemake-minimal-9. | 863 KB    | ########## | 100% [A                                                     
-                                                     [A
-
-                                                     [A[A
-
-
-                                                     [A[A[A done
-Preparing transaction: - \ | / - \ | / - \ done
-Verifying transaction: / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | done
-Executing transaction: - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / done
-#
-# To activate this environment, use
-#
-#     $ conda activate /work/ugbogu/pipeline/envs/.conda/smk
-#
-# To deactivate an active environment, use
-#
-#     $ conda deactivate
-
-[INFO] Activating Snakemake env: /work/ugbogu/pipeline/envs/.conda/smk
-[INFO] Using snakemake: /work/ugbogu/pipeline/envs/.conda/smk/bin/snakemake (9.19.0)
-[INFO] Unlocking Snakemake working directory (if locked)...
-Config file /work/ugbogu/pipeline/config/config.yaml is extended by additional config specified via the command line.
-Unlocked working directory.
-[INFO] Starting Snakemake pipeline...
-Config file /work/ugbogu/pipeline/config/config.yaml is extended by additional config specified via the command line.
-Assuming unrestricted shared filesystem usage.
-host: hcc02
-Building DAG of jobs...
-Creating conda environment envs/tcga-r-env.yaml...
-Downloading and installing remote packages.
