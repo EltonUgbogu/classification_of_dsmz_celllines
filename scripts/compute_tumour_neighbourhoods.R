@@ -635,12 +635,11 @@ orig_ids_norm <- normalize_id(original_ids_raw)
 orig_to_cell_norm <- setNames(cell_line_norm, orig_ids_norm)
 
 # ------------------------------------------------------------------------------
-# SECTION 15: OPTION A - COLLAPSE DSMZ REPLICATES TO CANONICAL IDs
+# SECTION 15: PROFILE-LEVEL DSMZ IDS WITH CANONICAL LABELS
 # ------------------------------------------------------------------------------
-# Collapse technical DSMZ replicate IDs to canonical cell line IDs, and
-# aggregate expression rows by mean. Tumour IDs remain unchanged.
-#
-# This produces outputs where DSMZ nodes are labeled as RBL_XX (canonical).
+# Retain technical DSMZ replicate IDs while carrying canonical cell-line labels.
+# This preserves profile-level tumour-neighbourhood consensus vectors so that
+# downstream graph construction can aggregate replicate profiles explicitly.
 
 collapse_matrix_by_id <- function(mat, ids) {
   if (length(ids) != nrow(mat)) {
@@ -711,22 +710,18 @@ if (any(dsmz_mask & is.na(cell_line_canonical_raw))) {
        paste(head(bad, 10), collapse = ", "))
 }
 
-# Build collapsed sample IDs (DSMZ -> CELL:canonical to avoid tumour ID collisions, tumour -> original)
-sample_id_collapsed <- ifelse(
-  dsmz_mask,
-  paste0("CELL:", cell_line_canonical_raw),
-  current_ids_raw
-)
+# Keep DSMZ profiles as profile-level identifiers; tumour IDs remain unchanged.
+sample_id_collapsed <- current_ids_raw
 names(sample_id_collapsed) <- current_ids_raw
 
-# Guard: Tumour IDs should remain unique after collapse
+# Guard: tumour IDs should remain unique after identifier normalisation.
 tumour_dups <- sample_id_collapsed[!dsmz_mask & duplicated(sample_id_collapsed)]
 if (length(tumour_dups) > 0) {
   stop("Unexpected duplicate tumour IDs after collapse (first 5): ",
        paste(head(unique(tumour_dups), 5), collapse = ", "))
 }
 
-# Collapse expression matrix and dataset labels
+# Retain expression matrix and dataset labels at profile level.
 expr_mat <- collapse_matrix_by_id(expr_mat, sample_id_collapsed)
 dataset_vec <- collapse_dataset_by_id(dataset_vec, sample_id_collapsed)
 dataset_vec <- dataset_vec[rownames(expr_mat)]
@@ -745,16 +740,16 @@ collapsed_to_sample_ids <- vapply(
   character(1)
 )
 
-# Canonical and display maps for outputs (DSMZ: strip CELL: prefix for clean names)
-cell_line_canonical <- ifelse(dsmz_mask, sub("^CELL:", "", current_ids), NA_character_)
+# Canonical and display maps for outputs.
+cell_line_canonical <- ifelse(dsmz_mask, cell_line_canonical_raw[current_ids], NA_character_)
 names(cell_line_canonical) <- current_ids
-cell_line_display <- ifelse(dsmz_mask, sub("^CELL:", "", current_ids), current_ids)
+cell_line_display <- ifelse(dsmz_mask, cell_line_canonical, current_ids)
 names(cell_line_display) <- current_ids
 
-cat("[INFO] Option A: DSMZ replicates collapsed to canonical IDs.\n")
-cat("[INFO] Total samples after collapse: ", nrow(expr_mat),
+cat("[INFO] DSMZ replicate profiles retained with canonical cell-line labels.\n")
+cat("[INFO] Total samples after profile-level normalisation: ", nrow(expr_mat),
     " ( ", sum(dataset_vec == "DSMZ"), " DSMZ )\n", sep = "")
-cat("[DEBUG] Example DSMZ labels (collapsed):\n")
+cat("[DEBUG] Example DSMZ profile labels:\n")
 print(head(data.frame(
   canon  = current_ids[dsmz_mask],
   stringsAsFactors = FALSE
@@ -847,11 +842,11 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   }
 
   # --------------------------------------------------------------------------
-  # STEP 2: CLUSTER IDENTIFIER NORMALISATION (COLLAPSED IDs)
+  # STEP 2: CLUSTER IDENTIFIER NORMALISATION (PROFILE-LEVEL IDs)
   # --------------------------------------------------------------------------
-  # Cluster vector identifiers are technical IDs; map them to collapsed IDs
-  # (DSMZ -> canonical, tumour unchanged). Use raw and normalized mapping and
-  # keep whichever yields better overlap.
+  # Cluster vector identifiers are technical IDs; map them to the analysis IDs
+  # used by expr_mat. Use raw and normalized mapping and keep whichever yields
+  # better overlap.
 
   nm_raw <- names(cluster_vec)
 
