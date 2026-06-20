@@ -1,65 +1,59 @@
-# =========================================================
-
-# .rsyncignore
-
-# Exclusion policy for rsync from hpc
-
-# to the local Git repository.
+# Git policy for classification_of_dsmz_celllines
 
 #
 
-# Paths are relative to /work/ugbogu/pipeline/.
+# Track source code, configuration, environment specifications, selected
 
-# This file prevents bulky HPC artifacts from being copied to the Mac.
+# curated figures, and selected lightweight release files.
 
-# =========================================================
+#
 
-# -----------------------------
-# Markdown notes require explicit manual transfer
-# -----------------------------
+# Exclude raw data, reference indexes, generated intermediates, runtime
+
+# state, local editor files, credentials, and bulky outputs.
+
+# -----------------------------------------------------------------------------
+
+# Markdown policy
+
+# -----------------------------------------------------------------------------
+
+# Markdown files are excluded by default and require explicit force-add.
+
+# The top-level README remains tracked because it is already versioned.
+
 *.md
 *.mds
+!README.md
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# Snakemake runtime internals
+# Snakemake runtime state
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
 .snakemake/
-.snakemake/**
 **/.snakemake/
-**/.snakemake/**
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# Scheduler, runtime, and temporary logs
+# Logs, scheduler output, benchmarks, and temporary files
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
 logs/
-logs/**
 benchmarks/
-benchmarks/**
 tmp/
-tmp/**
 **/tmp/
-**/tmp/**
-**/*.out
-**/*.err
+*.out
+*.err
+*.log
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
 # Raw sequencing and alignment artifacts
 
-# -----------------------------
-
-**/fastq/
-**/fastq/**
-**/bam/
-**/bam/**
-**/sra/
-**/sra/**
+# -----------------------------------------------------------------------------
 
 *.fastq
 *.fastq.gz
@@ -69,206 +63,189 @@ tmp/**
 *.bai
 *.sam
 *.cram
+*.crai
 *.sra
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# FASTQC artifacts
+# Reference genomes, indexes, and large annotations
 
-# -----------------------------
-
-**/results/fastqc/
-**/results/fastqc/**
-
-# -----------------------------
-
-# STAR runtime and intermediate outputs
-
-# -----------------------------
-
-**/results/star/
-**/results/star/**
-**/*_STARtmp/
-**/*_STARtmp/**
-**/*_STARgenome/
-**/*_STARgenome/**
-**/*_STARpass1/
-**/*_STARpass1/**
-
-*.Log.out
-*.Log.progress.out
-*.Log.final.out
-*.SJ.out.tab
-
-# -----------------------------
-
-# Count matrices and per-sample count exports
-
-# -----------------------------
-
-count_data/
-count_data/**
-**/count_data/
-**/count_data/**
-valid_count/
-valid_count/**
-**/valid_count/
-**/valid_count/**
-*.tab
-
-# -----------------------------
-
-# Reference genomes, indexes, and annotations
-
-# -----------------------------
-
-data/reference/gencode_v44/
-data/reference/gencode_v44/**
-data/reference/star_*/
-data/reference/star_*/**
-data/reference/**/GRCh38.primary_assembly.genome.fa
-
-data/HISAT2/genome/
-data/HISAT2/genome/**
-HISAT2/genome/
-HISAT2/genome/**
+# -----------------------------------------------------------------------------
 
 *.fa
 *.fasta
 *.fna
 *.gtf
 *.gtf.gz
+*.gff
+*.gff3
+*.gff.gz
+*.gff3.gz
 
-# -----------------------------
+data/reference/
+data/HISAT2/genome/
+HISAT2/genome/
+reference_data/
 
-# External payload manifests that are not source code
+# -----------------------------------------------------------------------------
 
-# -----------------------------
+# Count matrices and large analysis objects
 
-data/nbl/target_nbl/manifests/*.json
-data/nbl/target_nbl/metadata/payload*.json
+# -----------------------------------------------------------------------------
 
-# -----------------------------
+count_data/
+**/count_data/
+valid_count/
+**/valid_count/
 
-# Conda/runtime payloads
-
-# -----------------------------
-
-envs/.conda/
-envs/.conda/**
-**/envs/.conda/
-**/envs/.conda/**
-
-miniconda3/
-miniconda3/**
-.conda/
-.conda/**
-.cache/
-.cache/**
-
-# -----------------------------
-
-# Python and R runtime artifacts
-
-# -----------------------------
-
-**pycache**/
-**pycache**/**
-**/**pycache**/
-**/**pycache**/**
-*.pyc
-*.pyo
-
-.Rhistory
-.RData
-.Rproj.user/
-.Rproj.user/**
-.Rcache/
-.Rcache/**
-*.Rcheck/
-*.Rcheck/**
-
-# Large R/Python data objects remain on HPC.
-
+*.tab
 *.rds
 *.Rds
 *.RData
 *.parquet
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# Backup, editor, and local-user artifacts
+# Conda and local runtime payloads
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-*.bak
-*~
+envs/.conda/
+**/envs/.conda/
+miniconda3/
+.conda/
+.cache/
+
+# Keep Conda environment specifications.
+
+!envs/*.yaml
+!envs/*.yml
+
+# -----------------------------------------------------------------------------
+
+# Python and R runtime artifacts
+
+# -----------------------------------------------------------------------------
+
+**pycache**/
+**/**pycache**/
+*.pyc
+*.pyo
+
+.Rhistory
+.Rproj.user/
+.Rcache/
+*.Rcheck/
+
+# -----------------------------------------------------------------------------
+
+# Local editor and operating-system artifacts
+
+# -----------------------------------------------------------------------------
+
+.DS_Store
+.vscode/
+.idea/
 *.swp
 *.swo
+*~
 *.tmp
-.DS_Store
 
-.vscode/
-.vscode/**
-.idea/
-.idea/**
+# -----------------------------------------------------------------------------
 
+# Local home-directory artifacts accidentally copied into the repository
+
+# -----------------------------------------------------------------------------
+
+.Rprofile
+.TinyTeX/
+.bash_history
+.bash_logout
+.bashrc
+.condarc
+.config/
 .codex/
-.codex/**
 .cursor/
-.cursor/**
+.gh_env
+.gitconfig
 .ipython/
-.ipython/**
+.java/
 .jupyter/
-.jupyter/**
+.lesshst
+.ncbi/
+.pki/
+.profile
+.vscode-R/
+.wget-hsts
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# Generated result clutter
+# Local AI-agent working directories
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-results/**/plots/
-results/**/plots/**
-results/**/diagnostics/
-results/**/diagnostics/**
-results/**/inspection/
-results/**/inspection/**
-results/**/*.html
+.claude/
+.codex_remote_edits/
 
-# Full intermediate result objects remain on HPC.
+# -----------------------------------------------------------------------------
 
-results/**/*.rds
-results/**/*.Rds
-results/**/*.parquet
+# Backup, archive, and obsolete files
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# Archive and obsolete result trees
-
-# -----------------------------
-
+*.bak
 archive/
-archive/**
 archives/
-archives/**
 backup/
-backup/**
 backups/
-backups/**
 old/
-old/**
 deprecated/
-deprecated/**
-**/*archive*/
-**/*backup*/
-**/*deprecated*
+*archive*
+*backup*
+*deprecated*
 
-# -----------------------------
+# -----------------------------------------------------------------------------
 
-# Bulky packaged artifacts
+# Data directory policy
 
-# -----------------------------
+# -----------------------------------------------------------------------------
+
+# Raw and bulky data are excluded by default. Small curated metadata should be
+
+# stored outside data/, preferably under resources/, metadata/, config/, or
+
+# supplementary_data/.
+
+data/
+
+# -----------------------------------------------------------------------------
+
+# Results directory policy
+
+# -----------------------------------------------------------------------------
+
+# Full generated results are excluded by default.
+
+results/
+
+# -----------------------------------------------------------------------------
+
+# Figure policy
+
+# -----------------------------------------------------------------------------
+
+# Selected curated figures may be tracked. Bulk diagnostic plot trees should
+
+# remain under ignored results directories.
+
+!figures/
+!figures/**
+
+# -----------------------------------------------------------------------------
+
+# Large packaged artifacts
+
+# -----------------------------------------------------------------------------
 
 *.zip
 *.tar
@@ -277,17 +254,17 @@ deprecated/**
 *.gz
 *.bz2
 *.xz
+*.7z
 
-# Keep curated thesis/report figures by not excluding:
+# -----------------------------------------------------------------------------
 
-# figures/
+# Secrets and local credentials
 
-# Thesis_writeup/Figures/
+# -----------------------------------------------------------------------------
 
-#
-
-# Keep lightweight final tables by not excluding:
-
-# results/final_tables/
-
-# results/curated/
+.secrets/
+.ssh/
+*.pem
+*.key
+.env
+.env.*
