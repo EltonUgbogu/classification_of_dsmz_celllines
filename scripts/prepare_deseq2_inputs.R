@@ -119,16 +119,13 @@ for (i in seq_along(target_cell_lines)) {
     filter(cell_line_canon == cl_can | Cell_Line_canon == cl_can)
   
   if (nrow(meta_matches) > 0) {
-    # Get sample_name from metadata
-    sample_names <- meta_matches$sample_name[!is.na(meta_matches$sample_name) & meta_matches$sample_name != ""]
-    if (length(sample_names) > 0) {
-      # Check if these sample names exist in counts
-      for (sn in sample_names) {
-        if (sn %in% colnames(counts_df)) {
-          matched_samples <- c(matched_samples, sn)
-          matched_cell_lines <- c(matched_cell_lines, cl)  # Keep node-stats label as cell_line
-          break  # Take first match
-        }
+    # Retain all count-bearing libraries for the biological cell-line group.
+    # This keeps RBL_15 and RBL_20 replicate profiles under one grouped focal identity.
+    sample_names <- unique(meta_matches$sample_name[!is.na(meta_matches$sample_name) & meta_matches$sample_name != ""])
+    for (sn in sample_names) {
+      if (sn %in% colnames(counts_df)) {
+        matched_samples <- c(matched_samples, sn)
+        matched_cell_lines <- c(matched_cell_lines, cl)  # Keep node-stats label as cell_line
       }
     }
   }
@@ -139,7 +136,7 @@ keep_idx <- !duplicated(matched_samples)
 matched_samples <- matched_samples[keep_idx]
 matched_cell_lines <- matched_cell_lines[keep_idx]
 
-message(sprintf("[INFO] Matched %d samples out of %d target cell lines", 
+message(sprintf("[INFO] Matched %d samples for %d target cell lines",
                 length(matched_samples), length(target_cell_lines)))
 
 # Report unmatched cell lines for debugging

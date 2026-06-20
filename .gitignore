@@ -1,36 +1,55 @@
 # =========================================================
-# classification_of_dsmz_celllines/.rsyncignore
-# Repo-specific policy for sync from jarvis -> local repo
+
+# .gitignore
+
+# Git policy for classification_of_dsmz_celllines.
+
 #
-# Keep:
-# - workflow source code
-# - config
-# - scripts
-# - lightweight curated text/tabular summaries
-#
-# Exclude:
-# - raw sequencing/alignment files
-# - STAR internals and runtime output
-# - FASTQC packaged outputs
-# - per-sample count exports / count matrices
-# - references, indexes, caches, environments, bulky artifacts
+
+# GitHub tracks source code, configuration, documentation,
+
+# selected final figures, and selected lightweight final tables.
+
+# HPC retains raw data, references, intermediates, runtime state,
+
+# and bulky generated outputs.
+
 # =========================================================
 
 # -----------------------------
-# Snakemake runtime internals
+# Markdown notes require explicit manual upload
 # -----------------------------
-.snakemake/
-**/.snakemake/
-**/.snakemake/conda/
-**/.snakemake/conda-*/
-**/.snakemake/shadow/
-**/.snakemake/tmp*/
-**/.snakemake/log/
-**/.snakemake/metadata/
+*.md
+*.mds
 
 # -----------------------------
-# Raw sequencing / alignment files
+
+# Snakemake runtime internals
+
 # -----------------------------
+
+.snakemake/
+**/.snakemake/
+
+# -----------------------------
+
+# Scheduler, runtime, and temporary logs
+
+# -----------------------------
+
+logs/
+benchmarks/
+tmp/
+**/tmp/
+*.out
+*.err
+
+# -----------------------------
+
+# Raw sequencing and alignment artifacts
+
+# -----------------------------
+
 *.fastq
 *.fastq.gz
 *.fq
@@ -41,147 +60,226 @@
 *.cram
 *.sra
 
-pipeline/data/**/fastq/
-pipeline/data/**/bam/
-pipeline/data/**/sra/
-pipeline/data/**/tmp/
+# -----------------------------
+
+# Reference genomes, indexes, and annotations
 
 # -----------------------------
-# Reference / index assets
-# -----------------------------
+
 *.fa
 *.fasta
 *.fna
 *.gtf
 *.gtf.gz
 
-pipeline/data/reference/gencode_v44/
-pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
-pipeline/data/reference/star_*/
-pipeline/data/HISAT2/genome/
-pipeline/data/HISAT2/genome/grch38/
-Trimmomatic-0.39/
+data/reference/
+data/HISAT2/genome/
 HISAT2/genome/
 
 # -----------------------------
-# R / Python / environment artifacts
+
+# Count matrices and large analysis objects
+
 # -----------------------------
+
+count_data/
+**/count_data/
+valid_count/
+**/valid_count/
+
+*.tab
+*.rds
+*.Rds
+*.RData
+*.parquet
+
+# -----------------------------
+
+# Conda/runtime payloads
+
+# -----------------------------
+
+envs/.conda/
+**/envs/.conda/
+miniconda3/
+.conda/
+.cache/
+
+# Keep Conda environment specification files.
+
+!envs/*.yaml
+!envs/*.yml
+
+# -----------------------------
+
+# Python and R runtime artifacts
+
+# -----------------------------
+
+**pycache**/
+**/**pycache**/
+*.pyc
+*.pyo
+
 .Rhistory
 .RData
 .Rproj.user/
 .Rcache/
 *.Rcheck/
-*.rds
-*.Rds
-*.bak
-
-__pycache__/
-*.pyc
-*.pyo
-
-miniconda3/
-**/envs/.conda/
-*.dist-info/
-*.egg-info/
 
 # -----------------------------
-# Generated bulky artifacts
-# -----------------------------
-*.parquet
-*.zip
-*.tar.gz
 
-benchmarks/
-bin/
-tmp/
-illumina/
-snap/
-actions-runner/
+# Local editor and OS artifacts
 
 # -----------------------------
-# pipeline/data results policy
-# Keep curated summaries, exclude runtime/intermediate clutter
-# -----------------------------
 
-# FASTQC archives and folders
-pipeline/data/**/results/fastqc/
-pipeline/data/**/results/fastqc/**
-
-# STAR output trees
-pipeline/data/**/results/star/
-pipeline/data/**/results/star/**
-
-# Extra hard-block STAR internals anywhere under pipeline/data
-pipeline/data/**/*_STARtmp/
-pipeline/data/**/*_STARtmp/**
-pipeline/data/**/*_STARgenome/
-pipeline/data/**/*_STARgenome/**
-pipeline/data/**/*_STARpass1/
-pipeline/data/**/*_STARpass1/**
-
-# Count exports / matrices
-pipeline/data/**/count_data/
-pipeline/data/**/count_data/**
-pipeline/data/**/valid_count/
-pipeline/data/**/valid_count/**
-pipeline/data/**/*.tab
-
-# STAR logs and splice junction tables
-pipeline/data/**/*.Log.out
-pipeline/data/**/*.Log.progress.out
-pipeline/data/**/*.Log.final.out
-pipeline/data/**/*.SJ.out.tab
-
-# Scheduler/runtime logs anywhere under pipeline
-pipeline/**/*.out
-pipeline/**/*.err
-
-# TARGET payload / manifest JSONs
-pipeline/data/nbl/target_nbl/manifests/*.json
-pipeline/data/nbl/target_nbl/metadata/payload*.json
-
-# -----------------------------
-# Local-user / editor noise
-# -----------------------------
 .DS_Store
 .vscode/
 .idea/
-*~
 *.swp
+*.swo
+*~
 *.tmp
-.TinyTeX/
 
-.codex/
-jarvis_pipeline_data
+# -----------------------------
 
-.cache/
-.conda/
-.config/
-.cursor/
-.ipython/
-.java/
-.jupyter/
-.ncbi/
-.pki/
+# Backup and obsolete files
+
+# -----------------------------
+
+*.bak
+archive/
+archives/
+backup/
+backups/
+old/
+deprecated/
+*archive*
+*backup*
+*deprecated*
+
+# -----------------------------
+
+# Data directory policy
+
+# -----------------------------
+
+# Raw and bulky data remain on HPC.
+
+data/
+
+# Small curated metadata should be stored outside data/, preferably:
+
+# resources/
+
+# metadata/
+
+# config/
+
+# -----------------------------
+
+# Results directory policy
+
+# -----------------------------
+
+# Full generated results remain on HPC.
+
+results/*
+
+# Selected final lightweight outputs may be versioned.
+
+!results/README.md
+!results/.gitkeep
+
+!results/final_tables/
+!results/final_tables/**
+!results/curated/
+!results/curated/**
+
+# -----------------------------
+
+# Figure policy
+
+# -----------------------------
+
+# Curated final figures are allowed in GitHub.
+
+# Do not place bulk diagnostic plot trees in figures/.
+
+!figures/
+!figures/**
+
+!Thesis_writeup/
+!Thesis_writeup/**
+!Thesis_writeup/Figures/
+!Thesis_writeup/Figures/**
+
+# -----------------------------
+
+# Large packaged artifacts
+
+# -----------------------------
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+
+# -----------------------------
+
+# Secrets and local credentials
+
+# -----------------------------
+
 .secrets/
 .ssh/
-.vscode-R/
-./claude
+*.pem
+*.key
+.env
+.env.*
 
+# -----------------------------
+# Local home-directory artifacts accidentally copied or created locally
+# -----------------------------
 .Rprofile
+.TinyTeX/
 .bash_history
 .bash_logout
 .bashrc
 .condarc
+.config/
+.codex/
+.cursor/
 .gh_env
 .gitconfig
+.ipython/
+.java/
+.jupyter/
 .lesshst
+.ncbi/
+.pki/
 .profile
+.vscode-R/
 .wget-hsts
 
+# Markdown files require explicit force-add.
+*.md
+*.mds
+
 # -----------------------------
-# Explicitly keep lightweight outputs
+# Generated analysis exports not tracked by default
 # -----------------------------
-!*.txt
-!*.tsv
-!*.csv
+derived_results/
+exploratory_257_gene_pan_cancer_network_sensitivity/
+reference_data/
+supplementary_data/257/
+
+# Markdown files require explicit force-add.
+*.md
+*.mds
+
+# Supplementary generated outputs require explicit force-add.
+supplementary_data/
