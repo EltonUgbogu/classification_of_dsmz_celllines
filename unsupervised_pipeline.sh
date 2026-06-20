@@ -22,8 +22,12 @@ SNAKEFILE="${SNAKEFILE:-$PROJECT_DIR/Snakefile}"
 CONFIGFILE="${CONFIGFILE:-$PROJECT_DIR/config/config.yaml}"
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/logs}"
 PIPELINE_PROFILE="${PIPELINE_PROFILE:-}"
+PIPELINE_UNLOCK="${PIPELINE_UNLOCK:-0}"
+PIPELINE_NOLOCK="${PIPELINE_NOLOCK:-1}"
 
-if [[ -z "$PIPELINE_PROFILE" && $# -gt 0 ]]; then
+# Prefer the explicit positional profile supplied to this wrapper over any
+# exported PIPELINE_PROFILE inherited by sbatch from the submit shell.
+if [[ $# -gt 0 ]]; then
   PIPELINE_PROFILE="$1"
   shift
 fi
@@ -45,6 +49,8 @@ SMK_ENV_YAML="${SMK_ENV_YAML:-$ENVS_DIR/smk.yaml}"
 
 # Always ensure logs directory exists in the project
 mkdir -p "$LOG_DIR"
+RUN_LOCK_DIR="${RUN_LOCK_DIR:-$LOG_DIR/run_locks}"
+mkdir -p "$RUN_LOCK_DIR"
 
 echo "[INFO] Running from directory: $PROJECT_DIR"
 echo "[INFO] Snakefile: $SNAKEFILE"
@@ -53,10 +59,25 @@ echo "[INFO] Logs:      $LOG_DIR"
 echo "[INFO] ENVS_DIR:  $ENVS_DIR"
 echo "[INFO] PIPELINE_PROFILE = ${PIPELINE_PROFILE:-NA}"
 echo "[INFO] TARGETS = ${TARGETS[*]}"
+echo "[INFO] PIPELINE_UNLOCK = $PIPELINE_UNLOCK"
+echo "[INFO] PIPELINE_NOLOCK = $PIPELINE_NOLOCK"
 echo "[INFO] SLURM_CPUS_PER_TASK = ${SLURM_CPUS_PER_TASK:-8}"
 echo "[INFO] SLURM_JOB_ID = ${SLURM_JOB_ID:-NA}"
 
 cd "$PROJECT_DIR" || { echo "[ERROR] Failed to cd into: $PROJECT_DIR"; exit 1; }
+
+# Profile-level lock. Different profiles may run concurrently, but a second
+# run of the same profile would target the same output tree and is blocked.
+LOCK_SAFE_PROFILE="$(printf '%s' "$PIPELINE_PROFILE" | tr -c 'A-Za-z0-9_.-' '_')"
+RUN_LOCK_FILE="$RUN_LOCK_DIR/${LOCK_SAFE_PROFILE}.lock"
+exec 9>"$RUN_LOCK_FILE"
+if ! flock -n 9; then
+  echo "[ERROR] Another run for profile '$PIPELINE_PROFILE' is already active."
+  echo "        Lock file: $RUN_LOCK_FILE"
+  echo "        Different profiles can run in parallel; duplicate profile runs cannot."
+  exit 1
+fi
+echo "[INFO] Acquired profile run lock: $RUN_LOCK_FILE"
 
 # ------------------------------------------------------------------
 # 1. Conda-only setup + create/activate Snakemake env from ./envs/
@@ -66,6 +87,7 @@ if ! command -v conda >/dev/null 2>&1; then
   for conda_sh in \
     "${CONDA_SH_PATH:-}" \
     "${CONDA_BASE:-}/etc/profile.d/conda.sh" \
+    "${HOME}/miniforge3/etc/profile.d/conda.sh" \
     "${HOME}/miniconda3/etc/profile.d/conda.sh" \
     "${HOME}/anaconda3/etc/profile.d/conda.sh"
   do
@@ -136,21 +158,29 @@ fi
 echo "[INFO] Using snakemake: $SNAKEMAKE_BIN ($(snakemake --version))"
 
 # ------------------------------------------------------------------
-# 2. Unlock any previous Snakemake run (safe if not locked)
+# 2. Optional unlock
 # ------------------------------------------------------------------
-echo "[INFO] Unlocking Snakemake working directory (if locked)..."
-"$SNAKEMAKE_BIN" \
-  --snakefile "$SNAKEFILE" \
-  --configfile "$CONFIGFILE" \
-  ${PIPELINE_PROFILE:+--config pipeline_profile="$PIPELINE_PROFILE"} \
-  --use-conda \
-  --unlock || true
+if [[ "$PIPELINE_UNLOCK" == "1" || "$PIPELINE_UNLOCK" == "true" ]]; then
+  echo "[INFO] Unlocking Snakemake working directory by explicit request..."
+  "$SNAKEMAKE_BIN" \
+    --snakefile "$SNAKEFILE" \
+    --configfile "$CONFIGFILE" \
+    ${PIPELINE_PROFILE:+--config pipeline_profile="$PIPELINE_PROFILE"} \
+    --use-conda \
+    --unlock || true
+else
+  echo "[INFO] Skipping automatic Snakemake unlock. Set PIPELINE_UNLOCK=1 only after confirming no runs are active."
+fi
 
 # ------------------------------------------------------------------
 # 3. Run Snakemake pipeline
 # ------------------------------------------------------------------
 echo "[INFO] Starting Snakemake pipeline..."
 N_CORES="${SLURM_CPUS_PER_TASK:-8}"
+SNAKEMAKE_LOCK_ARGS=()
+if [[ "$PIPELINE_NOLOCK" == "1" || "$PIPELINE_NOLOCK" == "true" ]]; then
+  SNAKEMAKE_LOCK_ARGS+=(--nolock)
+fi
 
 set +e
 "$SNAKEMAKE_BIN" \
@@ -159,6 +189,7 @@ set +e
   ${PIPELINE_PROFILE:+--config pipeline_profile="$PIPELINE_PROFILE"} \
   --cores "$N_CORES" \
   --use-conda \
+  "${SNAKEMAKE_LOCK_ARGS[@]}" \
   --printshellcmds -p \
   --rerun-incomplete \
   --latency-wait 300 \

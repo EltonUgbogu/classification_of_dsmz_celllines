@@ -1,12 +1,91 @@
-# Snakemake runtime (huge)
+# =========================================================
+
+# .rsyncignore
+
+# Exclusion policy for rsync from hpc
+
+# to the local Git repository.
+
+#
+
+# Paths are relative to /work/ugbogu/pipeline/.
+
+# This file prevents bulky HPC artifacts from being copied to the Mac.
+
+# =========================================================
+
+# -----------------------------
+# Markdown notes require explicit manual transfer
+# -----------------------------
+*.md
+*.mds
+
+# -----------------------------
+
+# Snakemake runtime internals
+
+# -----------------------------
+
 .snakemake/
+.snakemake/**
 **/.snakemake/
+**/.snakemake/**
+
+# -----------------------------
+
+# Scheduler, runtime, and temporary logs
+
+# -----------------------------
+
+logs/
+logs/**
+benchmarks/
+benchmarks/**
+tmp/
+tmp/**
+**/tmp/
+**/tmp/**
+**/*.out
+**/*.err
+
+# -----------------------------
+
+# Raw sequencing and alignment artifacts
+
+# -----------------------------
+
+**/fastq/
+**/fastq/**
+**/bam/
+**/bam/**
+**/sra/
+**/sra/**
+
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bam
+*.bai
+*.sam
+*.cram
+*.sra
+
+# -----------------------------
 
 # FASTQC artifacts
+
+# -----------------------------
+
 **/results/fastqc/
 **/results/fastqc/**
 
-# STAR runtime / intermediate outputs
+# -----------------------------
+
+# STAR runtime and intermediate outputs
+
+# -----------------------------
+
 **/results/star/
 **/results/star/**
 **/*_STARtmp/
@@ -16,82 +95,199 @@
 **/*_STARpass1/
 **/*_STARpass1/**
 
-# STAR logs and splice junction outputs
 *.Log.out
 *.Log.progress.out
 *.Log.final.out
 *.SJ.out.tab
 
-# Count matrices / per-sample count exports
+# -----------------------------
+
+# Count matrices and per-sample count exports
+
+# -----------------------------
+
 count_data/
+count_data/**
 **/count_data/
+**/count_data/**
+valid_count/
+valid_count/**
 **/valid_count/
 **/valid_count/**
 *.tab
 
-# Big / generated directories inside pipeline
-logs/
-*_family.soft.gz
+# -----------------------------
+
+# Reference genomes, indexes, and annotations
+
+# -----------------------------
+
 data/reference/gencode_v44/
-data/reference/**/GRCh38.primary_assembly.genome.fa
+data/reference/gencode_v44/**
 data/reference/star_*/
-pipeline/data/reference/gencode_v44/
-pipeline/data/reference/**/GRCh38.primary_assembly.genome.fa
-pipeline/data/reference/star_*/
+data/reference/star_*/**
+data/reference/**/GRCh38.primary_assembly.genome.fa
+
+data/HISAT2/genome/
+data/HISAT2/genome/**
+HISAT2/genome/
+HISAT2/genome/**
+
 *.fa
 *.fasta
 *.fna
-data/nbl/target_nbl/manifests/*.json
-data/nbl/target_nbl/metadata/payload*.json
-pipeline/data/nbl/target_nbl/manifests/*.json
-pipeline/data/nbl/target_nbl/metadata/payload*.json
-
-# Exclude generated conda payloads, but keep env spec files
-envs/.conda/
-**/envs/.conda/
-
-# Large sequencing/alignment artifacts — directories first
-**/fastq/
-**/bam/
-**/sra/
-**/tmp/
-
-*.fastq
-*.fastq.gz
-*.fq
-*.fq.gz
-*.bam
-*.bai
-*.sam
-*.sra
-*.cram
-
-# Python / R junk
-__pycache__/
-*.pyc
-.Rhistory
-.RData
-*.rds
-*.Rds
-*.bak
-
-# Reports / artifacts
-*.pdf
-*.html
-*.parquet
-*.png
-*.jpg
-*.jpeg
-
-# Annotations (too big for GitHub)
 *.gtf
 *.gtf.gz
 
-# Scheduler/runtime logs anywhere under pipeline
-pipeline/**/*.out
-pipeline/**/*.err
+# -----------------------------
 
-# Keep text/tabular files
-!*.txt
-!*.tsv
-!*.csv
+# External payload manifests that are not source code
+
+# -----------------------------
+
+data/nbl/target_nbl/manifests/*.json
+data/nbl/target_nbl/metadata/payload*.json
+
+# -----------------------------
+
+# Conda/runtime payloads
+
+# -----------------------------
+
+envs/.conda/
+envs/.conda/**
+**/envs/.conda/
+**/envs/.conda/**
+
+miniconda3/
+miniconda3/**
+.conda/
+.conda/**
+.cache/
+.cache/**
+
+# -----------------------------
+
+# Python and R runtime artifacts
+
+# -----------------------------
+
+**pycache**/
+**pycache**/**
+**/**pycache**/
+**/**pycache**/**
+*.pyc
+*.pyo
+
+.Rhistory
+.RData
+.Rproj.user/
+.Rproj.user/**
+.Rcache/
+.Rcache/**
+*.Rcheck/
+*.Rcheck/**
+
+# Large R/Python data objects remain on HPC.
+
+*.rds
+*.Rds
+*.RData
+*.parquet
+
+# -----------------------------
+
+# Backup, editor, and local-user artifacts
+
+# -----------------------------
+
+*.bak
+*~
+*.swp
+*.swo
+*.tmp
+.DS_Store
+
+.vscode/
+.vscode/**
+.idea/
+.idea/**
+
+.codex/
+.codex/**
+.cursor/
+.cursor/**
+.ipython/
+.ipython/**
+.jupyter/
+.jupyter/**
+
+# -----------------------------
+
+# Generated result clutter
+
+# -----------------------------
+
+results/**/plots/
+results/**/plots/**
+results/**/diagnostics/
+results/**/diagnostics/**
+results/**/inspection/
+results/**/inspection/**
+results/**/*.html
+
+# Full intermediate result objects remain on HPC.
+
+results/**/*.rds
+results/**/*.Rds
+results/**/*.parquet
+
+# -----------------------------
+
+# Archive and obsolete result trees
+
+# -----------------------------
+
+archive/
+archive/**
+archives/
+archives/**
+backup/
+backup/**
+backups/
+backups/**
+old/
+old/**
+deprecated/
+deprecated/**
+**/*archive*/
+**/*backup*/
+**/*deprecated*
+
+# -----------------------------
+
+# Bulky packaged artifacts
+
+# -----------------------------
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+
+# Keep curated thesis/report figures by not excluding:
+
+# figures/
+
+# Thesis_writeup/Figures/
+
+#
+
+# Keep lightweight final tables by not excluding:
+
+# results/final_tables/
+
+# results/curated/

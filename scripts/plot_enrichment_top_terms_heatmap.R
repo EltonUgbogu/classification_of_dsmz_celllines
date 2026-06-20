@@ -324,7 +324,7 @@ if (n_fig_terms > 28) {
 fix_display_label <- function(lbl) {
   if (grepl("Retina photoreceptor", lbl, ignore.case = TRUE) ||
       grepl("Retina; photoreceptor", lbl, ignore.case = TRUE)) {
-    return("Retina photoreceptor cells (≥low) [HPA]")
+    return("Retina photoreceptor cells (>=low) [HPA]")
   }
   if (grepl("Interleukin-10", lbl, ignore.case = TRUE) &&
       grepl("signali", lbl, ignore.case = TRUE)) {
@@ -357,14 +357,15 @@ group_order_display <- c(
   "BRCA\nrecurrent",
   "NBL\nrecurrent",
   "RBL\nrecurrent",
-  "Strict union\ndown",
-  "Strict union\nup",
-  "Strict union\nall",
-  "Operative\nfeature set",
-  "Operative\nminus strict"
+  "Recurrent core\ndown",
+  "Recurrent core\nup",
+  "Recurrent core\nall",
+  "Final 257-gene\nfeature set",
+  "Isolate-rescued\nsubset"
 )
 
 # Internal → display label mapping
+# Internal group_label values (from map_query) → manuscript-facing x-axis labels
 internal_to_display <- c(
   "BRCA per-contrast markers" = "BRCA\nper-contrast",
   "NBL per-contrast markers"  = "NBL\nper-contrast",
@@ -372,11 +373,11 @@ internal_to_display <- c(
   "BRCA recurrent"            = "BRCA\nrecurrent",
   "NBL recurrent"             = "NBL\nrecurrent",
   "RBL recurrent"             = "RBL\nrecurrent",
-  "Strict union down"         = "Strict union\ndown",
-  "Strict union up"           = "Strict union\nup",
-  "Strict union all"          = "Strict union\nall",
-  "Operative feature set"     = "Operative\nfeature set",
-  "Operative minus strict"    = "Operative\nminus strict"
+  "Strict union down"         = "Recurrent core\ndown",
+  "Strict union up"           = "Recurrent core\nup",
+  "Strict union all"          = "Recurrent core\nall",
+  "Operative feature set"     = "Final 257-gene\nfeature set",
+  "Operative minus strict"    = "Isolate-rescued\nsubset"
 )
 
 plot_data[, group_display := internal_to_display[group_label]]

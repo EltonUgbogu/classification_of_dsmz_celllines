@@ -176,6 +176,22 @@ if (!file.exists(in_rds)) {
 # Helper: strip CELL:/TUMOUR:/TUMOR: prefixes from IDs
 strip_prefix <- function(x) sub("^(CELL:|TUMOUR:|TUMOR:)", "", x)
 
+collapse_semicolon_ids <- function(x) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) return(NA_character_)
+  ids <- unlist(strsplit(x, ";", fixed = TRUE), use.names = FALSE)
+  ids <- trimws(ids)
+  ids <- sort(unique(ids[nzchar(ids)]))
+  if (!length(ids)) NA_character_ else paste(ids, collapse = ";")
+}
+
+first_non_missing <- function(x) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) NA_character_ else x[[1]]
+}
+
 # Load the consensus data (cell_tech_id, tumour_id, p_consensus triplets).
 # Preserve short cell_line for plots; do not overwrite with cell_tech_id.
 consensus_pairs <- readRDS(in_rds) %>%
@@ -219,15 +235,6 @@ if (!"cell_line_display" %in% colnames(consensus_pairs)) {
   consensus_pairs <- consensus_pairs %>%
     mutate(cell_line_display = cell_line)
 }
-
-cell_label_map <- consensus_pairs %>%
-  transmute(
-    cell_line = as.character(cell_line),
-    sample_id = as.character(sample_id),
-    cell_tech_id = dplyr::coalesce(as.character(.data$cell_tech_id), as.character(sample_id)),
-    cell_line_display = as.character(cell_line_display)
-  ) %>%
-  distinct()
 
 cat("Summary of consensus_pairs:\n")
 print(dplyr::glimpse(consensus_pairs))
@@ -308,23 +315,47 @@ if (opt$mode == "within") {
   cat("[INFO] Mode 'global': using all tumours.\n")
 }
 
-mat_wide <- cp %>%
-  select(cell_line, tumour_id, p_consensus) %>%
-  # pivot_wider() transforms long data to wide format
-  # names_from: column whose values become new column names
-  # values_from: column whose values fill the new columns
-  # values_fill: value to use for missing combinations (tumours not in neighbourhood)
+cp <- cp %>%
+  mutate(
+    profile_key = dplyr::coalesce(
+      as.character(.data$sample_id),
+      as.character(.data$cell_tech_id),
+      as.character(.data$cell_line)
+    )
+  )
+
+cell_label_map <- cp %>%
+  group_by(cell_line) %>%
+  summarise(
+    sample_id = collapse_semicolon_ids(sample_id),
+    cell_tech_id = collapse_semicolon_ids(profile_key),
+    cell_line_display = first_non_missing(cell_line_display),
+    .groups = "drop"
+  )
+
+profile_wide <- cp %>%
+  select(profile_key, cell_line, tumour_id, p_consensus) %>%
+  group_by(profile_key, cell_line, tumour_id) %>%
+  summarise(p_consensus = mean(p_consensus, na.rm = TRUE), .groups = "drop") %>%
   tidyr::pivot_wider(
     names_from  = tumour_id,
     values_from = p_consensus,
-    values_fill = 0  # Cell lines with no association to a tumour get 0
+    values_fill = 0
   )
 
-# Convert tibble to matrix for correlation computation
-mat <- mat_wide %>% as.data.frame()
-rownames(mat) <- mat$cell_line
-mat$cell_line <- NULL
-mat <- as.matrix(mat)
+profile_meta <- profile_wide %>% select(profile_key, cell_line)
+profile_mat <- profile_wide %>%
+  select(-profile_key, -cell_line) %>%
+  as.data.frame()
+profile_mat <- as.matrix(profile_mat)
+
+cell_line_counts <- table(profile_meta$cell_line)
+mat <- rowsum(profile_mat, group = profile_meta$cell_line, reorder = TRUE)
+mat <- sweep(mat, 1, as.numeric(cell_line_counts[rownames(mat)]), "/")
+
+cat("[INFO] Aggregated profile-level p_consensus vectors by arithmetic mean before graph construction.\n")
+cat("[INFO] Profile vectors:", nrow(profile_mat), "\n")
+cat("[INFO] Biological cell-line groups:", nrow(mat), "\n")
 
 cat("\nMatrix dimensions (DSMZ x Tumour):\n")
 print(dim(mat))
