@@ -168,51 +168,8 @@ deprecated/
 
 data/
 
-# Small curated metadata should be stored outside data/, preferably:
-
-# resources/
-
-# metadata/
-
-# config/
-
 # -----------------------------
 
-# Results directory policy
-
-# -----------------------------
-
-# Full generated results remain on HPC.
-
-results/*
-
-# Selected final lightweight outputs may be versioned.
-
-!results/README.md
-!results/.gitkeep
-
-!results/final_tables/
-!results/final_tables/**
-!results/curated/
-!results/curated/**
-
-# -----------------------------
-
-# Figure policy
-
-# -----------------------------
-
-# Curated final figures are allowed in GitHub.
-
-# Do not place bulk diagnostic plot trees in figures/.
-
-!figures/
-!figures/**
-
-!Thesis_writeup/
-!Thesis_writeup/**
-!Thesis_writeup/Figures/
-!Thesis_writeup/Figures/**
 
 # -----------------------------
 
@@ -269,17 +226,7 @@ results/*
 *.md
 *.mds
 
-# -----------------------------
-# Generated analysis exports not tracked by default
-# -----------------------------
-derived_results/
-exploratory_257_gene_pan_cancer_network_sensitivity/
-reference_data/
-supplementary_data/257/
-
 # Markdown files require explicit force-add.
 *.md
 *.mds
 
-# Supplementary generated outputs require explicit force-add.
-supplementary_data/
