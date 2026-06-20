@@ -1,2 +1,0 @@
-Instruction: Merge Supplementary tumour-purity figures S1-S7 into three grouped supplementary figures.
-🟡 [Status: partially corrected — Implemented in Supplementary.tex using LaTeX landscape panels with the existing tumour-purity PDF paths; final readability and figure-path rendering need Overleaf/PDF inspection.]
