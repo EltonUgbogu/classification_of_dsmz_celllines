@@ -1,4 +1,0 @@
-cell_line	degree	mean_edge_sim	max_edge_sim	is_outlier	sample_id	cell_tech_id	cell_line_display
-LAN2	0	NA	NA	TRUE	NG-A0611_LAN2_libLAB6083	LAN2	LAN2
-MHH_NB_11	0	NA	NA	TRUE	NG-A0611_MHHNB11_libLAB6084	MHH_NB_11	MHH_NB_11
-SK_N_BE_2	0	NA	NA	TRUE	NG-A0611_SKNBE2_libLAB6076	SK_N_BE_2	SK_N_BE_2

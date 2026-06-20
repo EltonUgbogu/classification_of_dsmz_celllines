@@ -1,3 +1,0 @@
-profile	label	entity	source_file	status	purpose
-nbl	cohort	tumour	data/nbl/count_data/nbl_tumour_sample_metadata.csv	implemented	cohort provenance
-nbl	MYCN.amplification	cell_line	data/dsmz/DSMZ_metadata.csv	implemented_in_cell_line_metadata	cell-line biological context

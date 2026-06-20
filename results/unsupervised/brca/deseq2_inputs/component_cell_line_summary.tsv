@@ -1,7 +1,0 @@
-component	n_cell_lines	eligible_for_deseq
-1	12	TRUE
-2	12	TRUE
-3	2	TRUE
-4	1	FALSE
-5	1	FALSE
-6	1	FALSE

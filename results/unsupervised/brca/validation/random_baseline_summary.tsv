@@ -1,2 +1,0 @@
-cohort	shortlist_n	random_iterations	observed_mean_selection_score	random_mean_selection_score	z_mean_selection_score	empirical_p_mean_selection_score	observed_mean_frac_ge_thr	observed_mean_median_p	observed_mean_max_p
-brca	10	1000	0.8490595251550175	0.7722218351649573	3.2873251950108227	9.99000999000999e-4	1	1	1

@@ -1,5 +1,0 @@
-profile	disease	tumour_source	cell_line_panel	current_analysis_input	current_preprocessing_output	source_evidence
-nbl	Neuroblastoma	GSE100148	DSMZ	data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds	data/nbl/count_data/nbl_tumour_count.rds	NA
-nbl	Neuroblastoma	GSE189367	DSMZ	data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds	data/nbl/count_data/nbl_tumour_count.rds	NA
-nbl	Neuroblastoma	SRP409177	DSMZ	data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds	data/nbl/count_data/nbl_tumour_count.rds	NA
-nbl	Neuroblastoma	TARGET-NBL	DSMZ	data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds	data/nbl/count_data/nbl_tumour_count.rds	NA

@@ -1,5 +1,0 @@
-Profile: nbl
-Shortlist size: top 10 ranked cell lines from p_consensus_best_cell_lines_ranked.tsv.
-Selection score is the existing composite_score/CPI emitted by summarize_p_consensus_all.R.
-n_supported_tumours is taken from the selected cell line's best_direction row in p_consensus_cellline_direction_summary.long.tsv.
-community_id is contextual graph metadata from the same best_direction when that annotation exists; it does not redefine ranking.

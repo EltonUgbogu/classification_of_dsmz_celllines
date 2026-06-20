@@ -1,5 +1,0 @@
-Profile: nbl
-Null size: 1000 permutations.
-This is a post-hoc aggregated null built from p_consensus_cellline_direction_summary.long.tsv, not a rerun of the raw-expression clustering workflow.
-Within each direction, cell-line labels are permuted while per-direction score distributions are preserved.
-Use this as a stability sanity check for shortlist concentration, not as a replacement for the primary ranking rule.

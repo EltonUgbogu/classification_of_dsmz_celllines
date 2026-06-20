@@ -1,2 +1,0 @@
-profile	disease	tumour_source	cell_line_panel	current_analysis_input	current_preprocessing_output	source_evidence
-brca	Breast cancer	TCGA-BRCA	DSMZ	data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds	NA	NA

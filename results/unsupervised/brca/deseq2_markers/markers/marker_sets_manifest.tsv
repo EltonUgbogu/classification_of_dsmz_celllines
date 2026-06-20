@@ -1,4 +1,0 @@
-contrast	marker_file	table_file	n_markers
-isolate_DU_4475_vs_rest	markers/isolate_DU_4475_vs_rest_markers_top50.txt	tables/isolate_DU_4475_vs_rest.tsv	0
-isolate_IPH_926_vs_rest	markers/isolate_IPH_926_vs_rest_markers_top50.txt	tables/isolate_IPH_926_vs_rest.tsv	0
-isolate_SK_BR_3_vs_rest	markers/isolate_SK_BR_3_vs_rest_markers_top50.txt	tables/isolate_SK_BR_3_vs_rest.tsv	0

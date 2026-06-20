@@ -1,7 +1,0 @@
-Study: Robust transcriptomic prioritisation of representative cancer cell lines
-Profile: brca
-Primary question: Which DSMZ cell lines most faithfully represent defined primary tumour cohorts, and does consensus across feature-selection and distance choices improve robustness over single-direction similarity analyses?
-
-Primary endpoint: ranked cell-line representativeness per cohort
-Scope note: Core inference is unsupervised. Biological labels are used only for post-hoc validation and do not alter the ranking procedure.
-
