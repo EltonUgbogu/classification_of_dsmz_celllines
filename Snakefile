@@ -288,7 +288,10 @@ if os.path.isabs(UNSUP_BASE):
 # The variables below define where outputs live and how directions are named.
 # Think of them as the bookkeeping layer that keeps many clustering runs organised.
 
-if os.path.basename(UNSUP_BASE) != profile_name:
+# Append the profile only when it is not already present in the configured
+# path. This avoids doubled roots such as
+# results/unsupervised/multicohort_cancer/unsupervised/multicohort_cancer.
+if profile_name not in os.path.normpath(UNSUP_BASE).split(os.sep):
     UNSUP_REL = os.path.join(UNSUP_BASE, profile_name)
 else:
     UNSUP_REL = UNSUP_BASE
@@ -409,6 +412,9 @@ rule feature_selection_unsupervised:
         outdir         = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised"),
         # Comma-separated method:N pairs so the R script knows each method's top-N.
         method_topn    = ",".join(f"{m}:{n}" for m, n in METHOD_TOPN.items())
+    # WGCNA::allowWGCNAThreads() requires nThreads >= 2, so this rule must
+    # always run with at least 2 threads (regardless of executor defaults).
+    threads: 2
     log: os.path.join(LOGROOT, "feature_selection_unsupervised.log")
     conda: CONDA_ENV_R
     shell:
@@ -489,6 +495,46 @@ AGN_EUC_PATTERN       = "|".join(map(re.escape, AGN_EUC_DIRECTIONS)) if AGN_EUC_
 CONS_DIRECTION_PATTERN = "|".join(map(re.escape, CONS_DIRECTIONS))
 CONS_EUC_DIRECTIONS    = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
 CONS_EUC_PATTERN       = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
+PAN_CANCER_FEATURE_SET_NAME = cfg.get("features", {}).get("pan_cancer_feature_set_name", "PanCancerFeatureSet")
+PAN_CANCER_FEATURE_SET_GENE_LIST = cfg.get("features", {}).get("pan_cancer_feature_set_gene_list")
+EXTERNAL_GENE_LIST_FEATURES = {PAN_CANCER_FEATURE_SET_NAME} if PAN_CANCER_FEATURE_SET_GENE_LIST else set()
+
+
+def _resolve_majority_support_threshold():
+    """
+    Resolves the majority-style support threshold m = max(2, ceil(|R| / 2))
+    for the support-threshold consensus cell-line similarity network, where
+    |R| is the number of representation-specific graphs for this cohort.
+
+    The value is recomputed from CONS_DIRECTIONS at Snakefile load time. If a
+    cohort also declares
+        profiles.<cohort>.tumour_neighbourhoods.similarity_consensus_min_support
+    in config/config.yaml, the declared value must match the recomputed value.
+    """
+    nh_cfg = cfg.get("tumour_neighbourhoods", {})
+    computed = max(2, (len(CONS_DIRECTIONS) + 1) // 2)
+    if "similarity_consensus_min_support" not in nh_cfg:
+        return computed
+    m = nh_cfg["similarity_consensus_min_support"]
+    if not isinstance(m, int) or m < 2:
+        raise ValueError(
+            "\n[Snakefile] Invalid value for "
+            f"profiles.{profile_name}.tumour_neighbourhoods.similarity_consensus_min_support: "
+            f"{m!r}. The majority-style support threshold must be an integer >= 2.\n"
+        )
+    if m != computed:
+        raise ValueError(
+            "\n[Snakefile] Configured support threshold does not match the "
+            "configured representation count for profile "
+            f"'{profile_name}'.\n"
+            f"profiles.{profile_name}.tumour_neighbourhoods.similarity_consensus_min_support: "
+            f"{m!r}; expected {computed} from |R|={len(CONS_DIRECTIONS)} "
+            "(m = max(2, ceil(|R| / 2))).\n"
+        )
+    return computed
+
+
+SIMILARITY_CONSENSUS_MIN_SUPPORT = _resolve_majority_support_threshold()
 
 # Defines the six HC and six k-means clustering kind identifiers.
 # PCA-prefixed kinds are optionally removed for pan-cancer runs where
@@ -540,6 +586,10 @@ def dir_to_gene_list(direction):
         if "pam50" in cfg and "ensembl_gene_list" in cfg["pam50"]:
             return cfgabs("pam50", "ensembl_gene_list")
         return cfgabs("features", "pam50_ensembl_gene_list")
+    elif feature in EXTERNAL_GENE_LIST_FEATURES:
+        # External feature-set directions reuse a fixed gene list rather than
+        # a feature_selection_unsupervised output.
+        return cfgabs("features", "pan_cancer_feature_set_gene_list")
     elif feature in FEATURE_METHODS:
         # Feature-set directions: filename encodes the method-specific top-N.
         # Uses FEATURESETS_DIR_REL to match the producer rule output.
@@ -548,7 +598,7 @@ def dir_to_gene_list(direction):
         # Unknown feature: fail loudly to prevent silent reuse of a default gene list.
         raise ValueError(
             f"Unknown feature '{feature}' extracted from direction '{direction}'. "
-            f"Known features: {sorted(set(FEATURE_METHODS) | {'pam50'})}"
+            f"Known features: {sorted(set(FEATURE_METHODS) | {'pam50'} | EXTERNAL_GENE_LIST_FEATURES)}"
         )
 
 
@@ -557,6 +607,8 @@ def dir_to_geneset(direction):
     feature = dir_to_feature(direction)
     if feature == "pam50":
         return "PAM50"
+    elif feature in EXTERNAL_GENE_LIST_FEATURES:
+        return feature
     else:
         return f"{feature}_top{method_topn(feature)}"
 
@@ -575,7 +627,7 @@ def validate_direction_to_gene_list(direction):
     feature = dir_to_feature(direction)
 
     # 1. Check that the extracted feature is recognized.
-    known_features = {"pam50"} | set(FEATURE_METHODS)
+    known_features = {"pam50"} | set(FEATURE_METHODS) | EXTERNAL_GENE_LIST_FEATURES
     assert feature in known_features, \
         f"Unknown feature '{feature}' extracted from direction '{direction}'. " \
         f"Known features: {sorted(known_features)}"
@@ -585,7 +637,7 @@ def validate_direction_to_gene_list(direction):
     filename = os.path.basename(gene_list_path)
 
     # For feature-set directions (not pam50), verify filename format.
-    if feature not in ("pam50",):
+    if feature not in ("pam50",) and feature not in EXTERNAL_GENE_LIST_FEATURES:
         if not filename.startswith("genes_top"):
             raise AssertionError(
                 f"Gene list file '{gene_list_path}' has unexpected name format. "
@@ -593,7 +645,7 @@ def validate_direction_to_gene_list(direction):
             )
 
     # Verify that the filename method matches the direction-derived feature.
-    if feature not in ("pam50",):
+    if feature not in ("pam50",) and feature not in EXTERNAL_GENE_LIST_FEATURES:
         if not filename.endswith(f"_{feature}.txt"):
             raise AssertionError(
                 f"Gene list for direction '{direction}' (method '{feature}') "
@@ -601,10 +653,10 @@ def validate_direction_to_gene_list(direction):
                 f"This indicates a misalignment in the direction-to-gene-list mapping."
             )
 
-    # 3. Non-PAM50 paths must be relative to match the producer rule
+    # 3. Feature-selection paths must be relative to match the producer rule
     #    (feature_selection_unsupervised) output declarations.
     #    Absolute paths would cause Snakemake MissingInputException.
-    if feature != "pam50" and os.path.isabs(gene_list_path):
+    if feature not in ("pam50",) and feature not in EXTERNAL_GENE_LIST_FEATURES and os.path.isabs(gene_list_path):
         raise AssertionError(
             f"Gene list path for direction '{direction}' is absolute: {gene_list_path}\n"
             f"The producer rule (feature_selection_unsupervised) declares outputs as "
@@ -1578,8 +1630,7 @@ rule tumour_nh_consensus:
         done = lambda wc: nh_consensus_dependency(wc.direction)
     output:
         consensus_rds = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.rds"),
-        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv"),
-        denominator_audit = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "p_consensus_denominator_audit_{direction}.tsv")
+        consensus_tsv = os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus", "Final_consensus_tumour_neighbourhoods_{direction}.tsv")
     params:
         script = os.path.join(BASE, "scripts", "tumour_neighbourhood_p_consensus.R"),
         config = os.path.join(BASE, "config", "config.yaml")
@@ -1597,7 +1648,6 @@ rule tumour_nh_consensus:
           --out_rds {output.consensus_rds} \
           --out_tsv {output.consensus_tsv} \
           > {log} 2>&1
-        test -s {output.denominator_audit} || (echo "ERROR: missing {output.denominator_audit}" >&2; exit 1)
         '''
 
 
@@ -1641,12 +1691,310 @@ rule cell_line_similarity_graph:
 
 P_CONS_ALL_DIR = os.path.join(TUMOUR_NH_ROOT, "final_consensus_all")
 P_CONS_PLOTS_DIR = os.path.join(P_CONS_ALL_DIR, "plots")
-P_CONS_THESIS_RESOLUTION_PREFIX = os.path.join(P_CONS_PLOTS_DIR, "Fig_DSMZ_similarity_network_resolution")
-P_CONS_THESIS_CONSENSUS_PREFIX = os.path.join(P_CONS_PLOTS_DIR, "Fig_DSMZ_similarity_network_consensus")
-P_CONS_SHORTNAMES_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_shortnames.tsv")
-P_CONS_RESOLVED_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_graph_edges.tsv")
-P_CONS_RESOLVED_NODE_STATS_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_graph_node_stats.tsv")
-P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, "dsmz_cellline_similarity_consensus_edges.tsv")
+P_CONS_THESIS_COHORTS = ["brca", "nbl", "rbl"]
+P_CONS_THESIS_COHORT_LABELS = {
+    "brca": "BRCA",
+    "nbl": "NBL",
+    "rbl": "RBL",
+}
+P_CONS_THESIS_FIG_DIR = abspath(
+    os.path.join(
+        config.get("multicohort_cancer", {}).get("outdir", "results/unsupervised/multicohort_cancer"),
+        "thesis_figures",
+    )
+)
+P_CONS_DIRECTION_DUMBBELL_PREFIX = os.path.join(
+    P_CONS_THESIS_FIG_DIR,
+    "Fig_p_consensus_direction_comparison_dumbbell",
+)
+
+def p_consensus_direction_summary_for_profile(profile):
+    cfgp = get_profile_cfg(profile)
+    unsup_root = cfgp.get("paths", {}).get("unsup_root")
+    if not unsup_root:
+        raise KeyError(f"paths.unsup_root missing for profile '{profile}'")
+    return os.path.join(
+        abspath(unsup_root),
+        "tumour_neighbourhoods",
+        "final_consensus_all",
+        "p_consensus_direction_summary.tsv",
+    )
+
+_COHORT_UPPER = profile_name.upper()
+# Naming-prefix selector: patient-referenced cohort graphs (BRCA/NBL/RBL etc.) are
+# the cohort-specific outputs derived from tumour/patient-referenced similarity;
+# the multicohort_cancer profile produces the pan-cancer integrated graph and
+# carries the pan_cancer prefix instead. Keeping these two namings distinct is a
+# hard requirement of the patient_referenced naming pass.
+_PR_PREFIX = "pan_cancer_" if IS_MULTICOHORT_PROFILE else "patient_referenced_"
+P_CONS_THESIS_RESOLUTION_PREFIX = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"Fig_{_COHORT_UPPER}_{_PR_PREFIX}resolved_cell_line_neighbourhood_graph",
+)
+P_CONS_THESIS_CONSENSUS_PREFIX = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"Fig_{_COHORT_UPPER}_{_PR_PREFIX}support_threshold_consensus_cell_line_similarity_network",
+)
+P_CONS_SHORTNAMES_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}cell_line_display_names.tsv")
+P_CONS_RESOLVED_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_edges.tsv")
+P_CONS_RESOLVED_NODE_STATS_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_node_stats.tsv")
+P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}support_threshold_consensus_cell_line_similarity_edges.tsv")
+P_CONS_ANCHOR_AUDIT_TSV            = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}resolved_cell_line_neighbourhood_anchor_centrality_audit.tsv")
+P_CONS_DSMZ_META_CSV = cfgget_path_abs(
+    cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"),
+    "paths", "dsmz_meta_csv",
+)
+P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX = P_CONS_THESIS_RESOLUTION_PREFIX + "_component_panels"
+P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX = P_CONS_THESIS_CONSENSUS_PREFIX + "_component_panels"
+P_CONS_RESOLVED_INTERACTIVE_HTML = P_CONS_THESIS_RESOLUTION_PREFIX + "_interactive.html"
+P_CONS_SUPPORT_INTERACTIVE_HTML = P_CONS_THESIS_CONSENSUS_PREFIX + "_interactive.html"
+P_CONS_RESOLVED_COMPONENT_SUMMARY_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_component_summary.tsv",
+)
+P_CONS_SUPPORT_COMPONENT_SUMMARY_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{_PR_PREFIX}support_threshold_consensus_cell_line_similarity_component_summary.tsv",
+)
+P_CONS_RESOLVED_NODE_LABELS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_full_node_labels.tsv",
+)
+P_CONS_SUPPORT_NODE_LABELS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{_PR_PREFIX}support_threshold_consensus_cell_line_similarity_full_node_labels.tsv",
+)
+PAN_CANCER_GRAPH_INSPECTION_TARGETS = (
+    [
+        P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX + ".pdf",
+        P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX + ".png",
+        P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX + ".svg",
+        P_CONS_RESOLVED_INTERACTIVE_HTML,
+        P_CONS_RESOLVED_COMPONENT_SUMMARY_TSV,
+        P_CONS_RESOLVED_NODE_LABELS_TSV,
+        P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".pdf",
+        P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".png",
+        P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".svg",
+        P_CONS_SUPPORT_INTERACTIVE_HTML,
+        P_CONS_SUPPORT_COMPONENT_SUMMARY_TSV,
+        P_CONS_SUPPORT_NODE_LABELS_TSV,
+    ]
+    if IS_MULTICOHORT_PROFILE else []
+)
+SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT = config.get("support_threshold_consensus_plot_layout", {})
+SUPPORT_THRESHOLD_COMPONENT_LABEL_GAP = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_label_gap",
+        2.0 if _COHORT_UPPER in ("BRCA", "MULTICOHORT_CANCER") else 0.40,
+    )
+)
+SUPPORT_THRESHOLD_NBL_COMPONENT_GAP_FRACTION = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("nbl_component_gap_fraction", 0.57)
+)
+SUPPORT_THRESHOLD_NBL_COMPONENT_MIN_GAP = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("nbl_component_min_gap", 9.5)
+)
+SUPPORT_THRESHOLD_LEGEND_ANCHOR_X = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "legend_anchor_x",
+        0.81 if _COHORT_UPPER == "NBL" else (0.72 if _COHORT_UPPER == "RBL" else 1.01),
+    )
+)
+SUPPORT_THRESHOLD_LEGEND_ANCHOR_Y = SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+    "legend_anchor_y",
+    1.30 if _COHORT_UPPER == "BRCA" else None,
+)
+SUPPORT_THRESHOLD_LEGEND_ANCHOR_Y_ARG = (
+    "" if SUPPORT_THRESHOLD_LEGEND_ANCHOR_Y is None
+    else f"--legend-anchor-y {float(SUPPORT_THRESHOLD_LEGEND_ANCHOR_Y)}"
+)
+SUPPORT_THRESHOLD_LEGEND_ALIGN_MODE = SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+    "legend_align_mode",
+    "default" if _COHORT_UPPER in ("BRCA", "RBL") else "component-band",
+)
+SUPPORT_THRESHOLD_LEGEND_GAP_FRAC = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("legend_gap_frac", 0.025)
+)
+SUPPORT_THRESHOLD_ISOLATE_LABEL_Y_FRAC = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_label_y_frac",
+        0.02 if _COHORT_UPPER == "NBL" else 0.010,
+    )
+)
+SUPPORT_THRESHOLD_ISOLATE_BOX_HEIGHT_FACTOR = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_box_height_factor",
+        2.00,
+    )
+)
+SUPPORT_THRESHOLD_ISOLATE_GAP = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_gap",
+        8.0 if _COHORT_UPPER in ("BRCA", "MULTICOHORT_CANCER") else 4.0,
+    )
+)
+SUPPORT_THRESHOLD_ISOLATE_SPACING = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_spacing",
+        18.0 if _COHORT_UPPER in ("BRCA", "MULTICOHORT_CANCER") else 7.0,
+    )
+)
+SUPPORT_THRESHOLD_DENSE_COMPONENT_MIN_SIZE = int(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("dense_component_min_size", 8)
+)
+SUPPORT_THRESHOLD_DENSE_COMPONENT_MIN_DENSITY = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("dense_component_min_density", 0.25)
+)
+SUPPORT_THRESHOLD_DENSE_COMPONENT_EXPAND_FACTOR = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("dense_component_expand_factor", 1.85)
+)
+SUPPORT_THRESHOLD_COMPONENT_GRID_NCOLS = int(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_grid_ncols",
+        4 if _COHORT_UPPER == "MULTICOHORT_CANCER" else 3,
+    )
+)
+SUPPORT_THRESHOLD_COMPONENT_GRID_NROWS = int(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_grid_nrows",
+        3 if _COHORT_UPPER == "MULTICOHORT_CANCER" else 2,
+    )
+)
+SUPPORT_THRESHOLD_COMPONENT_CELL_WIDTH = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_cell_width",
+        84.0 if _COHORT_UPPER == "MULTICOHORT_CANCER" else (62.0 if _COHORT_UPPER == "BRCA" else 54.0),
+    )
+)
+SUPPORT_THRESHOLD_COMPONENT_CELL_HEIGHT = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_cell_height",
+        42.0 if _COHORT_UPPER == "MULTICOHORT_CANCER" else (54.0 if _COHORT_UPPER == "BRCA" else 27.0),
+    )
+)
+SUPPORT_THRESHOLD_COMPONENT_ROW_GAP = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_row_gap",
+        14.0 if _COHORT_UPPER in ("BRCA", "MULTICOHORT_CANCER") else 5.0,
+    )
+)
+SUPPORT_THRESHOLD_COMPONENT_COL_GAP = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "component_col_gap",
+        14.0 if _COHORT_UPPER == "MULTICOHORT_CANCER" else (12.0 if _COHORT_UPPER == "BRCA" else 8.0),
+    )
+)
+SUPPORT_THRESHOLD_LEGEND_WIDTH = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "legend_width",
+        64.0 if _COHORT_UPPER == "MULTICOHORT_CANCER" else (62.0 if _COHORT_UPPER == "BRCA" else 44.0),
+    )
+)
+SUPPORT_THRESHOLD_ISOLATE_REGION_HEIGHT = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_region_height",
+        20.0 if _COHORT_UPPER == "MULTICOHORT_CANCER" else (18.0 if _COHORT_UPPER == "BRCA" else 8.8),
+    )
+)
+SUPPORT_THRESHOLD_ISOLATE_PANEL_PADDING_X = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("isolate_panel_padding_x", 12.0)
+)
+SUPPORT_THRESHOLD_ISOLATE_PANEL_PADDING_Y = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("isolate_panel_padding_y", 1.4)
+)
+SUPPORT_THRESHOLD_ISOLATE_LABEL_BAND_FRAC = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("isolate_label_band_frac", 0.34)
+)
+SUPPORT_THRESHOLD_ISOLATE_MAX_PER_ROW = int(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_max_per_row",
+        7 if _COHORT_UPPER == "MULTICOHORT_CANCER" else 6,
+    )
+)
+SUPPORT_THRESHOLD_ISOLATE_PANEL_WIDTH_FRAC = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "isolate_panel_width_frac",
+        0.80 if _COHORT_UPPER == "MULTICOHORT_CANCER" else 0.62,
+    )
+)
+SUPPORT_THRESHOLD_FOOTNOTE_REGION_HEIGHT = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("footnote_region_height", 7.0)
+)
+SUPPORT_THRESHOLD_COMPONENT_CELL_FILL_X = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("component_cell_fill_x", 0.78)
+)
+SUPPORT_THRESHOLD_COMPONENT_CELL_FILL_Y = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("component_cell_fill_y", 0.72)
+)
+SUPPORT_THRESHOLD_DENSE_COMPONENT_CELL_FILL_X = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("dense_component_cell_fill_x", 0.92)
+)
+SUPPORT_THRESHOLD_DENSE_COMPONENT_CELL_FILL_Y = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("dense_component_cell_fill_y", 0.84)
+)
+SUPPORT_THRESHOLD_C2_COMPONENT_CELL_FILL_X = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("c2_component_cell_fill_x", 0.88)
+)
+SUPPORT_THRESHOLD_C2_COMPONENT_CELL_FILL_Y = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get("c2_component_cell_fill_y", 0.80)
+)
+SUPPORT_THRESHOLD_C1_X_EXPAND_FACTOR = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "c1_x_expand_factor",
+        4.00 if _COHORT_UPPER == "BRCA" else 2.60,
+    )
+)
+SUPPORT_THRESHOLD_C1_Y_EXPAND_FACTOR = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "c1_y_expand_factor",
+        4.00 if _COHORT_UPPER == "BRCA" else 1.30,
+    )
+)
+SUPPORT_THRESHOLD_C2_X_EXPAND_FACTOR = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "c2_x_expand_factor",
+        2.00 if _COHORT_UPPER == "BRCA" else 1.60,
+    )
+)
+SUPPORT_THRESHOLD_C2_Y_EXPAND_FACTOR = float(
+    SUPPORT_THRESHOLD_CONSENSUS_PLOT_LAYOUT.get(
+        "c2_y_expand_factor",
+        2.00 if _COHORT_UPPER == "BRCA" else 1.15,
+    )
+)
+P_CONS_COMMUNITY_DETECTION_DIR     = os.path.join(P_CONS_ALL_DIR, "community_detection")
+P_CONS_LEIDEN_COMMUNITIES_TSV      = os.path.join(P_CONS_COMMUNITY_DETECTION_DIR, "multicohort_cancer_communities.tsv")
+P_CONS_LEIDEN_SUMMARY_TSV          = os.path.join(P_CONS_COMMUNITY_DETECTION_DIR, "multicohort_cancer_community_summary.tsv")
+P_CONS_LEIDEN_MODULARITY_TSV       = os.path.join(P_CONS_COMMUNITY_DETECTION_DIR, "multicohort_cancer_modularity.tsv")
+P_CONS_LEIDEN_LAYOUT_TSV           = os.path.join(P_CONS_COMMUNITY_DETECTION_DIR, "multicohort_cancer_layout.tsv")
+P_CONS_LEIDEN_FIG_PREFIX           = os.path.join(P_CONS_PLOTS_DIR, "Fig_MULTICOHORT_CANCER_lineage_community")
+COMMUNITY_STABILITY_DIR = os.path.join(P_CONS_ALL_DIR, "community_stability")
+COMMUNITY_STABILITY_ASSIGNMENTS = os.path.join(COMMUNITY_STABILITY_DIR, "community_assignments_long.tsv")
+COMMUNITY_STABILITY_COMPONENT_SUMMARY = os.path.join(COMMUNITY_STABILITY_DIR, "community_stability_component_summary.tsv")
+COMMUNITY_STABILITY_GLOBAL_SUMMARY = os.path.join(COMMUNITY_STABILITY_DIR, "community_stability_global_summary.tsv")
+COMMUNITY_STABILITY_VALIDATION = os.path.join(COMMUNITY_STABILITY_DIR, "community_stability_validation_report.txt")
+COMMUNITY_STABILITY_OUTPUTS = [
+    COMMUNITY_STABILITY_ASSIGNMENTS,
+    os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_matrix_Leiden.tsv"),
+    os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_matrix_Louvain.tsv"),
+    os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_n_valid_Leiden.tsv"),
+    os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_n_valid_Louvain.tsv"),
+    COMMUNITY_STABILITY_COMPONENT_SUMMARY,
+    COMMUNITY_STABILITY_GLOBAL_SUMMARY,
+    os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_coassignment_heatmap_Leiden.pdf"),
+    os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_coassignment_heatmap_Louvain.pdf"),
+    os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_stability_within_between_Leiden.pdf"),
+    os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_stability_within_between_Louvain.pdf"),
+    COMMUNITY_STABILITY_VALIDATION,
+]
+COMMUNITY_STABILITY_CFG = cfg.get("community_stability", {})
+COMMUNITY_STABILITY_ENABLED_PROFILES = {
+    str(p) for p in COMMUNITY_STABILITY_CFG.get("enabled_profiles", ["brca", "nbl", "rbl"])
+}
+COMMUNITY_STABILITY_ENABLED = bool(COMMUNITY_STABILITY_CFG.get("enabled", True)) and (
+    profile_name in COMMUNITY_STABILITY_ENABLED_PROFILES
+)
+COMMUNITY_STABILITY_TARGETS = COMMUNITY_STABILITY_OUTPUTS if COMMUNITY_STABILITY_ENABLED else []
 STUDY_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, config.get("study_design", {}).get("outputs_dirname", "study_design"))
 VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 
@@ -1681,6 +2029,36 @@ rule summarize_p_consensus_all:
         Rscript {params.script} \
           --config {params.config} \
           --profile "{profile_name}" \
+          --threshold {params.threshold} \
+          > {log} 2>&1
+        '''
+
+
+rule plot_p_consensus_direction_comparison_dumbbell:
+    input:
+        brca = p_consensus_direction_summary_for_profile("brca"),
+        nbl = p_consensus_direction_summary_for_profile("nbl"),
+        rbl = p_consensus_direction_summary_for_profile("rbl")
+    output:
+        pdf = P_CONS_DIRECTION_DUMBBELL_PREFIX + ".pdf",
+        png = P_CONS_DIRECTION_DUMBBELL_PREFIX + ".png",
+        svg = P_CONS_DIRECTION_DUMBBELL_PREFIX + ".svg",
+        caption = P_CONS_DIRECTION_DUMBBELL_PREFIX + "_caption.txt"
+    params:
+        script = os.path.join(BASE, "scripts", "plot_p_consensus_direction_dumbbell.R"),
+        out_prefix = P_CONS_DIRECTION_DUMBBELL_PREFIX,
+        threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
+    log: os.path.join(LOGROOT, "plot_p_consensus_direction_comparison_dumbbell.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.pdf}) $(dirname {log})
+        Rscript {params.script} \
+          --brca {input.brca} \
+          --nbl {input.nbl} \
+          --rbl {input.rbl} \
+          --out_prefix {params.out_prefix} \
+          --caption {output.caption} \
           --threshold {params.threshold} \
           > {log} 2>&1
         '''
@@ -1841,40 +2219,110 @@ rule resolve_dsmz_graph_neighbours:
         '''
 
 
-rule plot_resolved_dsmz_similarity_network:
+rule plot_patient_referenced_resolved_cell_line_neighbourhood_graph:
     """
     Thesis figure for the resolved DSMZ similarity network after graph-based
     neighbour resolution. The helper also writes short-name, edge-list, and
     node-stat TSVs into the plot directory for figure provenance.
     """
     input:
-        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv")
+        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv"),
+        script = os.path.join(BASE, "scripts", "visualize_resolved_dsmz_graph.py"),
+        style = os.path.join(BASE, "scripts", "graph_plot_style.py")
     output:
         png = P_CONS_THESIS_RESOLUTION_PREFIX + ".png",
         pdf = P_CONS_THESIS_RESOLUTION_PREFIX + ".pdf",
         svg = P_CONS_THESIS_RESOLUTION_PREFIX + ".svg",
         shortnames = P_CONS_SHORTNAMES_TSV,
         edges = P_CONS_RESOLVED_EDGES_TSV,
-        node_stats = P_CONS_RESOLVED_NODE_STATS_TSV
+        node_stats = P_CONS_RESOLVED_NODE_STATS_TSV,
+        anchor_audit = P_CONS_ANCHOR_AUDIT_TSV
     params:
-        script = os.path.join(BASE, "scripts", "visualize_resolved_dsmz_graph.py"),
         out_prefix = P_CONS_THESIS_RESOLUTION_PREFIX,
-        label = profile_name.upper()
-    log: os.path.join(LOGROOT, "plot_resolved_dsmz_similarity_network.log")
+        label = profile_name.upper(),
+        dense_component_min_size = 8,
+        dense_component_min_density = 0.30,
+        dense_component_expand_factor = 2.00,
+        resolved_component_label_gap = 2.0,
+        resolved_grid_cols = 2,
+        resolved_grid_rows = 2,
+        resolved_cell_width = 96.0,
+        resolved_cell_height = 60.0,
+        resolved_row_gap = 16.0,
+        resolved_col_gap = 18.0,
+        resolved_legend_width = 68.0,
+        resolved_isolate_height = 18.0,
+        resolved_isolate_spacing = 18.0,
+        resolved_isolate_panel_padding_x = 12.0,
+        resolved_isolate_panel_padding_y = 1.4,
+        resolved_isolate_label_band_frac = 0.34,
+        resolved_isolate_max_per_row = 6,
+        resolved_isolate_panel_width_frac = 0.62,
+        resolved_footnote_height = 7.0,
+        resolved_component_cell_fill_x = 0.78,
+        resolved_component_cell_fill_y = 0.72,
+        resolved_dense_component_cell_fill_x = 0.92,
+        resolved_dense_component_cell_fill_y = 0.84,
+        resolved_c2_component_cell_fill_x = 0.88,
+        resolved_c2_component_cell_fill_y = 0.80,
+        c1_x_expand_factor = 3.00,
+        c1_y_expand_factor = 3.00,
+        c2_x_expand_factor = 1.35,
+        c2_y_expand_factor = 1.05,
+        isolate_gap = 8.0,
+        isolate_box_height_factor = 2.00,
+        isolate_label_y_frac = 0.010,
+        isolate_label_left_pad = 14.0,
+        legend_alignment_mode = "component-band"
+    log: os.path.join(LOGROOT, "plot_patient_referenced_resolved_cell_line_neighbourhood_graph.log")
     conda: CONDA_ENV_PY
     shell:
         r'''
         mkdir -p {P_CONS_PLOTS_DIR}
-        python {params.script} \
+        python {input.script} \
           {input.resolved_tsv} \
           {params.out_prefix} \
           {params.label} \
+          --dense-component-min-size {params.dense_component_min_size} \
+          --dense-component-min-density {params.dense_component_min_density} \
+          --dense-component-expand-factor {params.dense_component_expand_factor} \
+          --component-label-gap {params.resolved_component_label_gap} \
+          --component-grid-ncols {params.resolved_grid_cols} \
+          --component-grid-nrows {params.resolved_grid_rows} \
+          --component-cell-width {params.resolved_cell_width} \
+          --component-cell-height {params.resolved_cell_height} \
+          --component-row-gap {params.resolved_row_gap} \
+          --component-col-gap {params.resolved_col_gap} \
+          --legend-width {params.resolved_legend_width} \
+          --isolate-region-height {params.resolved_isolate_height} \
+          --footnote-region-height {params.resolved_footnote_height} \
+          --component-cell-fill-x {params.resolved_component_cell_fill_x} \
+          --component-cell-fill-y {params.resolved_component_cell_fill_y} \
+          --dense-component-cell-fill-x {params.resolved_dense_component_cell_fill_x} \
+          --dense-component-cell-fill-y {params.resolved_dense_component_cell_fill_y} \
+          --c2-component-cell-fill-x {params.resolved_c2_component_cell_fill_x} \
+          --c2-component-cell-fill-y {params.resolved_c2_component_cell_fill_y} \
+          --c1-x-expand-factor {params.c1_x_expand_factor} \
+          --c1-y-expand-factor {params.c1_y_expand_factor} \
+          --c2-x-expand-factor {params.c2_x_expand_factor} \
+          --c2-y-expand-factor {params.c2_y_expand_factor} \
+          --isolate-gap {params.isolate_gap} \
+          --isolate-spacing {params.resolved_isolate_spacing} \
+          --isolate-panel-padding-x {params.resolved_isolate_panel_padding_x} \
+          --isolate-panel-padding-y {params.resolved_isolate_panel_padding_y} \
+          --isolate-label-band-frac {params.resolved_isolate_label_band_frac} \
+          --isolate-max-per-row {params.resolved_isolate_max_per_row} \
+          --isolate-panel-width-frac {params.resolved_isolate_panel_width_frac} \
+          --isolate-box-height-factor {params.isolate_box_height_factor} \
+          --isolate-label-y-frac {params.isolate_label_y_frac} \
+          --isolate-label-left-pad {params.isolate_label_left_pad} \
+          --legend-alignment-mode {params.legend_alignment_mode} \
           > {log} 2>&1
         test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
         '''
 
 
-rule build_dsmz_similarity_network_consensus:
+rule build_patient_referenced_support_threshold_consensus_cell_line_similarity_network:
     """
     Aggregates per-direction DSMZ similarity graph edge files into a single
     consensus edge table for the thesis consensus-network figure.
@@ -1891,10 +2339,14 @@ rule build_dsmz_similarity_network_consensus:
     params:
         script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
         tumour_nh_dir = TUMOUR_NH_ROOT_ABS,
-        min_support = cfg.get(
-            "tumour_neighbourhoods", {}
-        ).get("similarity_consensus_min_support", max(2, (len(CONS_DIRECTIONS) + 1) // 2))
-    log: os.path.join(LOGROOT, "build_dsmz_similarity_network_consensus.log")
+        directions = ",".join(CONS_DIRECTIONS),
+        # Majority-style support threshold m = max(2, ceil(|R| / 2)); resolved
+        # at Snakefile load time from the configured representation list; any
+        # explicit tumour_neighbourhoods.similarity_consensus_min_support value
+        # must match the recomputed value (see
+        # _resolve_majority_support_threshold above).
+        min_support = SIMILARITY_CONSENSUS_MIN_SUPPORT
+    log: os.path.join(LOGROOT, "build_patient_referenced_support_threshold_consensus_cell_line_similarity_network.log")
     conda: CONDA_ENV_PY
     shell:
         r'''
@@ -1903,6 +2355,7 @@ rule build_dsmz_similarity_network_consensus:
           --tumour_nh_dir {params.tumour_nh_dir} \
           --out_edges {output.edges} \
           --min_support {params.min_support} \
+          --directions {params.directions} \
           --name_map {input.shortnames} \
           --require_short \
           > {log} 2>&1
@@ -1910,127 +2363,331 @@ rule build_dsmz_similarity_network_consensus:
         '''
 
 
-rule plot_dsmz_similarity_network_consensus:
+rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network:
     """
     Thesis figure for the consensus DSMZ similarity network aggregated across
     configured similarity-network directions.
     """
     input:
         edges = P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV,
-        shortnames = P_CONS_SHORTNAMES_TSV
+        shortnames = P_CONS_SHORTNAMES_TSV,
+        script = os.path.join(BASE, "scripts", "plot_consensus_graph.py"),
+        style = os.path.join(BASE, "scripts", "graph_plot_style.py")
     output:
         png = P_CONS_THESIS_CONSENSUS_PREFIX + ".png",
         pdf = P_CONS_THESIS_CONSENSUS_PREFIX + ".pdf",
         svg = P_CONS_THESIS_CONSENSUS_PREFIX + ".svg"
     params:
-        script = os.path.join(BASE, "scripts", "plot_consensus_graph.py"),
         out_prefix = P_CONS_THESIS_CONSENSUS_PREFIX,
-        label = profile_name.upper()
-    log: os.path.join(LOGROOT, "plot_dsmz_similarity_network_consensus.log")
+        label = profile_name.upper(),
+        component_label_gap = SUPPORT_THRESHOLD_COMPONENT_LABEL_GAP,
+        nbl_component_gap_fraction = SUPPORT_THRESHOLD_NBL_COMPONENT_GAP_FRACTION,
+        nbl_component_min_gap = SUPPORT_THRESHOLD_NBL_COMPONENT_MIN_GAP,
+        legend_anchor_x = SUPPORT_THRESHOLD_LEGEND_ANCHOR_X,
+        legend_anchor_y_arg = SUPPORT_THRESHOLD_LEGEND_ANCHOR_Y_ARG,
+        legend_align_mode = SUPPORT_THRESHOLD_LEGEND_ALIGN_MODE,
+        legend_gap_frac = SUPPORT_THRESHOLD_LEGEND_GAP_FRAC,
+        isolate_label_y_frac = SUPPORT_THRESHOLD_ISOLATE_LABEL_Y_FRAC,
+        isolate_box_height_factor = SUPPORT_THRESHOLD_ISOLATE_BOX_HEIGHT_FACTOR,
+        isolate_gap = SUPPORT_THRESHOLD_ISOLATE_GAP,
+        isolate_label_left_pad = 28.0 if _COHORT_UPPER == "BRCA" else 0.0,
+        isolate_spacing = SUPPORT_THRESHOLD_ISOLATE_SPACING,
+        isolate_panel_padding_x = SUPPORT_THRESHOLD_ISOLATE_PANEL_PADDING_X,
+        isolate_panel_padding_y = SUPPORT_THRESHOLD_ISOLATE_PANEL_PADDING_Y,
+        isolate_label_band_frac = SUPPORT_THRESHOLD_ISOLATE_LABEL_BAND_FRAC,
+        isolate_max_per_row = SUPPORT_THRESHOLD_ISOLATE_MAX_PER_ROW,
+        isolate_panel_width_frac = SUPPORT_THRESHOLD_ISOLATE_PANEL_WIDTH_FRAC,
+        dense_component_min_size = SUPPORT_THRESHOLD_DENSE_COMPONENT_MIN_SIZE,
+        dense_component_min_density = SUPPORT_THRESHOLD_DENSE_COMPONENT_MIN_DENSITY,
+        dense_component_expand_factor = SUPPORT_THRESHOLD_DENSE_COMPONENT_EXPAND_FACTOR,
+        support_grid_cols = SUPPORT_THRESHOLD_COMPONENT_GRID_NCOLS,
+        support_grid_rows = SUPPORT_THRESHOLD_COMPONENT_GRID_NROWS,
+        support_cell_width = SUPPORT_THRESHOLD_COMPONENT_CELL_WIDTH,
+        support_cell_height = SUPPORT_THRESHOLD_COMPONENT_CELL_HEIGHT,
+        support_row_gap = SUPPORT_THRESHOLD_COMPONENT_ROW_GAP,
+        support_col_gap = SUPPORT_THRESHOLD_COMPONENT_COL_GAP,
+        support_legend_width = SUPPORT_THRESHOLD_LEGEND_WIDTH,
+        support_isolate_height = SUPPORT_THRESHOLD_ISOLATE_REGION_HEIGHT,
+        support_footnote_height = SUPPORT_THRESHOLD_FOOTNOTE_REGION_HEIGHT,
+        support_component_cell_fill_x = SUPPORT_THRESHOLD_COMPONENT_CELL_FILL_X,
+        support_component_cell_fill_y = SUPPORT_THRESHOLD_COMPONENT_CELL_FILL_Y,
+        support_dense_component_cell_fill_x = SUPPORT_THRESHOLD_DENSE_COMPONENT_CELL_FILL_X,
+        support_dense_component_cell_fill_y = SUPPORT_THRESHOLD_DENSE_COMPONENT_CELL_FILL_Y,
+        support_c2_component_cell_fill_x = SUPPORT_THRESHOLD_C2_COMPONENT_CELL_FILL_X,
+        support_c2_component_cell_fill_y = SUPPORT_THRESHOLD_C2_COMPONENT_CELL_FILL_Y,
+        c1_x_expand_factor = SUPPORT_THRESHOLD_C1_X_EXPAND_FACTOR,
+        c1_y_expand_factor = SUPPORT_THRESHOLD_C1_Y_EXPAND_FACTOR,
+        c2_x_expand_factor = SUPPORT_THRESHOLD_C2_X_EXPAND_FACTOR,
+        c2_y_expand_factor = SUPPORT_THRESHOLD_C2_Y_EXPAND_FACTOR
+    log: os.path.join(LOGROOT, "plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network.log")
     conda: CONDA_ENV_PY
     shell:
         r'''
         mkdir -p {P_CONS_PLOTS_DIR}
-        python {params.script} \
+        python {input.script} \
           --edges {input.edges} \
           --nodes {input.shortnames} \
           --nodes-col short_id \
           --out {params.out_prefix} \
           --label {params.label} \
+          --component-label-gap {params.component_label_gap} \
+          --nbl-component-gap-fraction {params.nbl_component_gap_fraction} \
+          --nbl-component-min-gap {params.nbl_component_min_gap} \
+          --legend-anchor-x {params.legend_anchor_x} \
+          {params.legend_anchor_y_arg} \
+          --legend-align-mode {params.legend_align_mode} \
+          --legend-gap-frac {params.legend_gap_frac} \
+          --isolate-label-y-frac {params.isolate_label_y_frac} \
+          --isolate-box-height-factor {params.isolate_box_height_factor} \
+          --isolate-gap {params.isolate_gap} \
+          --isolate-label-left-pad {params.isolate_label_left_pad} \
+          --isolate-spacing {params.isolate_spacing} \
+          --isolate-panel-padding-x {params.isolate_panel_padding_x} \
+          --isolate-panel-padding-y {params.isolate_panel_padding_y} \
+          --isolate-label-band-frac {params.isolate_label_band_frac} \
+          --isolate-max-per-row {params.isolate_max_per_row} \
+          --isolate-panel-width-frac {params.isolate_panel_width_frac} \
+          --dense-component-min-size {params.dense_component_min_size} \
+          --dense-component-min-density {params.dense_component_min_density} \
+          --dense-component-expand-factor {params.dense_component_expand_factor} \
+          --component-grid-ncols {params.support_grid_cols} \
+          --component-grid-nrows {params.support_grid_rows} \
+          --component-cell-width {params.support_cell_width} \
+          --component-cell-height {params.support_cell_height} \
+          --component-row-gap {params.support_row_gap} \
+          --component-col-gap {params.support_col_gap} \
+          --legend-width {params.support_legend_width} \
+          --isolate-region-height {params.support_isolate_height} \
+          --footnote-region-height {params.support_footnote_height} \
+          --component-cell-fill-x {params.support_component_cell_fill_x} \
+          --component-cell-fill-y {params.support_component_cell_fill_y} \
+          --dense-component-cell-fill-x {params.support_dense_component_cell_fill_x} \
+          --dense-component-cell-fill-y {params.support_dense_component_cell_fill_y} \
+          --c2-component-cell-fill-x {params.support_c2_component_cell_fill_x} \
+          --c2-component-cell-fill-y {params.support_c2_component_cell_fill_y} \
+          --c1-x-expand-factor {params.c1_x_expand_factor} \
+          --c1-y-expand-factor {params.c1_y_expand_factor} \
+          --c2-x-expand-factor {params.c2_x_expand_factor} \
+          --c2-y-expand-factor {params.c2_y_expand_factor} \
           > {log} 2>&1
         test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
         '''
 
 
-# =============================================================================
-# STAGE 6b: PUBLICATION CELL LINE COMPONENT NETWORK FIGURE (CROSS-COHORT)
-# =============================================================================
-# Combines resolved component graphs from BRCA, NBL, and (optionally) RBL into
-# a single 4-panel manuscript figure with unified visual grammar.  RBL inputs
-# are passed only when the per-cohort plots directory exists at run time.
-# Old per-cohort diagnostic rules (plot_resolved_dsmz_similarity_network,
-# plot_dsmz_similarity_network_consensus) are retained as QC outputs.
+if IS_MULTICOHORT_PROFILE:
 
-_PUB_NET_ROOT = os.path.join(PIPE_ROOT, "results", "unsupervised")
-_PUB_NET_OUTDIR = os.path.join(_PUB_NET_ROOT, "publication", "cell_line_component_networks")
-_PUB_NET_LOG = os.path.join(PIPE_ROOT, "logs", "publication")
+    rule plot_pan_cancer_resolved_graph_inspection:
+        """
+        Component-panel and interactive inspection outputs for the dense
+        multicohort resolved graph. These are generated from the audited graph
+        sidecars and do not alter graph topology or anchor selection.
+        """
+        input:
+            edges = P_CONS_RESOLVED_EDGES_TSV,
+            node_stats = P_CONS_RESOLVED_NODE_STATS_TSV,
+            display_names = P_CONS_SHORTNAMES_TSV,
+            metadata = P_CONS_DSMZ_META_CSV,
+            script = os.path.join(BASE, "scripts", "plot_pan_cancer_graph_inspection.py")
+        output:
+            panels_pdf = P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX + ".pdf",
+            panels_png = P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX + ".png",
+            panels_svg = P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX + ".svg",
+            interactive_html = P_CONS_RESOLVED_INTERACTIVE_HTML,
+            component_summary = P_CONS_RESOLVED_COMPONENT_SUMMARY_TSV,
+            node_labels = P_CONS_RESOLVED_NODE_LABELS_TSV
+        params:
+            title_label = "Pan-cancer resolved cell-line neighbourhood graph"
+        log: os.path.join(LOGROOT, "plot_pan_cancer_resolved_graph_inspection.log")
+        conda: CONDA_ENV_PY
+        shell:
+            r'''
+            mkdir -p {P_CONS_PLOTS_DIR}
+            python {input.script} \
+              --graph-type resolved \
+              --edges {input.edges} \
+              --node-stats {input.node_stats} \
+              --display-names {input.display_names} \
+              --metadata {input.metadata} \
+              --panels-pdf {output.panels_pdf} \
+              --panels-png {output.panels_png} \
+              --panels-svg {output.panels_svg} \
+              --interactive-html {output.interactive_html} \
+              --component-summary-out {output.component_summary} \
+              --node-labels-out {output.node_labels} \
+              --label "{params.title_label}" \
+              > {log} 2>&1
+            test -s {output.panels_pdf} || (echo "ERROR: missing {output.panels_pdf}" >&2; exit 1)
+            test -s {output.panels_png} || (echo "ERROR: missing {output.panels_png}" >&2; exit 1)
+            test -s {output.panels_svg} || (echo "ERROR: missing {output.panels_svg}" >&2; exit 1)
+            test -s {output.interactive_html} || (echo "ERROR: missing {output.interactive_html}" >&2; exit 1)
+            test -s {output.component_summary} || (echo "ERROR: missing {output.component_summary}" >&2; exit 1)
+            test -s {output.node_labels} || (echo "ERROR: missing {output.node_labels}" >&2; exit 1)
+            '''
 
-def _cohort_cons_plots(cohort):
-    return os.path.join(_PUB_NET_ROOT, cohort,
-                        "tumour_neighbourhoods", "final_consensus_all", "plots")
 
-def _cohort_resolved(cohort):
-    return os.path.join(_PUB_NET_ROOT, cohort,
-                        "tumour_neighbourhoods", "final_consensus_all",
-                        "resolved_dsmz_neighbours.tsv")
+    rule plot_pan_cancer_support_threshold_graph_inspection:
+        """
+        Component-panel and interactive inspection outputs for the dense
+        multicohort support-threshold consensus graph. These are generated from
+        the audited consensus edge sidecar and short-name table.
+        """
+        input:
+            edges = P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV,
+            display_names = P_CONS_SHORTNAMES_TSV,
+            metadata = P_CONS_DSMZ_META_CSV,
+            script = os.path.join(BASE, "scripts", "plot_pan_cancer_graph_inspection.py")
+        output:
+            panels_pdf = P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".pdf",
+            panels_png = P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".png",
+            panels_svg = P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".svg",
+            interactive_html = P_CONS_SUPPORT_INTERACTIVE_HTML,
+            component_summary = P_CONS_SUPPORT_COMPONENT_SUMMARY_TSV,
+            node_labels = P_CONS_SUPPORT_NODE_LABELS_TSV
+        params:
+            title_label = "Pan-cancer support-threshold consensus cell-line similarity network"
+        log: os.path.join(LOGROOT, "plot_pan_cancer_support_threshold_graph_inspection.log")
+        conda: CONDA_ENV_PY
+        shell:
+            r'''
+            mkdir -p {P_CONS_PLOTS_DIR}
+            python {input.script} \
+              --graph-type support_threshold \
+              --edges {input.edges} \
+              --display-names {input.display_names} \
+              --metadata {input.metadata} \
+              --panels-pdf {output.panels_pdf} \
+              --panels-png {output.panels_png} \
+              --panels-svg {output.panels_svg} \
+              --interactive-html {output.interactive_html} \
+              --component-summary-out {output.component_summary} \
+              --node-labels-out {output.node_labels} \
+              --label "{params.title_label}" \
+              > {log} 2>&1
+            test -s {output.panels_pdf} || (echo "ERROR: missing {output.panels_pdf}" >&2; exit 1)
+            test -s {output.panels_png} || (echo "ERROR: missing {output.panels_png}" >&2; exit 1)
+            test -s {output.panels_svg} || (echo "ERROR: missing {output.panels_svg}" >&2; exit 1)
+            test -s {output.interactive_html} || (echo "ERROR: missing {output.interactive_html}" >&2; exit 1)
+            test -s {output.component_summary} || (echo "ERROR: missing {output.component_summary}" >&2; exit 1)
+            test -s {output.node_labels} || (echo "ERROR: missing {output.node_labels}" >&2; exit 1)
+            '''
 
-def _cohort_node_stats(cohort):
-    return os.path.join(_cohort_cons_plots(cohort), "dsmz_cellline_graph_node_stats.tsv")
 
-def _cohort_edges(cohort):
-    return os.path.join(_cohort_cons_plots(cohort), "dsmz_cellline_graph_edges.tsv")
-
-
-rule plot_publication_cell_line_component_networks:
+rule community_stability_analysis:
     """
-    Publication-level cell line similarity component network figure spanning
-    BRCA, NBL, and RBL cohorts.  Produces a combined 4-panel figure, input
-    validation report, component community summary, component annotation tables,
-    layout coordinates, consensus vs resolved comparison, supplementary table,
-    and figure provenance record.
+    Cross-direction cell-line graph community stability diagnostic.
 
-    BRCA and NBL inputs are required DAG dependencies.  RBL inputs are
-    supplied via params and passed to the script only when the files exist
-    (handled by the conditional shell logic below), so the rule can run even
-    if the RBL profile has not yet been processed.
-
-    Do not use this rule's outputs as primary manuscript figures until all
-    three cohorts have been processed.
+    Leiden/Louvain assignments are direction-specific diagnostics. This rule
+    compares pairwise same-community co-assignment frequencies across directions
+    against the final resolved graph components. It does not create or interpret
+    a final consensus Leiden/Louvain community plot.
     """
     input:
-        brca_resolved   = _cohort_resolved("brca"),
-        brca_node_stats = _cohort_node_stats("brca"),
-        brca_edges      = _cohort_edges("brca"),
-        nbl_resolved    = _cohort_resolved("nbl"),
-        nbl_node_stats  = _cohort_node_stats("nbl"),
-        nbl_edges       = _cohort_edges("nbl"),
+        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv"),
+        shortnames = P_CONS_SHORTNAMES_TSV,
+        node_annots = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_node_annotations_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
     output:
-        validation   = os.path.join(_PUB_NET_OUTDIR, "network_input_validation.tsv"),
-        summary      = os.path.join(_PUB_NET_OUTDIR, "cell_line_component_community_summary.tsv"),
-        annotations  = os.path.join(_PUB_NET_OUTDIR, "cell_line_component_annotations.tsv"),
-        fig_pdf      = os.path.join(_PUB_NET_OUTDIR, "Fig_cell_line_similarity_components_combined.pdf"),
-        fig_svg      = os.path.join(_PUB_NET_OUTDIR, "Fig_cell_line_similarity_components_combined.svg"),
-        fig_png      = os.path.join(_PUB_NET_OUTDIR, "Fig_cell_line_similarity_components_combined.png"),
-        layout_coords = os.path.join(_PUB_NET_OUTDIR, "cell_line_network_layout_coordinates.tsv"),
-        comparison   = os.path.join(_PUB_NET_OUTDIR, "consensus_resolved_comparison.tsv"),
-        supp         = os.path.join(_PUB_NET_OUTDIR, "supp_cell_line_component_annotations.tsv"),
-        provenance   = os.path.join(_PUB_NET_OUTDIR, "figure_provenance.tsv"),
+        assignments = COMMUNITY_STABILITY_ASSIGNMENTS,
+        matrix_leiden = os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_matrix_Leiden.tsv"),
+        matrix_louvain = os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_matrix_Louvain.tsv"),
+        nvalid_leiden = os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_n_valid_Leiden.tsv"),
+        nvalid_louvain = os.path.join(COMMUNITY_STABILITY_DIR, "community_coassignment_n_valid_Louvain.tsv"),
+        component_summary = COMMUNITY_STABILITY_COMPONENT_SUMMARY,
+        global_summary = COMMUNITY_STABILITY_GLOBAL_SUMMARY,
+        heatmap_leiden = os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_coassignment_heatmap_Leiden.pdf"),
+        heatmap_louvain = os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_coassignment_heatmap_Louvain.pdf"),
+        within_between_leiden = os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_stability_within_between_Leiden.pdf"),
+        within_between_louvain = os.path.join(COMMUNITY_STABILITY_DIR, "Fig_community_stability_within_between_Louvain.pdf"),
+        validation = COMMUNITY_STABILITY_VALIDATION
     params:
-        script        = os.path.join(SCRIPTS_DIR, "plot_publication_cell_line_component_networks.py"),
-        outdir        = _PUB_NET_OUTDIR,
-        rbl_resolved  = _cohort_resolved("rbl"),
-        rbl_node_stats = _cohort_node_stats("rbl"),
-        rbl_edges     = _cohort_edges("rbl"),
-    log: os.path.join(_PUB_NET_LOG, "plot_publication_cell_line_component_networks.log")
+        script = os.path.join(BASE, "scripts", "analyze_community_stability.py"),
+        tumour_nh_root = TUMOUR_NH_ROOT_ABS,
+        outdir = COMMUNITY_STABILITY_DIR,
+        directions = ",".join(CONS_DIRECTIONS),
+        cohort = profile_name
+    log: os.path.join(LOGROOT, "community_stability_analysis.log")
     conda: CONDA_ENV_PY
     shell:
         r'''
-        mkdir -p {params.outdir} {_PUB_NET_LOG}
+        mkdir -p {params.outdir}
         python {params.script} \
-          --brca-resolved   {input.brca_resolved} \
-          --brca-node-stats {input.brca_node_stats} \
-          --brca-edges      {input.brca_edges} \
-          --nbl-resolved    {input.nbl_resolved} \
-          --nbl-node-stats  {input.nbl_node_stats} \
-          --nbl-edges       {input.nbl_edges} \
-          $([ -f "{params.rbl_resolved}"   ] && echo "--rbl-resolved {params.rbl_resolved}"     || true) \
-          $([ -f "{params.rbl_node_stats}" ] && echo "--rbl-node-stats {params.rbl_node_stats}" || true) \
-          $([ -f "{params.rbl_edges}"      ] && echo "--rbl-edges {params.rbl_edges}"           || true) \
-          --out-dir {params.outdir} \
+          --cohort "{params.cohort}" \
+          --tumour-nh-root {params.tumour_nh_root} \
+          --directions "{params.directions}" \
+          --resolved-tsv {input.resolved_tsv} \
+          --shortnames-tsv {input.shortnames} \
+          --outdir {params.outdir} \
           > {log} 2>&1
-        test -s {output.fig_pdf} || (echo "ERROR: missing {output.fig_pdf}" >&2; exit 1)
+        test -s {output.assignments} || (echo "ERROR: missing {output.assignments}" >&2; exit 1)
+        test -s {output.global_summary} || (echo "ERROR: missing {output.global_summary}" >&2; exit 1)
         '''
 
+
+# =============================================================================
+# STAGE 6b: MULTICOHORT_CANCER LEIDEN COMMUNITY DETECTION
+# =============================================================================
+
+rule compute_multicohort_cancer_communities:
+    """
+    Unweighted Leiden community detection on the final resolved MULTICOHORT_CANCER
+    DSMZ cell-line graph (56 nodes, 155 edges, 9 components).
+    Produces per-node community assignments, community summary, modularity table,
+    layout coordinates, and a two-panel lineage/community PDF+PNG figure.
+    Uses igraph::cluster_leiden() — does NOT fall back to Louvain.
+    Runs only for the multicohort_cancer profile.
+    """
+    input:
+        edges         = P_CONS_RESOLVED_EDGES_TSV,
+        node_stats    = P_CONS_RESOLVED_NODE_STATS_TSV,
+        anchor_audit  = P_CONS_ANCHOR_AUDIT_TSV,
+        shortnames    = P_CONS_SHORTNAMES_TSV,
+        metadata      = MC_META,
+    output:
+        communities       = P_CONS_LEIDEN_COMMUNITIES_TSV,
+        community_summary = P_CONS_LEIDEN_SUMMARY_TSV,
+        modularity        = P_CONS_LEIDEN_MODULARITY_TSV,
+        layout            = P_CONS_LEIDEN_LAYOUT_TSV,
+        pdf               = P_CONS_LEIDEN_FIG_PREFIX + ".pdf",
+        png               = P_CONS_LEIDEN_FIG_PREFIX + ".png",
+    params:
+        script        = os.path.join(BASE, "scripts",
+                            "compute_and_plot_multicohort_cancer_communities.R"),
+        helper_annots = os.path.join(
+            TUMOUR_NH_ROOT, "Entropy_corr", "final_consensus",
+            "cell_line_similarity_graph_node_annotations_Entropy_corr.tsv"
+        ),
+        seed          = 42,
+    log: os.path.join(LOGROOT, "compute_multicohort_cancer_communities.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.communities})
+        mkdir -p $(dirname {log})
+        Rscript {params.script} \
+          --edges                   {input.edges} \
+          --node-stats              {input.node_stats} \
+          --anchor-audit            {input.anchor_audit} \
+          --shortnames              {input.shortnames} \
+          --metadata                {input.metadata} \
+          --helper-node-annotations {params.helper_annots} \
+          --out-communities         {output.communities} \
+          --out-community-summary   {output.community_summary} \
+          --out-modularity          {output.modularity} \
+          --out-layout              {output.layout} \
+          --out-pdf                 {output.pdf} \
+          --out-png                 {output.png} \
+          --seed                    {params.seed} \
+          > {log} 2>&1
+        test -s {output.communities}       || (echo "ERROR: missing {output.communities}" >&2; exit 1)
+        test -s {output.community_summary} || (echo "ERROR: missing {output.community_summary}" >&2; exit 1)
+        test -s {output.modularity}        || (echo "ERROR: missing {output.modularity}" >&2; exit 1)
+        test -s {output.layout}            || (echo "ERROR: missing {output.layout}" >&2; exit 1)
+        test -s {output.pdf}               || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.png}               || (echo "ERROR: missing {output.png}" >&2; exit 1)
+        '''
 
 # =============================================================================
 # STAGE 7: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS
@@ -2058,7 +2715,10 @@ else:
     DESEQ2_ENABLED = bool(_enabled_override)
 
 # Cross-direction aggregated graph node stats (produced by aggregate_graph_node_stats)
-NODE_STATS_TSV = os.path.join(P_CONS_ALL_DIR, "dsmz_cellline_graph_node_stats.tsv")
+NODE_STATS_TSV = os.path.join(
+    P_CONS_ALL_DIR,
+    f"{_PR_PREFIX}aggregated_cell_line_similarity_graph_node_stats.tsv",
+)
 DESEQ2_NODE_STATS_TSV = P_CONS_RESOLVED_NODE_STATS_TSV
 
 if DESEQ2_ENABLED:
@@ -2067,8 +2727,9 @@ if DESEQ2_ENABLED:
     # RULE: aggregate_graph_node_stats
     #
     # Picks the best-direction graph node annotations and writes a single
-    # dsmz_cellline_graph_node_stats.tsv in P_CONS_ALL_DIR.  Best direction
-    # is selected at runtime from p_consensus_direction_summary.tsv.
+    # patient_referenced_aggregated_cell_line_similarity_graph_node_stats.tsv
+    # (or pan_cancer_aggregated_… for the multicohort profile) in P_CONS_ALL_DIR.
+    # Best direction is selected at runtime from p_consensus_direction_summary.tsv.
     # -------------------------------------------------------------------------
     rule aggregate_graph_node_stats:
         input:
@@ -2280,52 +2941,66 @@ if DESEQ2_ENABLED:
     # -----------------------------------------------------------------------------
     rule derive_anchor_list:
         """
-        Selects one deterministic bridge-like anchor per non-isolate component.
-        Anchors are ranked by betweenness descending, degree descending, and
-        cell-line identifier ascending.
+        Extracts canonical anchor cell lines from
+        patient_referenced_resolved_cell_line_neighbourhood_anchor_centrality_audit.tsv
+        (or the pan_cancer_… variant for the multicohort profile; produced by
+        plot_patient_referenced_resolved_cell_line_neighbourhood_graph).  The anchor set is
+        the union of:
+          - degree_anchor_selected     : highest-degree node per component
+            (alias for most_connected_selected)
+          - bridge_betweenness_selected : maximum unweighted unnormalised
+            betweenness node per component
+            (alias for canonical_bridge_selected)
+        Selection logic:
+          Primary  -- use anchor_selected column if present (schema v2+)
+          Fallback -- union of most_connected_selected OR canonical_bridge_selected
+            (schema v1 backward compatibility)
+        Duplicate nodes (selected by both criteria) are de-duplicated; both
+        reasons are retained in anchor_components.tsv via the source audit file.
+        Two output files are written for use in deseq2_isolate_degs.R:
+          anchor_list.csv        -- comma-separated node IDs of canonical anchors
+          anchor_components.tsv  -- two-column TSV (anchor<TAB>component)
         """
         input:
-            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+            anchor_audit = P_CONS_ANCHOR_AUDIT_TSV
         output:
-            anchor_csv = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
-            anchor_components = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv"),
-            anchor_tsv = os.path.join(DESEQ2_INPUT_DIR, "bridge_like_anchor_cell_lines.tsv")
+            anchor_list_csv       = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
+            anchor_components_tsv = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv")
         log: os.path.join(LOGROOT, "derive_anchor_list.log")
-        conda: CONDA_ENV_R
         shell:
             r'''
-            Rscript -e '
-            suppressPackageStartupMessages({{
-              library(readr)
-              library(dplyr)
-            }})
-            meta <- read_tsv("{input.meta_comp}", show_col_types = FALSE)
-            req <- c("cell_line", "component", "is_isolate", "degree", "betweenness")
-            miss <- setdiff(req, colnames(meta))
-            if (length(miss) > 0) stop("metadata_with_components missing columns: ", paste(miss, collapse = ", "))
-            anchors <- meta %>%
-              mutate(
-                cell_line = as.character(cell_line),
-                component = as.character(component),
-                is_isolate = tolower(as.character(is_isolate)) %in% c("true", "1", "yes"),
-                degree = suppressWarnings(as.numeric(degree)),
-                betweenness = suppressWarnings(as.numeric(betweenness))
-              ) %>%
-              distinct(cell_line, component, is_isolate, degree, betweenness) %>%
-              filter(!is_isolate, !is.na(component), component != "", tolower(component) != "na") %>%
-              group_by(component) %>%
-              filter(n() >= 2) %>%
-              arrange(desc(betweenness), desc(degree), cell_line, .by_group = TRUE) %>%
-              slice(1) %>%
-              ungroup() %>%
-              transmute(anchor = cell_line, component, degree, betweenness)
-            write_lines(paste(anchors$anchor, collapse = ","), "{output.anchor_csv}")
-            write_tsv(anchors %>% select(anchor, component), "{output.anchor_components}")
-            write_tsv(anchors %>% rename(cell_line = anchor), "{output.anchor_tsv}")
-            ' > {log} 2>&1
-            test -s {output.anchor_components} || (echo -e "anchor\tcomponent" > {output.anchor_components})
-            test -f {output.anchor_csv} || touch {output.anchor_csv}
-            test -s {output.anchor_tsv} || (echo -e "cell_line\tcomponent\tdegree\tbetweenness" > {output.anchor_tsv})
+            awk -F'\t' 'BEGIN {{ OFS="\t" }}
+              NR==1 {{
+                for(i=1;i<=NF;i++) {{
+                  if($i=="node_id")                  nid=i
+                  if($i=="component_id")             cid=i
+                  if($i=="anchor_selected")          asel=i
+                  if($i=="most_connected_selected")  mcs=i
+                  if($i=="canonical_bridge_selected") cbs=i
+                }}
+                if(!nid) {{ print "ERROR: column node_id not found" > "/dev/stderr"; exit 1 }}
+                if(!cid) {{ print "ERROR: column component_id not found" > "/dev/stderr"; exit 1 }}
+                if(!asel && !mcs && !cbs) {{
+                  print "ERROR: no anchor selection column found (expected anchor_selected, most_connected_selected, or canonical_bridge_selected)" > "/dev/stderr"
+                  exit 1
+                }}
+                print "anchor","component"
+                next
+              }}
+              NR>1 {{
+                if(asel) {{
+                  selected = ($asel=="True" || $asel=="TRUE")
+                }} else {{
+                  selected = ($mcs=="True" || $mcs=="TRUE" || $cbs=="True" || $cbs=="TRUE")
+                }}
+                if(selected) print $nid,$cid
+              }}
+            ' {input.anchor_audit} > {output.anchor_components_tsv} 2> {log}
+            awk -F'\t' 'NR>1 {{ print $1 }}' {output.anchor_components_tsv} \
+              | sort -u | paste -sd',' > {output.anchor_list_csv}
+            echo "[derive_anchor_list] Schema: $(head -1 {input.anchor_audit} | tr '\t' '\n' | grep -n 'anchor_selected\|most_connected\|canonical_bridge' | head -5)" >> {log}
+            echo "[derive_anchor_list] Anchors: $(cat {output.anchor_list_csv})" >> {log}
+            echo "[derive_anchor_list] anchor_components rows: $(wc -l < {output.anchor_components_tsv})" >> {log}
             '''
 
 
@@ -2334,18 +3009,22 @@ if DESEQ2_ENABLED:
     # -----------------------------------------------------------------------------
     rule deseq2_isolate_degs:
         """
-        Runs DESeq2 isolate-vs-rest contrasts for each isolate cell line identified
-        by the graph resolution stage.  Produces per-contrast DEG tables, filtered
-        marker gene lists, size-factor QC, and a recurrence-based unique feature set.
+        Runs DESeq2 contrasts for each graph-derived group identified in the
+        cell-line similarity graph:
+          - isolate-vs-REST: each degree-zero cell line vs all others
+          - anchor-vs-outside-component: each canonical anchor vs cell lines
+            outside its component (union of most-connected and bridge anchors,
+            de-duplicated by the derive_anchor_list rule)
+        Produces per-contrast DEG tables, filtered marker gene lists, size-factor
+        QC, and a recurrence-based unique feature set.
         """
         input:
-            counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-            meta_comp    = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
-            isolate_csv  = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv"),
-            isolate_tsv  = os.path.join(DESEQ2_INPUT_DIR, "isolate_cell_lines.tsv"),
-            anchor_csv   = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
-            anchor_components = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv"),
-            anchor_tsv   = os.path.join(DESEQ2_INPUT_DIR, "bridge_like_anchor_cell_lines.tsv")
+            counts_tsv            = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
+            meta_comp             = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
+            isolate_csv           = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv"),
+            isolate_tsv           = os.path.join(DESEQ2_INPUT_DIR, "isolate_cell_lines.tsv"),
+            anchor_list_csv       = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
+            anchor_components_tsv = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv")
         output:
             size_factors = os.path.join(DESEQ2_ISOLATE_DIR, "qc", "size_factors.tsv"),
             manifest     = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
@@ -2362,8 +3041,8 @@ if DESEQ2_ENABLED:
             fdr           = DESEQ2_CFG.get("fdr_isolate", 0.01),
             lfc           = DESEQ2_CFG.get("lfc_isolate", 1.5),
             topN          = DESEQ2_CFG.get("topN_isolate", 50),
-            fdr_anchor    = DESEQ2_CFG.get("fdr_anchor", 0.05),
-            lfc_anchor    = DESEQ2_CFG.get("lfc_anchor", 1.0),
+            fdr_anchor    = DESEQ2_CFG.get("fdr_anchor",  0.05),
+            lfc_anchor    = DESEQ2_CFG.get("lfc_anchor",  1.0),
             topN_anchor   = DESEQ2_CFG.get("topN_anchor", 200),
             min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10),
             recurrence_k  = DESEQ2_CFG.get("recurrence_k", 2)
@@ -2372,8 +3051,9 @@ if DESEQ2_ENABLED:
         shell:
             r'''
             ISOLATE_LIST=$(cat {input.isolate_csv})
-            if [ -z "$ISOLATE_LIST" ]; then
-                echo "[WARN] No isolates found; creating empty outputs" > {log}
+            ANCHOR_LIST=$(cat {input.anchor_list_csv})
+            if [ -z "$ISOLATE_LIST" ] && [ -z "$ANCHOR_LIST" ]; then
+                echo "[WARN] No isolates and no anchors found; creating empty outputs" > {log}
                 mkdir -p {params.outdir}/qc {params.outdir}/markers
                 echo -e "sample_id\tsize_factor" > {output.size_factors}
                 echo -e "contrast\tmarker_file\ttable_file\tn_markers" > {output.manifest}
@@ -2382,8 +3062,11 @@ if DESEQ2_ENABLED:
                 touch {output.session_info}
                 exit 0
             fi
-            ANCHOR_LIST=$(cat {input.anchor_csv})
             mkdir -p {params.outdir}
+            ANCHOR_ARGS=""
+            if [ -n "$ANCHOR_LIST" ]; then
+                ANCHOR_ARGS="--anchor_list $ANCHOR_LIST --anchor_components {input.anchor_components_tsv} --fdr_anchor {params.fdr_anchor} --lfc_anchor {params.lfc_anchor} --topN_anchor {params.topN_anchor}"
+            fi
             Rscript {params.script} \
               --counts {input.counts_tsv} \
               --meta {input.meta_comp} \
@@ -2391,20 +3074,65 @@ if DESEQ2_ENABLED:
               --cell_line_col {params.cell_line_col} \
               --component_col {params.component_col} \
               --isolate_list "$ISOLATE_LIST" \
-              --anchor_list "$ANCHOR_LIST" \
-              --anchor_components {input.anchor_components} \
               --outdir {params.outdir} \
               --fdr_isolate {params.fdr} \
               --lfc_isolate {params.lfc} \
               --topN_isolate {params.topN} \
-              --fdr_anchor {params.fdr_anchor} \
-              --lfc_anchor {params.lfc_anchor} \
-              --topN_anchor {params.topN_anchor} \
               --min_baseMean {params.min_baseMean} \
               --recurrence_k {params.recurrence_k} \
+              $ANCHOR_ARGS \
               > {log} 2>&1
             '''
 
+    DESEQ2_DIRECTIONAL_MARKER_DIR = os.path.join(DESEQ2_ISOLATE_DIR, "directional_markers")
+    DESEQ2_DIRECTIONAL_MARKER_DIR_ABS = os.path.join(DESEQ2_ISOLATE_DIR_ABS, "directional_markers")
+
+    # -----------------------------------------------------------------------------
+    # RULE: write_deseq2_directional_marker_tables
+    # -----------------------------------------------------------------------------
+    rule write_deseq2_directional_marker_tables:
+        """
+        Organise retained DESeq2 marker genes into directional marker tables
+        based on the sign of log2FoldChange. This is a downstream-only step:
+        it consumes the completed marker manifest, marker gene lists, and full
+        DESeq2 tables without rerunning DESeq2.
+        """
+        input:
+            manifest = ancient(os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv")),
+            markers_dir = ancient(os.path.join(DESEQ2_ISOLATE_DIR, "markers")),
+            tables_dir = ancient(os.path.join(DESEQ2_ISOLATE_DIR, "tables")),
+            deseq2_script = os.path.join(BASE, "scripts", "deseq2_isolate_degs.R")
+        output:
+            orientation = os.path.join(DESEQ2_DIRECTIONAL_MARKER_DIR, "directional_marker_orientation.txt"),
+            all_up = os.path.join(DESEQ2_DIRECTIONAL_MARKER_DIR, "cohort_level", "all_upregulated_markers.tsv"),
+            all_down = os.path.join(DESEQ2_DIRECTIONAL_MARKER_DIR, "cohort_level", "all_downregulated_markers.tsv"),
+            counts = os.path.join(DESEQ2_DIRECTIONAL_MARKER_DIR, "cohort_level", "directional_marker_counts.tsv"),
+            top_up = os.path.join(DESEQ2_DIRECTIONAL_MARKER_DIR, "cohort_level", "top_upregulated_markers.tsv"),
+            top_down = os.path.join(DESEQ2_DIRECTIONAL_MARKER_DIR, "cohort_level", "top_downregulated_markers.tsv")
+        params:
+            script = os.path.join(BASE, "scripts", "write_deseq2_directional_marker_tables.R"),
+            cohort = profile_name,
+            deseq2_dir = DESEQ2_ISOLATE_DIR_ABS,
+            outdir = DESEQ2_DIRECTIONAL_MARKER_DIR_ABS
+        log:
+            os.path.join(LOGROOT, "write_deseq2_directional_marker_tables.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript {params.script} \
+              --cohort {params.cohort} \
+              --deseq2_dir {params.deseq2_dir} \
+              --deseq2_script {input.deseq2_script} \
+              --outdir {params.outdir} \
+              > {log} 2>&1
+            '''
+
+    rule write_all_deseq2_directional_marker_tables:
+        """
+        Aggregate target for the active profile's directional marker files.
+        """
+        input:
+            rules.write_deseq2_directional_marker_tables.output
 
     # -----------------------------------------------------------------------------
     # RULE: deseq2_component_vs_rest_all
@@ -2430,8 +3158,7 @@ if DESEQ2_ENABLED:
             sample_id_col = DESEQ2_CFG.get("staged_sample_id_col", "sample_id"),
             fdr           = DESEQ2_CFG.get("fdr_component", 0.05),
             lfc           = DESEQ2_CFG.get("lfc_component", 1.0),
-            topN          = DESEQ2_CFG.get("topN_component", 500),
-            min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10)
+            topN          = DESEQ2_CFG.get("topN_component", 500)
         log: os.path.join(LOGROOT, "deseq2_component_vs_rest_all.log")
         conda: CONDA_ENV_R
         shell:
@@ -2455,7 +3182,6 @@ if DESEQ2_ENABLED:
                   --fdr {params.fdr} \
                   --lfc {params.lfc} \
                   --topN {params.topN} \
-                  --min_baseMean {params.min_baseMean} \
                   >> {log} 2>&1
             done < {input.comp_list}
             echo "[DONE] All components processed" >> {log}
@@ -2612,6 +3338,39 @@ if ENRICH_ENABLED:
             '''
 
 
+    rule build_enrichment_summary_top_terms:
+        input:
+            top_terms = os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"),
+            query_manifest = os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv")
+        output:
+            summary = os.path.join(ENRICH_DIR_REL, "enrichment_summary_top_terms.tsv"),
+            provenance = os.path.join(ENRICH_DIR_REL, "enrichment_summary_top_terms_provenance.tsv")
+        params:
+            script = os.path.join(SCRIPTS_DIR, "build_enrichment_summary_top_terms.R")
+        log: os.path.join(LOGROOT, "build_enrichment_summary_top_terms.log")
+        conda: CONDA_ENV_R
+        shell:
+            "Rscript {params.script} --input {input.top_terms} --query-manifest {input.query_manifest} --output {output.summary} > {log} 2>&1 && test -s {output.summary} && test -s {output.provenance}"
+
+    rule plot_enrichment_top_terms_heatmap:
+        input:
+            summary = os.path.join(ENRICH_DIR_REL, "enrichment_summary_top_terms.tsv")
+        output:
+            pdf = os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap.pdf"),
+            png = os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap.png"),
+            matrix = os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap_matrix.tsv"),
+            selected = os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap_selected_terms.tsv"),
+            excluded = os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap_excluded_terms.tsv"),
+            provenance = os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap_provenance.tsv")
+        params:
+            script = os.path.join(SCRIPTS_DIR, "plot_enrichment_top_terms_heatmap.R"),
+            outdir = os.path.join(ENRICH_DIR_ABS, "figures")
+        log: os.path.join(LOGROOT, "plot_enrichment_top_terms_heatmap.log")
+        conda: CONDA_ENV_R
+        shell:
+            "mkdir -p {params.outdir} && Rscript {params.script} --input {input.summary} --outdir {params.outdir} > {log} 2>&1 && test -s {output.pdf} && test -s {output.provenance}"
+
+
 # =============================================================================
 # STAGE 8: MARKER POST-PROCESSING (CONSENSUS → FEATURES → EXPRESSION → MAPPING)
 # =============================================================================
@@ -2715,11 +3474,11 @@ if MARKER_POST_ENABLED:
             script=os.path.join(SCRIPTS_DIR, "build_component_consensus_markers_v2.py"),
             outdir=lambda wc: profile_consensus_outdir(wc.profile),
             padj=CONSENSUS_CFG.get("padj", 0.05),
-            basemean=CONSENSUS_CFG.get("basemean", 10.0),
-            lfc=CONSENSUS_CFG.get("lfc", 1.0),
+            basemean=CONSENSUS_CFG.get("basemean", 1.0),
+            lfc=CONSENSUS_CFG.get("lfc", 0.5),
             core_support_min=CONSENSUS_CFG.get("core_support_min", 2),
             core_support_frac=CONSENSUS_CFG.get("core_support_frac", 0.30),
-            min_anchor_genes=CONSENSUS_CFG.get("min_anchor_genes", 0),
+            min_anchor_genes=CONSENSUS_CFG.get("min_anchor_genes", 25),
             fallback_topn=CONSENSUS_CFG.get("fallback_topn", 200),
             flip_policy=CONSENSUS_CFG.get("flip_policy", "remove"),
             recurrence_k=CONSENSUS_CFG.get("recurrence_k", 2)
@@ -2792,12 +3551,8 @@ if MARKER_POST_ENABLED:
     rule build_pan_cancer_features:
         """Merge per-profile summaries into a pan-cancer feature panel."""
         input:
-            summaries=[
-                os.path.join(profile_consensus_summary_rel(p), "consensus_export_done.txt")
-                for p in PAN_PROFILES
-            ],
             marker_manifests=[
-                profile_marker_manifest_rel(p)
+                ancient(profile_marker_manifest_rel(p))
                 for p in PAN_PROFILES
             ]
         output:
@@ -2811,12 +3566,9 @@ if MARKER_POST_ENABLED:
         params:
             script=os.path.join(SCRIPTS_DIR, "build_pan_cancer_features.py"),
             outdir=PAN_FEATURES_OUTDIR_ABS,
-            profile_dirs=_profile_dir_args(),
             profile_marker_dirs=_profile_marker_dir_args(),
             profile_marker_manifests=_profile_marker_manifest_args(),
-            min_cross=PAN_CANCER_MP_CFG.get("min_cross_disease", 2),
-            cap_specific=PAN_CANCER_MP_CFG.get("cap_specific", 300),
-            cap_isolate=PAN_CANCER_MP_CFG.get("cap_isolate", 50),
+            cap_isolate=PAN_CANCER_MP_CFG.get("cap_isolate", 0),
             remove_ribo_mt="--remove-ribo-mt" if PAN_CANCER_MP_CFG.get("remove_ribo_mt", False) else "",
             gene_annot=("--gene-annotation-tsv " + abspath(PAN_CANCER_MP_CFG["gene_annotation_tsv"]))
                         if PAN_CANCER_MP_CFG.get("gene_annotation_tsv") else ""
@@ -2826,12 +3578,9 @@ if MARKER_POST_ENABLED:
             r'''
             mkdir -p "{params.outdir}"
             python "{params.script}" \
-              {params.profile_dirs} \
               {params.profile_marker_dirs} \
               {params.profile_marker_manifests} \
               --output-dir "{params.outdir}" \
-              --min-cross-disease {params.min_cross} \
-              --cap-specific {params.cap_specific} \
               --cap-isolate {params.cap_isolate} \
               {params.remove_ribo_mt} \
               {params.gene_annot} \
@@ -2841,22 +3590,37 @@ if MARKER_POST_ENABLED:
 
     PAN_EXPR_RDS = abspath(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"))
     PAN_EXPR_META = abspath(PAN_EXPR_CFG.get("output_meta_tsv", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv"))
+    PAN_EXPR_CELL_LINES_RDS = abspath(PAN_EXPR_CFG.get(
+        "output_cell_lines_rds",
+        "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only.rds"
+    ))
+    PAN_EXPR_CELL_LINES_META = abspath(PAN_EXPR_CFG.get(
+        "output_cell_lines_meta_tsv",
+        "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only_metadata.tsv"
+    ))
 
     # Precompute optional CLI fragments for the expression matrix rule.
     # Snakemake shell blocks only support simple {name} placeholders, NOT
     # inline Python expressions like {expr if cond else ""}.
-    _PAN_EXPR_HEME_PATH = profile_vst_joint_abs("heme") if PAN_EXPR_CFG.get("include_heme") else ""
+    # HEME is cell-line-only in the current inputs, so it is excluded from the
+    # main tumour/cell-line alignment matrix and reserved for the cell-line-only
+    # matrix below.
+    _PAN_EXPR_HEME_PATH = ""
+    _PAN_EXPR_CELL_LINES_HEME_PATH = profile_vst_joint_abs("heme") if PAN_EXPR_CFG.get("include_heme_cell_lines_only", True) else ""
+    _PAN_EXPR_CELL_LINES_HEME_INPUT = [_PAN_EXPR_CELL_LINES_HEME_PATH] if _PAN_EXPR_CELL_LINES_HEME_PATH else []
     _PAN_EXPR_METADATA_PATH = abspath(PAN_EXPR_CFG.get("metadata_fallback_csv", "")) if PAN_EXPR_CFG.get("metadata_fallback_csv") else ""
     _PAN_EXPR_HEME_ARG = f'--heme-vst "{_PAN_EXPR_HEME_PATH}"' if _PAN_EXPR_HEME_PATH else ""
+    _PAN_EXPR_CELL_LINES_HEME_ARG = f'--heme-vst "{_PAN_EXPR_CELL_LINES_HEME_PATH}"' if _PAN_EXPR_CELL_LINES_HEME_PATH else ""
     _PAN_EXPR_METADATA_ARG = f'--metadata "{_PAN_EXPR_METADATA_PATH}"' if _PAN_EXPR_METADATA_PATH else ""
     _PAN_EXPR_OUTPUT_META_ARG = f'--output-metadata "{PAN_EXPR_META}"' if PAN_EXPR_META else ""
+    _PAN_EXPR_CELL_LINES_OUTPUT_META_ARG = f'--output-metadata "{PAN_EXPR_CELL_LINES_META}"' if PAN_EXPR_CELL_LINES_META else ""
 
     # Precompute concrete input paths (avoid lambdas in input:).
     _PAN_EXPR_BRCA_VST = profile_vst_joint_abs("brca")
     _PAN_EXPR_NBL_VST = profile_vst_joint_abs("nbl")
     _PAN_EXPR_RBL_VST = profile_vst_joint_abs("rbl")
 
-    # Build the input list; include heme VST only when configured.
+    # Main expression inputs are restricted to cohorts with tumour samples.
     _PAN_EXPR_INPUTS = [_PAN_EXPR_BRCA_VST, _PAN_EXPR_NBL_VST, _PAN_EXPR_RBL_VST]
     if _PAN_EXPR_HEME_PATH:
         _PAN_EXPR_INPUTS.append(_PAN_EXPR_HEME_PATH)
@@ -2894,6 +3658,280 @@ if MARKER_POST_ENABLED:
               > "{log}" 2>&1
             '''
 
+    rule build_pan_cancer_feature_expression_matrix_cell_lines_only:
+        """Build a feature-restricted pan-cancer matrix containing cell lines only."""
+        input:
+            genes = PAN_FEATURES_CLEAN,
+            brca = _PAN_EXPR_BRCA_VST,
+            nbl  = _PAN_EXPR_NBL_VST,
+            rbl  = _PAN_EXPR_RBL_VST,
+            heme = _PAN_EXPR_CELL_LINES_HEME_INPUT
+        output:
+            expr_rds = PAN_EXPR_CELL_LINES_RDS,
+            meta_tsv = PAN_EXPR_CELL_LINES_META
+        params:
+            script = os.path.join(SCRIPTS_DIR, "build_pan_cancer_expression_matrix.R"),
+            heme_arg = _PAN_EXPR_CELL_LINES_HEME_ARG,
+            metadata_arg = _PAN_EXPR_METADATA_ARG,
+            output_meta_arg = _PAN_EXPR_CELL_LINES_OUTPUT_META_ARG,
+            expr_dir = os.path.abspath(os.path.dirname(PAN_EXPR_CELL_LINES_RDS))
+        log: os.path.join(LOGROOT, "build_pan_cancer_expression_matrix_cell_lines_only.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.expr_dir}"
+            Rscript "{params.script}" \
+              --brca-vst "{input.brca}" \
+              --nbl-vst "{input.nbl}" \
+              --rbl-vst "{input.rbl}" \
+              {params.heme_arg} \
+              {params.metadata_arg} \
+              --genes "{input.genes}" \
+              --sample-type-filter cell_line \
+              --output "{output.expr_rds}" \
+              {params.output_meta_arg} \
+              > "{log}" 2>&1
+            '''
+
+    PAN_ALIGNMENT_UMAP_CFG = MARKER_POST_CFG.get("tumour_cell_line_alignment_umap", {})
+    PAN_ALIGNMENT_UMAP_OUTDIR = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+        "output_dir",
+        "results/unsupervised/pan_cancer/tumour_cell_line_alignment_umap"
+    ))
+    PAN_ALIGNMENT_UMAP_META = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+        "metadata_tsv",
+        PAN_EXPR_META
+    ))
+    _PAN_ALIGNMENT_UMAP_METRICS_RAW = PAN_ALIGNMENT_UMAP_CFG.get("metrics", ["cosine", "euclidean"])
+    if isinstance(_PAN_ALIGNMENT_UMAP_METRICS_RAW, str):
+        PAN_ALIGNMENT_UMAP_METRICS = [
+            m.strip() for m in _PAN_ALIGNMENT_UMAP_METRICS_RAW.split(",") if m.strip()
+        ]
+    else:
+        PAN_ALIGNMENT_UMAP_METRICS = [str(m).strip() for m in _PAN_ALIGNMENT_UMAP_METRICS_RAW if str(m).strip()]
+
+    def pan_alignment_umap_tag(metric):
+        return "DEG_SET_" + re.sub(r"[^A-Za-z0-9]+", "_", metric)
+
+    def pan_alignment_umap_stem(metric):
+        return "pan_cancer_tumour_cell_line_alignment_umap_" + pan_alignment_umap_tag(metric)
+
+    PAN_ALIGNMENT_UMAP_PDFS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m)}.pdf")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SVGS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m)}.svg")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_PNGS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m)}.png")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_COORDS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"coords_{pan_alignment_umap_stem(m)}.tsv")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SUMMARY = os.path.join(
+        PAN_ALIGNMENT_UMAP_OUTDIR,
+        "summary_pan_cancer_tumour_cell_line_alignment_umap.tsv"
+    )
+
+    rule plot_pan_cancer_tumour_cell_line_alignment_umap:
+        """Generate thesis-facing pan-cancer tumour/cell-line alignment UMAPs."""
+        input:
+            expr_rds = PAN_EXPR_RDS,
+            meta_tsv = PAN_ALIGNMENT_UMAP_META,
+            genes = PAN_FEATURES_CLEAN,
+            script = os.path.join(SCRIPTS_DIR, "plot_pan_cancer_tumour_cell_line_alignment_umap.R")
+        output:
+            pdf = PAN_ALIGNMENT_UMAP_PDFS,
+            svg = PAN_ALIGNMENT_UMAP_SVGS,
+            png = PAN_ALIGNMENT_UMAP_PNGS,
+            coords = PAN_ALIGNMENT_UMAP_COORDS,
+            summary = PAN_ALIGNMENT_UMAP_SUMMARY
+        params:
+            outdir = PAN_ALIGNMENT_UMAP_OUTDIR,
+            metrics = ",".join(PAN_ALIGNMENT_UMAP_METRICS),
+            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "thesis")
+        threads: 8
+        log: os.path.join(LOGROOT, "plot_pan_cancer_tumour_cell_line_alignment_umap.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{input.script}" \
+              --pipe_root "{BASE}" \
+              --expr_rds "{input.expr_rds}" \
+              --meta_tsv "{input.meta_tsv}" \
+              --deg_set "{input.genes}" \
+              --outdir "{params.outdir}" \
+              --dist_metrics "{params.metrics}" \
+              --page "{params.page}" \
+              > "{log}" 2>&1
+            for f in {output.pdf} {output.svg} {output.png} {output.coords} "{output.summary}"; do
+              test -s "$f" || (echo "ERROR: missing or empty $f" >&2; exit 1)
+            done
+            '''
+
+    # ==========================================================================
+    # DIAGNOSTIC: VST all-gene tumour/cell-line UMAP (BRCA + NBL + RBL)
+    # ==========================================================================
+    # Independent of the curated pan-cancer DEG / feature-set workflow above.
+    # This unsupervised diagnostic runs UMAP on the full VST gene space (after
+    # NA + zero-variance filtering on the merged matrix), with no class label
+    # used during fitting and no pan-cancer feature subsetting. Filenames use
+    # the VST_ALL_GENE label to keep this run's outputs cleanly separable from
+    # the thesis-facing DEG-set outputs above.
+    VST_ALLGENE_UMAP_OUTDIR = abspath(
+        "results/unsupervised/pan_cancer/vst_all_gene_tumour_cell_line_umap"
+    )
+    VST_ALLGENE_UMAP_EXPR_RDS = os.path.join(
+        VST_ALLGENE_UMAP_OUTDIR,
+        "vst_all_gene_brca_nbl_rbl_expr.rds"
+    )
+    VST_ALLGENE_UMAP_META_TSV = os.path.join(
+        VST_ALLGENE_UMAP_OUTDIR,
+        "vst_all_gene_metadata.tsv"
+    )
+    VST_ALLGENE_UMAP_MERGE_LOG = os.path.join(
+        VST_ALLGENE_UMAP_OUTDIR,
+        "vst_all_gene_metadata.tsv.merge_log.tsv"
+    )
+    VST_ALLGENE_UMAP_METRICS = ["cosine", "euclidean"]
+    VST_ALLGENE_UMAP_LABEL   = "VST_ALL_GENE"
+    VST_ALLGENE_UMAP_STEM    = "tumour_cell_line_alignment_umap"
+
+    def _vst_allgene_basename(prefix, metric, ext):
+        return f"{prefix}_{VST_ALLGENE_UMAP_STEM}_{VST_ALLGENE_UMAP_LABEL}_{metric}.{ext}"
+
+    VST_ALLGENE_UMAP_PDFS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("Fig", m, "pdf"))
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SVGS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("Fig", m, "svg"))
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_PNGS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("Fig", m, "png"))
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_COORDS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("coords", m, "tsv"))
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SUMMARY = os.path.join(
+        VST_ALLGENE_UMAP_OUTDIR,
+        f"summary_{VST_ALLGENE_UMAP_STEM}_{VST_ALLGENE_UMAP_LABEL}.tsv"
+    )
+
+    # Direct, profile-independent paths to the three per-cohort joint VST RDS
+    # files (samples x genes after orientation handling in the merge script).
+    VST_ALLGENE_BRCA_VST = os.path.join(BASE, "data", "brca", "brca_vst_joint.rds")
+    VST_ALLGENE_NBL_VST  = os.path.join(BASE, "data", "nbl",  "nbl_vst_joint.rds")
+    VST_ALLGENE_RBL_VST  = os.path.join(BASE, "data", "rbl",  "rbl_vst_joint.rds")
+
+    # Joint metadata produced by the multicohort_cancer profile (sample_id,
+    # cancer_type, sample_type[, cohort]). Used here purely to annotate
+    # samples AFTER UMAP fitting.
+    VST_ALLGENE_JOINT_META = os.path.join(
+        BASE, "results", "unsupervised", "multicohort_cancer", "inputs",
+        "joint_metadata.tsv"
+    )
+
+    rule merge_vst_all_genes_brca_nbl_rbl:
+        """
+        Merge BRCA + NBL + RBL joint VST tumour/cell-line matrices on the
+        intersection of Ensembl gene IDs (versions stripped), keeping the
+        first occurrence of duplicated IDs, then drop NA-bearing and
+        zero-variance genes on the merged matrix. No class label is used
+        during the merge or filtering.
+        """
+        input:
+            brca = VST_ALLGENE_BRCA_VST,
+            nbl  = VST_ALLGENE_NBL_VST,
+            rbl  = VST_ALLGENE_RBL_VST,
+            joint_meta = VST_ALLGENE_JOINT_META,
+            script = os.path.join(SCRIPTS_DIR, "merge_vst_all_genes_brca_nbl_rbl.R")
+        output:
+            expr_rds  = VST_ALLGENE_UMAP_EXPR_RDS,
+            meta_tsv  = VST_ALLGENE_UMAP_META_TSV,
+            merge_log = VST_ALLGENE_UMAP_MERGE_LOG
+        log: os.path.join(LOGROOT, "merge_vst_all_genes_brca_nbl_rbl.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "$(dirname "{output.expr_rds}")"
+            Rscript "{input.script}" \
+              --brca_rds  "{input.brca}" \
+              --nbl_rds   "{input.nbl}" \
+              --rbl_rds   "{input.rbl}" \
+              --joint_meta "{input.joint_meta}" \
+              --out_expr  "{output.expr_rds}" \
+              --out_meta  "{output.meta_tsv}" \
+              --out_log   "{output.merge_log}" \
+              > "{log}" 2>&1
+            for f in "{output.expr_rds}" "{output.meta_tsv}" "{output.merge_log}"; do
+              test -s "$f" || (echo "ERROR: missing or empty $f" >&2; exit 1)
+            done
+            '''
+
+    rule plot_vst_all_gene_tumour_cell_line_alignment_umap:
+        """
+        Unsupervised diagnostic UMAP on the BRCA+NBL+RBL VST all-gene merged
+        matrix. Uses the same plotting script as the pan-cancer DEG-set
+        thesis figure, invoked with --feature_mode=all_genes and the
+        VST_ALL_GENE label so output filenames remain disjoint from the
+        thesis-facing DEG-set outputs.
+        """
+        input:
+            expr_rds = VST_ALLGENE_UMAP_EXPR_RDS,
+            meta_tsv = VST_ALLGENE_UMAP_META_TSV,
+            script   = os.path.join(SCRIPTS_DIR,
+                "plot_pan_cancer_tumour_cell_line_alignment_umap.R")
+        output:
+            pdf     = VST_ALLGENE_UMAP_PDFS,
+            svg     = VST_ALLGENE_UMAP_SVGS,
+            png     = VST_ALLGENE_UMAP_PNGS,
+            coords  = VST_ALLGENE_UMAP_COORDS,
+            summary = VST_ALLGENE_UMAP_SUMMARY
+        params:
+            outdir           = VST_ALLGENE_UMAP_OUTDIR,
+            metrics          = ",".join(VST_ALLGENE_UMAP_METRICS),
+            feature_label    = VST_ALLGENE_UMAP_LABEL,
+            out_stem         = VST_ALLGENE_UMAP_STEM,
+            summary_basename = os.path.basename(VST_ALLGENE_UMAP_SUMMARY),
+            page             = "thesis"
+        threads: 8
+        log: os.path.join(LOGROOT, "plot_vst_all_gene_tumour_cell_line_alignment_umap.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            # uwot's Annoy backend writes its NN index to TMPDIR; the cluster
+            # node's /tmp is small, so redirect to a per-rule scratch dir on the
+            # work filesystem before invoking Rscript.
+            export TMPDIR="{params.outdir}/.umap_tmp"
+            mkdir -p "$TMPDIR"
+            Rscript "{input.script}" \
+              --pipe_root "{BASE}" \
+              --expr_rds "{input.expr_rds}" \
+              --meta_tsv "{input.meta_tsv}" \
+              --feature_mode all_genes \
+              --feature_label "{params.feature_label}" \
+              --out_stem "{params.out_stem}" \
+              --summary_basename "{params.summary_basename}" \
+              --outdir "{params.outdir}" \
+              --dist_metrics "{params.metrics}" \
+              --page "{params.page}" \
+              > "{log}" 2>&1
+            rm -rf "$TMPDIR"
+            for f in {output.pdf} {output.svg} {output.png} {output.coords} "{output.summary}"; do
+              test -s "$f" || (echo "ERROR: missing or empty $f" >&2; exit 1)
+            done
+            '''
+
     MAPPING_OUTDIR = abspath(MAPPING_CFG.get("output_dir", "results/unsupervised/pan_cancer/tumour_mapping"))
 
     def mapping_metrics_summary():
@@ -2906,9 +3944,16 @@ if MARKER_POST_ENABLED:
     rule score_tumour_cellline_mapping:
         """Score tumour-to-cell-line mappings using the combined expression object."""
         input:
-            expr_rds = PAN_EXPR_RDS
+            expr_rds = PAN_EXPR_RDS,
+            genes = PAN_FEATURES_CLEAN
         output:
-            metrics_summary = mapping_metrics_summary()
+            metrics_summary = mapping_metrics_summary(),
+            tumour_rankings = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_rankings.tsv"),
+            tumour_summary = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_mapping_summary.tsv"),
+            tumour_scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_scores.rds"),
+            cellline_rankings = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_to_tumour_rankings.tsv"),
+            cellline_summary = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_mapping_summary.tsv"),
+            cellline_metrics = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_metrics_overall.tsv")
         params:
             script=os.path.join(SCRIPTS_DIR, "score_tumour_cellline_mapping.R"),
             outdir=MAPPING_OUTDIR,
@@ -2925,6 +3970,7 @@ if MARKER_POST_ENABLED:
             mkdir -p "{params.outdir}"
             Rscript "{params.script}" \
               --pan-cancer-expr "{input.expr_rds}" \
+              --genes "{input.genes}" \
               --output-dir "{params.outdir}" \
               --top-k {params.top_k} \
               --similarity {params.similarity} \
@@ -2937,6 +3983,387 @@ if MARKER_POST_ENABLED:
             '''
 
 
+    PAN_CANCER_DIR = abspath("results/unsupervised/pan_cancer")
+    PAN_GRAPH_DIR = os.path.join(PAN_CANCER_DIR, "graph")
+    PAN_FIG_DIR = os.path.join(PAN_CANCER_DIR, "figures")
+    PAN_COR_RDS = os.path.join(PAN_CANCER_DIR, "pan_cancer_cor.rds")
+
+    rule compute_pan_cancer_correlation:
+        input: expr = PAN_EXPR_RDS
+        output: cor = PAN_COR_RDS
+        params: script = os.path.join(SCRIPTS_DIR, "compute_pan_cancer_correlation.R"), method = "spearman"
+        log: os.path.join(LOGROOT, "compute_pan_cancer_correlation.log")
+        conda: CONDA_ENV_R
+        shell: "mkdir -p {PAN_CANCER_DIR} && Rscript {params.script} --input {input.expr} --output {output.cor} --method {params.method} > {log} 2>&1 && test -s {output.cor}"
+
+    rule build_pan_cancer_graph:
+        input: cor = PAN_COR_RDS
+        output:
+            edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
+            components = os.path.join(PAN_GRAPH_DIR, "pan_cancer_components.tsv")
+        params: script = os.path.join(SCRIPTS_DIR, "build_pan_cancer_graph.R"), outdir = PAN_GRAPH_DIR, k = 20, min_cor = 0.0
+        log: os.path.join(LOGROOT, "build_pan_cancer_graph.log")
+        conda: CONDA_ENV_R
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --cor-matrix {input.cor} --k {params.k} --min-cor {params.min_cor} --output-dir {params.outdir} > {log} 2>&1 && test -s {output.edges} && test -s {output.components}"
+
+    rule compute_pan_cancer_communities:
+        input:
+            edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
+            meta = PAN_EXPR_RDS
+        output:
+            communities = os.path.join(PAN_GRAPH_DIR, "pan_cancer_communities.tsv"),
+            summary = os.path.join(PAN_GRAPH_DIR, "community_validation", "community_summary.tsv")
+        params: script = os.path.join(SCRIPTS_DIR, "compute_pan_cancer_communities.R"), outdir = os.path.join(PAN_GRAPH_DIR, "community_validation"), seed = 1
+        log: os.path.join(LOGROOT, "compute_pan_cancer_communities.log")
+        conda: CONDA_ENV_R
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --edges {input.edges} --meta {input.meta} --out {output.communities} --outdir {params.outdir} --method both --seed {params.seed} > {log} 2>&1 && test -s {output.communities}"
+
+    rule inspect_pan_cancer_graph:
+        input:
+            edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
+            communities = os.path.join(PAN_GRAPH_DIR, "pan_cancer_communities.tsv"),
+            components = os.path.join(PAN_GRAPH_DIR, "pan_cancer_components.tsv")
+        output:
+            summary = os.path.join(PAN_GRAPH_DIR, "inspection", "INSPECTION_SUMMARY.md"),
+            bridges = os.path.join(PAN_GRAPH_DIR, "inspection", "isolated_or_bridge_nodes.tsv")
+        params: script = os.path.join(SCRIPTS_DIR, "inspect_pan_cancer_graph.R"), graph_dir = PAN_GRAPH_DIR, inspection_dir = os.path.join(PAN_GRAPH_DIR, "inspection")
+        log: os.path.join(LOGROOT, "inspect_pan_cancer_graph.log")
+        conda: CONDA_ENV_R
+        shell: "Rscript {params.script} --graph-dir {params.graph_dir} --inspection-dir {params.inspection_dir} > {log} 2>&1 && test -s {output.bridges}"
+
+    rule plot_pan_cancer_graph:
+        input:
+            edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
+            components = os.path.join(PAN_GRAPH_DIR, "pan_cancer_components.tsv"),
+            meta = PAN_EXPR_RDS
+        output:
+            pdf = os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph.pdf"),
+            components_pdf = os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph_components.pdf"),
+            size_pdf = os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_component_size.pdf"),
+            provenance = os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph_provenance.tsv")
+        params: script = os.path.join(SCRIPTS_DIR, "plot_pan_cancer_graph.R"), outdir = PAN_FIG_DIR
+        log: os.path.join(LOGROOT, "plot_pan_cancer_graph.log")
+        conda: CONDA_ENV_R
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --edges {input.edges} --components {input.components} --meta {input.meta} --outdir {params.outdir} --expected-gene-count 0 > {log} 2>&1 && printf 'figure_name\tscript\tcommand\tgit_commit\ttimestamp\tinput_files\toutput_files\tupstream_tables\tkey_parameters\tsoftware_versions\tfigure_type\tsource_pipeline_root\tcopied_to_thesis_path\tlegacy_source_path\tnotes\nFig_pan_cancer_graph.pdf\tscripts/plot_pan_cancer_graph.R\tRscript scripts/plot_pan_cancer_graph.R\tunavailable_not_git_worktree\tNA\t{input.edges};{input.components};{input.meta}\t{output.pdf};{output.components_pdf};{output.size_pdf}\t{input.edges};{input.components}\texpected_gene_count=infer_from_rds_genes\tR/igraph/ggplot2\tpan_cancer\t/work/ugbogu/pipeline\t\t\tTranscriptomic similarity network for prioritisation and neighbourhood assignment only\n' > {output.provenance} && test -s {output.pdf}"
+
+    rule plot_cellline_centred_figures:
+        """
+        Legacy bar-chart summaries for cell-line-centred similarity mapping.
+        Uses simple top-k fraction statistics from score_tumour_cellline_mapping.R;
+        does NOT compute Precision@k bootstrap confidence intervals.
+
+        THIS IS NOT the four-panel Precision@k / bootstrap figure.
+        The verified Precision@k bootstrap figure is produced by the
+        cellline_precision_at_k rule (script: cellline_centred_precision_at_k.R).
+
+        These outputs are legacy products retained for compatibility.
+        """
+        input:
+            metrics_summary = mapping_metrics_summary(),
+            tumour_rank = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_rankings.tsv"),
+            cell_rank = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_to_tumour_rankings.tsv"),
+            cell_metrics = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_metrics_overall.tsv")
+        output:
+            topk_bar_chart = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_tumour_retrieval.pdf"),
+            confidence = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_confidence_scores.pdf"),
+            component = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_component_mapping.pdf"),
+            replicate = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_replicate_sensitivity.pdf"),
+            provenance = os.path.join(MAPPING_OUTDIR, "cellline_centred", "cellline_centred_figure_provenance.tsv")
+        params: script = os.path.join(SCRIPTS_DIR, "plot_cellline_centred_figures.R"), outdir = os.path.join(MAPPING_OUTDIR, "cellline_centred"), top_k = MAPPING_CFG.get("top_k", 10), top_n = 50
+        log: os.path.join(LOGROOT, "plot_cellline_centred_figures.log")
+        conda: CONDA_ENV_R
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --mapping-dir {MAPPING_OUTDIR} --outdir {params.outdir} --top-k {params.top_k} --top-n {params.top_n} > {log} 2>&1 && test -s {output.topk_bar_chart} && test -s {output.provenance}"
+
+    rule cellline_precision_at_k:
+        """
+        Cell-line-centred Precision@k bootstrap analysis.
+
+        For each biological cell-line group (replicate profiles collapsed by
+        arithmetic mean Spearman correlation before ranking), computes Precision@k
+        across multiple top-k thresholds.  Bootstrap confidence intervals use
+        B = 2000 resamples (with replacement) over biological cell-line groups,
+        with 2.5th and 97.5th empirical percentiles as bounds.
+
+        Lineage-stratified Precision@k summaries are computed separately within
+        each lineage (BRCA, NBL, RBL) and as an Overall summary.
+
+        Produces the four-panel figure (Fig_cellline_centred_tumour_class_similarity.pdf):
+          A  Top-1 lineage confusion matrix
+          B  Mean Precision@k with 95% bootstrap CI ribbons per cohort
+          C  Same-lineage tumour rank percentile distributions per cell line
+          D  Lineage composition of the top-k tumour neighbourhood
+
+        This is the verified Drive pipeline computation.  Bootstrap seed = 20260603.
+        tumour_components.tsv is optional (Panel B unaffected when absent).
+
+        Expected QC values:
+          raw profile-level observations : 58
+          biological cell-line groups    : 56 (after replicate profile aggregation)
+          BRCA groups : 29 | NBL groups : 18 | RBL groups : 9
+          tumour samples               : 1,128
+        """
+        input:
+            c2t_long = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity",
+                                    "cellline_tumour_scores_long.tsv.gz"),
+            t2c_long = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity",
+                                    "tumour_cellline_scores_long.tsv.gz")
+        output:
+            precision_fig = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_centred_tumour_class_similarity.pdf"),
+            precision_at_k_fig = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_centred_precision_at_k.pdf"),
+            topk_metrics  = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_topk_metrics.tsv"),
+            rank_summary  = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_centred_rank_summary.tsv"),
+            qc_log        = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_centred_QC_log.txt"),
+            provenance    = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_similarity_precision_provenance.tsv")
+        params:
+            script      = os.path.join(SCRIPTS_DIR,
+                              "cellline_centred_precision_at_k.R"),
+            outdir      = os.path.join(MAPPING_OUTDIR,
+                              "cellline_similarity_precision_bootstrap"),
+            mapping_dir = MAPPING_OUTDIR
+        log: os.path.join(LOGROOT, "cellline_precision_at_k.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{params.script}" \
+              --mapping-dir "{params.mapping_dir}" \
+              --outdir "{params.outdir}" \
+              > "{log}" 2>&1
+            test -s "{output.precision_fig}" || \
+              (echo "ERROR: missing {output.precision_fig}" >&2; exit 1)
+            test -s "{output.precision_at_k_fig}" || \
+              (echo "ERROR: missing {output.precision_at_k_fig}" >&2; exit 1)
+            test -s "{output.topk_metrics}" || \
+              (echo "ERROR: missing {output.topk_metrics}" >&2; exit 1)
+            # Provenance record
+            printf 'field\tvalue\n' > {output.provenance}
+            printf 'script\t{params.script}\n' >> {output.provenance}
+            printf 'mapping_dir\t{params.mapping_dir}\n' >> {output.provenance}
+            printf 'outdir\t{params.outdir}\n' >> {output.provenance}
+            printf 'timestamp\t%s\n' "$(date -Iseconds)" >> {output.provenance}
+            printf 'source_pipeline\tJarvis:/work/ugbogu/pipeline\n' >> {output.provenance}
+            printf 'bootstrap_resamples\t2000\n' >> {output.provenance}
+            printf 'bootstrap_statistic\tmean_precision_at_k\n' >> {output.provenance}
+            printf 'bootstrap_bounds\t2.5th_97.5th_percentile\n' >> {output.provenance}
+            printf 'resampling_unit\tbiological_cell_line_group\n' >> {output.provenance}
+            printf 'replicate_collapse\tmean_score_across_replicate_profiles\n' >> {output.provenance}
+            printf 'bootstrap_seed\t20260603\n' >> {output.provenance}
+            '''
+
+
+    rule plot_ecdf_model_prioritisation:
+        input:
+            metrics_summary = mapping_metrics_summary(),
+            scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_scores.rds"),
+            meta = PAN_EXPR_RDS
+        output:
+            pdf = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.pdf"),
+            png = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.png"),
+            svg = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.svg"),
+            summary = os.path.join(PAN_FIG_DIR, "ecdf_plots", "model_prioritisation_rank_summary.tsv"),
+            provenance = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined_provenance.tsv")
+        params: script = os.path.join(SCRIPTS_DIR, "plot_ecdf_rank_combined_pub.R"), outdir = os.path.join(PAN_FIG_DIR, "ecdf_plots"), pipeline_dir = PAN_CANCER_DIR, top_k = MAPPING_CFG.get("top_k", 10), n_show = 4
+        log: os.path.join(LOGROOT, "plot_ecdf_model_prioritisation.log")
+        conda: CONDA_ENV_R
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --pipeline-dir {params.pipeline_dir} --score-rds {input.scores} --meta-rds {input.meta} --outdir {params.outdir} --n-show {params.n_show} --top-k {params.top_k} > {log} 2>&1 && test -s {output.pdf} && test -s {output.provenance}"
+
+
+# ---------------------------------------------------------------------------
+# Pan-cancer cell line similarity network -- BUILD pipeline
+# Enabled via config key: pan_cancer_cell_line_similarity
+# ---------------------------------------------------------------------------
+_PAN_CELL_LINE_SIM_CFG = config.get("pan_cancer_cell_line_similarity", {})
+
+if _PAN_CELL_LINE_SIM_CFG:
+    _CL_SIM_EXPR   = abspath(_PAN_CELL_LINE_SIM_CFG.get("expr_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"))
+    _CL_SIM_DIR    = abspath(_PAN_CELL_LINE_SIM_CFG.get("output_dir", "results/unsupervised/pan_cancer/cell_line_similarity"))
+    _CL_SIM_COR    = _PAN_CELL_LINE_SIM_CFG.get("correlation", "spearman")
+    _CL_SIM_K      = _PAN_CELL_LINE_SIM_CFG.get("k", 20)
+    _CL_SIM_EXPECTED_GENES = _PAN_CELL_LINE_SIM_CFG.get("expected_genes", 171)
+    _CL_SIM_EXPECTED_NODES = _PAN_CELL_LINE_SIM_CFG.get("expected_nodes", 167)
+    _CL_SIM_SEED   = _PAN_CELL_LINE_SIM_CFG.get("seed", 1)
+    _CL_SIM_LEIDEN_RESOLUTION = _PAN_CELL_LINE_SIM_CFG.get("leiden_resolution", 1.0)
+    _CL_SIM_EDGES  = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_graph_edges.tsv")
+    _CL_SIM_META   = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_node_metadata.tsv")
+    _CL_SIM_COMMS  = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_communities.tsv")
+    _CL_SIM_LEIDEN_COMMS = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_leiden_communities.tsv")
+    _CL_SIM_COMMUNITY_METRICS = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_community_metrics.tsv")
+    _CL_SIM_LINEAGE_DISCORDANT = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_lineage_discordant_profiles.tsv")
+    _CL_SIM_LAYOUT = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_layout.tsv")
+    _CL_SIM_VAL_DIR = os.path.join(_CL_SIM_DIR, "community_validation")
+
+    rule build_pan_cancer_cell_line_similarity_graph:
+        input:
+            expr_rds = _CL_SIM_EXPR
+        output:
+            edges    = _CL_SIM_EDGES,
+            metadata = _CL_SIM_META
+        params:
+            script  = os.path.join(SCRIPTS_DIR, "build_pan_cancer_cell_line_similarity_graph.R"),
+            outdir  = _CL_SIM_DIR,
+            k       = _CL_SIM_K,
+            correlation = _CL_SIM_COR,
+            expected_genes = _CL_SIM_EXPECTED_GENES,
+            expected_nodes = _CL_SIM_EXPECTED_NODES
+        log: os.path.join(LOGROOT, "build_pan_cancer_cell_line_similarity_graph.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{params.script}" \
+              --expr-rds "{input.expr_rds}" \
+              --output-dir "{params.outdir}" \
+              --k {params.k} \
+              --correlation "{params.correlation}" \
+              --expected-genes {params.expected_genes} \
+              --expected-nodes {params.expected_nodes} \
+              > "{log}" 2>&1
+            test -s "{output.edges}"
+            test -s "{output.metadata}"
+            '''
+
+    rule compute_pan_cancer_cell_line_communities:
+        input:
+            edges    = _CL_SIM_EDGES,
+            metadata = _CL_SIM_META
+        output:
+            communities = _CL_SIM_COMMS,
+            leiden_communities = _CL_SIM_LEIDEN_COMMS,
+            community_metrics = _CL_SIM_COMMUNITY_METRICS,
+            lineage_discordant = _CL_SIM_LINEAGE_DISCORDANT
+        params:
+            script = os.path.join(SCRIPTS_DIR, "compute_pan_cancer_cell_line_communities.R"),
+            seed   = _CL_SIM_SEED,
+            leiden_resolution = _CL_SIM_LEIDEN_RESOLUTION
+        log: os.path.join(LOGROOT, "compute_pan_cancer_cell_line_communities.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript "{params.script}" \
+              --edges "{input.edges}" \
+              --meta "{input.metadata}" \
+              --out "{output.communities}" \
+              --leiden-out "{output.leiden_communities}" \
+              --community-metrics-out "{output.community_metrics}" \
+              --lineage-discordant-out "{output.lineage_discordant}" \
+              --seed {params.seed} \
+              --leiden-resolution {params.leiden_resolution} \
+              > "{log}" 2>&1
+            test -s "{output.communities}"
+            test -s "{output.leiden_communities}"
+            test -s "{output.community_metrics}"
+            test -s "{output.lineage_discordant}"
+            '''
+
+    rule compute_pan_cancer_cell_line_validation:
+        input:
+            edges       = _CL_SIM_EDGES,
+            communities = _CL_SIM_COMMS,
+            leiden_communities = _CL_SIM_LEIDEN_COMMS,
+            metadata    = _CL_SIM_META
+        output:
+            modularity    = os.path.join(_CL_SIM_VAL_DIR, "validation_modularity.tsv"),
+            assortativity = os.path.join(_CL_SIM_VAL_DIR, "validation_assortativity.tsv")
+        params:
+            script  = os.path.join(SCRIPTS_DIR, "compute_pan_cancer_cell_line_validation.R"),
+            out_dir = _CL_SIM_VAL_DIR
+        log: os.path.join(LOGROOT, "compute_pan_cancer_cell_line_validation.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.out_dir}"
+            Rscript "{params.script}" \
+              --edges "{input.edges}" \
+              --communities "{input.communities}" \
+              --leiden-communities "{input.leiden_communities}" \
+              --metadata "{input.metadata}" \
+              --out-dir "{params.out_dir}" \
+              > "{log}" 2>&1
+            test -s "{output.modularity}"
+            test -s "{output.assortativity}"
+            '''
+
+    rule compute_pan_cancer_cell_line_layout:
+        input:
+            edges = _CL_SIM_EDGES
+        output:
+            layout = _CL_SIM_LAYOUT
+        params:
+            script = os.path.join(SCRIPTS_DIR, "compute_pan_cancer_cell_line_layout.R"),
+            seed   = _CL_SIM_SEED
+        log: os.path.join(LOGROOT, "compute_pan_cancer_cell_line_layout.log")
+        conda: CONDA_ENV_R
+        shell: "Rscript {params.script} --edges {input.edges} --out {output.layout} --seed {params.seed} > {log} 2>&1 && test -s {output.layout}"
+
+
+# ---------------------------------------------------------------------------
+# Pan-cancer cell line similarity network -- two-panel figure
+# Cell-line-to-cell-line transcriptomic similarity (not cell-line-to-tumour).
+# Enabled and configured via config key: pan_cancer_cell_line_plot
+#
+# Required config keys:
+#   pan_cancer_cell_line_plot:
+#     edges_tsv:       path to edge list TSV  (columns: from, to, weight)
+#     communities_tsv: path to community TSV  (columns: sample, component, lineage)
+#     layout_tsv:      path to layout TSV     (columns: sample, x, y)
+#     output_dir:      directory for output PDF and PNG
+#
+# Run manually:  snakemake plot_pan_cancer_cell_line_two_panel --cores 1
+# Not part of the automated pipeline; do NOT add to PIPELINE_TARGET.
+# ---------------------------------------------------------------------------
+_PAN_CELL_LINE_PLOT_CFG = config.get("pan_cancer_cell_line_plot", {})
+
+if _PAN_CELL_LINE_PLOT_CFG:
+    _PLOT_EDGES  = abspath(_PAN_CELL_LINE_PLOT_CFG["edges_tsv"])
+    _PLOT_COMMS  = abspath(_PAN_CELL_LINE_PLOT_CFG["communities_tsv"])
+    _PLOT_LAYOUT = abspath(_PAN_CELL_LINE_PLOT_CFG["layout_tsv"])
+    _PLOT_OUTDIR = abspath(_PAN_CELL_LINE_PLOT_CFG["output_dir"])
+
+    rule plot_pan_cancer_cell_line_two_panel:
+        """Two-panel figure: pan-cancer cell line transcriptomic similarity
+        network (cell-line-to-cell-line, not cell-line-to-tumour).
+        Panel A: lineage coloured by Okabe-Ito palette.
+        Panel B: Louvain communities (Dark2) with convex hulls and centroid labels.
+        Accepts any edge list, community table, and layout produced by this
+        or any compatible pipeline run."""
+        input:
+            edges  = _PLOT_EDGES,
+            comms  = _PLOT_COMMS,
+            layout = _PLOT_LAYOUT
+        output:
+            pdf = os.path.join(_PLOT_OUTDIR, "Fig_pan_cancer_cell_line_similarity_network_lineage_community.pdf"),
+            png = os.path.join(_PLOT_OUTDIR, "Fig_pan_cancer_cell_line_similarity_network_lineage_community.png")
+        params:
+            script = os.path.join(SCRIPTS_DIR, "plot_pan_cancer_two_panel.R"),
+            outdir = _PLOT_OUTDIR
+        log: os.path.join(LOGROOT, "plot_pan_cancer_cell_line_two_panel.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{params.script}" \
+              --edges       "{input.edges}" \
+              --communities "{input.comms}" \
+              --layout      "{input.layout}" \
+              --out-dir     "{params.outdir}" \
+              > "{log}" 2>&1
+            test -s "{output.pdf}" || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+            test -s "{output.png}" || (echo "ERROR: missing {output.png}" >&2; exit 1)
+            '''
+
+
 # Final pipeline terminal target list.
 PIPELINE_TARGET = [
     os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
@@ -2944,6 +4371,8 @@ PIPELINE_TARGET = [
     P_CONS_THESIS_RESOLUTION_PREFIX + ".png",
     P_CONS_THESIS_CONSENSUS_PREFIX + ".pdf",
     P_CONS_THESIS_CONSENSUS_PREFIX + ".png",
+    *PAN_CANCER_GRAPH_INSPECTION_TARGETS,
+    *COMMUNITY_STABILITY_TARGETS,
     os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
     os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
     os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
@@ -2969,3 +4398,32 @@ if ENRICH_ENABLED:
 if MARKER_POST_ENABLED:
     PIPELINE_TARGET.append(PAN_EXPR_RDS)
     PIPELINE_TARGET.append(mapping_metrics_summary())
+
+if ENRICH_ENABLED:
+    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap.pdf"))
+if MARKER_POST_ENABLED:
+    PIPELINE_TARGET.extend([
+        os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph.pdf"),
+        os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.pdf"),
+        # Verified four-panel Precision@k bootstrap figure (cellline_precision_at_k rule).
+        # Legacy bar-chart outputs in cellline_centred/ are retained by plot_cellline_centred_figures
+        # rule but removed from PIPELINE_TARGET; they are not the verified computation.
+        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                     "Fig_cellline_centred_tumour_class_similarity.pdf"),
+        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                     "cellline_topk_metrics.tsv"),
+        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                     "cellline_centred_rank_summary.tsv"),
+        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                     "cellline_similarity_precision_provenance.tsv"),
+    ])
+
+if IS_MULTICOHORT_PROFILE:
+    PIPELINE_TARGET.extend([
+        P_CONS_LEIDEN_COMMUNITIES_TSV,
+        P_CONS_LEIDEN_SUMMARY_TSV,
+        P_CONS_LEIDEN_MODULARITY_TSV,
+        P_CONS_LEIDEN_LAYOUT_TSV,
+        P_CONS_LEIDEN_FIG_PREFIX + ".pdf",
+        P_CONS_LEIDEN_FIG_PREFIX + ".png",
+    ])
