@@ -4,8 +4,10 @@ channels:
   - bioconda
 dependencies:
   - snakemake-minimal
+  - snakemake-executor-plugin-slurm
+  - snakemake-executor-plugin-slurm-jobstep
   - r-base
   - r-dplyr
-  - r-matrixstats  
-  - r-ggplot2      
+  - r-matrixstats
+  - r-ggplot2
  
