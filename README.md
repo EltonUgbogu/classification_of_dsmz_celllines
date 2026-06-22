@@ -1,4 +1,4 @@
-# Classification of DSMZ cell lines using patient-referenced transcriptomic similarity
+# Classification of DSMZ Cell Lines to Cancer Types Based on Transcriptomic Analysis
 
 Cancer cell lines are standard laboratory models, but matching a cell line to a disease label does not guarantee that its transcriptome resembles patient tumours from that disease. This project asks a more specific question: in gene-expression space, how close are DSMZ (German Collection of Microorganisms and Cell Cultures) cancer cell lines to patient tumour RNA-seq cohorts, and does that proximity agree with the expected cancer context? The analysis constructs feature-distance representations from expression data and evaluates cancer-type agreement afterwards. The resulting scores describe feature-space transcriptomic proximity and require biological or experimental follow-up.
 
