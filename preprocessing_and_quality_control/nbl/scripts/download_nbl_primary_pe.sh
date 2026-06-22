@@ -66,7 +66,7 @@ run_one_dataset() {
     local SRA_DIR="${BASE}/sra"
     local FASTQ_DIR="${BASE}/fastq"
     local LOG_DIR="${BASE}/logs"
-    local TMPDIR="${SLURM_TMPDIR:-${BASE}/tmp/${SLURM_JOB_ID:-manual}}"
+    local TMPDIR="${SLURM_TMPDIR:-${BASE}/stage/${SLURM_JOB_ID:-manual}}"
     local THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
     local REMOVED_FILE="${BASE}/removed_nbl_srr_id_primary_tumour_pe.txt"

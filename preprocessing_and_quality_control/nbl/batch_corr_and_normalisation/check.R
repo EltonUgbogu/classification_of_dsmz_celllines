@@ -2,6 +2,15 @@
 
 #/usr/bin/env Rscript
 
-path = '/Users/eltonugbogu/Library/CloudStorage/GoogleDrive-eltontobi8@gmail.com/My Drive/dsmz/pipeline/pipeline/results/pan_cancer_joint_benchmark/inputs/joint_expr_matrix.rds'
+path <- Sys.getenv(
+  "JOINT_EXPR_MATRIX_RDS",
+  unset = file.path(
+    "results",
+    "unsupervised",
+    "multicohort_cancer",
+    "inputs",
+    "joint_expr_matrix.rds"
+  )
+)
 
 readRDS(path)

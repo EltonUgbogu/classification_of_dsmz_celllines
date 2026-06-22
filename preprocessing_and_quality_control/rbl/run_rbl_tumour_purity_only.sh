@@ -10,19 +10,32 @@
 
 set -euo pipefail
 
-cd /work/ugbogu/pipeline/preprocessing_and_quality_control/rbl
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # Avoid accidental inherited data-root variables.
 unset DATA_ROOT
 
-SMK_ENV="/work/ugbogu/pipeline/preprocessing_and_quality_control/rbl/envs/.conda/smk"
+SMK_ENV="${SMK_ENV:-envs/.conda/smk}"
 
 if [ ! -d "$SMK_ENV" ]; then
   echo "[ERROR] Snakemake env not found: $SMK_ENV"
   exit 1
 fi
 
-source /home/ugbogu/miniforge3/bin/activate "$SMK_ENV"
+if [ -n "${CONDA_SH_PATH:-}" ]; then
+  # shellcheck disable=SC1090
+  source "$CONDA_SH_PATH"
+elif command -v conda >/dev/null 2>&1; then
+  CONDA_BASE="$(conda info --base)"
+  # shellcheck disable=SC1091
+  source "${CONDA_BASE}/etc/profile.d/conda.sh"
+else
+  echo "[ERROR] conda not found. Set CONDA_SH_PATH or add conda to PATH." >&2
+  exit 1
+fi
+
+conda activate "$SMK_ENV"
 
 echo "[INFO] Job ID: ${SLURM_JOB_ID:-manual}"
 echo "[INFO] Running RBL tumour purity only"
