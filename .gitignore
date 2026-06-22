@@ -174,3 +174,11 @@ preprocessing_and_quality_control/rbl/rbl_snakefile_output.txt
 validation/*.tsv
 validation/*.txt
 validation/*_jobs.tsv
+
+# Local/unreviewed files not currently part of public release
+.github/
+AGENT.md
+run_all_neighbourhoods.sh
+run_pipeline.sh
+unsupervised_pipeline.sh
+supplementary/
