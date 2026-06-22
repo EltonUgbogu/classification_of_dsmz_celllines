@@ -135,3 +135,18 @@ cohorts:
         source_file: "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"
         status: "generated_at_runtime"
         purpose: "cancer-type concordance as post-hoc validation"
+
+  pan_cancer:
+    disease: "Pan-cancer marker-derived analysis"
+    tumour_sources:
+      - "brca"
+      - "nbl"
+      - "rbl"
+    current_analysis_input: "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"
+    cell_line_panel: "DSMZ"
+    runtime_labels:
+      - label: "cancer_type"
+        entity: "tumour_and_cell_line"
+        source_file: "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv"
+        status: "generated_by_pan_cancer_profile"
+        purpose: "pan-cancer ranking and mapping interpretation"
