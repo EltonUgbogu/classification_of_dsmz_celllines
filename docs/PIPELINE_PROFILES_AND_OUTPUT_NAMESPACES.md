@@ -56,10 +56,9 @@ Dry-run a pan-cancer ranking diagnostic through the pan-cancer profile:
 
 ```bash
 snakemake \
-  --config pipeline_profile=pan_cancer \
-  --rerun-triggers mtime \
   -n -p \
-  results/unsupervised/pan_cancer/ranking/diagnostics/ranking_diagnostic_metric_crosscheck.tsv
+  results/unsupervised/pan_cancer/ranking/diagnostics/ranking_diagnostic_metric_crosscheck.tsv \
+  --config pipeline_profile=pan_cancer
 ```
 
 Dry-run the multicohort patient-referenced target set through the multicohort
