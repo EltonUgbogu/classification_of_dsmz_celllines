@@ -19,6 +19,7 @@
 import csv
 import gzip
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -32,6 +33,9 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger(__name__)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+RBL_DATA_ROOT = Path(os.environ.get("RBL_DATA_ROOT", REPO_ROOT / "data" / "rbl")).expanduser()
 
 
 @dataclass(frozen=True)
@@ -49,7 +53,7 @@ class DatasetConfig:
 DATASETS: dict[str, DatasetConfig] = {
     "GSE111168": DatasetConfig(
         query="PRJNA436090",
-        outdir=Path("/work/ugbogu/pipeline/data/rbl/GSE111168_primary_tumours"),
+        outdir=RBL_DATA_ROOT / "GSE111168_primary_tumours",
         mode="geo_title_filter",
         # GEO uses American spelling (tumor1, tumor2, tumor3), not tumour*.
         title_pattern=r"^tumor[123]$",
@@ -57,14 +61,14 @@ DATASETS: dict[str, DatasetConfig] = {
     ),
     "GSE196420": DatasetConfig(
         query="PRJNA804875",
-        outdir=Path("/work/ugbogu/pipeline/data/rbl/GSE196420_primary_tumours"),
+        outdir=RBL_DATA_ROOT / "GSE196420_primary_tumours",
         mode="geo_title_filter",
         title_pattern=r"Primary Retinoblastoma - RNA-Seq",
         runinfo_gsm_fields=("LibraryName", "SampleName"),
     ),
     "GSE268136": DatasetConfig(
         query="PRJNA1114744",
-        outdir=Path("/work/ugbogu/pipeline/data/rbl/GSE268136_primary_tumours"),
+        outdir=RBL_DATA_ROOT / "GSE268136_primary_tumours",
         mode="geo_title_filter",
         title_pattern=r"^RB_\d+$",
         runinfo_gsm_fields=("LibraryName", "SampleName"),

@@ -17,29 +17,40 @@
 
 import os
 import glob
+import re
+from pathlib import Path
 
-WORKFLOW_DIR = workflow.basedir
-PIPELINE_DIR = os.path.abspath(os.path.join(WORKFLOW_DIR, "..", ".."))
+WORKFLOW_ROOT = Path(workflow.basedir).resolve()
+REPO_ROOT = WORKFLOW_ROOT.parents[1]
+WORKFLOW_DIR = str(WORKFLOW_ROOT)
+PIPELINE_DIR = str(REPO_ROOT)
+
+def repo_config_path(value):
+    """Resolve a relative cohort-config path against the repository root."""
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else REPO_ROOT / path)
+
+def workflow_config_path(value):
+    """Resolve a relative workflow-config path against this Snakefile directory."""
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else (WORKFLOW_ROOT / path).resolve())
 
 # ------------------------------------------------------------------------------
 # Paths and study identifiers
 # ------------------------------------------------------------------------------
 # A configuration file is used to hold stable reference and tool paths.
 # This prevents hard-coding genome resources and improves reproducibility.
-configfile: os.environ.get(
-    "CONFIGFILE",
-    os.path.join(PIPELINE_DIR, "config", "config.yaml")
-)
+configfile: "config/config.yaml"
 
-# Project-relative defaults keep the workflow portable across machines.
-DATA_ROOT = config.get("data_root") or os.environ.get("DATA_ROOT") or os.path.join(PIPELINE_DIR, "data", "rbl")
-PROJECTS = sorted(
-    name for name in os.listdir(DATA_ROOT)
-    if os.path.isdir(os.path.join(DATA_ROOT, name))
-    and name.startswith("GSE")
-    and name.endswith("_primary_tumours")
-)
-ENV_DIR = config.get("env_dir") or os.path.join(PIPELINE_DIR, "preprocessing_and_quality_control", "envs")
+# data_root is controlled by config/config.yaml and resolved relative to this
+# workflow directory to avoid accidental SLURM environment-variable leakage.
+DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/rbl"))
+PROJECTS = config.get("projects", [
+    "GSE111168_primary_tumours",
+    "GSE196420_primary_tumours",
+    "GSE268136_primary_tumours",
+])
+ENV_DIR = repo_config_path(config.get("env_dir") or "preprocessing_and_quality_control/envs")
 
 # ------------------------------------------------------------------------------
 # Reference resources and tool paths
@@ -49,14 +60,15 @@ ENV_DIR = config.get("env_dir") or os.path.join(PIPELINE_DIR, "preprocessing_and
 # REF_FASTA: reference genome FASTA (required for alignment QC checks)
 # THREADS: compute threads; defaults to 12 if not specified in config
 _genome   = config.get("genome", {})
-REF_INDEX = _genome.get("star_index", "")
-GTF       = _genome.get("gtf", "")       # retained for reference; not used in alignment rules
-REF_FASTA = _genome.get("fasta", "")
+REF_INDEX = repo_config_path(_genome.get("star_index", "")) if _genome.get("star_index") else ""
+GTF       = repo_config_path(_genome.get("gtf", "")) if _genome.get("gtf") else ""  # retained; not used in alignment rules
+REF_FASTA = repo_config_path(_genome.get("fasta", "")) if _genome.get("fasta") else ""
 THREADS   = config.get("threads", 12)
 
 # Validate required keys with a clear message before any KeyError can surface.
 missing_required = {k: v for k, v in {
     "genome.star_index": REF_INDEX,
+    "genome.gtf":        GTF,
     "genome.fasta":      REF_FASTA,
 }.items() if not v}
 if missing_required:
@@ -83,42 +95,74 @@ ALL_SAMPLES_BY_PROJECT = {}
 
 for project_id in PROJECTS:
     fastq_dir = f"{DATA_ROOT}/{project_id}/fastq"
-    if not os.path.exists(fastq_dir):
-        # Projects without FASTQ data are skipped to avoid hard pipeline failure.
-        print(f"[SKIP] No fastq directory: {fastq_dir}")
-        continue
-
-    # STAR requires correct pairing; this script assumes filenames use _1/_2 suffixing.
-    r1_pattern = f"{fastq_dir}/*_1.fastq.gz"
-    r1_files = sorted(glob.glob(r1_pattern))  # sorted for deterministic sample order
-
+    count_dir = f"{DATA_ROOT}/{project_id}/results/star/valid_count"
+    project_samples = {}
     paired_count = 0
-    for r1_path in r1_files:
-        # A paired-end sample is only accepted if the expected read 2 exists.
-        r2_path = r1_path.replace("_1.fastq.gz", "_2.fastq.gz")
+    count_only_count = 0
 
-        if os.path.exists(r2_path):
-            # Sample IDs are derived from SRR-style filenames, typical for SRA downloads.
-            basename = os.path.basename(r1_path)
-            srr = basename.replace("_1.fastq.gz", "")
+    if not os.path.exists(fastq_dir):
+        # Projects without FASTQ data may still have reusable STAR GeneCounts tabs.
+        print(f"[SKIP] No fastq directory: {fastq_dir}")
+    else:
+        # STAR requires correct pairing; this script assumes filenames use _1/_2 suffixing.
+        r1_pattern = f"{fastq_dir}/*_1.fastq.gz"
+        r1_files = sorted(glob.glob(r1_pattern))  # sorted for deterministic sample order
 
-            # A per-sample record stores read paths and project provenance.
-            # Project provenance is important for tracking batch effects across studies.
-            sample_info = {
-                "sample": srr,
-                "r1": r1_path,
-                "r2": r2_path,
-                "project": project_id
-            }
-            SAMPLES[(project_id, srr)] = sample_info
-            ALL_SAMPLES_BY_PROJECT.setdefault(project_id, []).append(srr)
-            paired_count += 1
-        else:
-            # Incomplete pairs are excluded because they can bias QC summaries and
-            # disrupt consistent further matrices.
-            print(f"[WARN] Missing R2 (skipping): {os.path.basename(r1_path)}")
+        for r1_path in r1_files:
+            # A paired-end sample is only accepted if the expected read 2 exists.
+            r2_path = r1_path.replace("_1.fastq.gz", "_2.fastq.gz")
 
-    print(f"[SUCCESS] {project_id}: Found {paired_count} real paired-end samples")
+            if os.path.exists(r2_path):
+                # Sample IDs are derived from SRR-style filenames, typical for SRA downloads.
+                basename = os.path.basename(r1_path)
+                srr = basename.replace("_1.fastq.gz", "")
+                count_tab = f"{count_dir}/{srr}.tab"
+
+                # A per-sample record stores read paths and project provenance.
+                # Project provenance is important for tracking batch effects across studies.
+                project_samples[srr] = {
+                    "sample": srr,
+                    "r1": r1_path,
+                    "r2": r2_path,
+                    "project": project_id,
+                    "has_fastq": True,
+                    "has_count_tab": os.path.exists(count_tab) and os.path.getsize(count_tab) > 0,
+                }
+                paired_count += 1
+            else:
+                # Incomplete pairs are excluded because they can bias QC summaries and
+                # disrupt consistent further matrices.
+                print(f"[WARN] Missing R2 (skipping): {os.path.basename(r1_path)}")
+
+    # Count-only cleanup may intentionally remove FASTQs after non-empty STAR
+    # count tabs exist. Register those samples so the 69-sample matrix DAG remains
+    # stable even when completed FASTQs have been deleted under quota pressure.
+    for tab_path in sorted(glob.glob(f"{count_dir}/*.tab")):
+        if os.path.getsize(tab_path) <= 0:
+            continue
+        srr = os.path.basename(tab_path).replace(".tab", "")
+        if srr in project_samples:
+            project_samples[srr]["has_count_tab"] = True
+            continue
+        project_samples[srr] = {
+            "sample": srr,
+            "r1": None,
+            "r2": None,
+            "project": project_id,
+            "has_fastq": False,
+            "has_count_tab": True,
+        }
+        count_only_count += 1
+
+    ALL_SAMPLES_BY_PROJECT.setdefault(project_id, [])
+    for srr in sorted(project_samples):
+        SAMPLES[(project_id, srr)] = project_samples[srr]
+        ALL_SAMPLES_BY_PROJECT[project_id].append(srr)
+
+    print(
+        f"[SUCCESS] {project_id}: registered {len(project_samples)} samples "
+        f"({paired_count} FASTQ-backed, {count_only_count} count-tab-only)"
+    )
 
 # ------------------------------------------------------------------------------
 # Global run list construction and validation
@@ -127,19 +171,28 @@ for project_id in PROJECTS:
 # This avoids accidental sample cross-pairing across projects and ensures
 # targets are created only for valid samples.
 ALL_RUNS = [(p, s) for p in PROJECTS for s in ALL_SAMPLES_BY_PROJECT.get(p, [])]
+FASTQ_RUNS = [(p, s) for p, s in ALL_RUNS if SAMPLES[(p, s)].get("has_fastq", False)]
+COUNT_ONLY_RUNS = [(p, s) for p, s in ALL_RUNS if not SAMPLES[(p, s)].get("has_fastq", False)]
+FASTQ_PROJECT_PATTERN = "|".join(sorted({re.escape(p) for p, _ in FASTQ_RUNS})) or r"a^"
+FASTQ_SAMPLE_PATTERN = "|".join(sorted({re.escape(s) for _, s in FASTQ_RUNS})) or r"a^"
 
 if not ALL_RUNS:
     # Failing early here prevents misleading further execution with empty targets.
-    raise ValueError("No paired-end samples found in fastq/ directories! Check file names and paths.")
+    raise ValueError("No FASTQ-backed samples or completed count tabs found. Check file names and paths.")
 else:
     # Reporting sample counts supports auditability and quick verification
     # against expected cohort sizes from GEO/SRA metadata.
-    print(f"\n[FINAL] TOTAL PAIRED-END SAMPLES: {len(ALL_RUNS)}")
+    print(f"\n[FINAL] TOTAL REGISTERED SAMPLES: {len(ALL_RUNS)}")
+    print(f"[FINAL] FASTQ-backed samples: {len(FASTQ_RUNS)}")
+    print(f"[FINAL] count-tab-only samples: {len(COUNT_ONLY_RUNS)}")
     for p in PROJECTS:
-        n = len(ALL_SAMPLES_BY_PROJECT.get(p, []))
-        print(f"[SUMMARY] {p}: {n} paired-end samples")
+        runs = ALL_SAMPLES_BY_PROJECT.get(p, [])
+        n_fastq = sum(1 for s in runs if SAMPLES[(p, s)].get("has_fastq", False))
+        n_count_only = len(runs) - n_fastq
+        print(f"[SUMMARY] {p}: {len(runs)} samples ({n_fastq} FASTQ-backed, {n_count_only} count-tab-only)")
     for p, s in ALL_RUNS[:10]:
-        print(f"  → {p}/{s}")
+        mode = "FASTQ" if SAMPLES[(p, s)].get("has_fastq", False) else "count-tab-only"
+        print(f"  → {p}/{s} [{mode}]")
     if len(ALL_RUNS) > 10:
         print(f"  ... and {len(ALL_RUNS)-10} more")
 
@@ -162,6 +215,8 @@ def get_fastqc_reads():
     reads = []
     seen = set()
     for (proj, sample), info in SAMPLES.items():
+        if not info.get("has_fastq", False):
+            continue
         for read, path in [("1", info["r1"]), ("2", info["r2"])]:
             read_id = os.path.basename(path).replace(".fastq.gz", "")
             key = (proj, read_id)
@@ -186,7 +241,13 @@ def get_r1(wc):
             f"[INPUT] Sample {wc.sample} is not registered under project {wc.project}. "
             f"It exists under: {candidates or 'NONE'}."
         )
-    return SAMPLES[key]["r1"]
+    info = SAMPLES[key]
+    if not info.get("has_fastq", False):
+        raise ValueError(
+            f"[INPUT] Sample {wc.project}/{wc.sample} has a completed count tab but no local FASTQs. "
+            "Redownload FASTQs before requesting alignment/count regeneration for this sample."
+        )
+    return info["r1"]
 
 def get_r2(wc):
     key = (wc.project, wc.sample)
@@ -196,7 +257,13 @@ def get_r2(wc):
             f"[INPUT] Sample {wc.sample} is not registered under project {wc.project}. "
             f"Exists under: {candidates or 'NONE'}."
         )
-    return SAMPLES[key]["r2"]
+    info = SAMPLES[key]
+    if not info.get("has_fastq", False):
+        raise ValueError(
+            f"[INPUT] Sample {wc.project}/{wc.sample} has a completed count tab but no local FASTQs. "
+            "Redownload FASTQs before requesting alignment/count regeneration for this sample."
+        )
+    return info["r2"]
 
 # ------------------------------------------------------------------------------
 # Concrete target file lists
@@ -204,8 +271,8 @@ def get_r2(wc):
 # Targets are enumerated explicitly from ALL_RUNS to guarantee that each
 # sample produces only its own outputs and is never cross-associated with
 # another project's samples.
-STAR_BAMS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam"       for p, s in ALL_RUNS]
-STAR_BAIS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam.bai"   for p, s in ALL_RUNS]
+STAR_BAMS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam"       for p, s in FASTQ_RUNS]
+STAR_BAIS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam.bai"   for p, s in FASTQ_RUNS]
 
 # STAR gene count output is separated into a dedicated directory to make it
 # easier to build expression matrices later.
@@ -218,9 +285,9 @@ STAR_COUNTS = [f"{DATA_ROOT}/{p}/results/star/valid_count/{s}.tab"              
 # - CollectInsertSizeMetrics estimates the library insert size distribution, a key
 #   property in paired-end RNA-seq.
 PICARD_TXT  = [f"{DATA_ROOT}/{p}/results/picard/{s}_{m}.txt"
-               for p, s in ALL_RUNS for m in ["validate_samfile", "alignment_summary_metrics",
+               for p, s in FASTQ_RUNS for m in ["validate_samfile", "alignment_summary_metrics",
                                              "quality_yield_metrics", "insert_size_metrics"]]
-PICARD_HIST = [f"{DATA_ROOT}/{p}/results/picard/{s}_insert_size_histogram.pdf"          for p, s in ALL_RUNS]
+PICARD_HIST = [f"{DATA_ROOT}/{p}/results/picard/{s}_insert_size_histogram.pdf"          for p, s in FASTQ_RUNS]
 
 # FastQC HTML summaries are used for per-read QC review and for aggregation.
 FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fastqc.html"
@@ -236,6 +303,84 @@ MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in 
 COUNT_MATRIX = f"{DATA_ROOT}/count_data/rbl_tumour_count.rds"
 COUNT_META   = f"{DATA_ROOT}/count_data/rbl_tumour_sample_metadata.csv"
 COUNT_GENES  = f"{DATA_ROOT}/count_data/rbl_tumour_gene_list_hgnc.txt"
+
+# Downstream RBL count verification and tumour-purity outputs.
+EXPECTED_SAMPLES = config.get("expected_samples", {})
+
+EXPECTED_RBL_SAMPLES = int(EXPECTED_SAMPLES.get("total", 69))
+
+EXPECTED_COHORT_SAMPLES = {
+    "GSE111168_primary_tumours": int(EXPECTED_SAMPLES.get("GSE111168_primary_tumours", 3)),
+    "GSE196420_primary_tumours": int(EXPECTED_SAMPLES.get("GSE196420_primary_tumours", 16)),
+    "GSE268136_primary_tumours": int(EXPECTED_SAMPLES.get("GSE268136_primary_tumours", 50)),
+}
+
+PURITY_THRESHOLD = float(config.get("purity_threshold", 0.7))
+PURITY_LABEL = f"{PURITY_THRESHOLD:.1f}"
+
+RBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/rbl_ensembl_to_hgnc.tsv"
+RBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/rbl_count_matrix_verified_{EXPECTED_RBL_SAMPLES}.ok"
+
+RBL_PURITY_DIR = repo_config_path(
+    config.get("purity_output_dir", "results/tumour_purity_analysis/rbl")
+)
+
+RBL_PURITY_SCRIPT = f"{WORKFLOW_DIR}/tumour_purity_analysis/rbl_tumour_purity_analysis.R"
+
+# The unfiltered 69-sample matrix remains the input to count verification and
+# ESTIMATE/tidyestimate scoring. Batch correction must consume the resulting
+# purity-filtered Ensembl count matrix, not the unfiltered matrix.
+RBL_PURITY_FILTERED_ENSEMBL = (
+    f"{RBL_PURITY_DIR}/rbl_filtered_count_matrix_ensembl_purity{PURITY_LABEL}.rds"
+)
+
+RBL_PURITY_OUTPUTS = [
+    f"{RBL_PURITY_DIR}/rbl_estimate_scores.csv",
+    f"{RBL_PURITY_DIR}/rbl_filtered_hgnc_counts_purity{PURITY_LABEL}.rds",
+    RBL_PURITY_FILTERED_ENSEMBL,
+    f"{RBL_PURITY_DIR}/rbl_sample_retention_by_cohort.pdf",
+    f"{RBL_PURITY_DIR}/rbl_purity_diagnostics.pdf",
+]
+
+BATCH_CONFIG = config.get("batch_correction_normalisation", {})
+CELL_LINE_CONFIG = config.get("cell_line_data", {})
+BATCH_OUTPUT_DIR = repo_config_path(BATCH_CONFIG.get(
+    "output_dir",
+    "data/rbl/results/batch_corr_and_normalisation/preprocess"
+))
+DSMZ_COUNT_MATRIX = CELL_LINE_CONFIG.get(
+    "dsmz_count_matrix",
+    "results/unsupervised/rbl/deseq2_inputs/counts.tsv"
+)
+DSMZ_SAMPLE_METADATA = CELL_LINE_CONFIG.get(
+    "dsmz_sample_metadata",
+    "data/dsmz/DSMZ_metadata.csv"
+)
+DSMZ_COUNT_MATRIX = repo_config_path(DSMZ_COUNT_MATRIX)
+DSMZ_SAMPLE_METADATA = repo_config_path(DSMZ_SAMPLE_METADATA)
+BATCH_TUMOUR_RDS = repo_config_path(BATCH_CONFIG.get("tumour_rds", COUNT_MATRIX))
+DSMZ_SAMPLE_ID_COLUMN = CELL_LINE_CONFIG.get("dsmz_sample_id_column", "sample_name")
+
+BATCH_OUTPUTS = [
+    f"{BATCH_OUTPUT_DIR}/tumour_counts.rds",
+    f"{BATCH_OUTPUT_DIR}/dsmz_rbl_counts.rds",
+    f"{BATCH_OUTPUT_DIR}/merged_counts_raw.rds",
+    f"{BATCH_OUTPUT_DIR}/coldata.tsv",
+    f"{BATCH_OUTPUT_DIR}/merged_counts_batch_corrected.rds",
+    f"{BATCH_OUTPUT_DIR}/tumour_vst_pre_bc.rds",
+    f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
+    f"{BATCH_OUTPUT_DIR}/joint_vst_pre_bc.rds",
+    f"{BATCH_OUTPUT_DIR}/joint_vst_post_bc.rds",
+    f"{BATCH_OUTPUT_DIR}/tumour_vst_post_bc.rds",
+    f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc.rds",
+    f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc_collapsed_cellline.rds",
+    f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
+    f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
+    f"{BATCH_OUTPUT_DIR}/umap_pre_BC.pdf",
+    f"{BATCH_OUTPUT_DIR}/umap_post_BC.pdf",
+    f"{BATCH_OUTPUT_DIR}/qc_tumour_vst.pdf",
+    f"{BATCH_OUTPUT_DIR}/qc_dsmz_vst.pdf",
+]
 
 # ------------------------------------------------------------------------------
 # Final pipeline outputs
@@ -258,7 +403,31 @@ rule all:
         MULTIQC_HTML,
         COUNT_MATRIX,
         COUNT_META,
-        COUNT_GENES
+        COUNT_GENES,
+        RBL_ENSEMBL_TO_HGNC,
+        RBL_COUNT_VERIFY,
+        RBL_PURITY_OUTPUTS,
+        BATCH_OUTPUTS
+
+# Post-download orchestration target for the full RBL workflow.
+# Dry-run after downloads complete:
+#   snakemake -n rbl_full_pipeline --cores 1 --use-conda
+rule rbl_full_pipeline:
+    input:
+        STAR_BAMS,
+        STAR_BAIS,
+        STAR_COUNTS,
+        PICARD_TXT,
+        PICARD_HIST,
+        FASTQC_HTML,
+        MULTIQC_HTML,
+        COUNT_MATRIX,
+        COUNT_META,
+        COUNT_GENES,
+        RBL_ENSEMBL_TO_HGNC,
+        RBL_COUNT_VERIFY,
+        RBL_PURITY_OUTPUTS,
+        BATCH_OUTPUTS
 
 # ------------------------------------------------------------------------------
 # Rule: FastQC on each FASTQ file
@@ -297,6 +466,9 @@ rule fastqc:
 #   STAR generates a per-gene count table; further scripts typically select
 #   the appropriate strandedness column based on library prep inference.
 rule star_2pass:
+    wildcard_constraints:
+        project = FASTQ_PROJECT_PATTERN,
+        sample = FASTQ_SAMPLE_PATTERN
     input:
         index = REF_INDEX,
         r1 = get_r1,
@@ -353,6 +525,58 @@ rule star_2pass:
         # STAR writes Log.final.out automatically using the chosen prefix; the
         # expected location is already tracked via output.logf.
         """
+
+# ------------------------------------------------------------------------------
+# Rule: STAR count-only mode for storage-constrained matrix assembly
+# ------------------------------------------------------------------------------
+# Bioinformatics intent:
+#   Produce STAR GeneCounts and Log.final.out without writing BAM/SAM output.
+#   This rule is the preferred producer for valid_count/*.tab when the requested
+#   target is the RBL tumour count matrix. The BAM-producing star_2pass rule is
+#   retained below for future full alignment QC/Picard workflows.
+rule star_counts_only:
+    wildcard_constraints:
+        project = FASTQ_PROJECT_PATTERN,
+        sample = FASTQ_SAMPLE_PATTERN
+    input:
+        index = REF_INDEX,
+        r1 = get_r1,
+        r2 = get_r2
+    output:
+        counts = f"{DATA_ROOT}/{{project}}/results/star/valid_count/{{sample}}.tab",
+        logf   = f"{DATA_ROOT}/{{project}}/results/star/{{sample}}.Log.final.out",
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/star_counts_only/{{sample}}.log"
+    conda:
+        f"{ENV_DIR}/star.yaml"
+    threads: THREADS
+    resources:
+        mem_mb = 42000
+    params:
+        prefix = lambda wc: f"{DATA_ROOT}/{wc.project}/results/star/{wc.sample}."
+    shell:
+        r"""
+        set -euo pipefail
+
+        mkdir -p "$(dirname "{output.logf}")" "$(dirname "{output.counts}")" "$(dirname "{log}")"
+
+        STAR --genomeDir "{input.index}" \
+             --readFilesIn "{input.r1}" "{input.r2}" \
+             --readFilesCommand zcat \
+             --outFileNamePrefix "{params.prefix}" \
+             --outSAMtype None \
+             --quantMode GeneCounts \
+             --twopassMode Basic \
+             --runThreadN {threads} \
+             > "{log}" 2>&1
+
+        test -s "{params.prefix}ReadsPerGene.out.tab"
+        mv -f "{params.prefix}ReadsPerGene.out.tab" "{output.counts}"
+        test -s "{output.counts}"
+        test -s "{output.logf}"
+        """
+
+ruleorder: star_counts_only > star_2pass
 
 # ------------------------------------------------------------------------------
 # Picard QC rules: alignment integrity and library metrics
@@ -465,6 +689,8 @@ rule build_rbl_count_matrix:
         matrix = COUNT_MATRIX,
         meta   = COUNT_META,
         genes  = COUNT_GENES
+    params:
+        cohorts = ",".join(PROJECTS)
     log:
         f"{DATA_ROOT}/count_data/merge_star_counts.log"
     conda:
@@ -472,8 +698,171 @@ rule build_rbl_count_matrix:
     shell:
         r"""
         mkdir -p "$(dirname "{output.matrix}")"
-        ROOT_DIR={DATA_ROOT} Rscript {WORKFLOW_DIR}/scripts/merge_star_counts.R > {log} 2>&1
+        ROOT_DIR={DATA_ROOT} PROJECTS="{params.cohorts}" Rscript {WORKFLOW_DIR}/scripts/merge_star_counts.R > {log} 2>&1
         """
+
+# ------------------------------------------------------------------------------
+# Downstream RBL count-data validation and tumour-purity orchestration
+# ------------------------------------------------------------------------------
+
+rule build_rbl_ensembl_to_hgnc_map:
+    input:
+        gtf = GTF
+    output:
+        RBL_ENSEMBL_TO_HGNC
+    log:
+        f"{DATA_ROOT}/count_data/rbl_ensembl_to_hgnc.log"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{output}")" "$(dirname "{log}")"
+
+        awk '
+        BEGIN {{ FS = OFS = "\t"; print "Ensembl_ID", "HGNC_Symbol" }}
+        $3 == "gene" {{
+            gene_id = ""
+            gene_name = ""
+            n = split($9, attrs, ";")
+            for (i = 1; i <= n; i++) {{
+                attr = attrs[i]
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", attr)
+                if (attr ~ /^gene_id "/) {{
+                    gene_id = attr
+                    sub(/^gene_id "/, "", gene_id)
+                    sub(/"$/, "", gene_id)
+                    sub(/\.[0-9]+$/, "", gene_id)
+                }} else if (attr ~ /^gene_name "/) {{
+                    gene_name = attr
+                    sub(/^gene_name "/, "", gene_name)
+                    sub(/"$/, "", gene_name)
+                }}
+            }}
+            if (gene_id != "" && gene_name != "" && !seen[gene_id]++) {{
+                print gene_id, gene_name
+            }}
+        }}
+        ' "{input.gtf}" > "{output}.tmp" 2> "{log}"
+
+        rows=$(awk 'END {{ print NR - 1 }}' "{output}.tmp")
+        if [ "$rows" -le 0 ]; then
+            echo "[ERROR] No gene mappings were extracted from {input.gtf}" >> "{log}"
+            rm -f "{output}.tmp"
+            exit 1
+        fi
+
+        mv "{output}.tmp" "{output}"
+        echo "[OK] Wrote $rows Ensembl-to-HGNC mappings to {output}" >> "{log}"
+        """
+
+rule verify_final_rbl_count_matrix:
+    input:
+        matrix = COUNT_MATRIX,
+        meta = COUNT_META,
+        script = f"{WORKFLOW_DIR}/scripts/verify_rbl_count_matrix.R"
+    output:
+        RBL_COUNT_VERIFY
+    params:
+        expected_total = EXPECTED_RBL_SAMPLES,
+        expected_gse111168 = EXPECTED_COHORT_SAMPLES["GSE111168_primary_tumours"],
+        expected_gse196420 = EXPECTED_COHORT_SAMPLES["GSE196420_primary_tumours"],
+        expected_gse268136 = EXPECTED_COHORT_SAMPLES["GSE268136_primary_tumours"]
+    log:
+        f"{DATA_ROOT}/count_data/rbl_count_matrix_verified_{EXPECTED_RBL_SAMPLES}.log"
+    conda:
+        f"{ENV_DIR}/r-base.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{output}")" "$(dirname "{log}")"
+
+        Rscript "{input.script}" \
+            --matrix "{input.matrix}" \
+            --metadata "{input.meta}" \
+            --output "{output}" \
+            --expected-total "{params.expected_total}" \
+            --expected-gse111168 "{params.expected_gse111168}" \
+            --expected-gse196420 "{params.expected_gse196420}" \
+            --expected-gse268136 "{params.expected_gse268136}" \
+            > "{log}" 2>&1
+        """
+
+rule rbl_tumour_purity_analysis:
+    input:
+        matrix = COUNT_MATRIX,
+        meta = COUNT_META,
+        map = RBL_ENSEMBL_TO_HGNC,
+        verify = RBL_COUNT_VERIFY,
+        script = RBL_PURITY_SCRIPT
+    output:
+        RBL_PURITY_OUTPUTS
+    params:
+        output_dir = RBL_PURITY_DIR,
+        threshold = PURITY_THRESHOLD
+    log:
+        f"{RBL_PURITY_DIR}/rbl_tumour_purity_analysis.snakemake.log"
+    conda:
+        f"{ENV_DIR}/rbl-tumour-purity-env.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.output_dir}" "$(dirname "{log}")"
+
+        SE_PATH="{input.matrix}" \
+        META_CSV="{input.meta}" \
+        MAP_TSV="{input.map}" \
+        OUTPUT_DIR="{params.output_dir}" \
+        PURITY_THRESHOLD="{params.threshold}" \
+        Rscript "{input.script}" > "{log}" 2>&1
+        """
+
+# Required dependency chain:
+# raw 69-sample RBL tumour count matrix
+# -> count-matrix verification
+# -> ESTIMATE/tidyestimate tumour-purity filtering
+# -> purity-filtered tumour count matrix
+# -> DSMZ/RBL batch correction and integration
+rule preprocess_integrate_rbl:
+    input:
+        tumour_rds = RBL_PURITY_FILTERED_ENSEMBL,
+        dsmz_count_matrix = DSMZ_COUNT_MATRIX,
+        dsmz_sample_metadata = DSMZ_SAMPLE_METADATA,
+        verify = RBL_COUNT_VERIFY
+    output:
+        tumour_counts_rds = f"{BATCH_OUTPUT_DIR}/tumour_counts.rds",
+        dsmz_counts_rds = f"{BATCH_OUTPUT_DIR}/dsmz_rbl_counts.rds",
+        merged_counts_rds = f"{BATCH_OUTPUT_DIR}/merged_counts_raw.rds",
+        coldata_tsv = f"{BATCH_OUTPUT_DIR}/coldata.tsv",
+        batch_corrected_counts_rds = f"{BATCH_OUTPUT_DIR}/merged_counts_batch_corrected.rds",
+        tumour_vst_rds = f"{BATCH_OUTPUT_DIR}/tumour_vst_pre_bc.rds",
+        dsmz_vst_rds = f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
+        joint_vst_pre_bc_rds = f"{BATCH_OUTPUT_DIR}/joint_vst_pre_bc.rds",
+        joint_vst_post_bc_rds = f"{BATCH_OUTPUT_DIR}/joint_vst_post_bc.rds",
+        tumour_vst_post_bc_rds = f"{BATCH_OUTPUT_DIR}/tumour_vst_post_bc.rds",
+        dsmz_vst_post_bc_rds = f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc.rds",
+        dsmz_vst_post_bc_collapsed_cellline_rds = f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc_collapsed_cellline.rds",
+        pca_pre_pdf = f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
+        pca_post_pdf = f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
+        umap_pre_pdf = f"{BATCH_OUTPUT_DIR}/umap_pre_BC.pdf",
+        umap_post_pdf = f"{BATCH_OUTPUT_DIR}/umap_post_BC.pdf",
+        tumour_qc_pdf = f"{BATCH_OUTPUT_DIR}/qc_tumour_vst.pdf",
+        dsmz_qc_pdf = f"{BATCH_OUTPUT_DIR}/qc_dsmz_vst.pdf",
+    params:
+        min_shared = BATCH_CONFIG.get("min_shared_genes", 5000),
+        tumour_label = BATCH_CONFIG.get("tumour_label", "RBL_TUMOUR"),
+        dsmz_label = BATCH_CONFIG.get("dsmz_label", "DSMZ_RBL"),
+        dsmz_sample_col = DSMZ_SAMPLE_ID_COLUMN,
+        dsmz_cellline_col = BATCH_CONFIG.get("dsmz_cellline_col", "Cell_Line"),
+        dsmz_filter_col = BATCH_CONFIG.get("dsmz_filter_col", "Disease"),
+        dsmz_filter_values = BATCH_CONFIG.get("dsmz_filter_values", ["Retinoblastoma"]),
+        subtype_metadata = BATCH_CONFIG.get("subtype_metadata", ""),
+        subtype_sample_col = BATCH_CONFIG.get("subtype_sample_col", "sample"),
+        subtype_col = BATCH_CONFIG.get("subtype_col", "subtype"),
+    log:
+        f"{DATA_ROOT}/logs/batch_corr_and_normalisation/preprocess_integrate_rbl.log"
+    conda:
+        "batch_corr_and_normalisation/envs/r_rbl_preprocess.yaml"
+    script:
+        "batch_corr_and_normalisation/scripts/R/rbl_preprocess_snakemake.R"
 
 # ------------------------------------------------------------------------------
 # MultiQC: per-project aggregation of QC and alignment metrics

@@ -21,11 +21,13 @@
 #
 # Usage:
 #   python download_nbl_tumour_sample_srr_ids.py GSE100148|GSE189367|SRP409177|all
+#   python download_nbl_tumour_sample_srr_ids.py download-gse100148-missing
 # =============================================================================
 
 import csv
 import gzip
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -39,6 +41,9 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger(__name__)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl")).expanduser()
 
 
 @dataclass(frozen=True)
@@ -56,22 +61,31 @@ class DatasetConfig:
 DATASETS: dict[str, DatasetConfig] = {
     "GSE100148": DatasetConfig(
         query="SRP109627",
-        outdir=Path("/work/ugbogu/pipeline/data/nbl/GSE100148"),
+        outdir=NBL_DATA_ROOT / "GSE100148",
         mode="geo_title_filter",
         title_pattern=r".*patient.*RNA-seq$",
         runinfo_gsm_fields=("LibraryName", "SampleName"),
     ),
     "GSE189367": DatasetConfig(
         query="SRP347311",
-        outdir=Path("/work/ugbogu/pipeline/data/nbl/GSE189367"),
+        outdir=NBL_DATA_ROOT / "GSE189367",
         mode="runinfo_filter",
     ),
     "SRP409177": DatasetConfig(
         query="SRP409177",
-        outdir=Path("/work/ugbogu/pipeline/data/nbl/SRP409177"),
+        outdir=NBL_DATA_ROOT / "SRP409177",
         mode="runinfo_filter",
     ),
 }
+
+GSE100148_MISSING_VST_IDS = {
+    "GSE100148_SRR5710452": "SRR5710452",
+    "GSE100148_SRR5710457": "SRR5710457",
+    "GSE100148_SRR5710462": "SRR5710462",
+    "GSE100148_SRR5710467": "SRR5710467",
+}
+
+RECOVERY_RAW_DIR = NBL_DATA_ROOT / "patient_tumour_recovery"
 
 REQUIRED_RUNINFO_COLUMNS = {
     "Run",
@@ -125,6 +139,131 @@ def ensure_family_soft(gse: str, outdir: Path) -> Path:
     log.info("Downloading SOFT file: %s", url)
     subprocess.run(["wget", "-O", str(family_soft), url], check=True)
     return family_soft
+
+
+def ensure_tool_available(tool: str) -> None:
+    try:
+        subprocess.run(
+            ["which", tool],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError:
+        raise RuntimeError(
+            f"Required tool not found in PATH: {tool}. "
+            f"Load the appropriate module or activate the correct environment."
+        )
+
+
+def find_downloaded_sra(run: str, sra_dir: Path) -> Path | None:
+    candidates = list(sra_dir.rglob(f"{run}.sra"))
+    if candidates:
+        return candidates[0]
+
+    direct = sra_dir / run / f"{run}.sra"
+    if direct.exists():
+        return direct
+
+    return None
+
+
+def write_target_manifest(
+    vst_to_srr: dict[str, str],
+    manifest_path: Path,
+    status_by_run: dict[str, str],
+) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with manifest_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "cohort",
+                "source_dataset",
+                "vst_sample_id",
+                "srr_accession",
+                "download_status",
+                "notes",
+            ],
+            delimiter="\t",
+        )
+        writer.writeheader()
+
+        for vst_sample_id, run in vst_to_srr.items():
+            writer.writerow({
+                "cohort": "nbl",
+                "source_dataset": "GSE100148",
+                "vst_sample_id": vst_sample_id,
+                "srr_accession": run,
+                "download_status": status_by_run.get(run, "not_attempted"),
+                "notes": "",
+            })
+
+
+def prefetch_sra_runs(
+    vst_to_srr: dict[str, str],
+    outdir: Path,
+    max_size: str = "200G",
+) -> int:
+    ensure_tool_available("prefetch")
+
+    sra_dir = outdir
+    log_dir = outdir / "logs"
+    manifest_path = outdir / "GSE100148_missing_download_manifest.tsv"
+
+    sra_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    status_by_run: dict[str, str] = {}
+
+    for vst_sample_id, run in vst_to_srr.items():
+        existing = find_downloaded_sra(run, sra_dir)
+        if existing and existing.stat().st_size > 0:
+            log.info("Already present: %s -> %s", run, existing)
+            status_by_run[run] = "already_present"
+            continue
+
+        log.info("Downloading %s for %s", run, vst_sample_id)
+
+        stdout_log = log_dir / f"{run}.prefetch.stdout.log"
+        stderr_log = log_dir / f"{run}.prefetch.stderr.log"
+
+        cmd = [
+            "prefetch",
+            run,
+            "--output-directory",
+            str(sra_dir),
+            "--max-size",
+            max_size,
+        ]
+
+        with stdout_log.open("w") as out, stderr_log.open("w") as err:
+            try:
+                subprocess.run(cmd, check=True, text=True, stdout=out, stderr=err)
+                downloaded = find_downloaded_sra(run, sra_dir)
+
+                if downloaded and downloaded.stat().st_size > 0:
+                    status_by_run[run] = "downloaded"
+                    log.info("Downloaded: %s -> %s", run, downloaded)
+                else:
+                    status_by_run[run] = "failed_no_sra_found_after_prefetch"
+                    log.error("Prefetch completed but no .sra file found for %s", run)
+
+            except subprocess.CalledProcessError:
+                status_by_run[run] = "failed_prefetch"
+                log.error("Prefetch failed for %s. See %s", run, stderr_log)
+
+    write_target_manifest(vst_to_srr, manifest_path, status_by_run)
+
+    failed = [run for run, status in status_by_run.items() if status.startswith("failed")]
+    log.info("Wrote manifest: %s", manifest_path)
+
+    if failed:
+        log.error("Failed downloads: %s", ", ".join(failed))
+        return 1
+
+    return 0
 
 
 def extract_gsm_titles(family_soft: Path, gsm_titles_tsv: Path) -> dict[str, str]:
@@ -357,11 +496,17 @@ def main() -> int:
     if len(sys.argv) != 2:
         print(
             f"Usage: {Path(sys.argv[0]).name} "
-            f"{' | '.join(DATASETS)} | all"
+            f"{' | '.join(DATASETS)} | all | download-gse100148-missing"
         )
         return 1
 
     target = sys.argv[1]
+
+    if target == "download-gse100148-missing":
+        return prefetch_sra_runs(
+            vst_to_srr=GSE100148_MISSING_VST_IDS,
+            outdir=RECOVERY_RAW_DIR,
+        )
 
     if target == "all":
         rc = 0

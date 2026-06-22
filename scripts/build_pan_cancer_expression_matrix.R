@@ -116,7 +116,14 @@ prepare_metadata <- function(meta_dt, fallback_meta, default_lineage, source_lab
   if (length(drop_cols) > 0) {
     meta_dt[, (drop_cols) := NULL]
   }
-  meta_dt[, .(sample_id, lineage, type, source_profile)]
+  meta_dt[, .(
+    sample_id,
+    lineage,
+    cancer_type = lineage,
+    type,
+    sample_type = type,
+    source_profile
+  )]
 }
 
 load_expr_with_meta <- function(path, profile_label) {
@@ -165,7 +172,9 @@ option_list <- list(
   make_option(c("--output"), type = "character", default = NULL,
               help = "Output RDS path"),
   make_option(c("--output-metadata"), type = "character", default = NULL,
-              help = "Optional TSV path for metadata export")
+              help = "Optional TSV path for metadata export"),
+  make_option(c("--sample-type-filter"), type = "character", default = "all",
+              help = "Sample type to retain after metadata harmonisation: all, cell_line, or tumour")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -185,6 +194,14 @@ gene_list <- gene_list[gene_list != ""]
 gene_list <- unique(gene_list)
 genes_clean <- strip_version(gene_list)
 cat("[1/4] Loaded", length(genes_clean), "pan-cancer features\n")
+
+sample_type_filter <- tolower(gsub("-", "_", opt$`sample-type-filter`))
+if (!sample_type_filter %in% c("all", "cell_line", "tumour")) {
+  stop("Unsupported --sample-type-filter: ", opt$`sample-type-filter`)
+}
+if (sample_type_filter != "all") {
+  cat("[INFO] Retaining only samples with type = ", sample_type_filter, "\n", sep = "")
+}
 
 profile_inputs <- list(
   BRCA = opt$`brca-vst`,
@@ -213,8 +230,8 @@ for (profile in names(profile_inputs)) {
   }
   cat(sprintf("  Loading %s: %s\n", profile, path))
   obj <- load_expr_with_meta(path, profile)
-  expr_list[[profile]] <- obj$expr
-  sample_ids <- colnames(obj$expr)
+  expr_profile <- obj$expr
+  sample_ids <- colnames(expr_profile)
   meta_processed <- prepare_metadata(
     meta_dt = obj$meta,
     fallback_meta = fallback_meta,
@@ -222,9 +239,22 @@ for (profile in names(profile_inputs)) {
     source_label = profile,
     sample_ids = sample_ids
   )
+  if (sample_type_filter != "all") {
+    keep <- meta_processed$type == sample_type_filter
+    keep[is.na(keep)] <- FALSE
+    if (!any(keep)) {
+      cat(sprintf("    %s: 0 samples match type = %s; skipping\n",
+                  profile, sample_type_filter))
+      next
+    }
+    keep_ids <- meta_processed$sample_id[keep]
+    expr_profile <- expr_profile[, keep_ids, drop = FALSE]
+    meta_processed <- meta_processed[keep]
+  }
+  expr_list[[profile]] <- expr_profile
   meta_list[[profile]] <- meta_processed
   cat(sprintf("    %s: %d genes x %d samples\n",
-              profile, nrow(obj$expr), ncol(obj$expr)))
+              profile, nrow(expr_profile), ncol(expr_profile)))
 }
 
 if (length(expr_list) == 0) {

@@ -7,7 +7,7 @@ component consensus markers plus a summary export layer that feeds
 build_pan_cancer_features.py.
 
 Primary CLI (used by Snakemake):
-  --tables-dir   Path to component_vs_rest tables for a single profile
+  --tables-dir   Path to component_vs_rest or isolate-vs-rest tables for a single profile
   --profile-name Logical profile name (e.g. brca, nbl, rbl)
   --outdir       Output directory for consensus results
 
@@ -44,6 +44,7 @@ import numpy as np
 # Constants
 # ---------------------------------------------------------------------------
 ANCHOR_RE = re.compile(r"^anchor_(.+?)_vs_outside_component_(\d+)\.tsv$")
+ISOLATE_RE = re.compile(r"^isolate_(.+?)_vs_rest\.tsv$")
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +100,7 @@ def topn_fallback(df: pd.DataFrame, n: int) -> pd.DataFrame:
         return df2
     df2["abs_lfc"] = df2["log2FoldChange"].abs()
     df2 = df2.sort_values(
-        ["padj", "abs_lfc", "gene_id"], ascending=[True, False, True]
+        ["padj", "abs_lfc"], ascending=[True, False]
     ).head(n).drop(columns=["abs_lfc"])
     return df2
 
@@ -129,8 +130,8 @@ def aggregate_consensus(anchor_dfs: list, direction: str, n_anchors: int) -> pd.
     g["rank_score"] = g["support_n"] * g["median_abs_log2FC"]
     g["direction"] = direction
     g = g.sort_values(
-        ["support_n", "rank_score", "best_padj", "gene_id"],
-        ascending=[False, False, True, True]
+        ["support_n", "rank_score", "best_padj"],
+        ascending=[False, False, True]
     ).reset_index(drop=True)
     return g
 
@@ -145,14 +146,38 @@ def jaccard(a: set, b: set) -> float:
 
 def comp_sort_key(c: str):
     try:
-        return int(c)
+        return (0, int(c))
     except ValueError:
-        return 10**9
+        return (1, str(c))
 
 
 def ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def discover_contrast_tables(tables_dir: Path) -> tuple[dict, str]:
+    """Discover supported DESeq2 table layouts."""
+    anchors_by_comp = {}
+
+    for f in sorted(tables_dir.glob("anchor_*_vs_outside_component_*.tsv")):
+        m = ANCHOR_RE.match(f.name)
+        if not m:
+            continue
+        anchor_name, comp = m.group(1), m.group(2)
+        anchors_by_comp.setdefault(comp, []).append((anchor_name, f))
+
+    if anchors_by_comp:
+        return anchors_by_comp, "anchor_vs_outside_component"
+
+    for f in sorted(tables_dir.glob("isolate_*_vs_rest.tsv")):
+        m = ISOLATE_RE.match(f.name)
+        if not m:
+            continue
+        isolate_name = m.group(1)
+        anchors_by_comp.setdefault(isolate_name, []).append((isolate_name, f))
+
+    return anchors_by_comp, "isolate_vs_rest"
 
 
 def write_summary_exports(profile: str,
@@ -236,23 +261,16 @@ def process_profile(profile: str, tables_dir: Path, outdir: Path, args: argparse
     ensure_dir(outdir)
 
     print(f"[INFO] Processing profile={profile} tables_dir={tables_dir}")
-    print(
-        "[INFO] Active consensus thresholds: "
-        f"padj<={args.padj:g}, baseMean>={args.basemean:g}, "
-        f"absLFC>={args.lfc:g}, min_anchor_genes={args.min_anchor_genes}, "
-        f"fallback_topn={args.fallback_topn}"
-    )
 
-    anchors_by_comp = {}
-    for f in tables_dir.glob("anchor_*_vs_outside_component_*.tsv"):
-        m = ANCHOR_RE.match(f.name)
-        if not m:
-            continue
-        anchor_name, comp = m.group(1), m.group(2)
-        anchors_by_comp.setdefault(comp, []).append((anchor_name, f))
+    anchors_by_comp, table_mode = discover_contrast_tables(tables_dir)
 
     if not anchors_by_comp:
-        raise SystemExit(f"[ERROR] No anchor files found for profile={profile} in {tables_dir}")
+        raise SystemExit(
+            f"[ERROR] No supported DESeq2 tables found for profile={profile} in {tables_dir}. "
+            "Expected anchor_*_vs_outside_component_*.tsv or isolate_*_vs_rest.tsv"
+        )
+
+    print(f"[INFO] Detected DESeq2 table layout: {table_mode}")
 
     qc_rows = []
     all_sig_long = []
@@ -283,11 +301,11 @@ def process_profile(profile: str, tables_dir: Path, outdir: Path, args: argparse
 
             fb_up = False
             fb_down = False
-            if args.min_anchor_genes > 0 and len(up_sig) < args.min_anchor_genes:
+            if len(up_sig) < args.min_anchor_genes:
                 up_sig = topn_fallback(up, args.fallback_topn)
                 fb_up = True
                 fallback_up_anchors.append(anchor_name)
-            if args.min_anchor_genes > 0 and len(down_sig) < args.min_anchor_genes:
+            if len(down_sig) < args.min_anchor_genes:
                 down_sig = topn_fallback(down, args.fallback_topn)
                 fb_down = True
                 fallback_down_anchors.append(anchor_name)
@@ -510,13 +528,13 @@ def main():
     ap.add_argument("--outdir", required=True,
                     help="Output directory for profile-specific consensus results")
     ap.add_argument("--padj", type=float, default=0.05)
-    ap.add_argument("--basemean", type=float, default=10.0)
-    ap.add_argument("--lfc", type=float, default=1.0)
+    ap.add_argument("--basemean", type=float, default=1.0)
+    ap.add_argument("--lfc", type=float, default=0.5)
     ap.add_argument("--core-support-min", type=int, default=2,
                     help="Minimum anchor count for core markers")
     ap.add_argument("--core-support-frac", type=float, default=0.30,
                     help="Minimum support fraction for core markers")
-    ap.add_argument("--min-anchor-genes", type=int, default=0)
+    ap.add_argument("--min-anchor-genes", type=int, default=25)
     ap.add_argument("--fallback-topn", type=int, default=200)
     ap.add_argument("--flip-policy", choices=["remove", "majority"], default="remove",
                     help="How to handle genes appearing UP in some anchors, DOWN in others")

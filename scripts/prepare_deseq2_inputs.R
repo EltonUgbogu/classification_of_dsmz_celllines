@@ -15,7 +15,7 @@
 #   --profile brca \
 #   --dsmz_counts data/dsmz/DSMZ_count_gene.rds \
 #   --dsmz_meta data/dsmz/DSMZ_metadata.csv \
-#   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/dsmz_cellline_graph_node_stats.tsv \
+#   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/plots/patient_referenced_resolved_cell_line_neighbourhood_graph_node_stats.tsv \
 #   --outdir results/unsupervised/brca/deseq2_inputs
 #
 # ============================================================

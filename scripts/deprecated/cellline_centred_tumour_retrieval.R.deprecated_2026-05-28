@@ -1,0 +1,43 @@
+#!/usr/bin/env Rscript
+
+# =============================================================================
+# cellline_centred_tumour_retrieval.R  [DEPRECATED COMPATIBILITY WRAPPER]
+# =============================================================================
+#
+# DEPRECATED 2026-05-28.
+# This file is a thin compatibility shim that forwards all arguments to the
+# active implementation:  scripts/cellline_centred_precision_at_k.R
+#
+# Reason for deprecation:
+#   The script was renamed to cellline_centred_precision_at_k.R to replace
+#   "retrieval" with computation-specific terminology (Precision@k, bootstrap).
+#   The active Snakemake rule (cellline_precision_at_k) already calls the new
+#   script directly; no active Snakefile rule invokes this file as a script.
+#
+# DO NOT add this file to any Snakemake rule or PIPELINE_TARGET.
+# DO NOT delete this file without confirming no external process calls it.
+#
+# Preserved full implementation for audit trail:
+#   Git history contains the original 948-line implementation under this name.
+# =============================================================================
+
+# Determine the directory of this script to locate the active implementation
+this_script <- normalizePath(sys.frame(0)$ofile, mustWork = FALSE)
+if (is.na(this_script) || !nzchar(this_script)) {
+  # Fallback: assume scripts/ directory relative to working directory
+  this_script <- file.path(getwd(), "scripts", "cellline_centred_tumour_retrieval.R")
+}
+scripts_dir  <- dirname(this_script)
+active_script <- file.path(scripts_dir, "cellline_centred_precision_at_k.R")
+
+if (!file.exists(active_script)) {
+  stop(
+    "[cellline_centred_tumour_retrieval.R] Deprecation wrapper: cannot locate ",
+    "active script at: ", active_script, "\n",
+    "Ensure cellline_centred_precision_at_k.R is present in the same directory.",
+    call. = FALSE
+  )
+}
+
+message("[cellline_centred_tumour_retrieval.R] DEPRECATED: forwarding to cellline_centred_precision_at_k.R")
+source(active_script)

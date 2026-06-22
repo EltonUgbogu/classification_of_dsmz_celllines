@@ -1,8 +1,8 @@
 profiles:
   nbl:
-    tumour_rds: "/work/ugbogu/pipeline/data/nbl/tests/fixtures/VST_NBL_brca.rds"
-    dsmz_rds: "/work/ugbogu/pipeline/data/dsmz/DSMZ_count_gene.rds"
-    dsmz_meta_csv: "/work/ugbogu/pipeline/data/dsmz/DSMZ_metadata.csv"
+    tumour_rds: "data/nbl/tests/fixtures/VST_NBL_brca.rds"
+    dsmz_rds: "data/dsmz/DSMZ_count_gene.rds"
+    dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
     min_shared_genes: 5000
     tumour_label: "NBL_TUMOUR"
     dsmz_label: "DSMZ_NBL"

@@ -34,7 +34,7 @@
 # =============================================================================
 
 #SBATCH --job-name=download_rbl_primary_pe
-#SBATCH --chdir=/work/ugbogu/pipeline/data/rbl
+#SBATCH --chdir=.
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 #SBATCH --nodes=1
@@ -45,7 +45,9 @@
 
 set -euo pipefail
 
-ROOT=/work/ugbogu/pipeline/data/rbl
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+ROOT="${RBL_DATA_ROOT:-$REPO_ROOT/data/rbl}"
 ARG="${1:-GSE268136_primary_tumours}"
 
 need() {
@@ -115,7 +117,11 @@ run_one_dataset() {
         echo "[INFO] JOB_STDOUT=$JOB_STDOUT"
         echo "[INFO] JOB_STDERR=$JOB_STDERR"
 
-        source /home/ugbogu/miniforge3/etc/profile.d/conda.sh
+        CONDA_SH_PATH="${CONDA_SH_PATH:-${HOME}/miniforge3/etc/profile.d/conda.sh}"
+        if [[ ! -f "$CONDA_SH_PATH" ]] && command -v conda >/dev/null 2>&1; then
+            CONDA_SH_PATH="$(conda info --base)/etc/profile.d/conda.sh"
+        fi
+        source "$CONDA_SH_PATH"
         conda activate sra3
         hash -r
 

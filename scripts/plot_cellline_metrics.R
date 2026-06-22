@@ -102,6 +102,9 @@ req_ov <- c("cell_line","cell_lineage","mean_score","median_score","mean_rank","
 miss_ov <- setdiff(req_ov, names(ov))
 if (length(miss_ov) > 0) stop("overall file missing columns: ", paste(miss_ov, collapse=", "))
 
+if (!"cell_line_display" %in% names(byc)) byc[, cell_line_display := cell_line]
+if (!"cell_line_display" %in% names(ov)) ov[, cell_line_display := cell_line]
+
 # Filter cohorts
 byc <- byc[tum_lineage %in% cohorts_keep]
 
@@ -114,9 +117,9 @@ ov[, cell_lineage := as.factor(cell_lineage)]
 # =============================================================================
 # Show top-N most representative cell lines per cohort by mean_rank (lower is better)
 rank_top <- byc[, .SD[order(mean_rank)][1:min(.N, top_n)], by = tum_lineage]
-rank_top[, cell_line := factor(cell_line, levels = unique(cell_line[order(mean_rank)])), by=tum_lineage]
+rank_top[, cell_line_display := factor(cell_line_display, levels = unique(cell_line_display[order(mean_rank)])), by=tum_lineage]
 
-p1 <- ggplot(rank_top, aes(x = reorder(cell_line, -mean_rank), y = mean_rank, fill = cell_lineage)) +
+p1 <- ggplot(rank_top, aes(x = reorder(cell_line_display, -mean_rank), y = mean_rank, fill = cell_lineage)) +
   geom_col() +
   coord_flip() +
   facet_wrap(~ tum_lineage, scales = "free_y") +
@@ -135,7 +138,7 @@ save_pdf(p1, file.path(outdir, "Fig_cellline_mean_rank_by_cohort.pdf"), w=12, h=
 # =============================================================================
 top1_top <- byc[, .SD[order(-pct_in_top1, -mean_score)][1:min(.N, top_n)], by = tum_lineage]
 
-p2 <- ggplot(top1_top, aes(x = reorder(cell_line, pct_in_top1), y = pct_in_top1, fill = cell_lineage)) +
+p2 <- ggplot(top1_top, aes(x = reorder(cell_line_display, pct_in_top1), y = pct_in_top1, fill = cell_lineage)) +
   geom_col() +
   coord_flip() +
   facet_wrap(~ tum_lineage, scales = "free_y") +
@@ -157,9 +160,9 @@ best_mean <- byc[order(tum_lineage, -mean_score, -pct_in_top1, median_rank)][
   , .SD[1], by = tum_lineage
 ]
 
-p3 <- ggplot(best_mean, aes(x = tum_lineage, y = mean_score, fill = cell_line)) +
+p3 <- ggplot(best_mean, aes(x = tum_lineage, y = mean_score, fill = cell_line_display)) +
   geom_col() +
-  geom_text(aes(label = cell_line), vjust = -0.4, size = 3) +
+  geom_text(aes(label = cell_line_display), vjust = -0.4, size = 3) +
   labs(
     title = "Best cell line per tumour cohort (highest mean Spearman score)",
     x = "Tumour cohort",
@@ -178,9 +181,9 @@ best_top1 <- byc[order(tum_lineage, -pct_in_top1, -mean_score, median_rank)][
   , .SD[1], by = tum_lineage
 ]
 
-p4 <- ggplot(best_top1, aes(x = tum_lineage, y = pct_in_top1, fill = cell_line)) +
+p4 <- ggplot(best_top1, aes(x = tum_lineage, y = pct_in_top1, fill = cell_line_display)) +
   geom_col() +
-  geom_text(aes(label = cell_line), vjust = -0.4, size = 3) +
+  geom_text(aes(label = cell_line_display), vjust = -0.4, size = 3) +
   labs(
     title = "Best cell line per tumour cohort (highest Top-1 selection frequency)",
     x = "Tumour cohort",
@@ -218,10 +221,10 @@ top_union <- unique(byc[order(-mean_score), head(cell_line, top_n)])
 hm <- byc[cell_line %in% top_union]
 
 # Order cell lines by overall mean_score (within these)
-cell_order <- hm[, .(mean_score_all = mean(mean_score, na.rm=TRUE)), by=cell_line][order(-mean_score_all)]$cell_line
-hm[, cell_line := factor(cell_line, levels = cell_order)]
+cell_order <- hm[, .(mean_score_all = mean(mean_score, na.rm=TRUE)), by=cell_line_display][order(-mean_score_all)]$cell_line_display
+hm[, cell_line_display := factor(cell_line_display, levels = cell_order)]
 
-p6 <- ggplot(hm, aes(x = tum_lineage, y = cell_line, fill = mean_score)) +
+p6 <- ggplot(hm, aes(x = tum_lineage, y = cell_line_display, fill = mean_score)) +
   geom_tile() +
   labs(
     title = sprintf("Cell line × tumour cohort representativeness (mean score; union of top %d per cohort)", top_n),

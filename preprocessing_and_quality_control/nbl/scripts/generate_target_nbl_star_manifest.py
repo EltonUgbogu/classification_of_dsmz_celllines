@@ -10,8 +10,7 @@ Filters:
 - cases.samples.sample_type = Primary Tumor
 
 Output:
-- manifest.tsv (GDC download manifest), default:
-  /work/ugbogu/pipeline/data/nbl/target_nbl/manifest.tsv
+- manifest.tsv under `NBL_DATA_ROOT/target_nbl` by default.
 
 Usage:
     python3 generate_target_nbl_star_manifest.py
@@ -21,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
@@ -28,7 +28,9 @@ from pathlib import Path
 
 GDC_FILES_ENDPOINT = "https://api.gdc.cancer.gov/files"
 
-DEFAULT_MANIFEST_PATH = Path("/work/ugbogu/pipeline/data/nbl/target_nbl/manifest.tsv")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl")).expanduser()
+DEFAULT_MANIFEST_PATH = NBL_DATA_ROOT / "target_nbl" / "manifest.tsv"
 
 
 def build_filters() -> dict:

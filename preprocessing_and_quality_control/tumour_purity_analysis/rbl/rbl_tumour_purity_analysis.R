@@ -3,12 +3,8 @@
 # rbl_tumour_purity_analysis.R
 # Tumour purity pipeline (tidyestimate) for RBL cohort
 #
-# INPUT:
-#   /home/chu25/data/rbl/rbl_raw_count_matrix.rds   (66 samples x 60660 genes)
-#   /home/chu25/data/rbl/final_rbl_ensembl_to_hgnc.tsv
-#
-# OUTPUT DIR:
-#   /home/chu25/data/rbl/results/tumour_purity_results
+# Input and output defaults resolve below RBL_DATA_ROOT or the repository's
+# data/rbl and results/tumour_purity_analysis/rbl directories.
 
 suppressPackageStartupMessages({
   library(tidyestimate)
@@ -20,6 +16,11 @@ suppressPackageStartupMessages({
   library(RColorBrewer)
   library(SummarizedExperiment)
 })
+
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
+rbl_data_root <- Sys.getenv("RBL_DATA_ROOT", unset = file.path(repo_root, "data", "rbl"))
 
 # --------------------------------------------------------------
 # 1. Map Ensembl → HGNC (robust, deduplicates symbols)
@@ -280,10 +281,10 @@ read_rbl_expr_matrix <- function(path) {
 # 7. CORE PIPELINE: ESTIMATE + purity filter + plots + outputs
 # --------------------------------------------------------------
 run_rbl_tidyestimate_purity <- function(
-  expr_matrix_path = "/home/chu25/data/rbl/rbl_raw_count_matrix.rds",
-  output_dir       = "/work/ugbogu/pipeline/results/tumour_purity_analysis/rbl",
-  map_tsv_path     = "/home/chu25/data/rbl/final_rbl_ensembl_to_hgnc.tsv",
-  purity_threshold = 0.7
+  expr_matrix_path = Sys.getenv("SE_PATH", file.path(rbl_data_root, "count_data", "rbl_tumour_count.rds")),
+  output_dir       = Sys.getenv("OUTPUT_DIR", file.path(repo_root, "results", "tumour_purity_analysis", "rbl")),
+  map_tsv_path     = Sys.getenv("MAP_TSV", file.path(rbl_data_root, "count_data", "rbl_ensembl_to_hgnc.tsv")),
+  purity_threshold = as.numeric(Sys.getenv("PURITY_THRESHOLD", "0.7"))
 ) {
   message("[INFO] Starting RBL tidyestimate purity pipeline...")
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -603,9 +604,9 @@ run_rbl_tidyestimate_purity <- function(
 # --------------------------------------------------------------
 if (sys.nframe() == 0) {
   run_rbl_tidyestimate_purity(
-    expr_matrix_path = "/home/chu25/data/rbl/rbl_raw_count_matrix.rds",
-    output_dir       = "/work/ugbogu/pipeline/results/tumour_purity_analysis/rbl",
-    map_tsv_path     = "/home/chu25/data/rbl/final_rbl_ensembl_to_hgnc.tsv",
-    purity_threshold = 0.7
+    expr_matrix_path = Sys.getenv("SE_PATH", file.path(rbl_data_root, "count_data", "rbl_tumour_count.rds")),
+    output_dir       = Sys.getenv("OUTPUT_DIR", file.path(repo_root, "results", "tumour_purity_analysis", "rbl")),
+    map_tsv_path     = Sys.getenv("MAP_TSV", file.path(rbl_data_root, "count_data", "rbl_ensembl_to_hgnc.tsv")),
+    purity_threshold = as.numeric(Sys.getenv("PURITY_THRESHOLD", "0.7"))
   )
 }

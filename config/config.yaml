@@ -1,51 +1,119 @@
+# Defines the external study-design manifest and metadata output directory materialised by the workflow.
 study_design:
   file: config/study_design.yaml
   outputs_dirname: study_design
 
+# Optional external artefacts. Relative paths are resolved from the repository
+# root; absolute local overrides may be supplied in a private config file.
+external_inputs:
+  retained_source_contrasts: ""
+
+# Configures validation parameters for permutation, random-baseline, and shortlist checks.
 validation:
   shortlist_n: 10
   permutation_iterations: 1000
   random_baseline_iterations: 1000
   seed: 42
 
+# Defines shared defaults inherited by cohort profile sections unless overridden.
 defaults:
+  # Locates shared R helper functions used by tumour-neighbourhood and agnostic clustering rules.
   paths:
     tumour_nh_base_functions: R/base_functions
     agnostic_base_functions_dir: R
+  # Configures candidate cluster counts evaluated by clustering rules.
   clustering:
     k_grid: [2, 3, 4, 5, 6, 7, 8]
   feature_selection:
+    # Sets method-specific feature-selection cutoffs for candidate and refined gene sets.
     method_topn:
+      # Broad statistical candidate sets retain larger top-N gene lists.
       Variance:   3000
       MAD:        3000
       MeanAbsDev: 3000
       Entropy:    3000
       PCA:        3000
+      # Refined network-derived gene sets retain smaller top-N gene lists.
       Spearman:   500
       MX:         500
       kTotal:     500
       HVG:        3000
+  # Defines graph-informed DESeq2 marker filtering thresholds and column mappings.
   deseq2:
+    # Maps staged and raw metadata columns consumed by DESeq2 marker rules.
     sample_id_col: sample_name
     staged_sample_id_col: sample_id
     cell_line_col: cell_line
     raw_cell_line_col: DSMZ_Cell_line_norm
     component_col: component
+    # Filters isolate-vs-REST graph-derived marker contrasts.
     fdr_isolate: 0.01
     lfc_isolate: 1.5
     topN_isolate: 50
+    # Filters anchor-vs-outside-component graph-derived marker contrasts.
     fdr_anchor: 0.05
     lfc_anchor: 1.0
     topN_anchor: 200
+    # Filters component-vs-REST graph-derived marker contrasts.
     fdr_component: 0.05
     lfc_component: 1.0
     topN_component: 500
+    # Sets expression and recurrence thresholds for retained marker sets.
     min_baseMean: 10
     recurrence_k: 2
     enabled_profiles:
       - brca
       - nbl
       - rbl
+  # Routes staged graph-derived DESeq2 inputs for each disease profile.
+  deseq2_inputs:
+    use_staged_inputs: true
+    # Records expected sample counts for staged DESeq2 input validation.
+    expected_samples:
+      brca: 29
+      nbl: 18
+      rbl: 11
+    # Routes staged count matrices into DESeq2 marker rules.
+    staged_counts:
+      brca: results/unsupervised/brca/deseq2_inputs/counts.tsv
+      nbl: results/unsupervised/nbl/deseq2_inputs/counts.tsv
+      rbl: results/unsupervised/rbl/deseq2_inputs/counts.tsv
+    # Routes staged metadata with graph components into DESeq2 marker rules.
+    staged_metadata:
+      brca: results/unsupervised/brca/deseq2_inputs/metadata_with_components.tsv
+      nbl: results/unsupervised/nbl/deseq2_inputs/metadata_with_components.tsv
+      rbl: results/unsupervised/rbl/deseq2_inputs/metadata_with_components.tsv
+    # Routes isolate labels derived from resolved graph components.
+    staged_isolate_list:
+      brca: results/unsupervised/brca/deseq2_inputs/isolate_list.csv
+      nbl: results/unsupervised/nbl/deseq2_inputs/isolate_list.csv
+      rbl: results/unsupervised/rbl/deseq2_inputs/isolate_list.csv
+    # Routes anchor labels used by anchor-vs-outside-component contrasts.
+    staged_anchor_list:
+      brca: results/unsupervised/brca/deseq2_inputs/anchor_list.csv
+      nbl: results/unsupervised/nbl/deseq2_inputs/anchor_list.csv
+      rbl: results/unsupervised/rbl/deseq2_inputs/anchor_list.csv
+    # Routes anchor-to-component mappings for anchor-aware marker contrasts.
+    staged_anchor_components:
+      brca: results/unsupervised/brca/deseq2_inputs/anchor_components.tsv
+      nbl: results/unsupervised/nbl/deseq2_inputs/anchor_components.tsv
+      rbl: results/unsupervised/rbl/deseq2_inputs/anchor_components.tsv
+    # Routes component labels for component-vs-REST marker contrasts.
+    staged_components:
+      brca: results/unsupervised/brca/deseq2_inputs/components_list.txt
+      nbl: results/unsupervised/nbl/deseq2_inputs/components_list.txt
+      rbl: results/unsupervised/rbl/deseq2_inputs/components_list.txt
+    # Records whether raw source count objects are available for each cohort profile.
+    raw_source_available:
+      brca: true
+      nbl: false
+      rbl: false
+    # Records provenance for raw or staged count sources.
+    raw_source_provenance:
+      brca: data/brca/dsmz_brca_counts.rds
+      nbl: unavailable; staged counts.tsv validated as integer-like
+      rbl: unavailable; staged counts.tsv validated as integer-like
+  # Configures community detection as a diagnostic stability analysis against resolved graph components.
   community_stability:
     enabled: true
     enabled_profiles:
@@ -54,12 +122,15 @@ defaults:
       - rbl
     scope: cell_line_graph_stability_diagnostic
     interpretation: "Leiden/Louvain community detection is used only as an auxiliary cross-direction cell-line graph co-assignment stability check against final resolved graph components."
+  # Configures g:Profiler enrichment, source databases, correction, archive use, and display filtering.
   enrichment:
     enabled: true
     organism: hsapiens
+    # Sets query-size and alpha thresholds for enrichment tests.
     min_query_genes: 5
     alpha: 0.05
     correction_method: g_SCS
+    # Selects ontology, pathway, regulatory, tissue, and complex source databases.
     sources:
       - GO:BP
       - GO:MF
@@ -72,11 +143,13 @@ defaults:
       - CORUM
     optional_sources: []
     include_hp: false
+    # Configures archive-backed reproducibility and IEA sensitivity settings.
     primary_exclude_iea: false
     run_iea_sensitivity: true
     archive_url: "https://biit.cs.ut.ee/gprofiler_archive3/e114_eg62_p19/"
     require_archive: true
     as_short_link: false
+    # Controls source-family marker pooling and operative feature-set settings.
     component_marker_pooling: union
     component_recurrence_min: 1
     component_rank_stat: median_abs_log2fc
@@ -88,10 +161,13 @@ defaults:
     operative_feature_set_rank_source: "initial_run_log2fc"
     operative_feature_set_gene_file: "results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt"
     operative_feature_set_rank_tsv: ""
+    # Controls display limits and output routing for retained top-term tables.
     top_terms_per_source: 5
     output_dir_name: enrichment
+  # Configures post-DESeq2 marker collation, source-family feature construction, and pan-cancer outputs.
   marker_postprocessing:
     enabled: true
+    # Configures per-profile consensus marker filtering and recurrence handling.
     consensus:
       enabled: true
       outdir_name: consensus_markers
@@ -104,20 +180,63 @@ defaults:
       fallback_topn: 200
       flip_policy: remove
       recurrence_k: 2
+    # Configures source-family marker selection for the pan-cancer feature panel.
     pan_cancer:
       enabled: true
+      # Selects disease profiles contributing graph-derived marker contrasts.
       disease_profiles: [brca, nbl, rbl]
+      method: ranked_marker_source_pan_cancer_panel
+      # Routes final source-family marker panel outputs.
       outdir: results/unsupervised/pan_cancer/feature_space
       final_features_tsv: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.tsv
       final_features_clean: results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt
       final_features_up: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.UP.txt
       final_features_down: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.DOWN.txt
       build_summary_tsv: results/unsupervised/pan_cancer/feature_space/pan_cancer_feature_build_summary.tsv
+      # Controls recurrence and singleton policies for marker-source retention.
+      recurrence_k: 2
+      desired_min_size: 200
+      force_exact_size: false
+      marker_source_recurrence: true
+      singleton_source_policy: ranked_quantile
+      disable_old_isolate_rescue: true
+      old_isolate_rescue:
+        enabled: false
+      ranked_marker_source_panel:
+        enabled: true
+        output_prefix: ranked_marker_source_panel
+        primary_rule: auto
+        marker_source_recurrence:
+          enabled: true
+          singleton_policy: ranked_quantile
+        # Configures empirical ranking thresholds for retained source-family markers.
+        empirical_ranking:
+          padj_quantile: 0.25
+          abs_log2fc_quantile: 0.75
+          strict_iqr:
+            baseMean_threshold: median
+            require_direction_consistency: false
+          relaxed_iqr:
+            minimum_criteria_met: 2
+            baseMean_threshold: median
+        ranking_order:
+          - source_count_desc
+          - min_padj_asc
+          - median_abs_log2fc_desc
+          - median_baseMean_desc
+          - direction_consistency_desc
+      # Constrains cross-disease support and marker-source class caps.
       min_cross_disease: 2
       cap_specific: 300
-      cap_isolate: 50
+      cap_isolate: 0
       remove_ribo_mt: false
-      gene_annotation_tsv: ""
+      # Records annotation and backup/provenance paths used by feature-panel audits.
+      gene_annotation_tsv: resources/ensembl_to_symbol.tsv
+      previous177_backup_dir: results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016
+      previous177_features_tsv: results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016/pan_cancer_features.tsv
+      active_backup_dir: results/unsupervised/pan_cancer/feature_space_BACKUP_before_ranked_source_family_panel_20260618_190642
+      previous125_features_tsv: results/unsupervised/pan_cancer/feature_space_BACKUP_before_ranked_source_family_panel_20260618_190642/pan_cancer_features.tsv
+    # Constructs pan-cancer expression objects from the marker-derived feature panel.
     expression_matrix:
       include_heme: false
       include_heme_cell_lines_only: true
@@ -126,6 +245,20 @@ defaults:
       output_meta_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
       output_cell_lines_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only.rds
       output_cell_lines_meta_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only_metadata.tsv
+    # Configures UMAP visualisation of tumour-cell-line alignment in the pan-cancer feature space.
+    tumour_cell_line_alignment_umap:
+      output_dir: results/unsupervised/pan_cancer/tumour_cell_line_alignment_umap
+      metadata_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
+      source_metadata_tsv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
+      metrics: [cosine, euclidean]
+      page: deg_set_alignment
+      figure_width: 9.0
+      figure_height: 7.0
+      slide_width: 13.33
+      slide_height: 7.5
+      legend_position: bottom
+      source_cancer_slide_threshold: 6
+    # Configures Spearman-based tumour-cell-line mapping and global-gene filtering.
     mapping:
       output_dir: results/unsupervised/pan_cancer/tumour_mapping
       top_k: 10
@@ -135,8 +268,8 @@ defaults:
       global_gene_regex: "^RPL|^RPS|^MT-|^HIST"
       gene_symbol_map: ""
 
-# Top-level multicohort_cancer block: defines source cohorts and shared output location.
-# The real analysis grid (methods, distances, directions) is under profiles.multicohort_cancer.
+# Defines multicohort source profiles and shared output root.
+# Profile-specific feature-distance directions are configured under profiles.multicohort_cancer.
 multicohort_cancer:
   outdir: results/unsupervised/multicohort_cancer
   profiles:
@@ -144,9 +277,511 @@ multicohort_cancer:
     - nbl
     - rbl
 
+# Configures final patient-referenced and support-network figure layouts without changing graph topology.
+graph_plot_layout:
+  # Configures resolved neighbour graph geometry, styling, component spacing, isolate placement, labels, and legends.
+  resolved_patient_graph:
+    # Defines profile-independent layout defaults for resolved graph figures.
+    default:
+      fig_w: 30
+      fig_h: 22
+      dpi: 600
+      node_size: 4600
+      font_size: 20
+      edge_width_min: 2.2
+      edge_width_max: 9.0
+      legend_mode: "separate"
+      use_halo_labels: true
+      halo_linewidth: 3.6
+      halo_color: "white"
+      dense_component_min_size: 8
+      dense_component_min_density: 0.30
+      dense_component_expand_factor: 2.00
+      adaptive_component_layout: true
+      adaptive_component_min_nodes: 4
+      adaptive_component_min_density: 0.15
+      adaptive_component_min_expand: 1.0
+      adaptive_component_max_expand: 3.2
+      adaptive_component_density_weight: 1.3
+      adaptive_component_size_weight: 0.10
+      adaptive_component_label_weight: 0.22
+      label_overlap_avoidance: true
+      label_padding_factor: 1.45
+      label_bbox_margin: 0.10
+      max_label_overlap_iterations: 1800
+      min_label_separation: 0.35
+      avoid_isolate_overlap: true
+      min_component_isolate_gap: 5.0
+      isolate_panel_reserved_height: 10.0
+      adaptive_isolate_y_shift: true
+      component_isolate_gap_factor: 1.0
+      component_label_gap: 2.0
+      component_grid_cols: 2
+      component_grid_rows: 2
+      component_cell_width: 96.0
+      component_cell_height: 60.0
+      component_row_gap: 16.0
+      component_col_gap: 18.0
+      legend_width: 68.0
+      isolate_region_height: 18.0
+      isolate_spacing: 18.0
+      isolate_panel_padding_x: 12.0
+      isolate_panel_padding_y: 1.4
+      isolate_label_band_frac: 0.34
+      isolate_max_per_row: 6
+      isolate_panel_width_frac: 0.62
+      footnote_region_height: 7.0
+      component_cell_fill_x: 0.78
+      component_cell_fill_y: 0.72
+      dense_component_cell_fill_x: 0.92
+      dense_component_cell_fill_y: 0.84
+      c2_component_cell_fill_x: 0.88
+      c2_component_cell_fill_y: 0.80
+      c1_x_expand_factor: 3.00
+      c1_y_expand_factor: 3.00
+      c2_x_expand_factor: 1.35
+      c2_y_expand_factor: 1.05
+      isolate_gap: 8.0
+      isolate_box_height_factor: 2.00
+      isolate_label_y_frac: 0.010
+      isolate_label_left_pad: 14.0
+      compact_isolate_panel: true
+      isolate_panel_width_mode: "content"
+      isolate_panel_spacing: 10.0
+      min_isolate_label_spacing: 8.0
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      legend_alignment_mode: "component-band"
+    # Overrides resolved-graph layout parameters for the BRCA profile.
+    brca:
+      font_size: 20
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: false
+    # Overrides resolved-graph layout parameters for the NBL profile.
+    nbl:
+      font_size: 21
+      c2_component_cell_fill_x: 0.96
+      c2_component_cell_fill_y: 0.92
+      c2_x_expand_factor: 2.20
+      c2_y_expand_factor: 1.80
+      adaptive_component_max_expand: 3.8
+      adaptive_component_density_weight: 1.6
+      adaptive_component_size_weight: 0.12
+      adaptive_component_label_weight: 0.28
+      position_fill_x: 0.94
+      position_fill_y: 0.90
+      axis_margin_frac: 0.03
+      min_component_isolate_gap: 6.0
+      min_label_separation: 0.50
+      max_label_overlap_iterations: 2400
+      isolate_panel_spacing: 8.0
+      min_isolate_label_spacing: 8.0
+    # Overrides resolved-graph layout parameters for the RBL profile.
+    rbl:
+      fig_w: 18.5
+      fig_h: 7.2
+      node_size: 3800
+      font_size: 17
+      edge_width_min: 1.8
+      edge_width_max: 6.0
+      isolate_gap: 3.2
+      isolate_spacing: 7.0
+      isolate_box_height_factor: 1.45
+      position_fill_x: 0.86
+      position_fill_y: 0.78
+      axis_margin_frac: 0.04
+      adaptive_component_max_expand: 2.2
+      min_component_isolate_gap: 3.5
+      min_label_separation: 0.25
+      isolate_panel_spacing: 7.0
+      min_isolate_label_spacing: 7.0
+
+  # Configures majority-threshold support graph geometry, styling, adaptive layout, label overlap, and isolate panels.
+  multi_representation_majority_graph:
+    # Defines profile-independent layout defaults for majority-threshold support graph figures.
+    default:
+      fig_w: 30
+      fig_h: 22
+      dpi: 600
+      node_size: 4600
+      font_size: 18
+      edge_width_min: 2.2
+      edge_width_max: 9.0
+      dense_component_min_size: 8
+      dense_component_min_density: 0.30
+      dense_component_expand_factor: 2.00
+      component_label_gap: 2.0
+      component_grid_cols: 2
+      component_grid_rows: 2
+      component_cell_width: 96.0
+      component_cell_height: 60.0
+      component_row_gap: 16.0
+      component_col_gap: 18.0
+      legend_width: 68.0
+      isolate_region_height: 18.0
+      isolate_spacing: 18.0
+      isolate_panel_padding_x: 12.0
+      isolate_panel_padding_y: 1.4
+      isolate_label_band_frac: 0.34
+      isolate_max_per_row: 6
+      isolate_panel_width_frac: 0.62
+      footnote_region_height: 7.0
+      component_cell_fill_x: 0.78
+      component_cell_fill_y: 0.72
+      dense_component_cell_fill_x: 0.92
+      dense_component_cell_fill_y: 0.84
+      c1_x_expand_factor: 3.00
+      c1_y_expand_factor: 3.00
+      isolate_gap: 8.0
+      isolate_box_height_factor: 2.00
+      isolate_label_y_frac: 0.010
+      isolate_label_left_pad: 14.0
+      legend_alignment_mode: "component-band"
+      legend_mode: "separate"
+      use_halo_labels: true
+      halo_linewidth: 3.6
+      halo_color: "white"
+      match_resolved_style: false
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: true
+      isolate_panel_width_mode: "layout"
+      isolate_panel_spacing: 18.0
+      min_isolate_label_spacing: 8.0
+      adaptive_component_layout: true
+      adaptive_component_min_nodes: 4
+      adaptive_component_min_density: 0.15
+      adaptive_component_min_expand: 1.0
+      adaptive_component_max_expand: 3.0
+      adaptive_component_density_weight: 1.2
+      adaptive_component_size_weight: 0.10
+      adaptive_component_label_weight: 0.22
+      label_overlap_avoidance: true
+      label_padding_factor: 1.45
+      label_bbox_margin: 0.10
+      max_label_overlap_iterations: 1800
+      min_label_separation: 0.35
+      avoid_isolate_overlap: true
+      min_component_isolate_gap: 5.0
+      isolate_panel_reserved_height: 10.0
+      adaptive_isolate_y_shift: true
+      component_isolate_gap_factor: 1.0
+    # Overrides majority-threshold support graph layout parameters for the BRCA profile.
+    brca:
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: false
+    # Overrides majority-threshold support graph layout parameters for the NBL profile.
+    nbl:
+      node_size: 5800
+      font_size: 21
+      isolate_region_height: 24.0
+      isolate_gap: 14.0
+      isolate_panel_padding_x: 3.0
+      isolate_panel_padding_y: 1.0
+      component_cell_fill_y: 0.64
+      dense_component_cell_fill_y: 0.76
+      c1_y_expand_factor: 2.20
+      legend_mode: "separate"
+      use_halo_labels: true
+      match_resolved_style: true
+      position_fill_x: 0.98
+      position_fill_y: 0.95
+      axis_margin_frac: 0.014
+      compact_isolate_panel: true
+      isolate_panel_width_mode: "content"
+      isolate_panel_spacing: 5.0
+      min_isolate_label_spacing: 8.0
+      adaptive_component_layout: true
+      adaptive_component_min_nodes: 4
+      adaptive_component_min_density: 0.15
+      adaptive_component_min_expand: 1.0
+      adaptive_component_max_expand: 4.0
+      adaptive_component_density_weight: 1.8
+      adaptive_component_size_weight: 0.14
+      adaptive_component_label_weight: 0.30
+      label_padding_factor: 1.75
+      label_bbox_margin: 0.18
+      max_label_overlap_iterations: 3200
+      min_label_separation: 0.80
+      min_component_isolate_gap: 7.0
+      component_isolate_gap_factor: 1.0
+    # Overrides majority-threshold support graph layout parameters for the RBL profile.
+    rbl:
+      fig_w: 18.5
+      fig_h: 7.2
+      node_size: 3800
+      font_size: 17
+      edge_width_min: 1.8
+      edge_width_max: 6.0
+      position_fill_x: 0.86
+      position_fill_y: 0.78
+      axis_margin_frac: 0.04
+      isolate_gap: 3.2
+      isolate_panel_spacing: 7.0
+      min_isolate_label_spacing: 7.0
+      adaptive_component_max_expand: 2.2
+      min_component_isolate_gap: 3.5
+
+  # Configures union-supported graph geometry, selected labels, component spacing, and legend placement.
+  multi_representation_union_graph:
+    # Defines profile-independent layout defaults for union-supported graph figures.
+    default:
+      fig_w: 30
+      fig_h: 22
+      dpi: 600
+      node_size: 4600
+      font_size: 18
+      node_label_mode: "auto"
+      selected_label_max_component_labels: 8
+      selected_label_min_component_nodes: 16
+      selected_label_min_component_density: 0.25
+      selected_label_min_distance: 12.0
+      edge_width_min: 2.2
+      edge_width_max: 9.0
+      dense_component_min_size: 8
+      dense_component_min_density: 0.30
+      dense_component_expand_factor: 2.00
+      component_label_gap: 2.0
+      component_grid_cols: 2
+      component_grid_rows: 2
+      component_cell_width: 96.0
+      component_cell_height: 60.0
+      component_row_gap: 16.0
+      component_col_gap: 18.0
+      legend_width: 68.0
+      isolate_region_height: 18.0
+      isolate_spacing: 18.0
+      isolate_panel_padding_x: 12.0
+      isolate_panel_padding_y: 1.4
+      isolate_label_band_frac: 0.34
+      isolate_max_per_row: 6
+      isolate_panel_width_frac: 0.62
+      footnote_region_height: 7.0
+      component_cell_fill_x: 0.78
+      component_cell_fill_y: 0.72
+      dense_component_cell_fill_x: 0.92
+      dense_component_cell_fill_y: 0.84
+      c1_x_expand_factor: 3.00
+      c1_y_expand_factor: 3.00
+      isolate_gap: 8.0
+      isolate_box_height_factor: 2.00
+      isolate_label_y_frac: 0.010
+      isolate_label_left_pad: 14.0
+      legend_alignment_mode: "component-band"
+      legend_mode: "separate"
+      use_halo_labels: true
+      halo_linewidth: 3.6
+      halo_color: "white"
+      match_resolved_style: false
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: true
+      isolate_panel_width_mode: "layout"
+      isolate_panel_spacing: 18.0
+      min_isolate_label_spacing: 8.0
+      adaptive_component_layout: true
+      adaptive_component_min_nodes: 4
+      adaptive_component_min_density: 0.15
+      adaptive_component_min_expand: 1.0
+      adaptive_component_max_expand: 3.0
+      adaptive_component_density_weight: 1.2
+      adaptive_component_size_weight: 0.10
+      adaptive_component_label_weight: 0.22
+      label_overlap_avoidance: true
+      label_padding_factor: 1.45
+      label_bbox_margin: 0.10
+      max_label_overlap_iterations: 1800
+      min_label_separation: 0.35
+      avoid_isolate_overlap: true
+      min_component_isolate_gap: 5.0
+      isolate_panel_reserved_height: 10.0
+      adaptive_isolate_y_shift: true
+      component_isolate_gap_factor: 1.0
+    # Overrides union-supported graph layout parameters for the BRCA profile.
+    brca:
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: false
+    # Overrides union-supported graph layout parameters for the NBL profile.
+    nbl:
+      font_size: 20
+      legend_mode: "separate"
+      use_halo_labels: true
+      match_resolved_style: true
+      position_fill_x: 0.94
+      position_fill_y: 0.88
+      axis_margin_frac: 0.035
+      compact_isolate_panel: false
+      isolate_panel_width_mode: "content"
+      isolate_panel_spacing: 10.0
+      adaptive_component_max_expand: 3.5
+      adaptive_component_density_weight: 1.5
+      adaptive_component_size_weight: 0.12
+      adaptive_component_label_weight: 0.28
+      label_padding_factor: 1.55
+      max_label_overlap_iterations: 2600
+      min_label_separation: 0.60
+      min_component_isolate_gap: 6.0
+    # Overrides union-supported graph layout parameters for the RBL profile.
+    rbl:
+      fig_w: 18.5
+      fig_h: 7.2
+      node_size: 3800
+      font_size: 17
+      edge_width_min: 1.8
+      edge_width_max: 6.0
+      position_fill_x: 0.86
+      position_fill_y: 0.78
+      axis_margin_frac: 0.04
+      isolate_gap: 3.2
+      isolate_panel_spacing: 7.0
+      min_isolate_label_spacing: 7.0
+      adaptive_component_max_expand: 2.2
+      min_component_isolate_gap: 3.5
+
+  # Configures patient-referenced support graph geometry, isolate panels, adaptive layout, labels, and legends.
+  support_threshold_consensus_graph:
+    # Defines profile-independent layout defaults for patient-referenced support graph figures.
+    default:
+      graph_title: "Support-threshold consensus cell-line similarity network"
+      fig_w: 30
+      fig_h: 22
+      dpi: 600
+      node_size: 4600
+      font_size: 18
+      edge_width_min: 2.2
+      edge_width_max: 9.0
+      component_label_gap: 2.0
+      nbl_component_gap_fraction: 0.57
+      nbl_component_min_gap: 9.5
+      legend_anchor_x: 0.81
+      legend_anchor_y: null
+      legend_align_mode: "component-band"
+      legend_gap_frac: 0.025
+      legend_mode: "separate"
+      use_halo_labels: true
+      halo_linewidth: 3.6
+      halo_color: "white"
+      match_resolved_style: false
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: true
+      isolate_panel_width_mode: "layout"
+      isolate_panel_spacing: 18.0
+      min_isolate_label_spacing: 8.0
+      isolate_label_y_frac: 0.010
+      isolate_box_height_factor: 2.00
+      isolate_gap: 8.0
+      isolate_label_left_pad: 14.0
+      isolate_spacing: 18.0
+      isolate_panel_padding_x: 12.0
+      isolate_panel_padding_y: 1.4
+      isolate_label_band_frac: 0.34
+      isolate_max_per_row: 6
+      isolate_panel_width_frac: 0.62
+      dense_component_min_size: 8
+      dense_component_min_density: 0.25
+      dense_component_expand_factor: 1.85
+      adaptive_component_layout: true
+      adaptive_component_min_nodes: 4
+      adaptive_component_min_density: 0.15
+      adaptive_component_min_expand: 1.0
+      adaptive_component_max_expand: 3.0
+      adaptive_component_density_weight: 1.2
+      adaptive_component_size_weight: 0.10
+      adaptive_component_label_weight: 0.22
+      label_overlap_avoidance: true
+      label_padding_factor: 1.45
+      label_bbox_margin: 0.10
+      max_label_overlap_iterations: 1800
+      min_label_separation: 0.35
+      avoid_isolate_overlap: true
+      min_component_isolate_gap: 5.0
+      isolate_panel_reserved_height: 10.0
+      adaptive_isolate_y_shift: true
+      component_isolate_gap_factor: 1.0
+      component_grid_cols: 2
+      component_grid_rows: 2
+      component_cell_width: 96.0
+      component_cell_height: 60.0
+      component_row_gap: 16.0
+      component_col_gap: 18.0
+      legend_width: 68.0
+      isolate_region_height: 18.0
+      footnote_region_height: 7.0
+      component_cell_fill_x: 0.78
+      component_cell_fill_y: 0.72
+      dense_component_cell_fill_x: 0.92
+      dense_component_cell_fill_y: 0.84
+      c2_component_cell_fill_x: 0.88
+      c2_component_cell_fill_y: 0.80
+      c1_x_expand_factor: 3.00
+      c1_y_expand_factor: 3.00
+      c2_x_expand_factor: 1.35
+      c2_y_expand_factor: 1.05
+    # Overrides support-threshold consensus graph layout parameters for the BRCA profile.
+    brca:
+      position_fill_x: 0.90
+      position_fill_y: 0.86
+      axis_margin_frac: 0.04
+      compact_isolate_panel: false
+    # Overrides support-threshold consensus graph layout parameters for the NBL profile.
+    nbl:
+      node_size: 5800
+      font_size: 21
+      isolate_region_height: 24.0
+      isolate_gap: 14.0
+      isolate_panel_padding_x: 3.0
+      isolate_panel_padding_y: 1.0
+      component_cell_fill_y: 0.64
+      dense_component_cell_fill_y: 0.76
+      c1_y_expand_factor: 2.20
+      position_fill_x: 0.98
+      position_fill_y: 0.95
+      axis_margin_frac: 0.014
+      compact_isolate_panel: true
+      isolate_panel_width_mode: "content"
+      isolate_panel_spacing: 5.0
+      min_isolate_label_spacing: 8.0
+      adaptive_component_max_expand: 4.0
+      adaptive_component_density_weight: 1.8
+      adaptive_component_size_weight: 0.14
+      adaptive_component_label_weight: 0.30
+      label_padding_factor: 1.75
+      label_bbox_margin: 0.18
+      max_label_overlap_iterations: 3200
+      min_label_separation: 0.80
+      min_component_isolate_gap: 7.0
+    # Overrides support-threshold consensus graph layout parameters for the RBL profile.
+    rbl:
+      fig_w: 18.5
+      fig_h: 7.2
+      node_size: 3800
+      font_size: 17
+      edge_width_min: 1.8
+      edge_width_max: 6.0
+      position_fill_x: 0.86
+      position_fill_y: 0.78
+      axis_margin_frac: 0.04
+      isolate_gap: 3.2
+      isolate_panel_spacing: 7.0
+      min_isolate_label_spacing: 7.0
+      adaptive_component_max_expand: 2.2
+      min_component_isolate_gap: 3.5
+
+# Defines cohort profile metadata, feature-distance grids, input paths, tumour-neighbourhood directions, and support thresholds.
 profiles:
   # ---------------------------------------------------------------------------
-  # multicohort_cancer - full 9-method x 2-distance grid
+  # multicohort_cancer combines BRCA, NBL, and RBL and adds PanCancerFeatureSet directions.
   # ---------------------------------------------------------------------------
   multicohort_cancer:
     analysis:
@@ -167,7 +802,7 @@ profiles:
         - kTotal
         - HVG
     paths:
-      unsup_root: results/unsupervised/multicohort_cancer/unsupervised
+      unsup_root: results/unsupervised/multicohort_cancer
       vst_joint_rds: results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds
       cell_vst_rds: results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds
       tumour_vst_rds: results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds
@@ -195,19 +830,18 @@ profiles:
         - HVG_corr
         - PanCancerFeatureSet_euc
         - PanCancerFeatureSet_corr
-      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=20.
-      # Snakefile recomputes the value from the configured directions and validates this key.
+      # Similarity-consensus threshold implements m = max(2, ceil(|R| / 2)) for |R|=20.
+      # The explicit value avoids silent fallback and is validated by the Snakefile.
       similarity_consensus_min_support: 10
     features:
       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
-      mx_joint_scores_tsv: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_joint_scores.tsv
-      mx_final_gene_list: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_final_gene_list.txt
+      mx_joint_scores_tsv: results/unsupervised/multicohort_cancer/feature_selection_unsupervised/mx_joint_scores.tsv
+      mx_final_gene_list: results/unsupervised/multicohort_cancer/feature_selection_unsupervised/mx_final_gene_list.txt
       pan_cancer_feature_set_name: PanCancerFeatureSet
       pan_cancer_feature_set_gene_list: results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt
 
   # ---------------------------------------------------------------------------
-  # brca - full 9-method x 2-distance grid
-  # PAM50 is BRCA-specific in per-disease analyses.
+  # brca uses the full unsupervised feature-selection grid plus PAM50 directions.
   # ---------------------------------------------------------------------------
   brca:
     analysis:
@@ -257,8 +891,8 @@ profiles:
         - HVG_corr
         - pam50_euc
         - pam50_corr
-      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=20
-      # (includes pam50_{euc,corr}). Must be explicit per cohort (no silent fallback).
+      # Similarity-consensus threshold implements m = max(2, ceil(|R| / 2)) for |R|=20.
+      # The explicit value avoids silent fallback and includes pam50_{euc,corr}.
       similarity_consensus_min_support: 10
     features:
       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
@@ -266,7 +900,7 @@ profiles:
       mx_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # nbl - full 9-method x 2-distance grid (PAM50 is not applicable; non-BRCA per-disease profile)
+  # nbl uses the full unsupervised feature-selection grid without PAM50.
   # ---------------------------------------------------------------------------
   nbl:
     analysis:
@@ -314,15 +948,15 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
-      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
-      # Must be explicit per cohort (no silent fallback).
+      # Similarity-consensus threshold implements m = max(2, ceil(|R| / 2)) for |R|=18.
+      # The explicit value avoids silent fallback.
       similarity_consensus_min_support: 9
     features:
       mx_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # rbl - full 9-method x 2-distance grid (PAM50 is not applicable; non-BRCA per-disease profile)
+  # rbl uses the full unsupervised feature-selection grid without PAM50.
   # ---------------------------------------------------------------------------
   rbl:
     analysis:
@@ -370,15 +1004,15 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
-      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
-      # Must be explicit per cohort (no silent fallback).
+      # Similarity-consensus threshold implements m = max(2, ceil(|R| / 2)) for |R|=18.
+      # The explicit value avoids silent fallback.
       similarity_consensus_min_support: 9
     features:
       mx_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/mx_final_gene_list.txt
 
   # ---------------------------------------------------------------------------
-  # heme - full 9-method x 2-distance grid (PAM50 is not applicable; non-BRCA per-disease profile)
+  # heme uses the full unsupervised feature-selection grid without PAM50.
   # ---------------------------------------------------------------------------
   heme:
     analysis:
@@ -425,33 +1059,60 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
-      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
-      # Must be explicit per cohort (no silent fallback).
+      # Similarity-consensus threshold implements m = max(2, ceil(|R| / 2)) for |R|=18.
+      # The explicit value avoids silent fallback.
       similarity_consensus_min_support: 9
     features:
       mx_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/mx_final_gene_list.txt
 
+# Preserves shared helper-function paths used by the Snakefile.
 paths:
   tumour_nh_base_functions: R/base_functions
   agnostic_base_functions_dir: R
 
 # ---------------------------------------------------------------------------
-# Pan-cancer cell line similarity network
-# Build cell-line-only graph, communities, validation, layout, and figure.
+# Configures the cell-line-only pan-cancer similarity network.
+# Constructs the k-nearest-neighbour graph, community outputs, sensitivity sweeps, validation, layout, and figures.
 # ---------------------------------------------------------------------------
 pan_cancer_cell_line_similarity:
+  # Uses the marker-derived cell-line-only expression object as the network input.
   expr_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only.rds
+  # Routes cell-line-only network sidecars and diagnostic plot outputs.
   output_dir: results/unsupervised/pan_cancer/cell_line_similarity
+  # Computes Spearman correlations before constructing the k-nearest-neighbour graph.
   correlation: spearman
+  # Sets the k-nearest-neighbour graph size.
   k: 20
-  expected_genes: 171
+  # Validates expected gene and node counts before accepting graph outputs.
+  expected_genes: auto  # inferred from pan_cancer_features_clean.txt
+  expected_genes_fallback_file: supplementary_data/feature_space/pan_cancer_features_clean.txt
   expected_nodes: 167
+  # Sets deterministic seed and base Leiden community detection resolution.
   seed: 1
   leiden_resolution: 1.0
+  # Evaluates Leiden and Louvain resolution sweeps for community sensitivity.
+  leiden_resolution_sweep: [0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.75, 1.0]
+  louvain_resolution_sweep: [0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.75, 1.0]
+  # Configures full-expression sensitivity inputs for the cell-line-only network.
+  full_expression:
+    dsmz_vst_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+    dsmz_metadata_tsv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
+    heme_vst_rds: data/heme/heme_joint_expr_vst_batch_corrected.rds
+    output_dir: results/unsupervised/pan_cancer/cell_line_similarity/dsmz_joint_expression
+    expected_nodes: 167
 
+# Configures manual two-panel figure assembly from graph edges, communities, and layout coordinates.
 pan_cancer_cell_line_plot:
+  # Routes precomputed graph, community, and layout inputs into manual figure assembly.
   edges_tsv:       results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_graph_edges.tsv
   communities_tsv: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_communities.tsv
   layout_tsv:      results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_layout.tsv
+  # Controls output routing, panel geometry, legend placement, and Louvain figure aliasing.
   output_dir:      figures
+  figure_width:    11.2
+  figure_height:   5.0
+  panel_width:     4.75
+  legend_width:    1.70
+  legend_mode:     separate
+  louvain_alias_pdf: Fig_pan_cancer_cell_line_louvain.pdf

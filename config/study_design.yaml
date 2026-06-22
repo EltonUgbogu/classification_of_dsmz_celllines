@@ -1,16 +1,16 @@
 study:
-  title: "Robust transcriptomic prioritisation of representative cancer cell lines"
+  title: "Patient-referenced cell-line similarity and p-consensus robustness across cancer cohorts"
   primary_question: >
-    Which DSMZ cell lines most faithfully represent defined primary tumour cohorts,
-    and does consensus across feature-selection and distance choices improve robustness
-    over single-direction similarity analyses?
-  primary_endpoint: "ranked cell-line representativeness per cohort"
+    Which cancer cell lines receive the strongest patient-referenced tumour-neighbourhood
+    support within each cancer type, and how stable is that support across
+    feature--distance representations?
+  primary_endpoint: "ranked cell-line support within tumour-neighbourhood analyses"
   secondary_endpoints:
-    - "stability across feature-selection and distance choices"
-    - "community context in the DSMZ cell-line similarity graph"
-    - "agreement with cohort-specific post-hoc biological labels when those labels exist on disk"
+    - "p-consensus robustness across feature--distance representations"
+    - "community context in the resolved patient-referenced cell-line neighbourhood graph"
+    - "cancer-type concordance as post-hoc validation when labels exist on disk"
   scope_note: >
-    Core inference is unsupervised. Biological labels are used only for post-hoc validation
+    Core inference is unsupervised. Cancer-type labels are used for post-hoc validation
     and do not alter the ranking procedure.
 
 candidate_inference:
@@ -41,7 +41,7 @@ candidate_inference:
     - 8
   consensus_metric:
     name: "p_consensus"
-    definition: "proportion of analytical configurations supporting a tumour-cell-line neighbourhood"
+    definition: "proportion of configured analytical runs supporting a tumour--cell-line neighbourhood"
     strong_support_threshold: 0.7
   final_ranking:
     summary_table: "tumour_neighbourhoods/final_consensus_all/p_consensus_best_cell_lines_ranked.tsv"
@@ -51,13 +51,13 @@ candidate_inference:
       - "median_p"
       - "max_p"
     note: >
-      validation/04_model_selection_summary.R only summarises the ranking rule already emitted by
+      validation/04_model_selection_summary.R reports the ranking rule already emitted by
       summarize_p_consensus_all.R; it does not introduce a new decision system.
 
 validation_framework:
   biological_validation_axes:
-    - "cohort-specific label concordance when labels exist on disk"
-    - "DSMZ graph community context"
+    - "cancer-type label concordance when labels exist on disk"
+    - "resolved patient-referenced cell-line graph community context"
     - "clustering quality reporting from persisted silhouette artifacts"
   baseline_analyses:
     - "aggregated per-direction label permutation null"
@@ -122,12 +122,11 @@ cohorts:
     runtime_labels: []
 
   multicohort_cancer:
-    disease: "Pan-cancer joint benchmark"
+    disease: "Multicohort cancer patient-referenced analysis"
     tumour_sources:
       - "brca"
       - "nbl"
       - "rbl"
-      - "heme"
     current_analysis_input: "results/unsupervised/multicohort_cancer/inputs/joint_expr_matrix.rds"
     cell_line_panel: "DSMZ"
     runtime_labels:
@@ -135,4 +134,4 @@ cohorts:
         entity: "tumour_and_cell_line"
         source_file: "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"
         status: "generated_at_runtime"
-        purpose: "lineage-aware post-hoc validation"
+        purpose: "cancer-type concordance as post-hoc validation"

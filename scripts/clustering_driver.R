@@ -160,29 +160,27 @@ if (distance == "euclidean") {
 # ------------------------------------------------------------------------------
 # 5) k-means over k_grid with silhouette selection
 # ------------------------------------------------------------------------------
-cat("[INFO] Running k-means grid search over k = {", paste(k_grid, collapse = ", "),
-    "} with nstart=20...\n")
+cat("[INFO] Running k-means grid search over k = {", paste(k_grid, collapse = ", "), "}...\n")
 
 results <- lapply(k_grid, function(k) {
   set.seed(42)
-  km <- kmeans(pc_use, centers = k, nstart = 20)
+  km <- kmeans(pc_use, centers = k, nstart = 50)
   sil <- cluster::silhouette(km$cluster, dmat)
   mean_sil <- mean(sil[, "sil_width"])
   data.frame(k = k, mean_sil = mean_sil)
 })
 
 sil_df <- bind_rows(results)
-best_row <- sil_df[order(-sil_df$mean_sil, sil_df$k), ][1, ]
+best_row <- sil_df[which.max(sil_df$mean_sil), ]
 best_k <- best_row$k
 best_sil <- best_row$mean_sil
 
 cat("[INFO] Best k by silhouette: k =", best_k,
-    " (mean silhouette =", round(best_sil, 3),
-    "; ties resolved to smaller k)\n")
+    " (mean silhouette =", round(best_sil, 3), ")\n")
 
 # Run final kmeans at best_k
 set.seed(42)
-km_final <- kmeans(pc_use, centers = best_k, nstart = 20)
+km_final <- kmeans(pc_use, centers = best_k, nstart = 50)
 clusters <- km_final$cluster
 cluster_factor <- factor(clusters)
 

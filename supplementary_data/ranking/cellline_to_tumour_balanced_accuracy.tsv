@@ -1,0 +1,3 @@
+metric	value
+balanced_accuracy	0.9814814814814813
+definition	unweighted mean of BRCA, NBL and RBL top-1 accuracy

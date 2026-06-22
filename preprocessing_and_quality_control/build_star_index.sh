@@ -3,14 +3,16 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
-#SBATCH --output=/work/ugbogu/pipeline/logs/reference_build/slurm-star-index-%j.out
-#SBATCH --error=/work/ugbogu/pipeline/logs/reference_build/slurm-star-index-%j.err
+#SBATCH --output=logs/reference_build/slurm-star-index-%j.out
+#SBATCH --error=logs/reference_build/slurm-star-index-%j.err
 
 set -euo pipefail
 
-PIPELINE_ROOT="/work/ugbogu/pipeline"
-REF_DIR="${PIPELINE_ROOT}/data/reference/gencode_v44"
-INDEX_DIR="${PIPELINE_ROOT}/data/reference/star_gencode_v44"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PIPELINE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REFERENCE_ROOT="${REFERENCE_ROOT:-${PIPELINE_ROOT}/data/reference}"
+REF_DIR="${REFERENCE_ROOT}/gencode_v44"
+INDEX_DIR="${STAR_INDEX_DIR:-${REFERENCE_ROOT}/star_gencode_v44}"
 GTF_PATH="${REF_DIR}/gencode.v44.basic.annotation.gtf"
 FASTA_PATH="${REF_DIR}/GRCh38.primary_assembly.genome.fa"
 LOG_DIR="${PIPELINE_ROOT}/logs/reference_build"

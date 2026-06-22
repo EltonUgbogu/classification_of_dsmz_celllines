@@ -1,9 +1,19 @@
 from snakemake.exceptions import WorkflowError
+from pathlib import Path
+
+REPO_ROOT = Path(workflow.basedir).resolve().parents[2]
+
+def repo_config_path(value):
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else REPO_ROOT / path)
 
 if "profiles" not in config or "nbl" not in config["profiles"]:
     raise WorkflowError("Provide a config file with --configfile config/config.yaml or --configfile config/config.test.yaml")
 
 PROFILE = config["profiles"]["nbl"]
+TUMOUR_RDS = repo_config_path(PROFILE["tumour_rds"])
+DSMZ_RDS = repo_config_path(PROFILE["dsmz_rds"])
+DSMZ_META_CSV = repo_config_path(PROFILE["dsmz_meta_csv"])
 
 FINAL_OUTPUTS = [
     "results/nbl/preprocess/tumour_counts.rds",
@@ -27,9 +37,9 @@ FINAL_OUTPUTS = [
 
 rule preprocess_integrate_nbl:
     input:
-        tumour_rds = PROFILE["tumour_rds"],
-        dsmz_rds = PROFILE["dsmz_rds"],
-        dsmz_meta_csv = PROFILE["dsmz_meta_csv"],
+        tumour_rds = TUMOUR_RDS,
+        dsmz_rds = DSMZ_RDS,
+        dsmz_meta_csv = DSMZ_META_CSV,
     output:
         tumour_counts_rds = "results/nbl/preprocess/tumour_counts.rds",
         dsmz_counts_rds = "results/nbl/preprocess/dsmz_nbl_counts.rds",

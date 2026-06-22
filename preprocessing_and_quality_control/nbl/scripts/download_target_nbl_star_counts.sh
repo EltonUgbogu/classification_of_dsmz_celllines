@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=target_nbl_counts
-#SBATCH --chdir=/work/ugbogu/pipeline/preprocessing_and_quality_control/scripts/nbl
-#SBATCH --output=/work/ugbogu/pipeline/data/nbl/target_nbl/logs/target_nbl_counts_%j.out
-#SBATCH --error=/work/ugbogu/pipeline/data/nbl/target_nbl/logs/target_nbl_counts_%j.err
+#SBATCH --chdir=.
+#SBATCH --output=target_nbl_counts_%j.out
+#SBATCH --error=target_nbl_counts_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -11,11 +11,15 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
 echo "== $(date) :: START =="
 echo "Host: $(hostname)"
 echo "Job ID: ${SLURM_JOB_ID:-NA}"
 
-BASE=/work/ugbogu/pipeline/data/nbl/target_nbl
+BASE="${TARGET_NBL_DIR:-$REPO_ROOT/data/nbl/target_nbl}"
+export TARGET_NBL_DIR="$BASE"
 COUNT_DIR="${BASE}/count_data"
 META_DIR="${BASE}/metadata"
 MANIFEST_DIR="${BASE}/manifests"
@@ -30,7 +34,11 @@ cd "${BASE}"
 
 echo "Working directory: ${BASE}"
 
-source /home/ugbogu/miniforge3/etc/profile.d/conda.sh
+CONDA_SH_PATH="${CONDA_SH_PATH:-${HOME}/miniforge3/etc/profile.d/conda.sh}"
+if [[ ! -f "$CONDA_SH_PATH" ]] && command -v conda >/dev/null 2>&1; then
+  CONDA_SH_PATH="$(conda info --base)/etc/profile.d/conda.sh"
+fi
+source "$CONDA_SH_PATH"
 conda activate gdc39
 
 echo "Conda env: ${CONDA_DEFAULT_ENV:-none}"
@@ -142,10 +150,11 @@ fi
 echo "== $(date) :: Building file-to-aliquot mapping =="
 python - <<'PY'
 import csv
+import os
 import sys
 from pathlib import Path
 
-base = Path("/work/ugbogu/pipeline/data/nbl/target_nbl")
+base = Path(os.environ["TARGET_NBL_DIR"])
 meta = base / "metadata"
 
 inp = meta / "target_nbl_star_counts_mapping.tsv"

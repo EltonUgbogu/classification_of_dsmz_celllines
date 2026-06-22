@@ -1,0 +1,46 @@
+# Configuration for the RBL preprocessing and quality control workflow
+
+data_root: "../../data/rbl"
+env_dir: "preprocessing_and_quality_control/envs"
+
+projects:
+  - GSE111168_primary_tumours
+  - GSE196420_primary_tumours
+  - GSE268136_primary_tumours
+
+expected_samples:
+  GSE111168_primary_tumours: 3
+  GSE196420_primary_tumours: 16
+  GSE268136_primary_tumours: 50
+  total: 69
+
+purity_threshold: 0.7
+purity_output_dir: "data/rbl/results/tumour_purity_analysis"
+
+cell_line_data:
+  dsmz_count_matrix: "results/unsupervised/rbl/deseq2_inputs/counts.tsv"
+  dsmz_sample_metadata: "data/dsmz/DSMZ_metadata.csv"
+  dsmz_sample_id_column: "sample_name"
+  dsmz_subset_description: "Retinoblastoma DSMZ cell-line count-level DESeq2 input"
+
+batch_correction_normalisation:
+  output_dir: "data/rbl/results/batch_corr_and_normalisation/preprocess"
+  tumour_rds: "data/rbl/count_data/rbl_tumour_count.rds"
+  min_shared_genes: 5000
+  tumour_label: "RBL_TUMOUR"
+  dsmz_label: "DSMZ_RBL"
+  dsmz_cellline_col: "Cell_Line"
+  dsmz_filter_col: "Disease"
+  dsmz_filter_values:
+    - "Retinoblastoma"
+
+threads: 12
+
+genome:
+  star_index: "data/reference/star_gencode_v44"
+  gtf: "data/reference/gencode_v44/gencode.v44.basic.annotation.gtf"
+  fasta: "data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa"
+
+resources:
+  star_mem_mb: 42000
+  star_bamsort_ram_bytes: 32000000000

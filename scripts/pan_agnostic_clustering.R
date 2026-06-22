@@ -54,7 +54,7 @@ if (is.na(script_path)) {
   stop("[FATAL] Cannot determine script path via --file=. Are you running with Rscript?")
 }
 
-# script is /work/ugbogu/pipeline/scripts/pan_agnostic_clustering.R
+# script is scripts/pan_agnostic_clustering.R relative to the repository root
 base_dir <- normalizePath(file.path(dirname(script_path), ".."))
 
 UTILS <- file.path(base_dir, "R", "agnostic_clustering_utils.R")
@@ -219,4 +219,3 @@ run_agnostic_clustering(
 )
 
 cat("[SUCCESS] wrote:", opt$out_rds, "\n")
-

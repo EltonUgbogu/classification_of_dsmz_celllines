@@ -1,0 +1,2 @@
+graph_id	community_method	weighted	n_nodes	n_edges	n_connected_components	n_communities	modularity	seed	edge_source
+MULTICOHORT_CANCER_resolved_DSMZ_cellline_graph	Leiden	FALSE	56	155	9	9	0.715255	42	multicohort_cancer_resolved_cell_line_neighbourhood_graph_edges.tsv

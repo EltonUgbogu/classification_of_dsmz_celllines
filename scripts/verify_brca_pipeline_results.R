@@ -68,7 +68,7 @@ for (direction in directions) {
 final_files <- c(
   "ranked cell lines" = file.path(all_root, "p_consensus_best_cell_lines_ranked.tsv"),
   "resolved neighbours" = file.path(all_root, "resolved_dsmz_neighbours.tsv"),
-  "node stats" = file.path(all_root, "dsmz_cellline_graph_node_stats.tsv"),
+  "node stats" = file.path(all_root, "patient_referenced_aggregated_cell_line_similarity_graph_node_stats.tsv"),
   "model selection" = file.path(root, "validation", "model_selection_summary.tsv"),
   "permutation validation" = file.path(root, "validation", "neighbourhood_permutation_summary.tsv"),
   "random baseline" = file.path(root, "validation", "random_baseline_summary.tsv"),

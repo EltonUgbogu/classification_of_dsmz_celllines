@@ -8,8 +8,8 @@
 # -----------
 # This script quantifies transcriptomic similarity between tumour samples and
 # cell lines to identify which cell lines best represent the molecular profiles
-# of individual tumours. The analysis employs correlation-based scoring in a
-# curated pan-cancer feature space to rank cell lines by their expression
+# of individual tumours. The analysis employs correlation-based scoring in the
+# curated pan-cancer feature space to prioritise cell lines by their expression
 # similarity to each tumour sample.
 #
 # BIOLOGICAL RATIONALE
@@ -19,7 +19,8 @@
 # with which cell lines recapitulate the molecular characteristics of primary
 # tumours varies considerably. This script addresses a fundamental question in
 # translational cancer research: given a patient tumour sample, which available
-# cell lines most faithfully represent its transcriptomic profile?
+# cell lines are most transcriptomically similar within the selected feature
+# space?
 #
 # The matching problem is non-trivial because:
 #
@@ -35,8 +36,9 @@
 #      cancer) may be differentially represented in cell line panels.
 #
 # By systematically quantifying tumour-cell line similarity, this analysis
-# enables evidence-based selection of model systems for downstream functional
-# studies, drug screening, and mechanistic investigations.
+# provides a transcriptomic prioritisation layer for model-system selection.
+# These rankings do not establish functional fidelity, drug response,
+# perturbation response, xenograft behaviour, or biological mechanism.
 #
 #
 # FEATURE SPACE DEFINITION
@@ -153,7 +155,7 @@
 #
 # 3. Pan-cancer feature genes (--genes):
 #      - Text file with one gene identifier per line (Ensembl IDs)
-#      - Typically derived from variance-based or biological feature selection
+#      - Derived from the final 171-gene pan-cancer feature set
 #      - Version suffixes (e.g., .16) are stripped for compatibility
 #
 #
@@ -161,17 +163,17 @@
 # ------------
 # The script produces several output files for downstream analysis:
 #
-#   tumour_to_cellline_rankings.tsv
+#   tumour_to_cellline_group_rankings.tsv
 #       Full ranking table with columns: tumour, cell_line, rank, score,
 #       cell_lineage, tum_lineage, is_correct. Contains top-k cell lines
 #       per tumour for detailed inspection of matches.
 #
-#   tumour_mapping_summary.tsv
+#   tumour_mapping_group_summary.tsv
 #       Per-tumour summary including best match, confidence metrics
 #       (score delta, fraction same lineage), and top-k cell line lists.
 #       Facilitates identification of tumours with clear vs. ambiguous matches.
 #
-#   metrics_summary.tsv
+#   metrics_summary_group_level.tsv
 #       Overall evaluation metrics (top-1 accuracy, top-k accuracy, MRR).
 #       Provides aggregate assessment of mapping quality.
 #
@@ -179,30 +181,30 @@
 #       Per-cancer-type breakdown of mapping accuracy. Reveals whether
 #       certain lineages are better represented in the cell line panel.
 #
-#   tumour_cellline_scores.rds
+#   tumour_cellline_group_scores.rds
 #       Full tumour-by-cell-line score matrix (tumours x cell lines).
 #       Enables downstream analyses such as hierarchical clustering,
 #       visualisation, or alternative ranking strategies.
 #
 #   Extended metrics files (from Step 5.5):
-#       - metrics_summary_extended.tsv: Comprehensive tumour-driven metrics
+#       - metrics_summary_group_level_extended.tsv: Comprehensive tumour-driven metrics
 #       - metrics_by_tumour_lineage_extended.tsv: Per-lineage detailed metrics
 #       - cellline_metrics_by_tumour_cohort.tsv: Cell-line-driven metrics
 #       - cellline_metrics_overall.tsv: Pooled cell line performance
 #         (includes topk_lineage_entropy and top1_margin_z)
 #       - cellline_topk_lineage_enrichment.tsv: Lineage fractions in top-k tumours
-#       - tumour_cellline_scores_long.tsv.gz: Long-format score table
+#       - tumour_cellline_group_scores_long.tsv.gz: Long-format score table
 #
 #
 # USAGE EXAMPLE
 # -------------
 #   Rscript score_tumour_cellline_mapping.R \
-#     --pan-cancer-expr results/unsupervised/pan_cancer/pan_cancer_expr.rds \
-#     --joint-vst-brca data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds \
-#     --joint-vst-nbl data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds \
-#     --joint-vst-rbl data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds \
-#     --genes results/unsupervised/pan_cancer/pan_cancer_features_clean.txt \
-#     --output-dir results/unsupervised/pan_cancer/tumour_mapping \
+#     --pan-cancer-expr results/pan_cancer/pan_cancer_expr.rds \
+#     --joint-vst-brca data/brca/vst_joint_batch_corrected.rds \
+#     --joint-vst-nbl data/nbl/vst_joint_batch_corrected.rds \
+#     --joint-vst-rbl data/rbl/vst_joint_batch_corrected.rds \
+#     --genes results/pan_cancer/pan_cancer_features.txt \
+#     --output-dir results/pan_cancer/tumour_mapping \
 #     --top-k 10
 #
 #
@@ -226,6 +228,48 @@ suppressPackageStartupMessages({
   library(data.table)
   library(optparse)
 })
+
+# -----------------------------------------------------------------------------
+# Cell-line display labels
+# -----------------------------------------------------------------------------
+# Keep full sample IDs in primary identifier columns for reproducibility, but add
+# compact display labels for figures and reporting. For RBL profile-level
+# observations, duplicated biological cell-line names are disambiguated using the
+# final sample suffix: e.g. NG-30919_RBL_20_lib626624_10102_3 -> RBL_20_3.
+derive_cell_line_group <- function(cell_line) {
+  group <- sub("^NG-[^_]+_", "", as.character(cell_line))
+  group <- sub("_lib.*$", "", group)
+  group
+}
+
+make_cell_line_display <- function(cell_line, cell_lineage = NULL) {
+  cell_line <- as.character(cell_line)
+  if (is.null(cell_lineage)) {
+    cell_lineage <- rep(NA_character_, length(cell_line))
+  } else {
+    cell_lineage <- as.character(cell_lineage)
+  }
+
+  base <- derive_cell_line_group(cell_line)
+  suffix <- sub("^.*_", "", cell_line)
+  is_profile_observation <- grepl("_lib", cell_line)
+
+  dt_label <- data.table(
+    idx = seq_along(cell_line),
+    cell_line = cell_line,
+    cell_lineage = cell_lineage,
+    base = base,
+    suffix = suffix,
+    is_profile_observation = is_profile_observation
+  )
+  dt_label[, n_base := uniqueN(cell_line), by = .(cell_lineage, base)]
+  dt_label[, display := fifelse(
+    cell_lineage == "RBL" & is_profile_observation & n_base > 1L,
+    paste0(base, "_", suffix),
+    base
+  )]
+  dt_label[order(idx), display]
+}
 
 
 # -----------------------------------------------------------------------------
@@ -304,14 +348,14 @@ if (!opt$similarity %in% valid_similarity) {
 # Critical inputs are validated before proceeding to prevent cryptic errors
 # during execution. The script requires:
 #
-#   1. Feature-restricted pan-cancer expression (--pan-cancer-expr)
-#   2. Output directory (--output-dir)
+#   1. Cell line expression data (--pan-cancer-expr): Reference database
+#   2. Feature gene list (--genes): Defines comparison space
+#   3. Output directory (--output-dir): Required for saving results
 #
-# Joint VST inputs are retained for backwards compatibility but ignored in the
-# default config-driven pipeline.
+# Joint VST files are validated at load time as they are conditionally used.
 
-if (is.null(opt$`pan-cancer-expr`) || is.null(opt$`output-dir`)) {
-  stop("--pan-cancer-expr and --output-dir are required")
+if (is.null(opt$`pan-cancer-expr`) || is.null(opt$genes) || is.null(opt$`output-dir`)) {
+  stop("--pan-cancer-expr, --genes, and --output-dir are required")
 }
 
 # Create output directory with recursive = TRUE to handle nested paths
@@ -330,92 +374,290 @@ cat("========================================\n\n")
 
 
 # =============================================================================
-# STEP 1: Load Feature-Restricted Pan-Cancer Expression Object
+# STEP 1: Load Pan-Cancer Feature Genes
 # =============================================================================
-cat("[1] Loading pan-cancer expression object...\n")
-pan_obj <- readRDS(opt$`pan-cancer-expr`)
-if (!is.list(pan_obj) || is.null(pan_obj$expr) || is.null(pan_obj$meta)) {
-  stop("--pan-cancer-expr must be an RDS containing list(expr=..., meta=...)")
-}
-expr_all <- pan_obj$expr
-meta_all <- as.data.table(pan_obj$meta)
+# The feature gene list defines the expression space in which tumour-cell line
+# similarity is computed. These genes are typically selected based on one or
+# more criteria:
+#
+#   Variance-Based Selection:
+#     Genes with high variance across samples capture biological heterogeneity
+#     and distinguish between molecular subtypes. Low-variance genes contribute
+#     little discriminative information.
+#
+#   Study-Specific Marker Space:
+#     The input gene list is the curated pan-cancer feature set described in
+#     Methods. It is treated as an operational marker set for transcriptomic
+#     prioritisation, not as a universal cancer signature.
+#
+#   Pan-Cancer Applicability:
+#     Genes must be robustly expressed across multiple cancer types to enable
+#     cross-lineage comparisons. Tissue-specific genes may bias results.
+#
+# Ensembl Version Suffix Handling:
+# Ensembl gene identifiers may include version suffixes (e.g., ENSG00000141510.16)
+# indicating the annotation version. These suffixes are stripped to ensure
+# compatibility with expression matrices that may use unversioned identifiers.
+# The sub() function with regex "\\.[0-9]+$" matches a dot followed by one or
+# more digits at the string end.
 
-strip_version <- function(x) sub("\\.[0-9]+$", "", x)
+cat("[1] Loading pan-cancer feature genes...\n")
+genes <- readLines(opt$genes)
+genes <- genes[genes != ""]  # Remove empty lines
 
-fwrite_gz_safe <- function(x, file, sep = "\t") {
-  tryCatch(
-    data.table::fwrite(x, file = file, sep = sep),
-    error = function(e) {
-      if (grepl("\\.gz$", file) && grepl("Compression in fwrite", e$message, fixed = TRUE)) {
-        con <- gzfile(file, open = "wt")
-        on.exit(close(con), add = TRUE)
-        utils::write.table(x, file = con, sep = sep, quote = FALSE,
-                           row.names = FALSE, col.names = TRUE)
-      } else {
-        stop(e)
-      }
-    }
-  )
-}
+# Strip version numbers (e.g., ENSG00000141510.16 -> ENSG00000141510)
+# Regex explanation: \\. matches literal dot, [0-9]+ matches digits, $ anchors to end
+genes_no_version <- sub("\\.[0-9]+$", "", genes)
+cat("  Loaded", length(genes_no_version), "genes\n")
 
-required_meta_cols <- c("sample_id", "lineage", "type")
-missing <- setdiff(required_meta_cols, colnames(meta_all))
+
+# =============================================================================
+# STEP 2: Load Cell Line Expression Data
+# =============================================================================
+# The pan-cancer cell line expression matrix serves as the reference database
+# against which tumour samples are compared. This matrix aggregates cell lines
+# from multiple cancer types (e.g., BRCA, NBL, RBL), enabling both within-lineage
+# and cross-lineage similarity assessments.
+#
+# Expected Data Structure:
+# The RDS file should contain a list with two components:
+#
+#   $expr:  Numeric matrix with genes as rows and samples as columns
+#           Values should be normalised (VST, log-TPM) for comparability
+#
+#   $meta:  data.table/data.frame with sample metadata including:
+#           - sample_id: Unique identifier matching expression column names
+#           - lineage:   Cancer type (e.g., "BRCA", "NBL", "RBL")
+#           - type:      Sample type ("cell_line") for filtering
+#
+# Normalisation Considerations:
+# Expression values should be normalised prior to this analysis. Common choices:
+#
+#   VST (Variance Stabilising Transformation):
+#     From DESeq2, stabilises variance across the expression range. Suitable
+#     for count data and preserves relative differences between samples.
+#
+#   Log-TPM:
+#     Transcripts per million with log transformation. Accounts for library
+#     size and gene length, enabling cross-sample comparisons.
+#
+# The choice of normalisation affects absolute correlation values but typically
+# preserves relative rankings, which are the primary output of this analysis.
+
+cat("\n[2] Loading cell line expression...\n")
+cell_dat <- readRDS(opt$`pan-cancer-expr`)
+expr_cell <- cell_dat$expr
+meta_cell <- cell_dat$meta
+meta_cell <- as.data.table(meta_cell)
+expr_pan <- expr_cell
+meta_pan <- copy(meta_cell)
+
+# -----------------------------------------------------------------------------
+# Validate Metadata Schema
+# -----------------------------------------------------------------------------
+# Required columns are checked to provide informative error messages rather
+# than cryptic failures during downstream processing.
+
+req_cols <- c("sample_id", "lineage")
+missing <- setdiff(req_cols, colnames(meta_cell))
 if (length(missing) > 0) {
-  stop("Pan-cancer metadata missing columns: ", paste(missing, collapse = ", "))
+  stop("meta_cell is missing required columns: ", paste(missing, collapse = ", "))
 }
 
-if (!all(meta_all$sample_id %in% colnames(expr_all))) {
-  bad <- setdiff(meta_all$sample_id, colnames(expr_all))
-  stop("Metadata sample IDs not found in expression matrix: ",
-       paste(head(bad, 20), collapse = ", "))
-}
-expr_all <- expr_all[, meta_all$sample_id, drop = FALSE]
+# -----------------------------------------------------------------------------
+# Filter to Cell Lines Only
+# -----------------------------------------------------------------------------
+# The pan-cancer expression file may contain both cell lines and tumours.
+# If a "type" column exists, filter to retain only cell line samples.
+# This ensures the reference database contains only model systems.
 
-if (!is.null(pan_obj$genes)) {
-  feature_genes <- strip_version(pan_obj$genes)
-  cat("  Feature genes from RDS: ", length(feature_genes), "\n", sep = "")
-} else if (!is.null(opt$genes) && nzchar(opt$genes)) {
-  fallback_genes <- readLines(opt$genes)
-  fallback_genes <- fallback_genes[fallback_genes != ""]
-  feature_genes <- strip_version(fallback_genes)
-  cat("  Feature genes from --genes: ", length(feature_genes), "\n", sep = "")
-} else {
-  feature_genes <- strip_version(rownames(expr_all))
-  cat("  Feature genes inferred from expression matrix: ", length(feature_genes), "\n", sep = "")
+if ("type" %in% colnames(meta_cell)) {
+  meta_cell <- meta_cell[type == "cell_line"]
+  expr_cell <- expr_cell[, meta_cell$sample_id, drop = FALSE]
 }
 
+# -----------------------------------------------------------------------------
+# Validate Expression-Metadata Alignment
+# -----------------------------------------------------------------------------
+# Ensure all sample IDs in metadata have corresponding columns in the
+# expression matrix. Misalignment could indicate data corruption or
+# version mismatches between files.
 
-# =============================================================================
-# STEP 2: Split Cell Lines and Tumours
-# =============================================================================
-cat("\n[2] Splitting cell lines and tumours...\n")
-type_norm <- tolower(meta_all$type)
-type_norm[type_norm %in% c("cellline", "cell line", "cells", "cell_lines")] <- "cell_line"
-type_norm[type_norm %in% c("tumor", "tumours", "tumor_sample", "tumour")] <- "tumour"
-meta_all[, type := type_norm]
-
-meta_cell <- meta_all[type == "cell_line"]
-meta_tum <- meta_all[type == "tumour"]
-
-if (nrow(meta_cell) == 0) {
-  stop("Pan-cancer expression object contains no cell line samples")
+if (!all(meta_cell$sample_id %in% colnames(expr_cell))) {
+  bad <- setdiff(meta_cell$sample_id, colnames(expr_cell))
+  stop("These meta_cell$sample_id are missing in expr_cell colnames: ",
+       paste(head(bad, 20), collapse = ", "),
+       if (length(bad) > 20) paste0(" ... (+", length(bad) - 20, " more)") else "")
 }
 
-expr_cell <- expr_all[, meta_cell$sample_id, drop = FALSE]
-expr_tum <- expr_all[, meta_tum$sample_id, drop = FALSE]
+# Reorder expression columns to match metadata row order
+# This ensures consistent indexing throughout the analysis
+expr_cell <- expr_cell[, meta_cell$sample_id, drop = FALSE]
+stopifnot(identical(colnames(expr_cell), meta_cell$sample_id))
 
 cat("  Cell lines: ", ncol(expr_cell), " samples\n", sep = "")
 cat("  Cell line lineages:\n")
 print(table(meta_cell$lineage))
 
 
-if (nrow(meta_tum) == 0) {
-  cat("  No tumour samples present in pan-cancer expression object. Writing empty outputs...\n")
+# =============================================================================
+# STEP 3: Load Tumour Expression Data
+# =============================================================================
+# Tumour expression is loaded from joint VST files that contain both cell lines
+# and tumours from the same cancer type. Using joint batch-corrected matrices
+# is critical for valid tumour-cell line comparisons:
+#
+# Batch Effect Correction Rationale:
+# Tumour and cell line samples are typically processed in separate batches,
+# using different sequencing facilities, library preparation protocols, or
+# time points. These technical differences introduce systematic biases that
+# can dominate biological signal if not corrected.
+#
+# Joint normalisation approaches (e.g., ComBat-seq, limma::removeBatchEffect)
+# applied to combined tumour + cell line matrices address this by:
+#
+#   1. Estimating batch effects from the full dataset
+#   2. Removing systematic technical variation while preserving biological
+#      differences
+#   3. Ensuring expression scales are directly comparable between sample types
+#
+# Within-Lineage Processing:
+# Batch correction is performed separately for each cancer type (lineage).
+# This preserves lineage-specific biological variation that would be lost
+# if all samples were corrected together.
+#
+# Tumour Sample Identification:
+# Tumour samples are identified by exclusion: samples present in the joint
+# matrix but absent from the cell line metadata are classified as tumours.
+# This approach avoids requiring separate tumour metadata files.
+
+cat("\n[3] Loading tumour expression from joint VST files...\n")
+expr_tum_list <- list()
+meta_tum_list <- list()
+
+
+# -----------------------------------------------------------------------------
+# Load BRCA (Breast Cancer) Tumours
+# -----------------------------------------------------------------------------
+# BRCA tumours from TCGA or similar cohorts represent diverse molecular
+# subtypes (Luminal A, Luminal B, HER2-enriched, Basal-like, Normal-like).
+# The breast cancer cell line panel should ideally span these subtypes.
+
+if (!is.null(opt$`joint-vst-brca`) && file.exists(opt$`joint-vst-brca`)) {
+  cat("  Loading BRCA joint VST...\n")
+  brca <- readRDS(opt$`joint-vst-brca`)
+  if (is.matrix(brca)) {
+    # Identify cell line sample IDs for this lineage
+    cell_ids <- meta_cell[lineage == "BRCA", sample_id]
+    # Tumours are samples NOT in the cell line set
+    tum_ids <- setdiff(colnames(brca), cell_ids)
+    if (length(tum_ids) > 0) {
+      expr_tum_list[["BRCA"]] <- brca[, tum_ids, drop = FALSE]
+      meta_tum_list[["BRCA"]] <- data.table(
+        sample_id = tum_ids,
+        lineage = "BRCA",
+        type = "tumour"
+      )
+      cat("    BRCA tumours: ", length(tum_ids), "\n", sep = "")
+    }
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# Load NBL (Neuroblastoma) Tumours
+# -----------------------------------------------------------------------------
+# Neuroblastoma is a paediatric cancer arising from neural crest cells.
+# NBL tumours exhibit heterogeneous clinical behaviour ranging from
+# spontaneous regression to aggressive metastatic disease. MYCN amplification
+# status is a major prognostic factor that may influence cell line matching.
+
+if (!is.null(opt$`joint-vst-nbl`) && file.exists(opt$`joint-vst-nbl`)) {
+  cat("  Loading NBL joint VST...\n")
+  nbl <- readRDS(opt$`joint-vst-nbl`)
+  if (is.matrix(nbl)) {
+    cell_ids <- meta_cell[lineage == "NBL", sample_id]
+    tum_ids <- setdiff(colnames(nbl), cell_ids)
+    if (length(tum_ids) > 0) {
+      expr_tum_list[["NBL"]] <- nbl[, tum_ids, drop = FALSE]
+      meta_tum_list[["NBL"]] <- data.table(
+        sample_id = tum_ids,
+        lineage = "NBL",
+        type = "tumour"
+      )
+      cat("    NBL tumours: ", length(tum_ids), "\n", sep = "")
+    }
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# Load RBL (Retinoblastoma) Tumours
+# -----------------------------------------------------------------------------
+# Retinoblastoma is a rare paediatric eye cancer characterised by RB1
+# inactivation. The limited number of available RBL cell lines makes
+# accurate tumour-cell line matching particularly valuable for this
+# cancer type.
+
+if (!is.null(opt$`joint-vst-rbl`) && file.exists(opt$`joint-vst-rbl`)) {
+  cat("  Loading RBL joint VST...\n")
+  rbl <- readRDS(opt$`joint-vst-rbl`)
+  if (is.matrix(rbl)) {
+    cell_ids <- meta_cell[lineage == "RBL", sample_id]
+    tum_ids <- setdiff(colnames(rbl), cell_ids)
+    if (length(tum_ids) > 0) {
+      expr_tum_list[["RBL"]] <- rbl[, tum_ids, drop = FALSE]
+      meta_tum_list[["RBL"]] <- data.table(
+        sample_id = tum_ids,
+        lineage = "RBL",
+        type = "tumour"
+      )
+      cat("    RBL tumours: ", length(tum_ids), "\n", sep = "")
+    }
+  }
+}
+
+if (length(expr_tum_list) == 0 && "type" %in% colnames(meta_pan)) {
+  cat("  No per-disease joint VST tumour inputs supplied; checking pan-cancer expression RDS...\n")
+  meta_tum_pan <- copy(meta_pan)
+  meta_tum_pan[, type_norm := tolower(as.character(type))]
+  meta_tum_pan[, lineage := toupper(as.character(lineage))]
+  meta_tum_pan <- meta_tum_pan[
+    type_norm %in% c("tumour", "tumor") & lineage %in% c("BRCA", "NBL", "RBL")
+  ]
+  tumour_ids <- intersect(meta_tum_pan$sample_id, colnames(expr_pan))
+  if (length(tumour_ids) > 0) {
+    meta_tum_pan <- unique(meta_tum_pan[sample_id %in% tumour_ids], by = "sample_id")
+    meta_tum_pan <- meta_tum_pan[match(tumour_ids, sample_id)]
+    expr_tum_list[["PAN_CANCER_EXPR"]] <- expr_pan[, meta_tum_pan$sample_id, drop = FALSE]
+    meta_tum_list[["PAN_CANCER_EXPR"]] <- meta_tum_pan[, .(
+      sample_id,
+      lineage,
+      type = "tumour"
+    )]
+    cat("    Pan-cancer expression tumours: ", length(tumour_ids), "\n", sep = "")
+    cat("    Tumour lineages from pan-cancer expression:\n")
+    print(table(meta_tum_pan$lineage))
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# Validate and Combine Tumour Data
+# -----------------------------------------------------------------------------
+# Tumour expression matrices from individual cancer types are combined
+# column-wise (cbind) to create a unified matrix for pan-cancer analysis.
+# Row names (genes) must match across matrices - this is ensured by loading
+# from consistently processed joint VST files.
+
+if (length(expr_tum_list) == 0) {
+  cat("  No tumour samples found in joint VST files or pan-cancer expression RDS. Writing empty outputs...\n")
 
   empty_rank_t2c <- data.table(
     tumour = character(),
     rank = integer(),
     cell_line = character(),
+    cell_line_display = character(),
     score = numeric(),
     cell_lineage = character(),
     tum_lineage = character(),
@@ -425,10 +667,12 @@ if (nrow(meta_tum) == 0) {
     tumour_id = character(),
     tumour_lineage = character(),
     best_cell_line = character(),
+    best_cell_line_display = character(),
     best_score = numeric(),
     best_cell_line_lineage = character(),
     is_correct = logical(),
     topk_cell_lines = character(),
+    topk_cell_line_displays = character(),
     topk_scores = character(),
     topk_lineages = character(),
     n_correct_in_topk = integer(),
@@ -437,6 +681,7 @@ if (nrow(meta_tum) == 0) {
   )
   empty_rank_c2t <- data.table(
     cell_line = character(),
+    cell_line_display = character(),
     rank = integer(),
     tumour = character(),
     score = numeric(),
@@ -446,6 +691,7 @@ if (nrow(meta_tum) == 0) {
   )
   empty_summary_c2t <- data.table(
     cell_line = character(),
+    cell_line_display = character(),
     cell_lineage = character(),
     best_tumour = character(),
     best_score = numeric(),
@@ -474,14 +720,18 @@ if (nrow(meta_tum) == 0) {
   empty_scores_long_t2c <- data.table(
     tumour = character(),
     tum_lineage = character(),
+    cell_line_group = character(),
     cell_line = character(),
     cell_lineage = character(),
     score = numeric(),
     rank_in_tumour = integer(),
-    in_topk = logical()
+    in_topk = logical(),
+    n_profile_observations = integer(),
+    profile_level_observations = character()
   )
   empty_scores_long_c2t <- data.table(
     cell_line = character(),
+    cell_line_display = character(),
     cell_lineage = character(),
     tumour = character(),
     tum_lineage = character(),
@@ -506,6 +756,7 @@ if (nrow(meta_tum) == 0) {
   )
   empty_cellline_by_cohort <- data.table(
     cell_line = character(),
+    cell_line_display = character(),
     cell_lineage = character(),
     tum_lineage = character(),
     n_tumours = integer(),
@@ -521,6 +772,7 @@ if (nrow(meta_tum) == 0) {
   )
   empty_cellline_overall <- data.table(
     cell_line = character(),
+    cell_line_display = character(),
     cell_lineage = character(),
     n_tumours = integer(),
     mean_score = numeric(),
@@ -538,6 +790,7 @@ if (nrow(meta_tum) == 0) {
   )
   empty_topk_enrich <- data.table(
     cell_line = character(),
+    cell_line_display = character(),
     cell_lineage = character(),
     topk_lineage_entropy = numeric()
   )
@@ -557,72 +810,23 @@ if (nrow(meta_tum) == 0) {
     confidence_delta = numeric(),
     confidence_frac_same_lineage = numeric()
   )
-  empty_t2c_full <- data.table(
-    tumour = character(),
-    tum_lineage = character(),
-    cell_line = character(),
-    cell_lineage = character(),
-    score = numeric(),
-    rank_in_tumour = integer(),
-    source_cell_lines = character(),
-    n_cell_line_profiles = integer(),
-    is_correct = logical()
-  )
-  empty_c2t_full <- data.table(
-    cell_line = character(),
-    cell_lineage = character(),
-    tumour = character(),
-    tum_lineage = character(),
-    score = numeric(),
-    rank = integer(),
-    source_cell_lines = character(),
-    n_cell_line_profiles = integer(),
-    is_correct = logical()
-  )
-  empty_c2t_summary_metrics <- data.table(
-    metric = character(),
-    value = numeric(),
-    ci_low = numeric(),
-    ci_high = numeric()
-  )
-  empty_reciprocal <- data.table(
-    tumour = character(),
-    cell_line = character(),
-    tum_lineage = character(),
-    cell_lineage = character(),
-    t2c_rank = integer(),
-    c2t_rank = integer(),
-    t2c_score = numeric(),
-    c2t_score = numeric()
-  )
-  empty_top50_components <- data.table(
-    cell_line = character(),
-    cell_lineage = character(),
-    component_id = character(),
-    n_top50 = integer(),
-    frac_top50 = numeric(),
-    component_size = integer(),
-    component_purity = numeric(),
-    dominant_tumour_lineage = character()
-  )
 
-  fwrite(empty_rank_t2c, file = file.path(t2c_dir, "tumour_to_cellline_rankings.tsv"), sep = "\t")
-  fwrite(empty_summary_t2c, file = file.path(t2c_dir, "tumour_mapping_summary.tsv"), sep = "\t")
-  fwrite(empty_metrics, file = file.path(t2c_dir, "metrics_summary.tsv"), sep = "\t")
+  fwrite(empty_rank_t2c, file = file.path(t2c_dir, "tumour_to_cellline_group_rankings.tsv"), sep = "\t")
+  fwrite(empty_summary_t2c, file = file.path(t2c_dir, "tumour_mapping_group_summary.tsv"), sep = "\t")
+  fwrite(empty_metrics, file = file.path(t2c_dir, "metrics_summary_group_level.tsv"), sep = "\t")
+  fwrite(empty_metrics, file = file.path(opt$`output-dir`, "metrics_summary_group_level.tsv"), sep = "\t")
   fwrite(empty_metrics_by_lineage, file = file.path(t2c_dir, "metrics_by_lineage.tsv"), sep = "\t")
-  fwrite(empty_metrics_extended, file = file.path(t2c_dir, "metrics_summary_extended.tsv"), sep = "\t")
+  fwrite(empty_metrics_extended, file = file.path(t2c_dir, "metrics_summary_group_level_extended.tsv"), sep = "\t")
   fwrite(empty_metrics_by_tumour_lineage, file = file.path(t2c_dir, "metrics_by_tumour_lineage_extended.tsv"), sep = "\t")
-  fwrite_gz_safe(empty_scores_long_t2c, file = file.path(t2c_dir, "tumour_cellline_scores_long.tsv.gz"), sep = "\t")
-  fwrite(empty_t2c_full, file = file.path(t2c_dir, "tumour_to_cellline_full_rankings.tsv"), sep = "\t")
+  fwrite(empty_scores_long_t2c, file = file.path(t2c_dir, "tumour_cellline_group_scores_long.tsv.gz"), sep = "\t")
   saveRDS(matrix(numeric(0), nrow = 0, ncol = 0),
-          file = file.path(t2c_dir, "tumour_cellline_scores.rds"))
+          file = file.path(t2c_dir, "tumour_cellline_group_scores.rds"))
 
   fwrite(empty_rank_c2t, file = file.path(c2t_dir, "cellline_to_tumour_rankings.tsv"), sep = "\t")
   fwrite(empty_summary_c2t, file = file.path(c2t_dir, "cellline_mapping_summary.tsv"), sep = "\t")
   fwrite(empty_metrics, file = file.path(c2t_dir, "metrics_summary.tsv"), sep = "\t")
   fwrite(empty_metrics_by_lineage_cl, file = file.path(c2t_dir, "metrics_by_lineage.tsv"), sep = "\t")
-  fwrite_gz_safe(empty_scores_long_c2t, file = file.path(c2t_dir, "cellline_tumour_scores_long.tsv.gz"), sep = "\t")
-  fwrite(empty_c2t_full, file = file.path(c2t_dir, "cellline_to_tumour_full_rankings.tsv"), sep = "\t")
+  fwrite(empty_scores_long_c2t, file = file.path(c2t_dir, "cellline_tumour_scores_long.tsv.gz"), sep = "\t")
   saveRDS(matrix(numeric(0), nrow = 0, ncol = 0),
           file = file.path(c2t_dir, "cellline_tumour_scores.rds"))
 
@@ -631,12 +835,14 @@ if (nrow(meta_tum) == 0) {
   fwrite(empty_topk_enrich, file = file.path(c2t_dir, "cellline_topk_lineage_enrichment.tsv"), sep = "\t")
   fwrite(empty_topk_consistency, file = file.path(c2t_dir, "topk_lineage_consistency.tsv"), sep = "\t")
   fwrite(empty_low_confidence, file = file.path(c2t_dir, "low_confidence_cases.tsv"), sep = "\t")
-  fwrite(empty_c2t_summary_metrics, file = file.path(c2t_dir, "cellline_centred_summary_metrics.tsv"), sep = "\t")
-  fwrite(empty_reciprocal, file = file.path(c2t_dir, "reciprocal_pairs_k10.tsv"), sep = "\t")
-  fwrite(empty_top50_components, file = file.path(c2t_dir, "top50_component_composition.tsv"), sep = "\t")
 
   quit(status = 0)
 }
+
+# Combine matrices: genes (rows) must match; samples (columns) are concatenated
+expr_tum <- do.call(cbind, expr_tum_list)
+# Combine metadata tables by stacking rows
+meta_tum <- rbindlist(meta_tum_list)
 
 # Validate tumour metadata schema
 req_cols_t <- c("sample_id", "lineage")
@@ -694,12 +900,14 @@ print(table(meta_tum$lineage))
 
 cat("\n[4] Filtering to pan-cancer features...\n")
 
-common_genes <- intersect(rownames(expr_cell), rownames(expr_tum))
-common_genes <- intersect(common_genes, feature_genes)
+# Compute three-way intersection of gene identifiers
+common_genes <- intersect(rownames(expr_cell), genes_no_version)
+common_genes <- intersect(common_genes, rownames(expr_tum))
 
 if (length(common_genes) == 0) {
-  stop("No common genes shared by cell lines, tumours, and the feature list")
+  stop("No common genes found between expression matrices and feature list")
 }
+
 # Subset matrices to common genes
 # drop = FALSE ensures matrix structure is preserved even with one sample
 expr_cell_filt <- expr_cell[common_genes, , drop = FALSE]
@@ -824,6 +1032,65 @@ cat("  Score matrix: ", nrow(score_cor), " tumours x ",
 cat("  Score range: [", round(min(score_cor, na.rm = TRUE), 3), ", ",
     round(max(score_cor, na.rm = TRUE), 3), "]\n", sep = "")
 
+cat("\n[5.1] Collapsing replicate profile scores to biological cell-line groups...\n")
+
+cell_group_map <- data.table(cell_line_raw = colnames(score_cor))
+cell_group_map[, cell_line_group := derive_cell_line_group(cell_line_raw)]
+cell_group_map <- merge(
+  cell_group_map,
+  meta_cell[, .(sample_id, cell_lineage = lineage)],
+  by.x = "cell_line_raw",
+  by.y = "sample_id",
+  all.x = TRUE,
+  sort = FALSE
+)
+
+if (anyNA(cell_group_map$cell_lineage)) {
+  stop("Missing cell line lineage labels after biological group mapping.")
+}
+
+group_lineage_check <- cell_group_map[, .(n_lineages = uniqueN(cell_lineage)),
+                                      by = cell_line_group]
+if (any(group_lineage_check$n_lineages > 1L)) {
+  bad <- group_lineage_check[n_lineages > 1L, cell_line_group]
+  stop("Biological cell-line groups span multiple lineages: ",
+       paste(bad, collapse = ", "))
+}
+
+group_order <- unique(cell_group_map$cell_line_group)
+score_cor_group <- do.call(cbind, lapply(group_order, function(group_id) {
+  profile_ids <- cell_group_map[cell_line_group == group_id, cell_line_raw]
+  rowMeans(score_cor[, profile_ids, drop = FALSE], na.rm = TRUE)
+}))
+rownames(score_cor_group) <- rownames(score_cor)
+colnames(score_cor_group) <- group_order
+
+collapse_map_file <- file.path(t2c_dir, "tumour_cellline_group_collapse_mapping.tsv")
+cell_group_map[, collapse_rule := "mean_score_across_replicate_profiles"]
+cell_group_map[, retained_for_primary_analysis := TRUE]
+setcolorder(cell_group_map,
+            c("cell_line_raw", "cell_line_group", "cell_lineage",
+              "collapse_rule", "retained_for_primary_analysis"))
+fwrite(cell_group_map, collapse_map_file, sep = "\t")
+
+meta_cell <- cell_group_map[, .(
+  lineage = unique(cell_lineage),
+  type = "cell_line",
+  n_profile_observations = .N,
+  profile_level_observations = paste(sort(unique(cell_line_raw)), collapse = ";")
+), by = .(sample_id = cell_line_group)]
+setcolorder(meta_cell,
+            c("sample_id", "lineage", "type", "n_profile_observations",
+              "profile_level_observations"))
+
+score_cor <- score_cor_group
+
+cat("  Raw profile-level cell line entries: ", nrow(cell_group_map), "\n", sep = "")
+cat("  Biological cell-line groups: ", ncol(score_cor), "\n", sep = "")
+cat("  Group-level score matrix: ", nrow(score_cor), " tumours x ",
+    ncol(score_cor), " biological cell-line groups\n", sep = "")
+cat("  Collapse mapping saved to:", collapse_map_file, "\n")
+
 
 # =============================================================================
 # STEP 5.5: Extended Metrics (Tumour-driven + Cell-line-driven)
@@ -866,30 +1133,39 @@ setnames(dt, c("tumour", "cell_line", "score"))
 # Named vectors enable O(1) lookup by sample ID
 meta_cell_map <- setNames(meta_cell$lineage, meta_cell$sample_id)
 meta_tum_map  <- setNames(meta_tum$lineage,  meta_tum$sample_id)
-
-biological_cell_line_group <- function(x) {
-  y <- gsub("^NG-[0-9]+_", "", as.character(x))
-  y <- gsub("_lib.*$", "", y)
-  y
-}
-
-wilson_ci <- function(x, n, z = 1.96) {
-  if (is.na(n) || n <= 0) return(c(NA_real_, NA_real_))
-  p <- x / n
-  denom <- 1 + z^2 / n
-  centre <- (p + z^2 / (2 * n)) / denom
-  half <- z * sqrt((p * (1 - p) / n) + (z^2 / (4 * n^2))) / denom
-  c(max(0, centre - half), min(1, centre + half))
-}
+meta_cell_display_map <- setNames(
+  make_cell_line_display(meta_cell$sample_id, meta_cell$lineage),
+  meta_cell$sample_id
+)
 
 # Annotate each tumour-cell line pair with lineage information
 dt[, tum_lineage  := meta_tum_map[tumour]]
 dt[, cell_lineage := meta_cell_map[cell_line]]
+dt[, cell_line_display := meta_cell_display_map[cell_line]]
+dt[, cell_line_group := cell_line]
+
+meta_cell_profile_map <- setNames(meta_cell$profile_level_observations,
+                                  meta_cell$sample_id)
+meta_cell_n_profile_map <- setNames(meta_cell$n_profile_observations,
+                                    meta_cell$sample_id)
+dt[, profile_level_observations := meta_cell_profile_map[cell_line]]
+dt[, n_profile_observations := meta_cell_n_profile_map[cell_line]]
 
 # Compute rank of each cell line within each tumour
 # frank() with ties.method = "average" handles tied scores appropriately
 # Negative score ensures higher scores get lower (better) ranks
 dt[, rank_in_tumour := frank(-score, ties.method = "average"), by = tumour]
+
+# Cell-line-to-tumour thesis-facing outputs use the same biological cell-line
+# groups as the tumour-to-cell-line analysis.
+dt_c2t <- dt[, .(
+  score = mean(score, na.rm = TRUE),
+  n_profile_observations = max(n_profile_observations, na.rm = TRUE),
+  profile_level_observations = profile_level_observations[1]
+), by = .(cell_line = cell_line_group, cell_lineage, tumour, tum_lineage)]
+dt_c2t[, cell_line_display := cell_line]
+dt_c2t[, rank_in_tumour := frank(-score, ties.method = "average"), by = tumour]
+dt_c2t[, in_topk := rank_in_tumour <= top_k_val]
 
 
 # -----------------------------------------------------------------------------
@@ -903,284 +1179,13 @@ dt[, rank_in_tumour := frank(-score, ties.method = "average"), by = tumour]
 # For each tumour, identify the single best-matching cell line (highest score)
 # Using .I[which.max(score)] ensures robust tie handling
 
-top1_dt <- dt[order(tumour, -score, cell_line), .SD[1], by = tumour]
+top1_dt <- dt[dt[, .I[which.max(score)], by = tumour]$V1]
 top1_dt[, is_correct := (cell_lineage == tum_lineage)]
 
 
 # --- Top-k Analysis ---
 # Flag cell lines within the top-k rankings for each tumour
 dt[, in_topk := rank_in_tumour <= top_k_val]
-
-
-# =============================================================================
-# PLOT: ECDF of tumour-level ranks for top BRCA model candidates
-# =============================================================================
-# This plot supports the statistical story: "choose the model with the most
-# consistently low ranks across tumours" (median_rank + top-k frequency).
-
-clean_cl_label <- function(x) {
-  x <- gsub("^NG-[0-9]+_", "", x)  # drop NG-xxxxx_ prefix
-  x <- gsub("_lib.*$", "", x)     # drop _lib... suffix
-  x <- gsub("_", "-", x)          # nicer separators
-  x
-}
-
-draw_ecdf_polyline <- function(x, col, lwd = 3, lty = 1, max_pts = 250) {
-  x <- x[!is.na(x)]
-  if (length(x) == 0) return(invisible(NULL))
-
-  e <- ecdf(x)
-
-  # Always anchor at rank 1 so all curves start from (1, 0),
-  # even if the cell line never achieves rank 1 (e.g. negative controls)
-  xs <- sort(unique(c(1, x)))
-
-  # Downsample if too many unique x values (prevents "broken" PDF rendering)
-  if (length(xs) > max_pts) {
-    xs <- as.numeric(quantile(x, probs = seq(0, 1, length.out = max_pts), names = FALSE, type = 8))
-    xs <- sort(unique(c(1, xs)))
-  }
-
-  ys <- e(xs)
-  lines(xs, ys, type = "l", col = col, lwd = lwd, lty = lty)
-}
-
-plot_ecdf_rank_brca <- function(dt, outdir, top_k_val, n_show = 4, add_neg_control = TRUE) {
-
-  # Keep only BRCA tumours
-  dt_brca <- dt[tum_lineage == "BRCA" & !is.na(rank_in_tumour)]
-
-  # Candidate pool: BRCA cell lines only
-  pool <- dt_brca[cell_lineage == "BRCA",
-                  .(
-                    n_tumours = .N,
-                    median_rank = median(rank_in_tumour, na.rm = TRUE),
-                    median_score = median(score, na.rm = TRUE),
-                    pct_in_topk = mean(rank_in_tumour <= top_k_val, na.rm = TRUE)
-                  ),
-                  by = cell_line][order(median_rank, -median_score)]
-
-  if (nrow(pool) == 0) {
-    cat("  [WARN] No BRCA candidates found for ECDF plot.\n")
-    return(invisible(NULL))
-  }
-
-  # Pick top N by median_rank (tie-break by median_score already in ordering)
-  candidates <- head(pool$cell_line, n_show)
-
-  # Optional: add one negative control (best non-BRCA by median_rank)
-  neg_added <- FALSE
-  if (isTRUE(add_neg_control)) {
-    neg <- dt_brca[cell_lineage != "BRCA",
-                   .(median_rank = median(rank_in_tumour, na.rm = TRUE)),
-                   by = cell_line][order(median_rank)]
-    if (nrow(neg) > 0) {
-      candidates <- c(candidates, neg$cell_line[1])
-      neg_added <- TRUE
-    }
-  }
-
-  # --- Styling ---
-  cols <- c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#666666")  # 4 candidates + neg ctrl
-  if (length(candidates) > length(cols)) {
-    cols <- rep(cols, length.out = length(candidates))
-  }
-  lwd_main <- 3
-  lwd_neg  <- 2
-  lty_neg  <- 1
-
-  # Prepare output path
-  figdir <- file.path(outdir, "figures")
-  dir.create(figdir, recursive = TRUE, showWarnings = FALSE)
-  outfile <- file.path(figdir, sprintf("Fig_BRCA_rank_ECDF_top%d_k%d.pdf", n_show, top_k_val))
-
-  # Compute max rank for x-axis limit
-  max_rank <- ceiling(max(dt_brca[cell_line %in% candidates, rank_in_tumour], na.rm = TRUE))
-
-  pdf(outfile, width = 7.5, height = 5.5)
-  on.exit(dev.off(), add = TRUE)
-
-  # Plot first ECDF (continuous polyline)
-  first <- candidates[1]
-  x1 <- dt_brca[cell_line == first, rank_in_tumour]
-
-  plot(NULL,
-       xlim = c(1, max_rank),
-       ylim = c(0, 1),
-       main = sprintf("BRCA tumours (n=%d): ECDF of tumour-level ranks",
-                      length(unique(dt_brca$tumour))),
-       xlab = "Cell line rank per breast cancer clinical patient sample (1 = best)",
-       ylab = "Fraction of tumours with rank \u2264 x")
-
-  draw_ecdf_polyline(x1, col = cols[1], lwd = lwd_main, lty = 1)
-
-  # Optional: log unique ranks (BRCA often has many -> downsampling helps PDF)
-  cat("  BRCA unique ranks for ", first, ": ", length(unique(x1)), "\n", sep = "")
-
-  # Add others
-  if (length(candidates) > 1) {
-    for (i in 2:length(candidates)) {
-      cl <- candidates[i]
-      x <- dt_brca[cell_line == cl, rank_in_tumour]
-      is_neg <- neg_added && (i == length(candidates))  # last is neg control if added
-      draw_ecdf_polyline(x,
-                         col = cols[i],
-                         lwd = if (is_neg) lwd_neg else lwd_main,
-                         lty = 1)
-    }
-  }
-
-  # Vertical line at top-k threshold
-  abline(v = top_k_val, lty = 2, col = "grey50")
-
-  # Horizontal line at y = 0.5 (median rank reference)
-  # Its intersection with each curve shows the median rank visually
-  abline(h = 0.5, lty = 2, col = "grey50")
-
-  # Legend: cell line name only (no stats); sorted by median_rank (best first).
-  # Negative control gets an explicit label instead of its raw cell line ID.
-  leg_candidates <- if (neg_added) candidates[-length(candidates)] else candidates
-  leg_dt <- pool[cell_line %in% leg_candidates,
-                 .(cell_line, median_rank)][order(median_rank)]
-  leg_labels <- clean_cl_label(leg_dt$cell_line)
-  leg_cols   <- cols[match(leg_dt$cell_line, candidates)]
-  leg_lwd    <- rep(lwd_main, nrow(leg_dt))
-  leg_lty    <- rep(1, nrow(leg_dt))
-
-  # Append negative control entry last
-  if (neg_added) {
-    leg_labels <- c(leg_labels, "Negative control (non-BRCA)")
-    leg_cols   <- c(leg_cols, cols[length(candidates)])
-    leg_lwd    <- c(leg_lwd, lwd_neg)
-    leg_lty    <- c(leg_lty, lty_neg)
-  }
-
-  legend("bottomright",
-         legend = leg_labels, bty = "n",
-         col = leg_cols,
-         lwd = leg_lwd,
-         lty = leg_lty)
-  cat("  Saved ECDF rank plot:", outfile, "\n")
-}
-
-# Call ECDF plot after dt and top-k flags exist
-plot_ecdf_rank_brca(dt = dt, outdir = c2t_dir, top_k_val = top_k_val,
-                    n_show = 4, add_neg_control = TRUE)
-
-plot_ecdf_rank_lineage <- function(dt, lineage, outdir, top_k_val,
-                                   n_show = 4, add_neg_control = TRUE) {
-
-  dt_lin <- dt[tum_lineage == lineage & !is.na(rank_in_tumour)]
-
-  pool <- dt_lin[cell_lineage == lineage,
-                 .(
-                   n_tumours    = .N,
-                   median_rank  = median(rank_in_tumour, na.rm = TRUE),
-                   median_score = median(score, na.rm = TRUE),
-                   pct_in_topk  = mean(rank_in_tumour <= top_k_val, na.rm = TRUE)
-                 ),
-                 by = cell_line][order(median_rank, -median_score)]
-
-  if (nrow(pool) == 0) {
-    cat("  [WARN] No", lineage, "candidates found for ECDF plot.\n")
-    return(invisible(NULL))
-  }
-
-  candidates <- head(pool$cell_line, n_show)
-
-  neg_added <- FALSE
-  if (isTRUE(add_neg_control)) {
-    neg <- dt_lin[cell_lineage != lineage,
-                  .(median_rank = median(rank_in_tumour, na.rm = TRUE)),
-                  by = cell_line][order(median_rank)]
-    if (nrow(neg) > 0) {
-      candidates <- c(candidates, neg$cell_line[1])
-      neg_added <- TRUE
-    }
-  }
-
-  # --- Styling ---
-  cols <- c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#666666")  # 4 candidates + neg ctrl
-  if (length(candidates) > length(cols)) {
-    cols <- rep(cols, length.out = length(candidates))
-  }
-  lwd_main <- 3
-  lwd_neg  <- 2
-  lty_neg  <- 1
-
-  figdir <- file.path(outdir, "figures")
-  dir.create(figdir, recursive = TRUE, showWarnings = FALSE)
-  outfile <- file.path(figdir, sprintf("Fig_%s_rank_ECDF_top%d_k%d.pdf",
-                                       lineage, n_show, top_k_val))
-
-  max_rank <- ceiling(max(dt_lin[cell_line %in% candidates, rank_in_tumour], na.rm = TRUE))
-
-  pdf(outfile, width = 7.5, height = 5.5)
-  on.exit(dev.off(), add = TRUE)
-
-  first <- candidates[1]
-  x1 <- dt_lin[cell_line == first, rank_in_tumour]
-
-  plot(NULL,
-       xlim = c(1, max_rank),
-       ylim = c(0, 1),
-       main = sprintf("%s tumours (n=%d): ECDF of tumour-level ranks",
-                      lineage, length(unique(dt_lin$tumour))),
-       xlab = sprintf("Cell line rank per %s clinical patient sample (1 = best)",
-                      switch(lineage,
-                             "NBL" = "neuroblastoma",
-                             "RBL" = "retinoblastoma",
-                             lineage)),
-       ylab = "Fraction of tumours with rank \u2264 x")
-
-  draw_ecdf_polyline(x1, col = cols[1], lwd = lwd_main, lty = 1)
-
-  if (length(candidates) > 1) {
-    for (i in 2:length(candidates)) {
-      cl <- candidates[i]
-      x <- dt_lin[cell_line == cl, rank_in_tumour]
-      is_neg <- neg_added && (i == length(candidates))  # last is neg control if added
-      draw_ecdf_polyline(x,
-                         col = cols[i],
-                         lwd = if (is_neg) lwd_neg else lwd_main,
-                         lty = 1)
-    }
-  }
-
-  abline(v = top_k_val, lty = 2, col = "grey50")
-
-  # Horizontal line at y = 0.5 (median rank reference)
-  abline(h = 0.5, lty = 2, col = "grey50")
-
-  # Legend: cell line name only (no stats); sorted by median_rank (best first).
-  # Negative control gets an explicit label instead of its raw cell line ID.
-  leg_candidates <- if (neg_added) candidates[-length(candidates)] else candidates
-  leg_dt <- pool[cell_line %in% leg_candidates,
-                 .(cell_line, median_rank)][order(median_rank)]
-  leg_labels <- clean_cl_label(leg_dt$cell_line)
-  leg_cols   <- cols[match(leg_dt$cell_line, candidates)]
-  leg_lwd    <- rep(lwd_main, nrow(leg_dt))
-  leg_lty    <- rep(1, nrow(leg_dt))
-
-  if (neg_added) {
-    leg_labels <- c(leg_labels, sprintf("Negative control (non-%s)", lineage))
-    leg_cols   <- c(leg_cols, cols[length(candidates)])
-    leg_lwd    <- c(leg_lwd, lwd_neg)
-    leg_lty    <- c(leg_lty, lty_neg)
-  }
-
-  legend("bottomright",
-         legend = leg_labels, bty = "n",
-         col = leg_cols,
-         lwd = leg_lwd,
-         lty = leg_lty)
-  cat("  Saved ECDF rank plot:", outfile, "\n")
-}
-
-plot_ecdf_rank_lineage(dt, "NBL",  outdir = c2t_dir, top_k_val = top_k_val,
-                       n_show = 4, add_neg_control = TRUE)
-plot_ecdf_rank_lineage(dt, "RBL",  outdir = c2t_dir, top_k_val = top_k_val,
-                       n_show = 4, add_neg_control = TRUE)
 
 # Per-tumour top-k summary:
 #   any_correct_topk: Is there at least one correct-lineage cell line in top-k?
@@ -1263,7 +1268,7 @@ metrics_overall <- data.table(
   )
 )
 
-metrics_overall_file <- file.path(t2c_dir, "metrics_summary_extended.tsv")
+metrics_overall_file <- file.path(t2c_dir, "metrics_summary_group_level_extended.tsv")
 fwrite(metrics_overall, metrics_overall_file, sep = "\t")
 cat("  Saved:", metrics_overall_file, "\n")
 
@@ -1306,13 +1311,14 @@ cat("  Saved:", metrics_by_lineage_file, "\n")
 # --- Flag Top-1 Matches ---
 # For downstream analysis, mark which cell line is the top match for each tumour
 
-top1_pairs <- top1_dt[, .(tumour, cell_line)]
-top1_pairs[, is_top1 := TRUE]
-setkey(top1_pairs, tumour, cell_line)
+top1_pairs_group <- dt_c2t[dt_c2t[, .I[which.max(score)], by = tumour]$V1,
+                           .(tumour, cell_line)]
+top1_pairs_group[, is_top1 := TRUE]
+setkey(top1_pairs_group, tumour, cell_line)
 
-dt[, is_top1_for_tumour := FALSE]
-setkey(dt, tumour, cell_line)
-dt[top1_pairs, is_top1_for_tumour := TRUE]
+dt_c2t[, is_top1_for_tumour := FALSE]
+setkey(dt_c2t, tumour, cell_line)
+dt_c2t[top1_pairs_group, is_top1_for_tumour := TRUE]
 
 
 # --- Cell Line Metrics by Tumour Cohort ---
@@ -1320,7 +1326,8 @@ dt[top1_pairs, is_top1_for_tumour := TRUE]
 # cohort (lineage). This reveals whether cell lines preferentially match
 # their own lineage or cross-lineage tumours.
 
-cellline_by_cohort <- dt[, .(
+cellline_by_cohort <- dt_c2t[, .(
+  cell_line_display = cell_line_display[1],
   n_tumours = .N,
   mean_score = mean(score, na.rm = TRUE),
   median_score = median(score, na.rm = TRUE),
@@ -1330,7 +1337,8 @@ cellline_by_cohort <- dt[, .(
   pct_in_topk = mean(in_topk, na.rm = TRUE),              # Fraction of times in top-k
   best_tumour = tumour[which.max(score)],                 # Most similar tumour
   best_score = max(score, na.rm = TRUE),                  # Highest similarity score
-  best_rank = rank_in_tumour[which.max(score)]            # Rank for best tumour
+  best_rank = rank_in_tumour[which.max(score)],           # Rank for best tumour
+  n_profile_observations = max(n_profile_observations, na.rm = TRUE)
 ), by = .(cell_line, cell_lineage, tum_lineage)][order(tum_lineage, -mean_score)]
 
 cellline_by_cohort_file <- file.path(c2t_dir,
@@ -1342,7 +1350,8 @@ cat("  Saved:", cellline_by_cohort_file, "\n")
 # --- Cell Line Metrics Overall ---
 # Aggregate cell line performance across all tumours, regardless of lineage
 
-cellline_overall <- dt[, .(
+cellline_overall <- dt_c2t[, .(
+  cell_line_display = cell_line_display[1],
   n_tumours = .N,
   mean_score = mean(score, na.rm = TRUE),
   median_score = median(score, na.rm = TRUE),
@@ -1353,63 +1362,63 @@ cellline_overall <- dt[, .(
   best_tumour = tumour[which.max(score)],
   best_score = max(score, na.rm = TRUE),
   best_rank = rank_in_tumour[which.max(score)],
-  best_cohort = tum_lineage[which.max(score)]  # Lineage of best-matching tumour
+  best_cohort = tum_lineage[which.max(score)],  # Lineage of best-matching tumour
+  n_profile_observations = max(n_profile_observations, na.rm = TRUE),
+  profile_level_observations = profile_level_observations[which.max(score)]
 ), by = .(cell_line, cell_lineage)][order(-mean_score)]
 
 # --- Cell Line Top-k Lineage Enrichment + Entropy ---
 # For each cell line, compute the lineage composition of its top-k tumour matches.
 
-cellline_topk_list <- lapply(colnames(score_cor), function(cid) {
-  scores <- score_cor[, cid]
-  ord <- order(-as.numeric(scores), names(scores), na.last = NA)
-  top_n <- min(top_k_val, length(ord))
-  if (top_n == 0) return(NULL)
-  top_idx <- ord[seq_len(top_n)]
-  top_tums <- rownames(score_cor)[top_idx]
-  data.table(
-    cell_line = cid,
-    cell_lineage = meta_cell_map[cid],
-    tumour = top_tums,
-    tum_lineage = meta_tum_map[top_tums],
-    score = scores[top_tums],
-    rank = seq_len(top_n)
-  )
-})
-cellline_topk <- rbindlist(cellline_topk_list, fill = TRUE)
+cellline_topk <- dt_c2t[order(cell_line, -score),
+                        .SD[seq_len(min(top_k_val, .N))],
+                        by = cell_line]
+cellline_topk[, rank := seq_len(.N), by = cell_line]
 
 if (nrow(cellline_topk) > 0) {
-  n_topk <- cellline_topk[, .(n_topk = .N), by = .(cell_line, cell_lineage)]
-  topk_counts <- cellline_topk[, .(n_in_topk = .N), by = .(cell_line, cell_lineage, tum_lineage)]
-  topk_counts <- merge(topk_counts, n_topk, by = c("cell_line", "cell_lineage"))
+  n_topk <- cellline_topk[, .(n_topk = .N),
+                          by = .(cell_line, cell_line_display, cell_lineage)]
+  topk_counts <- cellline_topk[, .(n_in_topk = .N),
+                               by = .(cell_line, cell_line_display, cell_lineage, tum_lineage)]
+  topk_counts <- merge(topk_counts, n_topk,
+                       by = c("cell_line", "cell_line_display", "cell_lineage"))
   topk_counts[, frac_in_topk := n_in_topk / n_topk]
 
   entropy_dt <- topk_counts[, .(
     topk_lineage_entropy = -sum(frac_in_topk * log(frac_in_topk))
-  ), by = .(cell_line, cell_lineage)]
+  ), by = .(cell_line, cell_line_display, cell_lineage)]
 
   topk_enrich_file <- file.path(c2t_dir, "cellline_topk_lineage_enrichment.tsv")
   fwrite(topk_counts, topk_enrich_file, sep = "\t")
   cat("  Saved:", topk_enrich_file, "\n")
 } else {
-  entropy_dt <- data.table(cell_line = character(), cell_lineage = character(),
+  entropy_dt <- data.table(cell_line = character(), cell_line_display = character(),
+                           cell_lineage = character(),
                            topk_lineage_entropy = numeric())
 }
 
 # --- Cell Line Margin Z-Score (top1 vs distribution) ---
-cellline_margin <- data.table(
-  cell_line = colnames(score_cor),
-  top1_margin_z = vapply(colnames(score_cor), function(cid) {
-    scores <- score_cor[, cid]
-    if (all(is.na(scores))) return(NA_real_)
-    mu <- mean(scores, na.rm = TRUE)
-    sig <- sd(scores, na.rm = TRUE)
-    if (is.na(sig) || sig == 0) return(NA_real_)
-    (max(scores, na.rm = TRUE) - mu) / sig
-  }, numeric(1))
-)
+cellline_margin <- dt_c2t[, {
+  if (all(is.na(score))) {
+    list(top1_margin_z = NA_real_)
+  } else {
+    mu <- mean(score, na.rm = TRUE)
+    sig <- sd(score, na.rm = TRUE)
+    if (is.na(sig) || sig == 0) {
+      list(top1_margin_z = NA_real_)
+    } else {
+      list(top1_margin_z = (max(score, na.rm = TRUE) - mu) / sig)
+    }
+  }
+}, by = cell_line]
 
 # Merge entropy + margin into overall cell line metrics
-cellline_overall <- merge(cellline_overall, entropy_dt, by = c("cell_line", "cell_lineage"), all.x = TRUE)
+cellline_overall <- merge(
+  cellline_overall,
+  entropy_dt,
+  by = c("cell_line", "cell_line_display", "cell_lineage"),
+  all.x = TRUE
+)
 cellline_overall <- merge(cellline_overall, cellline_margin, by = "cell_line", all.x = TRUE)
 
 cellline_overall_file <- file.path(c2t_dir, "cellline_metrics_overall.tsv")
@@ -1420,25 +1429,29 @@ cat("  Saved:", cellline_overall_file, "\n")
 # --- Save Long-Format Score Tables ---
 # Compressed output for detailed downstream analysis or debugging
 
-# Tumour -> cell line (primary direction)
-dt_file <- file.path(t2c_dir, "tumour_cellline_scores_long.tsv.gz")
-fwrite_gz_safe(dt[, .(tumour, tum_lineage, cell_line, cell_lineage, score,
-                      rank_in_tumour, in_topk)],
-               dt_file, sep = "\t")
+# Tumour -> biological cell-line group (primary direction)
+dt_file <- file.path(t2c_dir, "tumour_cellline_group_scores_long.tsv.gz")
+fwrite(dt[, .(tumour, tum_lineage, cell_line_group, cell_line,
+              cell_lineage, score, rank_in_tumour, in_topk,
+              n_profile_observations, profile_level_observations)],
+       dt_file, sep = "\t")
 cat("  Saved:", dt_file, "\n")
 
 # Cell line -> tumour (flipped direction)
 dt_rev <- dt[, .(
   cell_line,
+  cell_line_group,
   cell_lineage,
   tumour,
   tum_lineage,
   score,
   rank_in_tumour,
-  in_topk
+  in_topk,
+  n_profile_observations,
+  profile_level_observations
 )]
 dt_rev_file <- file.path(c2t_dir, "cellline_tumour_scores_long.tsv.gz")
-fwrite_gz_safe(dt_rev, dt_rev_file, sep = "\t")
+fwrite(dt_rev, dt_rev_file, sep = "\t")
 cat("  Saved:", dt_rev_file, "\n")
 
 cat("  [5.5] Extended metrics computation complete.\n")
@@ -1448,8 +1461,10 @@ cat("  [5.5] Extended metrics computation complete.\n")
 # STEP 6: Rank Top-k Cell Lines per Tumour
 # =============================================================================
 # For each tumour, cell lines are ranked by descending correlation score.
-# The top-k cell lines represent the most transcriptomically similar models
-# and serve as candidate model systems for functional studies.
+# The top-k cell lines are the most transcriptomically similar candidates
+# under the chosen feature space and similarity metric. They should be treated
+# as candidate models for follow-up validation, not as experimentally validated
+# functional models.
 #
 # Ranking vs. Thresholding:
 # Ranking is preferred over absolute score thresholding because:
@@ -1473,7 +1488,7 @@ cat("\n[6] Ranking top-k cell lines per tumour...\n")
 
 # Helper function to extract top-k cell line names by score
 top_k <- function(score_row, k) {
-  ord <- order(-as.numeric(score_row), names(score_row), na.last = NA)
+  ord <- order(score_row, decreasing = TRUE)
   names(score_row)[ord][seq_len(min(k, length(ord)))]
 }
 
@@ -1514,6 +1529,7 @@ meta_tum_map <- setNames(meta_tum$lineage, meta_tum$sample_id)
 
 rank_df[, cell_lineage := meta_cell_map[cell_line]]
 rank_df[, tum_lineage := meta_tum_map[tumour]]
+rank_df[, cell_line_display := meta_cell_display_map[cell_line]]
 rank_df[, is_correct := cell_lineage == tum_lineage]
 
 cat("  Generated rankings for", length(unique(rank_df$tumour)), "tumours\n")
@@ -1521,23 +1537,20 @@ cat("  Generated rankings for", length(unique(rank_df$tumour)), "tumours\n")
 # -----------------------------------------------------------------------------
 # Cell line -> tumour rankings (reverse direction)
 # -----------------------------------------------------------------------------
-rank_list_cl <- lapply(colnames(score_cor), function(cid) {
-  scores <- score_cor[, cid]
-  tops <- top_k(scores, k = opt$`top-k`)
-  data.table(
-    cell_line = cid,
-    rank = seq_along(tops),
-    tumour = tops,
-    score = scores[tops]
-  )
-})
-
-rank_df_cl <- rbindlist(rank_list_cl)
-rank_df_cl[, tumour_lineage := meta_tum_map[tumour]]
-rank_df_cl[, cell_lineage := meta_cell_map[cell_line]]
+rank_df_cl <- dt_c2t[order(cell_line, -score),
+                     .SD[seq_len(min(opt$`top-k`, .N))],
+                     by = cell_line]
+rank_df_cl[, rank := seq_len(.N), by = cell_line]
+setcolorder(rank_df_cl, c(
+  "cell_line", "cell_line_display", "rank", "tumour", "score",
+  "tum_lineage", "cell_lineage", "n_profile_observations",
+  "profile_level_observations"
+))
+setnames(rank_df_cl, "tum_lineage", "tumour_lineage")
 rank_df_cl[, is_correct := tumour_lineage == cell_lineage]
 
-cat("  Generated rankings for", length(unique(rank_df_cl$cell_line)), "cell lines\n")
+cat("  Generated rankings for", length(unique(rank_df_cl$cell_line)),
+    " biological cell-line groups\n")
 
 # -----------------------------------------------------------------------------
 # Evaluation-only rankings (exclude HEME/OTHER from BRCA/NBL/RBL summaries)
@@ -1568,66 +1581,10 @@ rank_df_eval[, cell_lineage := meta_cell_map[cell_line]]
 rank_df_eval[, tum_lineage := meta_tum_map[tumour]]
 rank_df_eval[, is_correct := cell_lineage == tum_lineage]
 
-rank_list_cl_eval <- lapply(colnames(score_cor_eval), function(cid) {
-  scores <- score_cor_eval[, cid]
-  tops <- top_k(scores, k = opt$`top-k`)
-  data.table(
-    cell_line = cid,
-    rank = seq_along(tops),
-    tumour = tops,
-    score = scores[tops]
-  )
-})
-
-rank_df_cl_eval <- rbindlist(rank_list_cl_eval)
-rank_df_cl_eval[, tumour_lineage := meta_tum_map[tumour]]
-rank_df_cl_eval[, cell_lineage := meta_cell_map[cell_line]]
+rank_df_cl_eval <- copy(rank_df_cl[
+  cell_lineage %in% eval_lineages & tumour %in% eval_tumour_ids
+])
 rank_df_cl_eval[, is_correct := tumour_lineage == cell_lineage]
-
-# Filter NBL to only DSMZ cell lines (starting with NG-) for consistency with figure validation
-rank_df_cl_eval <- rank_df_cl_eval[
-  !(cell_lineage == "NBL" & !grepl("^NG-", cell_line))
-]
-
-# Full biological cell-line rankings for evaluation and cell-line-centred outputs.
-score_eval_long <- as.data.table(as.table(score_cor_eval))
-setnames(score_eval_long, c("tumour", "cell_line", "score"))
-score_eval_long[, tumour := as.character(tumour)]
-score_eval_long[, cell_line := as.character(cell_line)]
-
-cell_sample_lookup <- data.table(
-  cell_line = eval_cell_ids,
-  cell_line_group = biological_cell_line_group(eval_cell_ids),
-  cell_lineage = meta_cell_map[eval_cell_ids]
-)
-cell_group_lookup <- cell_sample_lookup[, .(
-  cell_lineage = sort(unique(cell_lineage))[1],
-  source_cell_lines = paste(sort(unique(cell_line)), collapse = ";"),
-  n_cell_line_profiles = .N
-), by = cell_line_group]
-
-tumour_lookup <- data.table(
-  tumour = eval_tumour_ids,
-  tum_lineage = meta_tum_map[eval_tumour_ids]
-)
-
-score_eval_long <- merge(score_eval_long, cell_sample_lookup, by = "cell_line", all.x = TRUE)
-score_eval_long <- merge(score_eval_long, tumour_lookup, by = "tumour", all.x = TRUE)
-group_score_dt <- score_eval_long[, .(
-  score = median(score, na.rm = TRUE),
-  source_cell_lines = paste(sort(unique(cell_line)), collapse = ";"),
-  n_cell_line_profiles = uniqueN(cell_line)
-), by = .(tumour, tum_lineage, cell_line_group, cell_lineage)]
-group_score_dt <- group_score_dt[!is.na(score)]
-group_score_dt[, is_correct := cell_lineage == tum_lineage]
-
-t2c_group_full <- copy(group_score_dt)
-setorder(t2c_group_full, tumour, -score, cell_line_group)
-t2c_group_full[, rank_in_tumour := seq_len(.N), by = tumour]
-
-c2t_full <- copy(group_score_dt)
-setorder(c2t_full, cell_line_group, -score, tumour)
-c2t_full[, rank := seq_len(.N), by = cell_line_group]
 
 
 # =============================================================================
@@ -1669,27 +1626,17 @@ c2t_full[, rank := seq_len(.N), by = cell_line_group]
 cat("\n[7] Computing evaluation metrics...\n")
 
 # Top-1 accuracy: fraction of tumours with correct lineage at rank 1
-top1 <- t2c_group_full[rank_in_tumour == 1]
+top1 <- rank_df_eval[rank == 1]
 top1_acc <- mean(top1$is_correct, na.rm = TRUE)
 
 # Top-k accuracy: fraction of tumours with any correct lineage in top-k
-topk_acc <- mean(t2c_group_full[rank_in_tumour <= opt$`top-k`,
-                                .(hit = any(is_correct, na.rm = TRUE)),
-                                by = tumour]$hit,
-                 na.rm = TRUE)
+topk_acc <- mean(tapply(rank_df_eval$is_correct, rank_df_eval$tumour, any), na.rm = TRUE)
 
 # Mean Reciprocal Rank: average of 1/rank for first correct match
-mrr_full_dt <- t2c_group_full[, {
-  hits <- rank_in_tumour[is_correct %in% TRUE]
-  first <- if (length(hits) == 0) NA_integer_ else min(hits, na.rm = TRUE)
-  list(
-    first_correct_rank = first,
-    rr = ifelse(is.na(first), 0, 1 / first),
-    rr_at_k = ifelse(is.na(first) || first > opt$`top-k`, 0, 1 / first)
-  )
-}, by = tumour]
-mrr <- mean(mrr_full_dt$rr, na.rm = TRUE)
-mrr_at_k <- mean(mrr_full_dt$rr_at_k, na.rm = TRUE)
+mrr <- mean(tapply(rank_df_eval$is_correct, rank_df_eval$tumour, function(v) {
+  hit <- which(v)[1]  # Position of first TRUE
+  if (is.na(hit)) 0 else 1 / hit  # 0 if no correct match in top-k
+}), na.rm = TRUE)
 
 # -----------------------------------------------------------------------------
 # Per-Lineage Metrics
@@ -1714,7 +1661,6 @@ lineage_metrics <- rbindlist(lineage_metrics)
 cat("  Top-1 accuracy: ", round(top1_acc * 100, 2), "%\n", sep = "")
 cat("  Top-", opt$`top-k`, " accuracy: ", round(topk_acc * 100, 2), "%\n", sep = "")
 cat("  MRR: ", round(mrr, 3), "\n", sep = "")
-cat("  MRR@", opt$`top-k`, ": ", round(mrr_at_k, 3), "\n", sep = "")
 
 
 # =============================================================================
@@ -1756,6 +1702,7 @@ tumour_summary <- rank_df[rank == 1, .(
   tumour_id = tumour,
   tumour_lineage = tum_lineage,
   best_cell_line = cell_line,
+  best_cell_line_display = cell_line_display,
   best_score = score,
   best_cell_line_lineage = cell_lineage,
   is_correct = is_correct
@@ -1764,6 +1711,7 @@ tumour_summary <- rank_df[rank == 1, .(
 # Add top-k cell lines as semicolon-separated lists for compact representation
 topk_cells <- rank_df[rank <= opt$`top-k`, .(
   topk_cell_lines = paste(cell_line, collapse = ";"),
+  topk_cell_line_displays = paste(cell_line_display, collapse = ";"),
   topk_scores = paste(round(score, 3), collapse = ";"),
   topk_lineages = paste(cell_lineage, collapse = ";"),
   n_correct_in_topk = sum(is_correct)
@@ -1801,7 +1749,10 @@ cat("\n[8.1] Creating cell line summary table...\n")
 
 cellline_summary <- rank_df_cl[rank == 1, .(
   cell_line = cell_line,
+  cell_line_display = cell_line_display,
   cell_lineage = cell_lineage,
+  n_profile_observations = n_profile_observations,
+  profile_level_observations = profile_level_observations,
   best_tumour = tumour,
   best_score = score,
   best_tumour_lineage = tumour_lineage,
@@ -1839,24 +1790,25 @@ cellline_summary <- merge(
 # -----------------------------------------------------------------------------
 # Cell line -> tumour evaluation metrics (reverse direction)
 # -----------------------------------------------------------------------------
-rank_df_cl_collapsed <- copy(c2t_full)
-setnames(rank_df_cl_collapsed, "cell_line_group", "cell_line")
+rank_df_cl_eval[, cell_line_group := cell_line]
+
+# C2T evaluation metrics are already computed on biological cell-line groups.
+rank_df_cl_collapsed <- copy(rank_df_cl_eval)
 rank_df_cl_collapsed[, rank_eval := rank]
-rank_df_cl_collapsed[, tumour_lineage := tum_lineage]
+rank_df_cl_collapsed[, is_correct := (tumour_lineage == cell_lineage)]
 
 top1_cl <- rank_df_cl_collapsed[rank_eval == 1]
 top1_acc_cl <- mean(top1_cl$is_correct, na.rm = TRUE)
 
-topk_acc_cl <- mean(rank_df_cl_collapsed[rank_eval <= opt$`top-k`,
-                                         .(hit = any(is_correct, na.rm = TRUE)),
-                                         by = cell_line]$hit,
+topk_acc_cl <- mean(tapply(rank_df_cl_collapsed$is_correct,
+                           rank_df_cl_collapsed$cell_line_group, any),
                     na.rm = TRUE)
 
-mrr_cl <- mean(rank_df_cl_collapsed[, {
-  hits <- rank_eval[is_correct %in% TRUE]
-  first <- if (length(hits) == 0) NA_integer_ else min(hits, na.rm = TRUE)
-  list(rr = ifelse(is.na(first), 0, 1 / first))
-}, by = cell_line]$rr, na.rm = TRUE)
+mrr_cl <- mean(tapply(rank_df_cl_collapsed$is_correct,
+                      rank_df_cl_collapsed$cell_line_group, function(v) {
+  hit <- which(v)[1]
+  if (is.na(hit)) 0 else 1 / hit
+}), na.rm = TRUE)
 
 lineage_metrics_cl <- lapply(eval_lineages, function(lin) {
   cl_subset <- top1_cl[cell_lineage == lin]
@@ -1874,98 +1826,35 @@ topk_consistency_cl <- rank_df_cl_collapsed[rank_eval <= opt$`top-k`, .(
   n_total = .N,
   n_same_lineage = sum(tumour_lineage == cell_lineage, na.rm = TRUE),
   frac_same = mean(tumour_lineage == cell_lineage, na.rm = TRUE)
-), by = .(cell_line, cell_lineage)]
+), by = .(cell_line_group, cell_lineage)]
+topk_consistency_cl[, cell_line_display := make_cell_line_display(cell_line_group, cell_lineage)]
 topk_consistency_cl[, all_same := n_same_lineage == n_total]
 
 # Low confidence cases (cell-line -> tumour) on collapsed units
 confidence_cl_group <- rank_df_cl_collapsed[, {
-  ord <- order(-score, tumour)
+  ord <- order(-score)
   s1 <- score[ord][1]
   sk <- score[ord][min(opt$`top-k`, .N)]
   list(s1 = s1, sk = sk, confidence_delta = s1 - sk)
-}, by = cell_line]
+}, by = cell_line_group]
 frac_same_cl_group <- rank_df_cl_collapsed[rank_eval <= opt$`top-k`,
   .(confidence_frac_same_lineage = mean(is_correct, na.rm = TRUE)),
-  by = cell_line]
+  by = cell_line_group]
 cellline_summary_group <- merge(confidence_cl_group, frac_same_cl_group,
-                                by = "cell_line", all.x = TRUE)
+                                by = "cell_line_group", all.x = TRUE)
 cellline_summary_group <- merge(cellline_summary_group, top1_cl[, .(
-  cell_line,
+  cell_line_group,
   cell_lineage,
   best_tumour = tumour,
   best_tumour_lineage = tumour_lineage,
   is_correct
-)], by = "cell_line", all.x = TRUE)
+)], by = "cell_line_group", all.x = TRUE)
 
 low_confidence_cl <- cellline_summary_group[confidence_delta < 0.03]
-
-top1_ci <- wilson_ci(sum(top1_cl$is_correct, na.rm = TRUE), nrow(top1_cl))
-topk_hits_cl <- rank_df_cl_collapsed[rank_eval <= opt$`top-k`,
-                                     .(hit = any(is_correct, na.rm = TRUE)),
-                                     by = cell_line]
-topk_ci <- wilson_ci(sum(topk_hits_cl$hit, na.rm = TRUE), nrow(topk_hits_cl))
-balanced_accuracy_cl <- mean(lineage_metrics_cl$top1_accuracy, na.rm = TRUE)
-cellline_centred_summary_metrics <- data.table(
-  metric = c("top1_accuracy", paste0("top", opt$`top-k`, "_accuracy"),
-             "mrr", "balanced_accuracy_top1"),
-  value = c(top1_acc_cl, topk_acc_cl, mrr_cl, balanced_accuracy_cl),
-  ci_low = c(top1_ci[1], topk_ci[1], NA_real_, NA_real_),
-  ci_high = c(top1_ci[2], topk_ci[2], NA_real_, NA_real_)
-)
-
-reciprocal_pairs_k10 <- merge(
-  t2c_group_full[rank_in_tumour <= 10,
-                 .(tumour, cell_line = cell_line_group, tum_lineage,
-                   cell_lineage, t2c_rank = rank_in_tumour, t2c_score = score)],
-  rank_df_cl_collapsed[rank_eval <= 10,
-                       .(tumour, cell_line, c2t_rank = rank_eval, c2t_score = score)],
-  by = c("tumour", "cell_line"),
-  all = FALSE
-)
-
-component_candidates <- c("patient_consensus_component", "consensus_component",
-                          "component", "cluster", "cluster_id", "component_id")
-component_col <- component_candidates[component_candidates %in% colnames(meta_tum)][1]
-if (!is.na(component_col)) {
-  tumour_components <- data.table(
-    tumour = meta_tum$sample_id,
-    component_id = as.character(meta_tum[[component_col]])
-  )
-  comp_sizes <- tumour_components[!is.na(component_id) & component_id != "",
-                                  .(component_size = .N), by = component_id]
-  top50 <- merge(
-    rank_df_cl_collapsed[rank_eval <= 50,
-                         .(cell_line, cell_lineage, tumour, tum_lineage)],
-    tumour_components,
-    by = "tumour",
-    all.x = TRUE
-  )
-  top50[is.na(component_id) | component_id == "", component_id := "UNAVAILABLE"]
-  top50_component_composition <- top50[, {
-    lineage_counts <- sort(table(tum_lineage), decreasing = TRUE)
-    list(
-      n_top50 = .N,
-      frac_top50 = .N / min(50, nrow(rank_df_cl_collapsed[cell_line == .BY$cell_line])),
-      dominant_tumour_lineage = names(lineage_counts)[1],
-      component_purity = as.numeric(lineage_counts[1]) / .N
-    )
-  }, by = .(cell_line, cell_lineage, component_id)]
-  top50_component_composition <- merge(
-    top50_component_composition, comp_sizes, by = "component_id", all.x = TRUE
-  )
+if (nrow(low_confidence_cl) > 0) {
+  low_confidence_cl[, cell_line_display := make_cell_line_display(cell_line_group, cell_lineage)]
 } else {
-  top50_component_composition <- rank_df_cl_collapsed[rank_eval <= 50, .(
-    n_top50 = .N,
-    frac_top50 = .N / min(50, nrow(rank_df_cl_collapsed[cell_line == .BY$cell_line])),
-    component_size = NA_integer_,
-    component_purity = NA_real_,
-    dominant_tumour_lineage = NA_character_
-  ), by = .(cell_line, cell_lineage)]
-  top50_component_composition[, component_id := "UNAVAILABLE"]
-  setcolorder(top50_component_composition,
-              c("cell_line", "cell_lineage", "component_id", "n_top50",
-                "frac_top50", "component_size", "component_purity",
-                "dominant_tumour_lineage"))
+  low_confidence_cl[, cell_line_display := character()]
 }
 
 
@@ -1979,69 +1868,47 @@ if (!is.na(component_col)) {
 #
 # Output File Descriptions:
 #
-#   tumour_to_cellline_rankings.tsv:
+#   tumour_to_cellline_group_rankings.tsv:
 #     Complete ranking table enabling detailed analysis of all matches.
 #     Useful for: Custom filtering, alternative ranking strategies, QC.
 #
-#   tumour_mapping_summary.tsv:
+#   tumour_mapping_group_summary.tsv:
 #     One row per tumour with key metrics. Suitable for integration with
 #     clinical metadata and selection of experimental models.
 #
-#   metrics_summary.tsv:
+#   metrics_summary_group_level.tsv:
 #     Aggregate metrics for reporting and comparison between analyses.
 #
 #   metrics_by_lineage.tsv:
 #     Per-lineage breakdown identifying cancer types with good/poor
 #     cell line representation.
 #
-#   tumour_cellline_scores.rds:
-#     Raw tumour→cell-line score matrix for advanced analyses.
+#   tumour_cellline_group_scores.rds:
+#     Tumour→biological-cell-line-group score matrix for advanced analyses.
 #
 #   cellline_tumour_scores.rds:
 #     Transposed cell-line→tumour score matrix for symmetric analyses.
 
 cat("\n[9] Saving outputs...\n")
 
-# Full rankings (all top-k cell lines per tumour)
-rank_file <- file.path(t2c_dir, "tumour_to_cellline_rankings.tsv")
+# Full rankings (top-k biological cell-line groups per tumour)
+rank_file <- file.path(t2c_dir, "tumour_to_cellline_group_rankings.tsv")
 fwrite(rank_df, file = rank_file, sep = "\t")
 cat("  Rankings saved to:", rank_file, "\n")
 
 # Per-tumour summary
-summary_file <- file.path(t2c_dir, "tumour_mapping_summary.tsv")
+summary_file <- file.path(t2c_dir, "tumour_mapping_group_summary.tsv")
 fwrite(tumour_summary, file = summary_file, sep = "\t")
 cat("  Summary saved to:", summary_file, "\n")
 
 # Cell line -> tumour rankings
-# Filter NBL to only DSMZ cell lines (starting with NG-) for consistency with figure validation
-rank_df_cl_filtered <- rank_df_cl[
-  !(cell_lineage == "NBL" & !grepl("^NG-", cell_line))
-]
 rank_cl_file <- file.path(c2t_dir, "cellline_to_tumour_rankings.tsv")
-fwrite(rank_df_cl_filtered, file = rank_cl_file, sep = "\t")
+fwrite(rank_df_cl, file = rank_cl_file, sep = "\t")
 cat("  Cell line rankings saved to:", rank_cl_file, "\n")
 
-t2c_full_file <- file.path(t2c_dir, "tumour_to_cellline_full_rankings.tsv")
-fwrite(t2c_group_full[, .(
-  tumour, tum_lineage, cell_line = cell_line_group, cell_lineage,
-  score, rank_in_tumour, source_cell_lines, n_cell_line_profiles, is_correct
-)], file = t2c_full_file, sep = "\t")
-cat("  Full tumour-to-cell-line rankings saved to:", t2c_full_file, "\n")
-
-c2t_full_file <- file.path(c2t_dir, "cellline_to_tumour_full_rankings.tsv")
-fwrite(rank_df_cl_collapsed[, .(
-  cell_line, cell_lineage, tumour, tumour_lineage, score, rank,
-  source_cell_lines, n_cell_line_profiles, is_correct
-)], file = c2t_full_file, sep = "\t")
-cat("  Full cell-line rankings saved to:", c2t_full_file, "\n")
-
 # Per-cell-line summary
-# Filter NBL to only DSMZ cell lines (starting with NG-) for consistency with figure validation
-cellline_summary_filtered <- cellline_summary[
-  !(cell_lineage == "NBL" & !grepl("^NG-", cell_line))
-]
 summary_cl_file <- file.path(c2t_dir, "cellline_mapping_summary.tsv")
-fwrite(cellline_summary_filtered, file = summary_cl_file, sep = "\t")
+fwrite(cellline_summary, file = summary_cl_file, sep = "\t")
 cat("  Cell line summary saved to:", summary_cl_file, "\n")
 
 # Cell line -> tumour metrics (summary + by lineage)
@@ -2062,12 +1929,14 @@ if (nrow(lineage_metrics_cl) > 0) {
 # Cell line -> tumour top-k consistency and low-confidence cases
 topk_cl_file <- file.path(c2t_dir, "topk_lineage_consistency.tsv")
 topk_consistency_cl_out <- copy(topk_consistency_cl)
+setnames(topk_consistency_cl_out, "cell_line_group", "cell_line")
 fwrite(topk_consistency_cl_out, file = topk_cl_file, sep = "\t")
 cat("  Cell line top-k consistency saved to:", topk_cl_file, "\n")
 
 low_conf_cl_file <- file.path(c2t_dir, "low_confidence_cases.tsv")
 fwrite(low_confidence_cl[, .(
-  cell_line,
+  cell_line = cell_line_group,
+  cell_line_display,
   cell_lineage,
   best_tumour_lineage,
   is_correct,
@@ -2076,27 +1945,17 @@ fwrite(low_confidence_cl[, .(
 )], file = low_conf_cl_file, sep = "\t")
 cat("  Cell line low-confidence cases saved to:", low_conf_cl_file, "\n")
 
-cellline_centred_metrics_file <- file.path(c2t_dir, "cellline_centred_summary_metrics.tsv")
-fwrite(cellline_centred_summary_metrics, file = cellline_centred_metrics_file, sep = "\t")
-cat("  Cell-line-centred summary metrics saved to:", cellline_centred_metrics_file, "\n")
-
-reciprocal_file <- file.path(c2t_dir, "reciprocal_pairs_k10.tsv")
-fwrite(reciprocal_pairs_k10, file = reciprocal_file, sep = "\t")
-cat("  Reciprocal pairs saved to:", reciprocal_file, "\n")
-
-top50_comp_file <- file.path(c2t_dir, "top50_component_composition.tsv")
-fwrite(top50_component_composition, file = top50_comp_file, sep = "\t")
-cat("  Top-50 component composition saved to:", top50_comp_file, "\n")
-
 # Overall metrics
 metrics <- data.table(
-  metric = c("top1_accuracy", paste0("top", opt$`top-k`, "_accuracy"),
-             "mrr", paste0("mrr_at_", opt$`top-k`)),
-  value = c(top1_acc, topk_acc, mrr, mrr_at_k)
+  metric = c("top1_accuracy", paste0("top", opt$`top-k`, "_accuracy"), "mrr"),
+  value = c(top1_acc, topk_acc, mrr)
 )
-metrics_file <- file.path(t2c_dir, "metrics_summary.tsv")
+metrics_file <- file.path(t2c_dir, "metrics_summary_group_level.tsv")
 fwrite(metrics, file = metrics_file, sep = "\t")
 cat("  Metrics saved to:", metrics_file, "\n")
+metrics_root_file <- file.path(opt$`output-dir`, "metrics_summary_group_level.tsv")
+fwrite(metrics, file = metrics_root_file, sep = "\t")
+cat("  Root metrics saved to:", metrics_root_file, "\n")
 
 # Per-lineage metrics
 if (nrow(lineage_metrics) > 0) {
@@ -2106,8 +1965,8 @@ if (nrow(lineage_metrics) > 0) {
 }
 
 # Full score matrices (RDS for efficient R-native storage)
-# Tumour -> cell line
-score_file <- file.path(t2c_dir, "tumour_cellline_scores.rds")
+# Tumour -> biological cell-line group
+score_file <- file.path(t2c_dir, "tumour_cellline_group_scores.rds")
 saveRDS(score_cor, file = score_file)
 cat("  Score matrix saved to:", score_file, "\n")
 

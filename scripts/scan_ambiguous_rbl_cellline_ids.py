@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import defaultdict
 
 tumour_nh_dir = Path("results/unsupervised/rbl/tumour_neighbourhoods")
-name_map_path = Path("results/unsupervised/rbl/tumour_neighbourhoods/final_consensus_all/dsmz_cellline_shortnames.tsv")
+name_map_path = Path("results/unsupervised/rbl/tumour_neighbourhoods/final_consensus_all/plots/patient_referenced_cell_line_display_names.tsv")
 
 # Load mapping: long_id -> short_id
 m = pd.read_csv(name_map_path, sep="\t", dtype=str)

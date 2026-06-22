@@ -4,12 +4,15 @@
 # Add component assignments to metadata from node stats
 # ============================================================
 #
-# This script reads the dsmz_cellline_graph_node_stats.tsv file
+# This script reads the resolved cell-line graph node-stats TSV
+# (passed via --node_stats; the Snakefile binds DESEQ2_NODE_STATS_TSV =
+# P_CONS_RESOLVED_NODE_STATS_TSV →
+# .../plots/patient_referenced_resolved_cell_line_neighbourhood_graph_node_stats.tsv)
 # and adds component assignments to your metadata file.
 #
 # Usage:
 # Rscript scripts/add_component_to_metadata.R \
-#   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/dsmz_cellline_graph_node_stats.tsv \
+#   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/plots/patient_referenced_resolved_cell_line_neighbourhood_graph_node_stats.tsv \
 #   --meta data/brca/metadata.tsv \
 #   --cell_line_col DSMZ_Cell_line_norm \
 #   --output data/brca/metadata_with_components.tsv
@@ -23,7 +26,7 @@ suppressPackageStartupMessages({
 })
 
 opt_list <- list(
-  make_option("--node_stats", type="character", help="Path to dsmz_cellline_graph_node_stats.tsv"),
+  make_option("--node_stats", type="character", help="Path to resolved-graph node stats TSV (patient_referenced_resolved_cell_line_neighbourhood_graph_node_stats.tsv)"),
   make_option("--meta", type="character", help="Input metadata TSV/CSV"),
   make_option("--cell_line_col", type="character", default="DSMZ_Cell_line_norm", help="Column in meta containing cell line names"),
   make_option("--output", type="character", help="Output metadata with component column"),

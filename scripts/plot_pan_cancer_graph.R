@@ -6,7 +6,8 @@
 # Pan-cancer (pan-disease) cell line → cell line consensus graph plots
 #
 # HARD CONSTRAINTS (project-specific):
-#   1) Working on 258 genes (RDS must contain an expr matrix with 258 genes)
+#   1) Working on the final 171-gene pan-cancer feature set by default
+#      (override with --expected-gene-count if regenerating legacy figures)
 #   2) Only concerned with cell lines
 #   3) In the .rds, cell line IDs must start with "NG-"
 #
@@ -40,11 +41,7 @@ option_list <- list(
   make_option(c("--outdir"), type="character", default=".",
               help="Output directory for plots"),
   make_option(c("--layout"), type="character", default="fr",
-              help="Layout: fr (Fruchterman-Reingold), kk (Kamada-Kawai), lgl, archived"),
-  make_option(c("--layout-coords"), type="character", default=NULL,
-              help="Optional archived layout TSV with sample_id, x, y columns"),
-  make_option(c("--save-layout-coords"), type="character", default=NULL,
-              help="Optional path to save the layout coordinates used for plotting"),
+              help="Layout: fr (Fruchterman-Reingold), kk (Kamada-Kawai), lgl"),
   make_option(c("--seed"), type="integer", default=1,
               help="Random seed for layout reproducibility"),
   make_option(c("--label-top-hubs"), type="integer", default=0,
@@ -52,7 +49,9 @@ option_list <- list(
   make_option(c("--require_ng_prefix"), type="logical", default=TRUE,
               help="If TRUE, enforce node IDs start with NG- (default TRUE)"),
   make_option(c("--require_258_genes"), type="logical", default=TRUE,
-              help="If TRUE, enforce expr matrix contains exactly 258 genes (default TRUE)")
+              help="Deprecated compatibility flag. If TRUE, enforce --expected-gene-count genes (default TRUE)"),
+  make_option(c("--expected-gene-count"), type="integer", default=171,
+              help="Expected number of feature genes in the expression matrix (default: 171)")
 )
 
 opt <- parse_args(OptionParser(option_list=option_list))
@@ -164,12 +163,12 @@ meta[, lineage := derive_lineage(meta)]
 meta <- unique(meta[, .(sample_id, lineage)])
 
 # -----------------------------------------------------------------------------
-# Enforce: 258 genes in the RDS expr (sanity check)
+# Enforce expected feature-gene count in the RDS expr (sanity check)
 # -----------------------------------------------------------------------------
 if (isTRUE(opt$require_258_genes)) {
-  expr_obj_name <- intersect(names(cell_dat), c("expr", "expression", "mat", "matrix", "counts", "tpm"))[1]
-  if (is.na(expr_obj_name)) {
-    warning("No obvious expr matrix found in RDS (expected one of: expr/expression/mat/matrix/counts/tpm). Skipping 258-gene validation.")
+    expr_obj_name <- intersect(names(cell_dat), c("expr", "expression", "mat", "matrix", "counts", "tpm"))[1]
+    if (is.na(expr_obj_name)) {
+      warning("No obvious expr matrix found in RDS (expected one of: expr/expression/mat/matrix/counts/tpm). Skipping feature-count validation.")
   } else {
     expr <- cell_dat[[expr_obj_name]]
     if (!is.matrix(expr) && !is.data.frame(expr)) {
@@ -177,10 +176,32 @@ if (isTRUE(opt$require_258_genes)) {
     }
     nr <- nrow(expr); nc <- ncol(expr)
 
-    # genes might be rows or columns depending on how it was saved
-    if (!(nr == 258 || nc == 258)) {
+    # genes might be rows or columns depending on how it was saved. A value
+    # of 0 means infer the current feature count from the RDS metadata.
+    expected_gene_count <- opt$`expected-gene-count`
+    if (expected_gene_count <= 0 && "genes" %in% names(cell_dat)) {
+      expected_gene_count <- length(cell_dat$genes)
+    }
+    if (expected_gene_count <= 0) {
+      warning("No positive expected gene count supplied and RDS has no $genes vector. Skipping gene-count validation.")
+      expected_gene_count <- NA_integer_
+    }
+    if (!is.na(expected_gene_count) &&
+        !(nr == expected_gene_count || nc == expected_gene_count) &&
+        "genes" %in% names(cell_dat) && length(cell_dat$genes) > 0) {
+      inferred_gene_count <- length(cell_dat$genes)
+      warning(
+        "Configured expected gene count ", expected_gene_count,
+        " does not match the expression matrix. Falling back to RDS genes count ",
+        inferred_gene_count, "."
+      )
+      expected_gene_count <- inferred_gene_count
+    }
+    if (!is.na(expected_gene_count) &&
+        !(nr == expected_gene_count || nc == expected_gene_count)) {
       stop(
-        "Expected expr matrix to have 258 genes in either rows or columns, but got: nrow=",
+        "Expected expr matrix to have ", expected_gene_count,
+        " genes in either rows or columns, but got: nrow=",
         nr, ", ncol=", nc, "."
       )
     }
@@ -224,49 +245,13 @@ V(g)$degree <- deg
 # Layout
 # -----------------------------------------------------------------------------
 set.seed(opt$seed)
-if (!is.null(opt$`layout-coords`) && file.exists(opt$`layout-coords`)) {
-  coords <- fread(opt$`layout-coords`)
-  req <- c("sample_id", "x", "y")
-  if (!all(req %in% names(coords))) {
-    stop("--layout-coords must contain columns: sample_id, x, y")
-  }
-  coords <- unique(coords[, .(sample_id = as.character(sample_id),
-                              x = as.numeric(x), y = as.numeric(y))],
-                   by = "sample_id")
-  missing_coords <- setdiff(V(g)$name, coords$sample_id)
-  if (length(missing_coords) > 0) {
-    stop("Archived layout missing coordinates for nodes: ",
-         paste(head(missing_coords, 20), collapse = ", "))
-  }
-  coords <- coords[match(V(g)$name, sample_id)]
-  lay <- as.matrix(coords[, .(x, y)])
-  rownames(lay) <- coords$sample_id
-  opt$layout <- "archived"
-  message("[INFO] Using archived fixed layout coordinates: ", opt$`layout-coords`)
-} else {
-  if (identical(opt$layout, "archived")) {
-    stop("--layout archived requires --layout-coords")
-  }
-  message("[INFO] Using exploratory stochastic layout: ", opt$layout,
-          " with seed=", opt$seed,
-          ". Provide --layout-coords for publication fixed-layout reproduction.")
-  lay <- switch(
-    opt$layout,
-    "kk"  = layout_with_kk(g),
-    "lgl" = layout_with_lgl(g),
-    "fr"  = layout_with_fr(g),
-    layout_with_fr(g)
-  )
-}
-
-if (!is.null(opt$`save-layout-coords`) && nzchar(opt$`save-layout-coords`)) {
-  dir.create(dirname(opt$`save-layout-coords`), recursive = TRUE, showWarnings = FALSE)
-  fwrite(
-    data.table(sample_id = V(g)$name, x = lay[, 1], y = lay[, 2]),
-    opt$`save-layout-coords`,
-    sep = "\t"
-  )
-}
+lay <- switch(
+  opt$layout,
+  "kk"  = layout_with_kk(g),
+  "lgl" = layout_with_lgl(g),
+  "fr"  = layout_with_fr(g),
+  layout_with_fr(g)
+)
 
 # -----------------------------------------------------------------------------
 # Plot helper (base plotting to avoid extra deps)

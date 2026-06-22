@@ -583,6 +583,109 @@ ensure_samples_in_rows <- function(mat) {
   return(t(as.matrix(mat)))  # Transpose to put samples in rows
 }
 
+ensure_genes_in_rows <- function(mat, label = "matrix") {
+  mat <- as.matrix(mat)
+  rn <- rownames(mat)
+  cn <- colnames(mat)
+  row_gene_frac <- if (!is.null(rn) && length(rn) > 0) mean(is_gene_id(rn), na.rm = TRUE) else 0
+  col_gene_frac <- if (!is.null(cn) && length(cn) > 0) mean(is_gene_id(cn), na.rm = TRUE) else 0
+
+  if (col_gene_frac > 0.5 && row_gene_frac <= 0.5) {
+    info("Transposing %s to genes x samples orientation.", label)
+    mat <- t(mat)
+  }
+
+  if (is.null(rownames(mat)) || is.null(colnames(mat))) {
+    stop_with(label, " must have rownames and colnames.")
+  }
+
+  mat
+}
+
+same_existing_path <- function(a, b) {
+  if (is.null(a) || is.null(b) || !nzchar(a) || !nzchar(b)) return(FALSE)
+  normalizePath(a, mustWork = file.exists(a)) == normalizePath(b, mustWork = file.exists(b))
+}
+
+load_joint_dataset <- function(cfg, sample_ids) {
+  meta_path <- NULL
+  if (!is.null(cfg$paths$meta_tsv) && nzchar(cfg$paths$meta_tsv) && file.exists(cfg$paths$meta_tsv)) {
+    meta_path <- cfg$paths$meta_tsv
+  } else if (!is.null(cfg$paths$dsmz_meta_csv) && nzchar(cfg$paths$dsmz_meta_csv) && file.exists(cfg$paths$dsmz_meta_csv)) {
+    meta_path <- cfg$paths$dsmz_meta_csv
+  }
+
+  fallback <- ifelse(grepl("^NG-", sample_ids), "DSMZ", "TUMOUR")
+  names(fallback) <- sample_ids
+
+  if (is.null(meta_path)) {
+    info("No metadata file found for joint matrix; using sample-id patterns for dataset labels.")
+    return(fallback)
+  }
+
+  meta <- suppressMessages({
+    if (grepl("\\.csv$", meta_path, ignore.case = TRUE)) {
+      readr::read_csv(meta_path, show_col_types = FALSE, progress = FALSE)
+    } else {
+      readr::read_tsv(meta_path, show_col_types = FALSE, progress = FALSE)
+    }
+  })
+  id_cols <- intersect(c("sample_id", "sample", "SampleID", "Sample_ID", "id"), names(meta))
+  if (length(id_cols) == 0) {
+    info("Metadata file %s has no sample_id column; using sample-id patterns for dataset labels.", meta_path)
+    return(fallback)
+  }
+
+  id_col <- id_cols[[1]]
+  if ("sample_type" %in% names(meta)) {
+    labels <- ifelse(grepl("cell", meta$sample_type, ignore.case = TRUE), "DSMZ", "TUMOUR")
+  } else if ("cohort" %in% names(meta)) {
+    labels <- ifelse(toupper(meta$cohort) == "DSMZ", "DSMZ", "TUMOUR")
+  } else {
+    info("Metadata file %s has no sample_type/cohort column; using sample-id patterns for dataset labels.", meta_path)
+    return(fallback)
+  }
+
+  label_map <- setNames(labels, meta[[id_col]])
+  out <- unname(label_map[sample_ids])
+  missing <- is.na(out) | !nzchar(out)
+  out[missing] <- fallback[missing]
+  names(out) <- sample_ids
+  out
+}
+
+subset_joint_matrix <- function(joint_mat, genes, cfg, kind, min_genes, too_few_msg) {
+  keep <- intersect(genes, rownames(joint_mat))
+  if (length(keep) < min_genes) {
+    stop_with(too_few_msg)
+  }
+
+  dataset_all <- load_joint_dataset(cfg, colnames(joint_mat))
+  cell_cols <- names(dataset_all)[dataset_all == "DSMZ"]
+  tumour_cols <- names(dataset_all)[dataset_all != "DSMZ"]
+
+  is_cell_tumour <- grepl("_cell_tumour", kind)
+  is_cell_only   <- grepl("_cell$", kind) && !is_cell_tumour
+  is_tumour_only <- grepl("_tumour$", kind) && !is_cell_tumour
+
+  if (is_cell_tumour) {
+    sample_cols <- colnames(joint_mat)
+  } else if (is_cell_only) {
+    sample_cols <- cell_cols
+    if (length(sample_cols) == 0) stop_with("No DSMZ/cell-line samples found in joint matrix metadata.")
+  } else if (is_tumour_only) {
+    sample_cols <- tumour_cols
+    if (length(sample_cols) == 0) stop_with("No tumour samples found in joint matrix metadata.")
+  } else {
+    stop_with("Cannot determine scope from kind: ", kind)
+  }
+
+  expr_mat <- joint_mat[keep, sample_cols, drop = FALSE]
+  dataset <- dataset_all[colnames(expr_mat)]
+  names(dataset) <- colnames(expr_mat)
+  list(expr_mat = expr_mat, dataset = dataset)
+}
+
 build_expr_mat <- function(feature, cfg, kind) {
   # build_expr_mat(): Constructs the expression matrix for clustering.
   #
@@ -683,12 +786,25 @@ build_expr_mat <- function(feature, cfg, kind) {
     # VST transformation (from DESeq2) normalises variance across the
     # expression range, making genes with different expression levels
     # more comparable for distance calculations.
-    cell_mat   <- readRDS(cell_path)
-    tumour_mat <- readRDS(tumour_path)
+    same_vst_source <- same_existing_path(cell_path, tumour_path)
+    cell_mat <- ensure_genes_in_rows(readRDS(cell_path), "cell VST matrix")
+    if (same_vst_source) {
+      tumour_mat <- cell_mat
+    } else {
+      tumour_mat <- ensure_genes_in_rows(readRDS(tumour_path), "tumour VST matrix")
+    }
 
     # Load the HVG list, filtering out empty lines.
     genes <- readLines(hvg_list)
     genes <- genes[nzchar(genes)]
+
+    if (same_vst_source) {
+      info("cell_vst_rds and tumour_vst_rds point to the same matrix; using joint metadata to define sample scope.")
+      return(subset_joint_matrix(
+        cell_mat, genes, cfg, kind, min_genes = 50,
+        too_few_msg = "Too few HVG genes found in joint matrix."
+      ))
+    }
 
     # Construct the output based on the specified sample scope.
     if (is_cell_tumour) {
@@ -753,11 +869,24 @@ build_expr_mat <- function(feature, cfg, kind) {
     stop_with("Missing feature list file. Pass --feature_list pointing to the gene list.")
   }
 
-  cell_mat <- readRDS(cell_path)
-  tumour_mat <- readRDS(tumour_path)
+  same_vst_source <- same_existing_path(cell_path, tumour_path)
+  cell_mat <- ensure_genes_in_rows(readRDS(cell_path), "cell VST matrix")
+  if (same_vst_source) {
+    tumour_mat <- cell_mat
+  } else {
+    tumour_mat <- ensure_genes_in_rows(readRDS(tumour_path), "tumour VST matrix")
+  }
 
   genes <- readLines(feature_list)
   genes <- genes[nzchar(genes)]
+
+  if (same_vst_source) {
+    info("cell_vst_rds and tumour_vst_rds point to the same matrix; using joint metadata to define sample scope.")
+    return(subset_joint_matrix(
+      cell_mat, genes, cfg, kind, min_genes = 50,
+      too_few_msg = "Too few feature genes found in joint matrix."
+    ))
+  }
 
   if (is_cell_tumour) {
     keep <- intersect(genes, intersect(rownames(cell_mat), rownames(tumour_mat)))
@@ -1004,7 +1133,7 @@ ccp_args <- list(
   seed         = seed,             # Random seed for reproducibility
   title        = paste0("CCP_", opt$direction, "_", opt$kind),
   plot         = "png",            # Output format for diagnostic plots
-  writeTable   = TRUE,             # Write cluster assignments to CSV
+  writeTable   = FALSE,            # Downstream uses the explicit CSV/RDS below
   verbose      = FALSE
 )
 
@@ -1060,17 +1189,13 @@ auc_values <- vapply(k_grid_effective, auc_at_k, numeric(1))
 # Compute delta AUC (improvement in AUC between successive k values).
 delta_auc <- diff(auc_values)
 
-# Select k with maximum delta AUC; resolve ties to the smaller k.
-delta_tbl <- data.frame(
-  k = k_grid_effective[-1],
-  delta_auc = delta_auc
-)
-best_k <- delta_tbl[order(-delta_tbl$delta_auc, delta_tbl$k), "k"][1]
+# Select k with maximum delta AUC.
+best_k <- k_grid_effective[which.max(delta_auc) + 1]
 
 info("k_grid: %s", paste(k_grid_effective, collapse = ","))
 info("AUC:    %s", paste(round(auc_values, 4), collapse = " "))
 info("delta_AUC: %s", paste(round(delta_auc, 4), collapse = " "))
-info("best_k: %d (delta AUC ties resolved to smaller k)", best_k)
+info("best_k: %d", best_k)
 
 # ------------------------------------------------------------------------------
 # SECTION 14: FINAL CLUSTER ASSIGNMENT EXTRACTION

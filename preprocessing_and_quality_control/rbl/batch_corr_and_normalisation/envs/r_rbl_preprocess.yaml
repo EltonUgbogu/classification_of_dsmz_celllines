@@ -1,0 +1,17 @@
+name: r_rbl_preprocess
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base>=4.3
+  - r-ggplot2
+  - r-dplyr
+  - r-tidyr
+  - r-tibble
+  - r-matrixstats
+  - r-uwot
+  - r-pheatmap
+  - bioconductor-deseq2
+  - bioconductor-sva
+  - bioconductor-summarizedexperiment

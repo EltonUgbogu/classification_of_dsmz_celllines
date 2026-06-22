@@ -536,16 +536,6 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
     mutate(cell_tech_id = cell_line)
   
   n_methods_total <- length(unique(all_long$method))
-  dir.create(dirname(opt$out_tsv), showWarnings = FALSE, recursive = TRUE)
-  audit_path <- file.path(dirname(opt$out_tsv), sprintf("p_consensus_denominator_audit_%s.tsv", direction))
-  readr::write_tsv(
-    tibble::tibble(
-      direction = direction,
-      denominator_used = n_methods_total,
-      discovered_method_files = paste(sort(unique(all_long$method)), collapse = ";")
-    ),
-    audit_path
-  )
   
   # ---------------------------------------------------------------------------
   # P_CONSENSUS COMPUTATION
@@ -776,19 +766,6 @@ disease_label <- cfg$labels$disease %||% "cell lines"
 # Create output directory and write results.
 cons_dir <- file.path(base_dir, "final_consensus")
 dir.create(cons_dir, showWarnings = FALSE, recursive = TRUE)
-denominator_audit_path <- file.path(cons_dir, sprintf("p_consensus_denominator_audit_%s.tsv", direction))
-readr::write_tsv(
-  methods_tbl %>%
-    transmute(
-      direction = direction,
-      method_id,
-      subdir,
-      file,
-      path,
-      denominator_used = n_methods_total
-    ),
-  denominator_audit_path
-)
 
 cons_basename <- sprintf("Final_consensus_tumour_neighbourhoods_%s", direction)
 

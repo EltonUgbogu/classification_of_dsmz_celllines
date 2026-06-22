@@ -69,42 +69,28 @@ cat("[INFO] unsup_root: ", unsup_root, "\n", sep = "")
 cat("[INFO] tumour_neighbourhoods base_dir: ", base_dir, "\n", sep = "")
 
 # ------------------------------------------------------------------------------
-# 1) Discover clustering methods contributing to consensus
+# 1) Define the 10 clustering methods contributing to consensus
 # ------------------------------------------------------------------------------
-# Each discovered method produces a neighbourhood file containing (cell_line,
-# tumour_id, in_top) tuples indicating which tumours are in the top
-# neighbourhood.
+# Each method produces a neighbourhood file containing (cell_line, tumour_id,
+# in_top) tuples indicating which tumours are in the top neighbourhood.
 
-method_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = FALSE)
-method_dirs <- method_dirs[method_dirs != "final_consensus"]
-methods_tbl <- tibble::tibble(
-  method_id = character(0),
-  subdir = character(0),
-  file = character(0),
-  path = character(0)
+methods_tbl <- tibble::tribble(
+  ~method_id,               ~subdir,                    ~file,
+  "HC_PAM50_dynamic",       "HC_PAM50_dynamic",         "Top_m_long_HC_PAM50_dynamic.csv",
+  "HC_PAM50_optimal",       "HC_PAM50_optimal",         "Top_m_long_HC_PAM50_optimal.csv",
+  "HC_PCA_dynamic",         "HC_PCA_dynamic",           "Top_m_long_HC_PCA_dynamic.csv",
+  "HC_PCA_optimal",         "HC_PCA_optimal",           "Top_m_long_HC_PCA_optimal.csv",
+  "km_PAM50",               "km_PAM50",                 "Top_m_long_km_PAM50.csv",
+  "km_PCA",                 "km_PCA",                   "Top_m_long_km_PCA.csv",
+  "consensus_HC_PAM50",     "consensus_HC_PAM50",       "Top_m_long_consensus_HC_PAM50.csv",
+  "consensus_kmeans_PAM50", "consensus_kmeans_PAM50",   "Top_m_long_consensus_kmeans_PAM50.csv",
+  "consensus_HC_PCA",       "consensus_HC_PCA",         "Top_m_long_consensus_HC_PCA.csv",
+  "consensus_kmeans_PCA",   "consensus_kmeans_PCA",     "Top_m_long_consensus_kmeans_PCA.csv"
 )
-for (subdir in method_dirs) {
-  csv_files <- list.files(file.path(base_dir, subdir),
-                          pattern = "^Top_m_long_.*\\.csv$",
-                          full.names = FALSE)
-  for (csv_file in csv_files) {
-    methods_tbl <- methods_tbl %>%
-      add_row(
-        method_id = subdir,
-        subdir = subdir,
-        file = csv_file,
-        path = file.path(base_dir, subdir, csv_file)
-      )
-  }
-}
-methods_tbl <- methods_tbl %>% filter(file.exists(path))
 
 n_methods_total <- nrow(methods_tbl)
 cat("[INFO] Number of clustering methods contributing to p_consensus: ",
     n_methods_total, "\n", sep = "")
-if (n_methods_total == 0) {
-  stop("No Top_m_long_*.csv files found in ", base_dir)
-}
 
 # ------------------------------------------------------------------------------
 # 2) Load neighbourhood results from all methods
@@ -114,6 +100,7 @@ if (n_methods_total == 0) {
 
 neigh_list <- methods_tbl %>%
   mutate(
+    path = file.path(base_dir, subdir, file),
     data = map2(path, method_id, ~ {
       if (!file.exists(.x)) {
         stop("Neighbourhood file not found: ", .x)
@@ -161,12 +148,6 @@ consensus_pairs <- all_long %>%
 # Write outputs
 cons_dir <- file.path(base_dir, "final_consensus")
 dir.create(cons_dir, showWarnings = FALSE, recursive = TRUE)
-readr::write_tsv(
-  methods_tbl %>%
-    transmute(direction, method_id, subdir, file, path,
-              denominator_used = n_methods_total),
-  file.path(cons_dir, sprintf("p_consensus_denominator_audit_%s.tsv", direction))
-)
 
 cons_basename <- sprintf("Final_consensus_tumour_neighbourhoods_%s", direction)
 cons_rds_path <- file.path(cons_dir, paste0(cons_basename, ".rds"))

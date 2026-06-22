@@ -1,0 +1,30 @@
+method	selected_rule_key	metric	value	owner_profile	marker_source_class	evidence_class	direction	recurrence_testable	n_source_lists_in_marker_source_class	recurrent_candidate_genes	singleton_candidate_genes	nonrecurrent_candidate_genes
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	final_clean_genes	379									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	desired_min_size	200									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	final_size_meets_desired_minimum	True									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	topup_tier_activated	True									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	selected_gene_evidence_rows	388									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	selected_marker_source_class_rows	391									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	duplicate_candidate_rows_removed_after_global_clean_id_deduplication	0									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	removed_ribo_mt_histone_genes	0									
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	direction_genes	304				DOWN					
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	direction_genes	2				MIXED					
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	direction_genes	73				UP					
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	final_owner_profile_genes	221	brca								
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	final_owner_profile_genes	99	nbl								
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	final_owner_profile_genes	59	rbl								
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	cohort_selected_genes_before_global_deduplication	228	brca								
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	cohort_selected_genes_before_global_deduplication	101	nbl								
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	cohort_selected_genes_before_global_deduplication	59	rbl								
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	evidence_class_genes	20			anchor_source_recurrent						
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	evidence_class_genes	24			anchor_singleton_ranked						
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	evidence_class_genes	4			isolate_source_recurrent						
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	evidence_class_genes	334			ranked_nonrecurrent_marker						
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_genes	277		anchor							
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_genes	109		isolate							
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_candidate_genes	627	brca	anchor			True	4.0	18.0	0.0	609.0
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_candidate_genes	148	brca	isolate			True	3.0	2.0	0.0	146.0
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_candidate_genes	281	nbl	anchor			True	3.0	2.0	0.0	279.0
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_candidate_genes	110	nbl	isolate			True	4.0	2.0	0.0	108.0
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_candidate_genes	101	rbl	anchor			False	1.0	0.0	101.0	0.0
+ranked_marker_source_pan_cancer_panel	relaxed_iqr_median_baseMean	marker_source_class_candidate_genes	144	rbl	isolate			True	4.0	0.0	0.0	144.0

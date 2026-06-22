@@ -12,6 +12,8 @@
 #   - community_purity.tsv
 #   - lineage_mixing_edges.tsv
 #   - isolated_or_bridge_nodes.tsv
+#     (bridge role uses unnormalised, unweighted, undirected betweenness;
+#      normalised betweenness is also reported for audit)
 #   - layout_sanity_check.tsv
 # =============================================================================
 
@@ -154,21 +156,29 @@ fwrite(lineage_mixing_edges, file.path(opt$`inspection-dir`, "lineage_mixing_edg
 # 5) isolated_or_bridge_nodes.tsv
 # -----------------------------------------------------------------------------
 deg <- degree(g)
-bet <- betweenness(g, normalized = TRUE)
+bet_unnorm <- betweenness(g, directed = FALSE, weights = NA, normalized = FALSE)
+bet_norm <- betweenness(g, directed = FALSE, weights = NA, normalized = TRUE)
 
 deg_thr <- as.numeric(quantile(deg, 0.9, na.rm = TRUE))
-bet_thr <- as.numeric(quantile(bet, 0.9, na.rm = TRUE))
+bet_thr <- as.numeric(quantile(bet_unnorm, 0.9, na.rm = TRUE))
 
 role <- rep("peripheral", vcount(g))
 role[deg == 0] <- "isolated"
-role[deg > 0 & bet >= bet_thr] <- "bridge"
+role[deg > 0 & bet_unnorm >= bet_thr] <- "bridge"
 role[deg >= deg_thr] <- "hub"
 
 bridge_df <- data.table(
   sample = V(g)$name,
   lineage = lin_map[V(g)$name],
   degree = deg,
-  betweenness = bet,
+  betweenness = bet_unnorm,
+  betweenness_unnormalised = bet_unnorm,
+  betweenness_normalised = bet_norm,
+  centrality_metric = "betweenness",
+  centrality_normalised = FALSE,
+  centrality_weighted = FALSE,
+  centrality_scope = "whole_graph",
+  centrality_tie_break = "not_applicable",
   role = role
 )
 bridge_df[is.na(lineage), lineage := "UNKNOWN"]

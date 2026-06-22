@@ -19,6 +19,7 @@ set -euo pipefail
 # SCRIPT_DIR is always the directory containing this file, regardless of
 # where sbatch was invoked from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$SCRIPT_DIR}}"
 # nbl/ is one level up, preprocessing_and_quality_control/ is two levels up
 NBL_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
@@ -34,7 +35,7 @@ for candidate in "${ENVS_DIR:-}" \
                  "$PREPROC_ROOT/envs" \
                  "$NBL_DIR/envs" \
                  "$PROJECT_DIR/envs" \
-                 "/work/ugbogu/pipeline/envs"
+                 "$REPO_ROOT/envs"
 do
   if [ -n "$candidate" ] && [ -f "$candidate/smk.yaml" ]; then
     ENVS_DIR="$candidate"

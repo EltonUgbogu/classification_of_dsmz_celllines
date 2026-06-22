@@ -14,13 +14,14 @@ set -euo pipefail
 # 0. Paths (single source of truth - auto-detected)
 # ------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$SCRIPT_DIR}}"
 PIPELINE_DIR="$(cd "$PROJECT_DIR/../.." && pwd)"
 
 SNAKEFILE="${SNAKEFILE:-$PROJECT_DIR/Snakefile}"
 CONFIGFILE="${CONFIGFILE:-}"
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/logs}"
-DATA_ROOT="${DATA_ROOT:-/work/ugbogu/pipeline/data/rbl}"
+DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/rbl}"
 export DATA_ROOT
 
 if [ -z "$CONFIGFILE" ]; then
@@ -41,14 +42,14 @@ export CONFIGFILE
 for candidate in "${ENVS_DIR:-}" \
                  "$PROJECT_DIR/envs" \
                  "$PIPELINE_DIR/envs" \
-                 "/work/ugbogu/pipeline/envs"
+                 "$REPO_ROOT/envs"
 do
   if [ -n "$candidate" ] && [ -f "$candidate/smk.yaml" ]; then
     ENVS_DIR="$candidate"
     break
   fi
 done
-ENVS_DIR="${ENVS_DIR:-$PROJECT_DIR/envs}"
+ENVS_DIR="${ENVS_DIR:-$REPO_ROOT/envs}"
 SMK_ENV_YAML="${SMK_ENV_YAML:-$ENVS_DIR/smk.yaml}"
 
 # Always ensure logs directory exists in the project

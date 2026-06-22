@@ -7,20 +7,28 @@
 # and where results/logs will be written:
 #   {project}/results/, {project}/logs/
 # If omitted, the Snakefile falls back to a project-relative data directory.
-data_root: "/work/ugbogu/pipeline/data/nbl"
-env_dir: "/work/ugbogu/pipeline/preprocessing_and_quality_control/envs"  # shared top-level envs
+data_root: "../../data/nbl"
+env_dir: "preprocessing_and_quality_control/envs"  # resolved from the repository root
 
 projects:
-  - GSE100148
   - GSE189367
   - SRP409177
+
+expected_samples:
+  TARGET_NBL: 162
+  SRP409177: 47
+  GSE189367: 64
+  total: 273
+
+purity_threshold: 0.7
+purity_output_dir: "results/tumour_purity_analysis/nbl"
 
 threads: 12
 
 genome:
-  star_index: "/work/ugbogu/pipeline/data/reference/star_gencode_v44"
-  gtf: "/work/ugbogu/pipeline/data/reference/gencode_v44/gencode.v44.basic.annotation.gtf"
-  fasta: "/work/ugbogu/pipeline/data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa"
+  star_index: "data/reference/star_gencode_v44"
+  gtf: "data/reference/gencode_v44/gencode.v44.basic.annotation.gtf"
+  fasta: "data/reference/gencode_v44/GRCh38.primary_assembly.genome.fa"
 
 resources:
   star_mem_mb: 42000

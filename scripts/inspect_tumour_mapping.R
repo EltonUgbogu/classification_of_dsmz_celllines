@@ -131,8 +131,8 @@
 # USAGE EXAMPLE
 # -------------
 #   Rscript inspect_tumour_mapping.R \
-#     --summary tumour_mapping_summary.tsv \
-#     --rankings tumour_to_cellline_rankings.tsv \
+#     --summary tumour_mapping_group_summary.tsv \
+#     --rankings tumour_to_cellline_group_rankings.tsv \
 #     --components pan_cancer_components.tsv \
 #     --output-dir inspection
 #
