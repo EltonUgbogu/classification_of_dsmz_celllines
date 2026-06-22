@@ -5,5 +5,5 @@ ranked_marker_source_pan_cancer_panel	nbl	anchor	anchor_CHP_134_vs_outside_compo
 ranked_marker_source_pan_cancer_panel	nbl	isolate	isolate_LAN6_vs_rest;isolate_MHH_NB_11_vs_rest;isolate_SH_SY5Y_vs_rest;isolate_SIMA_vs_rest	4	True	2	110	2	0	108	31	2	0	29
 ranked_marker_source_pan_cancer_panel	rbl	anchor	anchor_RBL_18_vs_outside_component_0	1	False	2	101	0	101	0	24	0	24	0
 ranked_marker_source_pan_cancer_panel	rbl	isolate	isolate_RBL_14_vs_rest;isolate_RBL_7_vs_rest;isolate_WERI_RB1_vs_rest;isolate_Y_79_vs_rest	4	True	2	144	0	0	144	35	0	0	35
-ranked_marker_source_pan_cancer_panel	ALL_FINAL	anchor									277			
-ranked_marker_source_pan_cancer_panel	ALL_FINAL	isolate									109			
+ranked_marker_source_pan_cancer_panel	ALL_FINAL	anchor	NA	NA	NA	NA	NA	NA	NA	NA	277	NA	NA	NA
+ranked_marker_source_pan_cancer_panel	ALL_FINAL	isolate	NA	NA	NA	NA	NA	NA	NA	NA	109	NA	NA	NA

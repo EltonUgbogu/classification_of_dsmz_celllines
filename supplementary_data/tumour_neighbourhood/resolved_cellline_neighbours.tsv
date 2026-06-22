@@ -24,10 +24,10 @@ brca	HCC_1937	MDA_MB_468	1	best_overall=PCA_corr;winner=Variance_corr;MeanAbsDev
 brca	MCF_7	KPL_1	1	best_overall=PCA_corr;winner=MX_corr	PCA_corr	MX_corr
 brca	MDA_MB_453	EVSA_T	1	best_overall=PCA_corr;winner=kTotal_euc	PCA_corr	kTotal_euc
 brca	MDA_MB_468	HCC_1937	1	best_overall=PCA_corr;winner=Variance_corr;MAD_corr;Entropy_corr;MX_corr;HVG_corr	PCA_corr	Variance_corr;MAD_corr;Entropy_corr;MX_corr;HVG_corr
-brca	CAL_148		0	best_overall=PCA_corr;winner=pam50_corr	PCA_corr	pam50_corr
-brca	DU_4475		0	best_overall=PCA_corr;winner=MAD_corr	PCA_corr	MAD_corr
-brca	IPH_926		0	best_overall=PCA_corr;winner=kTotal_euc	PCA_corr	kTotal_euc
-brca	SK_BR_3		0	best_overall=PCA_corr;winner=kTotal_euc	PCA_corr	kTotal_euc
+brca	CAL_148	NA	0	best_overall=PCA_corr;winner=pam50_corr	PCA_corr	pam50_corr
+brca	DU_4475	NA	0	best_overall=PCA_corr;winner=MAD_corr	PCA_corr	MAD_corr
+brca	IPH_926	NA	0	best_overall=PCA_corr;winner=kTotal_euc	PCA_corr	kTotal_euc
+brca	SK_BR_3	NA	0	best_overall=PCA_corr;winner=kTotal_euc	PCA_corr	kTotal_euc
 nbl	CHP_134	LS;SK_N_BE_2;KELLY;GI_ME_N	4	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
 nbl	CCLF_PEDS_0051_T	GI_ME_N;SK_N_BE_2;LAN2	3	best_overall=kTotal_euc;winner=Spearman_corr;MX_euc;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_euc;kTotal_euc;kTotal_corr
 nbl	CHP_126	LAN1;IMR_32;LAN5	3	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_corr;kTotal_euc;kTotal_corr
@@ -42,16 +42,16 @@ nbl	NGP	NBL_S;LAN1	2	best_overall=kTotal_euc;winner=Spearman_corr;MX_corr;kTotal
 nbl	LAN2	CCLF_PEDS_0051_T	1	best_overall=kTotal_euc;winner=MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	MX_corr;kTotal_euc;kTotal_corr
 nbl	NBL_S	NGP	1	best_overall=kTotal_euc;winner=MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	MX_corr;kTotal_euc;kTotal_corr
 nbl	NMB	LAN5	1	best_overall=kTotal_euc;winner=Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr	kTotal_euc	Spearman_corr;MX_euc;MX_corr;kTotal_euc;kTotal_corr
-nbl	LAN6		0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
-nbl	MHH_NB_11		0	best_overall=kTotal_euc;winner=PCA_euc;PCA_corr;Spearman_euc;MX_euc;MX_corr;kTotal_euc;kTotal_corr;HVG_corr	kTotal_euc	PCA_euc;PCA_corr;Spearman_euc;MX_euc;MX_corr;kTotal_euc;kTotal_corr;HVG_corr
-nbl	SH_SY5Y		0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
-nbl	SIMA		0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
+nbl	LAN6	NA	0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
+nbl	MHH_NB_11	NA	0	best_overall=kTotal_euc;winner=PCA_euc;PCA_corr;Spearman_euc;MX_euc;MX_corr;kTotal_euc;kTotal_corr;HVG_corr	kTotal_euc	PCA_euc;PCA_corr;Spearman_euc;MX_euc;MX_corr;kTotal_euc;kTotal_corr;HVG_corr
+nbl	SH_SY5Y	NA	0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
+nbl	SIMA	NA	0	best_overall=kTotal_euc;winner=kTotal_euc;kTotal_corr	kTotal_euc	kTotal_euc;kTotal_corr
 rbl	RBL_13	RBL_18;RBL_30	2	best_overall=HVG_euc;winner=PCA_euc;MX_euc	HVG_euc	PCA_euc;MX_euc
 rbl	RBL_15	RBL_18;RBL_13	2	best_overall=HVG_euc;winner=MAD_euc;MeanAbsDev_euc;Entropy_euc;MX_euc;HVG_euc	HVG_euc	MAD_euc;MeanAbsDev_euc;Entropy_euc;MX_euc;HVG_euc
 rbl	RBL_18	RBL_20;RBL_13	2	best_overall=HVG_euc;winner=MAD_euc;PCA_euc;MX_euc	HVG_euc	MAD_euc;PCA_euc;MX_euc
 rbl	RBL_20	RBL_18	1	best_overall=HVG_euc;winner=MAD_euc;PCA_euc;MX_euc	HVG_euc	MAD_euc;PCA_euc;MX_euc
 rbl	RBL_30	RBL_13	1	best_overall=HVG_euc;winner=PCA_euc;MX_euc	HVG_euc	PCA_euc;MX_euc
-rbl	RBL_14		0	best_overall=HVG_euc;winner=HVG_euc	HVG_euc	HVG_euc
-rbl	RBL_7		0	best_overall=HVG_euc;winner=MeanAbsDev_euc;HVG_euc	HVG_euc	MeanAbsDev_euc;HVG_euc
-rbl	WERI_RB1		0	best_overall=HVG_euc;winner=Variance_euc;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;HVG_euc;HVG_corr	HVG_euc	Variance_euc;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;HVG_euc;HVG_corr
-rbl	Y_79		0	best_overall=HVG_euc;winner=Variance_euc;Variance_corr;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;PCA_corr;MX_euc;HVG_euc;HVG_corr	HVG_euc	Variance_euc;Variance_corr;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;PCA_corr;MX_euc;HVG_euc;HVG_corr
+rbl	RBL_14	NA	0	best_overall=HVG_euc;winner=HVG_euc	HVG_euc	HVG_euc
+rbl	RBL_7	NA	0	best_overall=HVG_euc;winner=MeanAbsDev_euc;HVG_euc	HVG_euc	MeanAbsDev_euc;HVG_euc
+rbl	WERI_RB1	NA	0	best_overall=HVG_euc;winner=Variance_euc;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;HVG_euc;HVG_corr	HVG_euc	Variance_euc;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;HVG_euc;HVG_corr
+rbl	Y_79	NA	0	best_overall=HVG_euc;winner=Variance_euc;Variance_corr;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;PCA_corr;MX_euc;HVG_euc;HVG_corr	HVG_euc	Variance_euc;Variance_corr;MAD_euc;MeanAbsDev_euc;Entropy_euc;PCA_euc;PCA_corr;MX_euc;HVG_euc;HVG_corr
