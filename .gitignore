@@ -185,3 +185,6 @@ supplementary/
 
 # Private/local workflow audit notes
 docs/SCRIPT_TO_OUTPUT_MAPPING.md
+
+# Local test logs copied from Jarvis
+test_logs/
