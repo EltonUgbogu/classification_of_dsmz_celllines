@@ -309,6 +309,22 @@ run_unsupervised_feature_selection <- function(
   
   if (!is.matrix(counts)) stop("VST object must be a matrix")
   if (is.null(rownames(counts))) stop("Matrix must have gene rownames")
+
+  ensembl_fraction <- function(ids) {
+    if (is.null(ids) || length(ids) == 0) {
+      return(0)
+    }
+    mean(grepl("^ENS[A-Z]*G[0-9]+", ids))
+  }
+
+  row_gene_frac <- ensembl_fraction(rownames(counts))
+  col_gene_frac <- ensembl_fraction(colnames(counts))
+  if (col_gene_frac > row_gene_frac && col_gene_frac >= 0.5) {
+    if (!quiet) {
+      message("[WARN] Input matrix appears to be samples x genes; transposing to genes x samples")
+    }
+    counts <- t(counts)
+  }
   
   n_genes <- nrow(counts)
   n_samples <- ncol(counts)
@@ -381,19 +397,6 @@ run_unsupervised_feature_selection <- function(
   
   write_vec <- function(vec, filename) {
     writeLines(vec, file.path(subdir, filename))
-  }
-
-  rank_named_scores <- function(scores, decreasing = TRUE) {
-    if (is.null(names(scores))) stop("rank_named_scores requires a named vector")
-    score_num <- as.numeric(scores)
-    keep <- !is.na(score_num) & !is.na(names(scores)) & names(scores) != ""
-    score_num <- score_num[keep]
-    gene_id <- names(scores)[keep]
-    if (decreasing) {
-      gene_id[order(-score_num, gene_id, na.last = NA)]
-    } else {
-      gene_id[order(score_num, gene_id, na.last = NA)]
-    }
   }
   
   # ---------------------------------------------------------------------------
@@ -490,6 +493,15 @@ run_unsupervised_feature_selection <- function(
   # different reasons are all considered as candidates.
   
   if (!quiet) message("[INFO] Running 5 feature selection methods...")
+
+  take_top_names <- function(scores, n) {
+    genes <- names(sort(scores, decreasing = TRUE))
+    genes <- genes[!is.na(genes)]
+    if (length(genes) == 0 || n <= 0) {
+      return(character(0))
+    }
+    genes[seq_len(min(n, length(genes)))]
+  }
   
   # ---------------------------------------------------------------------------
   # METHOD 1: VARIANCE
@@ -511,9 +523,7 @@ run_unsupervised_feature_selection <- function(
   # The rowVars() function from matrixStats is used for efficiency (~10× faster
   # than apply(counts, 1, var)).
   
-  variance_score <- rowVars(counts, na.rm = TRUE)
-  names(variance_score) <- rownames(counts)
-  top_var <- head(rank_named_scores(variance_score), top_n_method)
+  top_var <- take_top_names(rowVars(counts, na.rm = TRUE), top_n_method)
 
   # ---------------------------------------------------------------------------
   # METHOD 1b: HVG (MEAN-VARIANCE TREND ADJUSTED)
@@ -555,7 +565,7 @@ run_unsupervised_feature_selection <- function(
   names(hvg_score) <- rownames(counts)
   hvg_score[!is.finite(hvg_score)] <- -Inf
 
-  top_hvg <- head(rank_named_scores(hvg_score), top_n_method)
+  top_hvg <- take_top_names(hvg_score, top_n_method)
 
   # ---------------------------------------------------------------------------
   # METHOD 2: MEDIAN ABSOLUTE DEVIATION (MAD)
@@ -578,9 +588,7 @@ run_unsupervised_feature_selection <- function(
   #   - Less efficient than variance for normal distributions
   #   - May miss genes with important outlier expression patterns
   
-  mad_score <- apply(counts, 1, mad, na.rm = TRUE)
-  names(mad_score) <- rownames(counts)
-  top_mad <- head(rank_named_scores(mad_score), top_n_method)
+  top_mad <- take_top_names(apply(counts, 1, mad, na.rm = TRUE), top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 3: MEAN ABSOLUTE DEVIATION FROM MEAN
@@ -600,8 +608,7 @@ run_unsupervised_feature_selection <- function(
   
   mean_vals <- rowMeans(counts, na.rm = TRUE)
   absdev <- rowMeans(abs(sweep(counts, 1, mean_vals, "-")), na.rm = TRUE)
-  names(absdev) <- rownames(counts)
-  top_mean_absdev <- head(rank_named_scores(absdev), top_n_method)
+  top_mean_absdev <- take_top_names(absdev, top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 4: SHANNON ENTROPY
@@ -652,8 +659,7 @@ run_unsupervised_feature_selection <- function(
     # Apply Shannon entropy formula: H = -Σ p × log₂(p)
     -sum(p * log2(p))
   })
-  names(entropy_score) <- rownames(counts)
-  top_entropy <- head(rank_named_scores(entropy_score), top_n_method)
+  top_entropy <- take_top_names(entropy_score, top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 5: PCA LOADINGS
@@ -700,7 +706,7 @@ run_unsupervised_feature_selection <- function(
   
   # Sum absolute loadings across PCs to get an overall importance score
   gene_scores <- rowSums(loadings)
-  top_pca <- head(rank_named_scores(gene_scores), top_n_method)
+  top_pca <- take_top_names(gene_scores, top_n_method)
   
   # ===========================================================================
 # SECTION 4: COMBINE CANDIDATES FROM ALL METHODS
@@ -713,7 +719,16 @@ run_unsupervised_feature_selection <- function(
   # If each method selects 3000 genes with 50% pairwise overlap, the union
   # might contain ~5000-8000 unique genes, depending on method agreement.
   
-  all_candidates <- unique(c(top_var, top_hvg, top_mad, top_mean_absdev, top_entropy, top_pca))
+  raw_candidates <- unique(c(top_var, top_hvg, top_mad, top_mean_absdev, top_entropy, top_pca))
+  all_candidates <- raw_candidates[!is.na(raw_candidates) & raw_candidates %in% rownames(counts)]
+  dropped_candidates <- length(raw_candidates) - length(all_candidates)
+  if (!quiet && dropped_candidates > 0) {
+    message("[WARN] Dropped ", dropped_candidates,
+            " candidate genes absent from the expression matrix or missing IDs")
+  }
+  if (length(all_candidates) == 0) {
+    stop("No candidate genes remain after filtering to expression matrix rownames.")
+  }
   if (!quiet) message("[INFO] Union of candidates: ", length(all_candidates), " genes")
   
   # ===========================================================================
@@ -824,8 +839,8 @@ run_unsupervised_feature_selection <- function(
                       paste(head(names(avg_corr), 5), collapse = ", "))
   
   # Select top genes by Spearman connectivity
-  final_top500_spearman <- head(rank_named_scores(avg_corr), final_top)
-  final_top3000_spearman <- head(rank_named_scores(avg_corr), top_n_method)
+  final_top500_spearman <- take_top_names(avg_corr, final_top)
+  final_top3000_spearman <- take_top_names(avg_corr, top_n_method)
   
   # ---------------------------------------------------------------------------
   # METHOD 7: MX SCORE (SPEARMAN × VARIANCE)
@@ -884,8 +899,8 @@ run_unsupervised_feature_selection <- function(
                       paste(head(names(mx_score), 5), collapse = ", "))
   
   # Select top genes by MX score
-  final_top500_mx <- head(rank_named_scores(mx_score), final_top)
-  final_top3000_mx <- head(rank_named_scores(mx_score), top_n_method)
+  final_top500_mx <- take_top_names(mx_score, final_top)
+  final_top3000_mx <- take_top_names(mx_score, top_n_method)
   
   if (!quiet) message("[DEBUG] final_top500_mx length: ", length(final_top500_mx))
   
@@ -1151,7 +1166,7 @@ run_unsupervised_feature_selection <- function(
         # The 0.001 factor ensures product only affects ties
         Rank_Combo = rank(Rank_Sum + 0.001 * sqrt(Rank_Prod))
       ) %>%
-      dplyr::arrange(Rank_Combo, Gene)  # Sort by combined rank (best first)
+      dplyr::arrange(Rank_Combo)  # Sort by combined rank (best first)
   }
   
   if (!quiet) message("[DEBUG] scores_df dimensions: ",
@@ -1163,16 +1178,16 @@ run_unsupervised_feature_selection <- function(
   
   if (nrow(scores_df) > 0) {
     # Top genes by kTotal (WGCNA connectivity)
-    top500_kTotal <- dplyr::arrange(scores_df, Rank_kTotal, Gene) %>%
+    top500_kTotal <- dplyr::arrange(scores_df, Rank_kTotal) %>%
       dplyr::slice_head(n = min(final_top, nrow(scores_df))) %>%
       dplyr::pull(Gene)
     
-    top3000_kTotal <- dplyr::arrange(scores_df, Rank_kTotal, Gene) %>%
+    top3000_kTotal <- dplyr::arrange(scores_df, Rank_kTotal) %>%
       dplyr::slice_head(n = min(top_n_method, nrow(scores_df))) %>%
       dplyr::pull(Gene)
     
     # Top genes by MX score
-    top500_MX <- dplyr::arrange(scores_df, Rank_MX, Gene) %>%
+    top500_MX <- dplyr::arrange(scores_df, Rank_MX) %>%
       dplyr::slice_head(n = min(final_top, nrow(scores_df))) %>%
       dplyr::pull(Gene)
     
@@ -1331,13 +1346,13 @@ run_unsupervised_feature_selection <- function(
     PCA        = top_pca,
     Spearman   = final_top3000_spearman,   # full ranked vector; sliced below
     MX         = c(final_top500_mx,        # MX canonical = top-500
-                   rank_named_scores(mx_score)),  # extend for safety
+                   names(sort(mx_score, decreasing = TRUE))),  # extend for safety
     kTotal     = c(top500_kTotal,
-                   rank_named_scores(kTotal))
+                   names(sort(kTotal,    decreasing = TRUE)))
   )
   # Re-rank MX and kTotal from their score vectors (already sorted) for safety.
-  all_method_vectors[["MX"]]     <- rank_named_scores(mx_score)
-  all_method_vectors[["kTotal"]] <- rank_named_scores(kTotal)
+  all_method_vectors[["MX"]]     <- names(sort(mx_score, decreasing = TRUE))
+  all_method_vectors[["kTotal"]] <- names(sort(kTotal,   decreasing = TRUE))
 
   # Default per-method top-N (matches Snakefile defaults when --method_topn absent).
   default_topn <- list(
@@ -1354,16 +1369,16 @@ run_unsupervised_feature_selection <- function(
     if (is.null(vec) || length(vec) == 0) next
     vec <- unique(vec[!is.na(vec)])
     # Resolve per-method N: --method_topn takes precedence, then default.
-    n_genes <- if (!is.null(method_topn_map[[nm]])) {
+    n_out_genes <- if (!is.null(method_topn_map[[nm]])) {
       as.integer(method_topn_map[[nm]])
     } else {
       as.integer(default_topn[[nm]] %||% final_top)
     }
-    top_genes <- head(vec, n_genes)
-    fn <- file.path(canonical_sets_dir, paste0("genes_top", n_genes, "_", nm, ".txt"))
+    top_genes <- head(vec, n_out_genes)
+    fn <- file.path(canonical_sets_dir, paste0("genes_top", n_out_genes, "_", nm, ".txt"))
     writeLines(top_genes, fn)
     if (!quiet) {
-      message("[INFO]   [canonical] ", nm, " (top-", n_genes, "): ",
+      message("[INFO]   [canonical] ", nm, " (top-", n_out_genes, "): ",
               length(top_genes), " genes -> ", basename(fn))
     }
   }
@@ -1484,8 +1499,8 @@ run_unsupervised_feature_selection <- function(
   # ---------------------------------------------------------------------------
   # TOP 200 ANALYSIS (Higher Confidence Subset)
   # ---------------------------------------------------------------------------
-  top200_spearman <- head(rank_named_scores(avg_corr), 200)
-  top200_mx <- head(rank_named_scores(mx_score), 200)
+  top200_spearman <- names(sort(avg_corr, decreasing = TRUE))[1:200]
+  top200_mx <- names(sort(mx_score, decreasing = TRUE))[1:200]
   intersection_200 <- intersect(top200_spearman, top200_mx)
   
   write_vec(top200_spearman, "top200_spearman.txt")

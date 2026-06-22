@@ -1,0 +1,13 @@
+name: rbl-tumour-purity-env
+channels:
+  - conda-forge
+dependencies:
+  - r-base=4.3
+  - r-data.table
+  - r-dplyr
+  - r-ggplot2
+  - r-ggpubr
+  - r-rcolorbrewer
+  - r-remotes
+  - r-tibble
+  - r-matrixstats

@@ -17,8 +17,22 @@
 
 import os
 import glob
+from pathlib import Path
 
-WORKFLOW_DIR = workflow.basedir
+WORKFLOW_ROOT = Path(workflow.basedir).resolve()
+REPO_ROOT = WORKFLOW_ROOT.parents[1]
+WORKFLOW_DIR = str(WORKFLOW_ROOT)
+PIPELINE_DIR = str(REPO_ROOT)
+
+def repo_config_path(value):
+    """Resolve a relative cohort-config path against the repository root."""
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else REPO_ROOT / path)
+
+def workflow_config_path(value):
+    """Resolve a relative workflow-config path against this Snakefile directory."""
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else (WORKFLOW_ROOT / path).resolve())
 
 # ------------------------------------------------------------------------------
 # Paths and study identifiers
@@ -27,10 +41,11 @@ WORKFLOW_DIR = workflow.basedir
 # This prevents hard-coding genome resources and improves reproducibility.
 configfile: "config/config.yaml"
 
-# Project-relative defaults keep the workflow portable across machines.
-DATA_ROOT = config.get("data_root") or os.path.abspath(os.path.join(WORKFLOW_DIR, "..", "..", "data", "nbl"))
-PROJECTS = config.get("projects", ["GSE100148", "GSE189367", "SRP409177"])
-ENV_DIR = config.get("env_dir") or os.path.abspath(os.path.join(WORKFLOW_DIR, "envs"))
+# data_root is controlled by config/config.yaml and resolved relative to this
+# workflow directory to avoid accidental SLURM environment-variable leakage.
+DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/nbl"))
+PROJECTS = config.get("projects", ["GSE189367", "SRP409177"])
+ENV_DIR = repo_config_path(config.get("env_dir") or "preprocessing_and_quality_control/envs")
 
 # ------------------------------------------------------------------------------
 # Reference resources and tool paths
@@ -40,14 +55,15 @@ ENV_DIR = config.get("env_dir") or os.path.abspath(os.path.join(WORKFLOW_DIR, "e
 # REF_FASTA: reference genome FASTA (required for alignment QC checks)
 # THREADS: compute threads; defaults to 12 if not specified in config
 _genome   = config.get("genome", {})
-REF_INDEX = _genome.get("star_index", "")
-GTF       = _genome.get("gtf", "")       # retained for reference; not used in alignment rules
-REF_FASTA = _genome.get("fasta", "")
+REF_INDEX = repo_config_path(_genome.get("star_index", "")) if _genome.get("star_index") else ""
+GTF       = repo_config_path(_genome.get("gtf", "")) if _genome.get("gtf") else ""  # retained; not used in alignment rules
+REF_FASTA = repo_config_path(_genome.get("fasta", "")) if _genome.get("fasta") else ""
 THREADS   = config.get("threads", 12)
 
 # Validate required keys with a clear message before any KeyError can surface.
 missing_required = {k: v for k, v in {
     "genome.star_index": REF_INDEX,
+    "genome.gtf":        GTF,
     "genome.fasta":      REF_FASTA,
 }.items() if not v}
 if missing_required:
@@ -234,6 +250,37 @@ TARGET_MATRIX     = f"{TARGET_NBL_DIR}/merged/target_nbl_count.rds"
 TARGET_META       = f"{TARGET_NBL_DIR}/merged/target_nbl_sample_metadata.csv"
 TARGET_GENES      = f"{TARGET_NBL_DIR}/merged/target_nbl_gene_list.txt"
 
+# Downstream NBL analysis settings
+EXPECTED_SAMPLES = config.get("expected_samples", {})
+
+EXPECTED_NBL_SAMPLES = int(EXPECTED_SAMPLES.get("total", 273))
+
+EXPECTED_COHORT_SAMPLES = {
+    "TARGET_NBL": int(EXPECTED_SAMPLES.get("TARGET_NBL", 162)),
+    "SRP409177": int(EXPECTED_SAMPLES.get("SRP409177", 47)),
+    "GSE189367": int(EXPECTED_SAMPLES.get("GSE189367", 64)),
+}
+
+PURITY_THRESHOLD = float(config.get("purity_threshold", 0.7))
+PURITY_LABEL = f"{PURITY_THRESHOLD:.1f}"
+
+NBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/nbl_ensembl_to_hgnc.tsv"
+NBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/nbl_count_matrix_verified_{EXPECTED_NBL_SAMPLES}.ok"
+
+NBL_PURITY_DIR = repo_config_path(
+    config.get("purity_output_dir", "results/tumour_purity_analysis/nbl")
+)
+
+NBL_PURITY_SCRIPT = f"{WORKFLOW_DIR}/tumour_purity_analysis/nbl_tumour_purity_analysis.R"
+
+NBL_PURITY_OUTPUTS = [
+    f"{NBL_PURITY_DIR}/nbl_estimate_scores.csv",
+    f"{NBL_PURITY_DIR}/nbl_filtered_hgnc_counts_purity{PURITY_LABEL}.rds",
+    f"{NBL_PURITY_DIR}/nbl_filtered_count_matrix_ensembl_purity{PURITY_LABEL}.rds",
+    f"{NBL_PURITY_DIR}/nbl_sample_retention_by_cohort.pdf",
+    f"{NBL_PURITY_DIR}/nbl_purity_diagnostics.pdf",
+]
+
 # ------------------------------------------------------------------------------
 # Final pipeline outputs
 # ------------------------------------------------------------------------------
@@ -258,7 +305,32 @@ rule all:
         COUNT_GENES,
         TARGET_MATRIX,
         TARGET_META,
-        TARGET_GENES
+        TARGET_GENES,
+        NBL_ENSEMBL_TO_HGNC,
+        NBL_COUNT_VERIFY,
+        NBL_PURITY_OUTPUTS
+
+# Post-download orchestration target for the full NBL workflow.
+# Dry-run after downloads complete:
+#   snakemake -n nbl_full_pipeline --cores 1 --use-conda
+rule nbl_full_pipeline:
+    input:
+        STAR_BAMS,
+        STAR_BAIS,
+        STAR_COUNTS,
+        PICARD_TXT,
+        PICARD_HIST,
+        FASTQC_HTML,
+        MULTIQC_HTML,
+        COUNT_MATRIX,
+        COUNT_META,
+        COUNT_GENES,
+        TARGET_MATRIX,
+        TARGET_META,
+        TARGET_GENES,
+        NBL_ENSEMBL_TO_HGNC,
+        NBL_COUNT_VERIFY,
+        NBL_PURITY_OUTPUTS
 
 # ------------------------------------------------------------------------------
 # Rule: FastQC on each FASTQ file
@@ -296,6 +368,12 @@ rule fastqc:
 # Note on quantMode GeneCounts:
 #   STAR generates a per-gene count table; further scripts typically select
 #   the appropriate strandedness column based on library prep inference.
+#
+# Storage note:
+#   This BAM-producing rule is retained for full alignment and BAM-based QC
+#   workflows, including Picard metrics and optional genome-browser inspection.
+#   Count-matrix generation should prefer star_counts_only below so STAR gene
+#   count tables are produced without unnecessary BAM/SAM storage.
 rule star_2pass:
     input:
         index = REF_INDEX,
@@ -353,6 +431,67 @@ rule star_2pass:
         # STAR writes Log.final.out automatically using the chosen prefix; the
         # expected location is already tracked via output.logf.
         """
+
+# ------------------------------------------------------------------------------
+# Rule: STAR count-only mode for storage-conscious count-matrix generation
+# ------------------------------------------------------------------------------
+# Bioinformatics intent:
+#   Produce STAR GeneCounts and Log.final.out without writing BAM/SAM output.
+#   This rule is the preferred producer for valid_count/*.tab when the requested
+#   target is the NBL tumour count matrix. Full BAM retention remains available
+#   through star_2pass for alignment QC workflows.
+#
+# Count-generation note:
+#   Count-matrix generation and count-only QC should rely on STAR count tables
+#   and Log.final.out files. BAM, BAI, and SAM files are intentionally not
+#   produced by this rule.
+rule star_counts_only:
+    input:
+        index = REF_INDEX,
+        r1 = get_r1,
+        r2 = get_r2
+    output:
+        counts = f"{DATA_ROOT}/{{project}}/results/star/valid_count/{{sample}}.tab",
+        logf   = f"{DATA_ROOT}/{{project}}/results/star/{{sample}}.Log.final.out",
+    log:
+        f"{DATA_ROOT}/{{project}}/logs/star_counts_only/{{sample}}.log"
+    conda:
+        f"{ENV_DIR}/star.yaml"
+    threads: THREADS
+    resources:
+        # STAR still needs the reference index and splice-junction discovery
+        # memory, but no BAM sort memory is required in count-only mode.
+        mem_mb = 42000
+    params:
+        # The prefix places STAR logs next to the full-alignment STAR outputs,
+        # while the count table is moved into valid_count/ for matrix assembly.
+        prefix = lambda wc: f"{DATA_ROOT}/{wc.project}/results/star/{wc.sample}."
+    shell:
+        r"""
+        set -euo pipefail
+
+        mkdir -p "$(dirname "{output.logf}")" "$(dirname "{output.counts}")" "$(dirname "{log}")"
+
+        STAR --genomeDir "{input.index}" \
+             --readFilesIn "{input.r1}" "{input.r2}" \
+             --readFilesCommand zcat \
+             --outFileNamePrefix "{params.prefix}" \
+             --outSAMtype None \
+             --quantMode GeneCounts \
+             --twopassMode Basic \
+             --runThreadN {threads} \
+             > "{log}" 2>&1
+
+        test -s "{params.prefix}ReadsPerGene.out.tab"
+        mv -f "{params.prefix}ReadsPerGene.out.tab" "{output.counts}"
+        test -s "{output.counts}"
+        test -s "{output.logf}"
+        """
+
+# STAR count tables are intentionally ambiguous with star_2pass outputs. Prefer
+# the count-only rule whenever a requested target only needs valid_count/*.tab
+# and STAR logs; explicit BAM/Picard targets still select star_2pass.
+ruleorder: star_counts_only > star_2pass
 
 # ------------------------------------------------------------------------------
 # Picard QC rules: alignment integrity and library metrics
@@ -455,9 +594,11 @@ rule picard_insert_size_metrics:
 # ------------------------------------------------------------------------------
 # Rule: merge per-sample STAR count tables into a single count matrix
 # ------------------------------------------------------------------------------
-# Reads all valid_count/{sample}.tab files across all GEO projects, then loads
-# the pre-built TARGET-NBL matrix and combines both into one genes x samples
-# count matrix via merge_star_counts.R.
+# Reads all valid_count/{sample}.tab files across all FASTQ-backed GEO projects
+# (GSE189367 and SRP409177), then loads the pre-built TARGET-NBL matrix and
+# combines both into one genes x samples count matrix via merge_star_counts.R.
+# STAR count tables are produced by star_counts_only for this target; BAM/SAM
+# files should not be generated for the count-only stage.
 # Depends on build_target_nbl_count_matrix completing first.
 rule build_nbl_count_matrix:
     input:
@@ -468,6 +609,8 @@ rule build_nbl_count_matrix:
         matrix = COUNT_MATRIX,
         meta   = COUNT_META,
         genes  = COUNT_GENES
+    params:
+        cohorts = ",".join(PROJECTS)
     log:
         f"{DATA_ROOT}/count_data/merge_star_counts.log"
     conda:
@@ -475,7 +618,7 @@ rule build_nbl_count_matrix:
     shell:
         r"""
         mkdir -p "$(dirname "{output.matrix}")"
-        ROOT_DIR={DATA_ROOT} Rscript {WORKFLOW_DIR}/scripts/merge_star_counts.R > {log} 2>&1
+        ROOT_DIR={DATA_ROOT} COHORTS="{params.cohorts}" Rscript {WORKFLOW_DIR}/scripts/merge_star_counts.R > {log} 2>&1
         """
 
 # ------------------------------------------------------------------------------
@@ -499,6 +642,120 @@ rule build_target_nbl_count_matrix:
         r"""
         mkdir -p "$(dirname "{output.matrix}")"
         TARGET_NBL_DIR={TARGET_NBL_DIR} Rscript {WORKFLOW_DIR}/scripts/merge_target_nbl_counts.R > {log} 2>&1
+        """
+
+# ------------------------------------------------------------------------------
+# Downstream NBL orchestration: gene ID map, count validation, tumour purity
+# ------------------------------------------------------------------------------
+
+rule build_nbl_ensembl_to_hgnc_map:
+    input:
+        gtf = GTF
+    output:
+        NBL_ENSEMBL_TO_HGNC
+    log:
+        f"{DATA_ROOT}/count_data/nbl_ensembl_to_hgnc.log"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{output}")" "$(dirname "{log}")"
+
+        awk '
+        BEGIN {{ FS = OFS = "\t"; print "Ensembl_ID", "HGNC_Symbol" }}
+        $3 == "gene" {{
+            gene_id = ""
+            gene_name = ""
+            n = split($9, attrs, ";")
+            for (i = 1; i <= n; i++) {{
+                attr = attrs[i]
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", attr)
+                if (attr ~ /^gene_id "/) {{
+                    gene_id = attr
+                    sub(/^gene_id "/, "", gene_id)
+                    sub(/"$/, "", gene_id)
+                    sub(/\.[0-9]+$/, "", gene_id)
+                }} else if (attr ~ /^gene_name "/) {{
+                    gene_name = attr
+                    sub(/^gene_name "/, "", gene_name)
+                    sub(/"$/, "", gene_name)
+                }}
+            }}
+            if (gene_id != "" && gene_name != "" && !seen[gene_id]++) {{
+                print gene_id, gene_name
+            }}
+        }}
+        ' "{input.gtf}" > "{output}.tmp" 2> "{log}"
+
+        rows=$(awk 'END {{ print NR - 1 }}' "{output}.tmp")
+        if [ "$rows" -le 0 ]; then
+            echo "[ERROR] No gene mappings were extracted from {input.gtf}" >> "{log}"
+            rm -f "{output}.tmp"
+            exit 1
+        fi
+
+        mv "{output}.tmp" "{output}"
+        echo "[OK] Wrote $rows Ensembl-to-HGNC mappings to {output}" >> "{log}"
+        """
+
+rule verify_final_nbl_count_matrix:
+    input:
+        matrix = COUNT_MATRIX,
+        meta = COUNT_META,
+        script = f"{WORKFLOW_DIR}/scripts/verify_nbl_count_matrix.R"
+    output:
+        NBL_COUNT_VERIFY
+    params:
+        expected_total = EXPECTED_NBL_SAMPLES,
+        expected_target = EXPECTED_COHORT_SAMPLES["TARGET_NBL"],
+        expected_srp409177 = EXPECTED_COHORT_SAMPLES["SRP409177"],
+        expected_gse189367 = EXPECTED_COHORT_SAMPLES["GSE189367"]
+    log:
+        f"{DATA_ROOT}/count_data/nbl_count_matrix_verified_{EXPECTED_NBL_SAMPLES}.log"
+    conda:
+        f"{ENV_DIR}/r-base.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname "{output}")" "$(dirname "{log}")"
+
+        Rscript "{input.script}" \
+            --matrix "{input.matrix}" \
+            --metadata "{input.meta}" \
+            --output "{output}" \
+            --expected-total "{params.expected_total}" \
+            --expected-target "{params.expected_target}" \
+            --expected-srp409177 "{params.expected_srp409177}" \
+            --expected-gse189367 "{params.expected_gse189367}" \
+            > "{log}" 2>&1
+        """
+
+rule nbl_tumour_purity_analysis:
+    input:
+        matrix = COUNT_MATRIX,
+        meta = COUNT_META,
+        map = NBL_ENSEMBL_TO_HGNC,
+        verify = NBL_COUNT_VERIFY,
+        script = NBL_PURITY_SCRIPT
+    output:
+        NBL_PURITY_OUTPUTS
+    params:
+        output_dir = NBL_PURITY_DIR,
+        threshold = PURITY_THRESHOLD
+    log:
+        f"{NBL_PURITY_DIR}/nbl_tumour_purity_analysis.snakemake.log"
+    conda:
+        f"{ENV_DIR}/tcga-r-env.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.output_dir}" "$(dirname "{log}")"
+
+        SE_PATH="{input.matrix}" \
+        META_CSV="{input.meta}" \
+        MAP_TSV="{input.map}" \
+        OUTPUT_DIR="{params.output_dir}" \
+        PURITY_THRESHOLD="{params.threshold}" \
+        Rscript "{input.script}" > "{log}" 2>&1
         """
 
 # ------------------------------------------------------------------------------
@@ -548,7 +805,6 @@ rule multiqc:
         # The report summarises QC across all samples within the project.
         multiqc {params.indir} -o {params.outdir} -n multiqc_report.html > {log} 2>&1
     """
-
 
 # ------------------------------------------------------------------------------
 # Rule: clean stale STAR temporary directories (opt-in)

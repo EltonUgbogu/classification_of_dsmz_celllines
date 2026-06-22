@@ -1,5 +1,7 @@
 #!/usr/bin/env snakemake
 
+# Classification of DSMZ Cell Lines to Cancer Types Based on Transcriptomic Analysis
+
 # Unsupervised Clustering and Tumour Neighbourhood Analysis Pipeline
 
 import json
@@ -11,29 +13,39 @@ from pathlib import Path
 from snakemake.shell import shell
 from snakemake.io import expand, directory
 
-# -----------------------------------------------------------------------------
-# PATHS / PROFILE SETUP (MUST BE DEFINED BEFORE RULES)
-# -----------------------------------------------------------------------------
-# Anchors all path resolution to the main Snakefile location, preventing
-# inadvertent resolution relative to Snakemake's site-packages directory when
-# --directory or the working directory differs from the pipeline root.
-_snakefile_path = getattr(workflow, "main_snakefile", None) or __file__
-BASE = os.path.dirname(os.path.abspath(os.path.realpath(_snakefile_path)))
-SCRIPTS_DIR = os.path.join(BASE, "scripts")
+# =============================================================================
+# IMPORTS / CONFIG / ENVIRONMENT PATHS
+# =============================================================================
+# Stage role: resolves pipeline roots, config, and conda environment paths before any rules are declared.
+# Anchors all path resolution to Snakemake's workflow directory, preventing
+# inadvertent resolution relative to the caller's current working directory.
+REPO_ROOT = Path(workflow.basedir).resolve()
+
+def repo_path(*parts):
+    """Return an absolute path to a repository-owned file or directory."""
+    return str(REPO_ROOT.joinpath(*parts))
+
+def cfg_path(value):
+    """Resolve a configured path against the repository root when relative."""
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else REPO_ROOT / path)
+
+BASE = str(REPO_ROOT)
+SCRIPTS_DIR = repo_path("scripts")
 PIPE_ROOT = BASE
 
 # Centralises conda environment paths to avoid hardcoded absolute strings in rules.
-CONDA_ENV_R = os.path.join(PIPE_ROOT, "envs", "tcga-r-env.yaml")
-CONDA_ENV_PY = os.path.join(PIPE_ROOT, "envs", "python-graph-env.yaml")
-CONDA_ENV_QC = os.path.join(PIPE_ROOT, "envs", "tumour_nh_qc.yaml")
+CONDA_ENV_R = repo_path("envs", "tcga-r-env.yaml")
+CONDA_ENV_PY = repo_path("envs", "python-graph-env.yaml")
+CONDA_ENV_QC = repo_path("envs", "tumour_nh_qc.yaml")
 
 # Resolves the config file path once at pipeline load time.
-CFGFILE_ABS = os.path.join(PIPE_ROOT, "config", "config.yaml")
+CFGFILE_ABS = repo_path("config", "config.yaml")
 
 # Conda environments — single source of truth; avoids hardcoded absolute paths in every rule.
-CONDA_ENV_R  = os.path.join(PIPE_ROOT, "envs", "tcga-r-env.yaml")
-CONDA_ENV_PY = os.path.join(PIPE_ROOT, "envs", "python-graph-env.yaml")
-CONDA_ENV_QC = os.path.join(PIPE_ROOT, "envs", "tumour_nh_qc.yaml")
+CONDA_ENV_R  = repo_path("envs", "tcga-r-env.yaml")
+CONDA_ENV_PY = repo_path("envs", "python-graph-env.yaml")
+CONDA_ENV_QC = repo_path("envs", "tumour_nh_qc.yaml")
 
 # Instructs Snakemake to load configuration from the resolved absolute path.
 configfile: CFGFILE_ABS
@@ -65,29 +77,36 @@ PIPELINE_TARGET = []
 # -----------------------------------------------------------------------------
 # RULE: all
 #
-# This is the default entry point of the whole workflow.
-# When you run Snakemake without naming a specific rule, Snakemake tries to build
-# whatever appears here. In this pipeline, the final target is chosen later based
-# on the active profile, so this rule acts like a profile-aware 'run everything'.
+# Snakemake builds this profile-aware target when no explicit rule is requested.
 # -----------------------------------------------------------------------------
 rule all:
     input:
         # Lazily evaluated so the target list is not resolved until after profile
         # setup and PIPELINE_TARGET is overwritten with profile-specific outputs.
         lambda wc: PIPELINE_TARGET,
-        # Pan-cancer UMAP (optional, can be run independently)
-        # Uncomment to include in default target:
+        # Pan-cancer UMAP (optional, independent target reference)
+        # Inactive target path retained for optional default-target assembly:
         # os.path.join(BASE, "results", "unsupervised", "pan_cancer", "umap", "pan_cancer_mx_umap_coords.tsv")
 
 
+# =============================================================================
+# GENERIC HELPERS
+# =============================================================================
+# Stage role: defines reusable path and configuration helpers used by later workflow sections.
 # Utility function: converts a config-relative path to an absolute path.
 def abspath(p):
-    return p if os.path.isabs(p) else os.path.abspath(os.path.join(BASE, p))
+    return cfg_path(p)
 
 
 STUDY_DESIGN_REL = config.get("study_design", {}).get("file", "config/study_design.yaml")
 STUDY_DESIGN_FILE = abspath(STUDY_DESIGN_REL)
 
+# =============================================================================
+# PROFILE DETECTION / CONFIG MERGE
+# =============================================================================
+# Stage role: selects the active profile and merges profile-specific settings into the default configuration.
+
+# Method helper: recursively merges default and profile-specific config without mutating either source dictionary.
 def deep_merge(base, override):
     """Recursively merges two configuration dictionaries without mutating either input."""
     merged = dict(base)
@@ -99,6 +118,7 @@ def deep_merge(base, override):
     return merged
 
 
+# Method helper: resolves the active profile and returns the merged configuration used by all downstream rules.
 def get_profile_cfg(profile):
     """Returns the merged configuration for a named profile, used for cross-profile pan-cancer access."""
     default_cfg = config.get("defaults", {})
@@ -108,6 +128,7 @@ def get_profile_cfg(profile):
     return deep_merge(default_cfg, profiles[profile])
 
 
+# Method helper: resolves per-profile VST inputs used when constructing the multicohort expression matrix.
 def profile_vst_joint_abs(profile):
     """Resolves the absolute path to vst_joint_rds for a given profile."""
     cfgp = get_profile_cfg(profile)
@@ -159,9 +180,44 @@ else:
     profile_name = config.get("profile", "default")
 
 
-# Beginner note:
-# From here down, the Snakefile converts config values into Python variables
-# that make the rest of the workflow easier to read and reuse.
+# Method helper: retrieves profile-aware graph layout settings for reproducible plotting parameters.
+def graph_layout_section(plot_key):
+    layout_cfg = config.get("graph_plot_layout")
+    if layout_cfg is None:
+        raise ValueError("Missing required config section: graph_plot_layout")
+
+    if plot_key not in layout_cfg:
+        raise ValueError(f"Missing graph_plot_layout section for plot: {plot_key}")
+
+    plot_cfg = layout_cfg[plot_key]
+    if "default" not in plot_cfg:
+        raise ValueError(f"Missing graph_plot_layout.{plot_key}.default")
+
+    profile_key = profile_name.lower()
+    default_cfg = plot_cfg["default"]
+    profile_cfg = plot_cfg.get(profile_key, {})
+
+    merged = dict(default_cfg)
+    merged.update(profile_cfg)
+    return merged
+
+
+# Method helper: reads one plotting parameter from the resolved graph layout section.
+def graph_layout_value(plot_key, param_key):
+    section = graph_layout_section(plot_key)
+    if param_key not in section:
+        raise ValueError(
+            f"Missing graph layout parameter: graph_plot_layout.{plot_key}.{param_key} "
+            f"for profile {profile_name.lower()}"
+        )
+    return section[param_key]
+
+
+# =============================================================================
+# PATH HELPERS AND GLOBAL CONSTANTS
+# =============================================================================
+# Stage role: materialises output namespaces and shared constants used across method stages.
+# These constants translate profile configuration into the paths and method labels used by later rules.
 
 analysis_cfg = cfg.get("analysis", {})
 # Controls whether PAM50 gene-set directions are included in the analysis.
@@ -170,9 +226,31 @@ USE_PAM50 = analysis_cfg.get("use_pam50", False)
 # Multicohort benchmark flag that disables PCA pre-processing steps across all
 # profiles to ensure comparability when merging cross-cancer datasets.
 MULTICOHORT_CFG = config.get("multicohort_cancer", {})
+IS_MULTICOHORT_PROFILE = profile_name == "multicohort_cancer"
+MULTICOHORT_OUTDIR = os.path.normpath(
+    MULTICOHORT_CFG.get(
+        "outdir",
+        os.path.join("results", "unsupervised", "multicohort_cancer"),
+    )
+)
+MULTICOHORT_CONSENSUS_DIR = os.path.join(MULTICOHORT_OUTDIR, "consensus")
+MULTICOHORT_FEATURE_SELECTION_DIR = os.path.join(
+    MULTICOHORT_OUTDIR,
+    "feature_selection_unsupervised",
+)
+MULTICOHORT_STUDY_DESIGN_DIR = os.path.join(MULTICOHORT_OUTDIR, "study_design")
+MULTICOHORT_TUMOUR_NEIGHBOURHOODS_DIR = os.path.join(
+    MULTICOHORT_OUTDIR,
+    "tumour_neighbourhoods",
+)
+MULTICOHORT_VALIDATION_DIR = os.path.join(MULTICOHORT_OUTDIR, "validation")
 DISABLE_PCA_EVERYWHERE = bool(MULTICOHORT_CFG.get("disable_pca_everywhere", False))
 vprint(f"[Snakefile] DISABLE_PCA_EVERYWHERE = {DISABLE_PCA_EVERYWHERE}")
 
+# =============================================================================
+# FEATURE / DIRECTION CONSTANTS
+# =============================================================================
+# Stage role: defines feature-distance representations and validates direction naming before DAG construction.
 # Resolves the list of feature selection methods and distance metrics from config,
 # with sensible defaults if neither feature_sets nor features keys are present.
 FEATURE_METHODS = cfg.get("feature_sets", {}).get(
@@ -207,6 +285,7 @@ def method_topn(m):
 TOPN = method_topn("MX")
 
 
+# Method helper: constructs feature-distance representation names from configured features and distance metrics.
 def build_directions():
     """
     Constructs the full list of analysis directions as method × distance combinations.
@@ -271,7 +350,10 @@ def cfgget_path_abs(default_rel, *keys):
 
 # Sets strict shell execution flags and pins thread counts for linear algebra libraries
 # to prevent unintended CPU over-subscription on shared HPC nodes.
-shell.prefix("set -euo pipefail; export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1; ")
+shell.prefix(
+    f"set -euo pipefail; export PIPELINE_ROOT={shlex.quote(PIPE_ROOT)}; "
+    "export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1; "
+)
 
 # Resolves the unsupervised output root: relative for rule output declarations
 # (Snakemake DAG portability), absolute for params/shell arguments (script compatibility).
@@ -282,15 +364,17 @@ vprint(f"[Snakefile] UNSUP_BASE (from config) = {UNSUP_BASE}")
 if os.path.isabs(UNSUP_BASE):
     UNSUP_BASE = os.path.relpath(UNSUP_BASE, PIPE_ROOT)
 
+if IS_MULTICOHORT_PROFILE:
+    legacy_multicohort_unsup = os.path.join(MULTICOHORT_OUTDIR, "unsupervised")
+    if os.path.normpath(UNSUP_BASE) == os.path.normpath(legacy_multicohort_unsup):
+        UNSUP_BASE = MULTICOHORT_OUTDIR
+
 # Ensures the profile name is embedded as the final directory component of the output root,
 # so results from different profiles never collide under the same parent directory.
-# Beginner note:
-# The variables below define where outputs live and how directions are named.
-# Think of them as the bookkeeping layer that keeps many clustering runs organised.
+# These paths keep profile-specific outputs separated while preserving portable relative rule outputs.
 
 # Append the profile only when it is not already present in the configured
-# path. This avoids doubled roots such as
-# results/unsupervised/multicohort_cancer/unsupervised/multicohort_cancer.
+# path. This avoids doubled roots such as results/unsupervised/brca/brca.
 if profile_name not in os.path.normpath(UNSUP_BASE).split(os.sep):
     UNSUP_REL = os.path.join(UNSUP_BASE, profile_name)
 else:
@@ -301,13 +385,16 @@ UNSUP = os.path.join(PIPE_ROOT, UNSUP_REL)
 vprint(f"[Snakefile] UNSUP_REL (final, relative) = {UNSUP_REL}")
 vprint(f"[Snakefile] UNSUP (final, absolute) = {UNSUP}")
 
+# =============================================================================
+# DATA PREPARATION CONFIGURATION
+# =============================================================================
+# Stage role: resolves configured expression inputs and multicohort staging paths before data-preparation rules.
 # Resolves the joint VST-normalised expression matrix (absolute; external input).
 VST_JOINT = cfgabs("paths", "vst_joint_rds")
 
 # Multicohort input construction (only active when running the multicohort_cancer profile).
-IS_MULTICOHORT_PROFILE = profile_name == "multicohort_cancer"
 MC_PROFILES    = [str(p) for p in MULTICOHORT_CFG.get("profiles", [])]
-MC_OUTDIR_REL  = MULTICOHORT_CFG.get("outdir", "results/unsupervised/multicohort_cancer")
+MC_OUTDIR_REL  = MULTICOHORT_OUTDIR
 MC_OUTDIR      = abspath(MC_OUTDIR_REL)
 MC_INPUT_DIR   = os.path.join(MC_OUTDIR, "inputs")
 MC_EXPR        = os.path.join(MC_INPUT_DIR, "joint_expr_matrix.rds")
@@ -322,6 +409,10 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
             "multicohort profile expects paths.vst_joint_rds to match the multicohort inputs output"
         )
 
+    # Rule: build_multicohort_joint_inputs
+    # Method role: data-preparation rule that merges cohort-level VST matrices into the multicohort expression space.
+    # Flow: configured profile VST matrices -> joint expression matrix and sample metadata.
+    # Downstream use: supplies the multicohort_cancer input matrix for feature selection and pan-cancer aggregation.
     rule build_multicohort_joint_inputs:
         """Merge cohort-level VST matrices into the joint expression matrix and metadata."""
         input:
@@ -350,6 +441,46 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
               > "{log}" 2>&1
             '''
 
+
+# =============================================================================
+# DATA PREPARATION
+# =============================================================================
+# Stage role: harmonises configured cohort expression matrices and metadata before feature selection.
+# Multicohort joint-input construction and per-profile cell/tumour splits live
+# here so all downstream sections consume materialised expression matrices.
+
+# Resolves cell line and tumour VST expression matrices (absolute; external inputs).
+# Falls back to vst_joint_rds for profiles (e.g. brca, nbl) that do not define
+# separate cell_vst_rds / tumour_vst_rds keys.
+CELL_VST   = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "cell_vst_rds")
+TUMOUR_VST = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "tumour_vst_rds")
+
+if profile_name in ("brca", "nbl", "rbl"):
+
+    # Rule: split_profile_joint_vst
+    # Method role: data-preparation rule that separates a profile joint VST object by sample type.
+    # Flow: joint profile VST matrix -> cell-line and tumour VST matrices.
+    # Downstream use: supplies agnostic clustering and tumour-neighbourhood input construction.
+    rule split_profile_joint_vst:
+        input:
+            joint = VST_JOINT
+        output:
+            cell = CELL_VST,
+            tumour = TUMOUR_VST
+        params:
+            script = os.path.join(SCRIPTS_DIR, "split_joint_vst_by_sample_type.R")
+        log: os.path.join(LOGROOT, "split_joint_vst_by_sample_type.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "$(dirname "{output.cell}")" "$(dirname "{output.tumour}")"
+            Rscript "{params.script}" \
+              --joint_rds "{input.joint}" \
+              --out_cell "{output.cell}" \
+              --out_tumour "{output.tumour}" \
+              > "{log}" 2>&1
+            '''
+
 # Feature list paths.
 # _REL variant → used in rule output: declarations (relative, for portable DAG tracking).
 # Non-suffixed absolute variant → used in rule input:, params:, and shell: references.
@@ -370,27 +501,19 @@ FEATURE_METHOD_OUTDIR     = os.path.join(UNSUP,     "feature_selection_unsupervi
 TUMOUR_NH_INPUT_ROOT_REL  = os.path.join(UNSUP_REL, "tumour_neighbourhoods_input")
 TUMOUR_NH_INPUT_ROOT      = os.path.join(UNSUP,     "tumour_neighbourhoods_input")
 
-# Initial pipeline target (Stage 6).  Overridden at end of file after
-# Stage 7 variables are defined so that rule all: includes DESeq2 completion.
-PIPELINE_TARGET = os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv")
+# PIPELINE_TARGET remains initialised near rule all; final assembly is handled
+# by build_pipeline_targets() after all optional section variables are defined.
 
 
 # =============================================================================
-# STAGE 0: FEATURE SELECTION
+# FEATURE SELECTION
 # =============================================================================
+# Stage role: derives unsupervised gene sets that define downstream feature-distance representations.
 
-# -----------------------------------------------------------------------------
-# RULE: feature_selection_unsupervised
-#
-# Purpose:
-#   Start the analysis by creating gene lists that define different 'views' of the
-#   same data. Each feature-selection method picks genes in a different way.
-#
-# Why this matters:
-#   All downstream clustering rules depend on these gene sets. A direction such as
-#   'Variance_euc' means: use the Variance-selected genes, then cluster with
-#   Euclidean distance.
-# -----------------------------------------------------------------------------
+# Rule: feature_selection_unsupervised
+# Method role: analysis rule that derives unsupervised gene sets for each configured feature method.
+# Flow: profile VST expression matrix -> method-specific ranked gene lists.
+# Downstream use: defines the feature component of every feature-distance representation.
 rule feature_selection_unsupervised:
     """
     Selects the top N genes from the joint VST expression matrix using multiple
@@ -432,35 +555,9 @@ rule feature_selection_unsupervised:
 
 
 # =============================================================================
-# STAGE 1: AGNOSTIC CLUSTERING — CONFIGURATION
+# AGNOSTIC CLUSTERING INPUT CONSTRUCTION / CONFIGURATION
 # =============================================================================
-
-# Resolves cell line and tumour VST expression matrices (absolute; external inputs).
-# Falls back to vst_joint_rds for profiles (e.g. brca, nbl) that do not define
-# separate cell_vst_rds / tumour_vst_rds keys.
-CELL_VST   = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "cell_vst_rds")
-TUMOUR_VST = cfgget_path_abs(cfgrel("paths", "vst_joint_rds"), "paths", "tumour_vst_rds")
-
-if profile_name in ("brca", "nbl", "rbl"):
-    rule split_profile_joint_vst:
-        input:
-            joint = VST_JOINT
-        output:
-            cell = CELL_VST,
-            tumour = TUMOUR_VST
-        params:
-            script = os.path.join(SCRIPTS_DIR, "split_joint_vst_by_sample_type.R")
-        log: os.path.join(LOGROOT, "split_joint_vst_by_sample_type.log")
-        conda: CONDA_ENV_R
-        shell:
-            r'''
-            mkdir -p "$(dirname "{output.cell}")" "$(dirname "{output.tumour}")"
-            Rscript "{params.script}" \
-              --joint_rds "{input.joint}" \
-              --out_cell "{output.cell}" \
-              --out_tumour "{output.tumour}" \
-              > "{log}" 2>&1
-            '''
+# Stage role: maps each feature-distance representation to filtered expression inputs and clustering parameters.
 
 # Resolves agnostic clustering output root.
 # Config override (agnostic_cluster_root) must be a relative path; if absent,
@@ -500,6 +597,7 @@ PAN_CANCER_FEATURE_SET_GENE_LIST = cfg.get("features", {}).get("pan_cancer_featu
 EXTERNAL_GENE_LIST_FEATURES = {PAN_CANCER_FEATURE_SET_NAME} if PAN_CANCER_FEATURE_SET_GENE_LIST else set()
 
 
+# Method helper: derives the majority-style edge-support threshold from configured representations.
 def _resolve_majority_support_threshold():
     """
     Resolves the majority-style support threshold m = max(2, ceil(|R| / 2))
@@ -548,6 +646,7 @@ if DISABLE_PCA_EVERYWHERE:
     vprint(f"[Snakefile] Filtered PCA kinds: HC_KINDS={HC_KINDS}, KM_KINDS={KM_KINDS}")
 
 
+# Method helper: extracts the feature component from a feature-distance representation name.
 def dir_to_feature(direction):
     """Extracts the feature method name from a direction string (e.g., 'Variance_euc' → 'Variance')."""
     if direction.startswith("pam50"):
@@ -559,11 +658,13 @@ def dir_to_feature(direction):
             return direction
 
 
+# Method helper: extracts the distance metric from a feature-distance representation name.
 def dir_to_dist(direction):
     """Maps a direction suffix to its R-compatible distance method string."""
     return "correlation" if direction.endswith("corr") else "euclidean"
 
 
+# Method helper: maps a representation to the gene-list file consumed by clustering input construction.
 def dir_to_gene_list(direction):
     """
     Returns the **relative** path to the gene list file appropriate for a given
@@ -602,6 +703,7 @@ def dir_to_gene_list(direction):
         )
 
 
+# Method helper: maps a representation to the script-level gene-set argument used by downstream rules.
 def dir_to_geneset(direction):
     """Returns a human-readable gene set label for annotation and reporting purposes."""
     feature = dir_to_feature(direction)
@@ -613,6 +715,7 @@ def dir_to_geneset(direction):
         return f"{feature}_top{method_topn(feature)}"
 
 
+# Method helper: validates representation naming against the expected feature-list path at parse time.
 def validate_direction_to_gene_list(direction):
     """
     Validates that a direction string correctly resolves to its gene-list file.
@@ -683,19 +786,15 @@ def agn_outdir_dir(direction, kind):
 
 
 # =============================================================================
-# STAGE 1: AGNOSTIC CLUSTERING — RULES
+# AGNOSTIC CLUSTERING
 # =============================================================================
+# Stage role: runs explicit clustering families for each configured feature-distance representation.
 
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_build_inputs
 #
-# Purpose:
-#   For one analysis direction, subset the cell-line and tumour expression matrices
-#   to only the genes relevant for that direction.
-#
-# Output meaning:
-#   These filtered matrices are the clean starting inputs for all clustering jobs
-#   for that direction.
+# Method role: constructs representation-specific cell-line and tumour expression matrices.
+# Flow: VST matrices plus the configured gene list -> filtered clustering inputs.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_build_inputs:
     """
@@ -730,12 +829,8 @@ rule agnostic_cluster_build_inputs:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_pca_hc_cell
 #
-# Purpose:
-#   Cluster only the cell-line matrix using hierarchical clustering after PCA.
-#
-# Beginner note:
-#   'pca_hc' means the data are first reduced to principal components, then
-#   hierarchical clustering is performed.
+# Method role: clusters cell-line samples after PCA using hierarchical clustering.
+# Flow: filtered cell-line matrix -> PCA hierarchical-clustering assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_hc_cell:
     """
@@ -779,7 +874,8 @@ rule agnostic_cluster_pca_hc_cell:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_pca_hc_tumour
 #
-# Same idea as the previous rule, but now only tumour samples are clustered.
+# Method role: clusters tumour samples after PCA within the configured feature-distance representation.
+# Flow: filtered tumour expression matrix -> tumour-only PCA hierarchical-clustering assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_hc_tumour:
     """
@@ -823,12 +919,9 @@ rule agnostic_cluster_pca_hc_tumour:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_pca_hc_joint
 #
-# Purpose:
-#   Cluster the combined cell-line + tumour matrix together after PCA.
-#
-# Why this is useful:
-#   Joint clustering lets you see whether cell lines and tumours occupy similar
-#   regions of transcriptomic space.
+# Method role: clusters combined cell-line and tumour samples after PCA using hierarchical clustering.
+# Flow: filtered joint expression matrix -> PCA joint-clustering assignment.
+# Joint clustering evaluates whether cell-line and tumour samples occupy neighbouring transcriptomic regions.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_hc_joint:
     """
@@ -875,8 +968,8 @@ rule agnostic_cluster_pca_hc_joint:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_pca_kmeans_cell
 #
-# Purpose:
-#   Run k-means on PCA-reduced cell-line data for one direction.
+# Method role: clusters PCA-reduced cell-line samples using k-means for one representation.
+# Flow: filtered cell-line matrix -> PCA k-means assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_kmeans_cell:
     """
@@ -919,8 +1012,8 @@ rule agnostic_cluster_pca_kmeans_cell:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_pca_kmeans_tumour
 #
-# Purpose:
-#   Run k-means on PCA-reduced tumour data for one direction.
+# Method role: clusters PCA-reduced tumour samples using k-means for one representation.
+# Flow: filtered tumour matrix -> PCA k-means assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_kmeans_tumour:
     """
@@ -963,8 +1056,8 @@ rule agnostic_cluster_pca_kmeans_tumour:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_pca_kmeans_joint
 #
-# Purpose:
-#   Run k-means on the PCA-reduced joint cell-line + tumour matrix.
+# Method role: clusters PCA-reduced joint cell-line and tumour samples using k-means.
+# Flow: filtered joint expression matrix -> PCA joint k-means assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_pca_kmeans_joint:
     """
@@ -1010,9 +1103,8 @@ rule agnostic_cluster_pca_kmeans_joint:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_hc_cell
 #
-# Purpose:
-#   Run hierarchical clustering directly on the filtered cell-line matrix
-#   without PCA. This keeps the analysis in the original selected-gene space.
+# Method role: clusters filtered cell-line samples directly using hierarchical clustering.
+# Flow: filtered cell-line matrix -> raw-space hierarchical-clustering assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_hc_cell:
     """
@@ -1055,8 +1147,8 @@ rule agnostic_cluster_hc_cell:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_hc_tumour
 #
-# Purpose:
-#   Run hierarchical clustering directly on the filtered tumour matrix.
+# Method role: clusters filtered tumour samples directly using hierarchical clustering.
+# Flow: filtered tumour matrix -> raw-space hierarchical-clustering assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_hc_tumour:
     """
@@ -1097,8 +1189,8 @@ rule agnostic_cluster_hc_tumour:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_hc_joint
 #
-# Purpose:
-#   Run hierarchical clustering directly on the filtered joint matrix.
+# Method role: clusters filtered joint cell-line and tumour samples using hierarchical clustering.
+# Flow: filtered joint expression matrix -> raw-space joint hierarchical-clustering assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_hc_joint:
     """
@@ -1143,8 +1235,8 @@ rule agnostic_cluster_hc_joint:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_kmeans_cell
 #
-# Purpose:
-#   Run k-means directly on the filtered cell-line matrix without PCA.
+# Method role: clusters filtered cell-line samples directly using k-means.
+# Flow: filtered cell-line matrix -> raw-space k-means assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_kmeans_cell:
     """
@@ -1186,8 +1278,8 @@ rule agnostic_cluster_kmeans_cell:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_kmeans_tumour
 #
-# Purpose:
-#   Run k-means directly on the filtered tumour matrix without PCA.
+# Method role: clusters filtered tumour samples directly using k-means.
+# Flow: filtered tumour matrix -> raw-space k-means assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_kmeans_tumour:
     """
@@ -1227,8 +1319,8 @@ rule agnostic_cluster_kmeans_tumour:
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_kmeans_joint
 #
-# Purpose:
-#   Run k-means directly on the filtered joint cell-line + tumour matrix.
+# Method role: clusters filtered joint cell-line and tumour samples directly using k-means.
+# Flow: filtered joint expression matrix -> raw-space joint k-means assignment.
 # -----------------------------------------------------------------------------
 rule agnostic_cluster_kmeans_joint:
     """
@@ -1268,18 +1360,10 @@ rule agnostic_cluster_kmeans_joint:
           > "{log}" 2>&1
         '''
 
-
-# -----------------------------------------------------------------------------
-# RULE: agnostic_cluster_all
-#
-# Purpose:
-#   This is a collector rule. It does not perform a new analysis itself.
-#   Instead, it asks Snakemake to build every clustering result that belongs to
-#   the active direction set and clustering kinds.
-#
-# Why collector rules are useful:
-#   They provide one clean target that stands for 'finish this whole stage'.
-# -----------------------------------------------------------------------------
+# Rule: agnostic_cluster_all
+# Method role: collector target that requires all agnostic clustering outputs for configured directions.
+# Flow: expected clustering output paths -> Snakemake dependency aggregation only.
+# Downstream use: provides a stage-level target without performing a new analysis.
 rule agnostic_cluster_all:
     """
     Convenience aggregation rule that collects all HC and k-means cluster outputs
@@ -1292,8 +1376,9 @@ rule agnostic_cluster_all:
 
 
 # =============================================================================
-# STAGE 2: CONSENSUS CLUSTERING
+# CONSENSUS CLUSTERING
 # =============================================================================
+# Stage role: aggregates clustering evidence within each representation before tumour-neighbourhood analysis.
 
 # Defines consensus output root and clustering kind identifiers.
 # PCA-containing kinds are stripped when DISABLE_PCA_EVERYWHERE is set.
@@ -1329,13 +1414,9 @@ def kind_to_alg(kind):
 # -----------------------------------------------------------------------------
 # RULE: consensus_cluster_ccp
 #
-# Purpose:
-#   Take the clustering results from the previous stage and summarize them into
-#   consensus-clustering outputs for one direction.
-#
-# Intuition:
-#   Instead of trusting a single clustering view, consensus clustering measures
-#   how stable the grouping is across related clustering runs.
+# Method role: computes resampling-based consensus clustering for one representation.
+# Flow: agnostic clustering outputs plus the feature list -> consensus-clustering assignment.
+# Consensus clustering evaluates grouping stability across related clustering runs.
 # -----------------------------------------------------------------------------
 rule consensus_cluster_ccp:
     """
@@ -1381,14 +1462,10 @@ rule consensus_cluster_ccp:
           --cluster_rds {output.cluster_rds} > {log} 2>&1
         '''
 
-
-# -----------------------------------------------------------------------------
-# RULE: consensus_cluster_all
-#
-# Purpose:
-#   Another collector rule. It makes Snakemake build all consensus outputs across
-#   the configured directions for the active profile.
-# -----------------------------------------------------------------------------
+# Rule: consensus_cluster_all
+# Method role: collector target that requires all consensus clustering outputs for configured directions.
+# Flow: expected consensus output paths -> Snakemake dependency aggregation only.
+# Downstream use: provides a stage-level target without performing a new analysis.
 rule consensus_cluster_all:
     """
     Convenience aggregation rule that collects all consensus cluster outputs
@@ -1401,8 +1478,9 @@ rule consensus_cluster_all:
 
 
 # =============================================================================
-# STAGE 3: TUMOUR NEIGHBOURHOOD INPUT CONSTRUCTION
+# TUMOUR-NEIGHBOURHOOD INPUT STAGING
 # =============================================================================
+# Stage role: stages representation-specific inputs, including optional PAM50 matrices, for tumour-neighbourhood rules.
 
 TUMOUR_NH_ROOT     = os.path.join(UNSUP_REL, "tumour_neighbourhoods")
 # Absolute counterpart used in shell find commands to ensure correctness on HPC
@@ -1500,6 +1578,11 @@ if HAS_PAM50_DIRECTIONS:
         _DSMZ_PAM50_PATH = None
 
 if HAS_PAM50_DIRECTIONS and _TCGA_PAM50_PATH and _DSMZ_PAM50_PATH:
+
+    # Rule: tumour_nh_build_inputs_pam50
+    # Method role: input-staging rule for PAM50 tumour-neighbourhood representations.
+    # Flow: configured PAM50 expression and mapping inputs -> staged neighbourhood expression and mapping RDS files.
+    # Downstream use: lets PAM50 directions enter the same tumour-neighbourhood rules as feature-derived directions.
     rule tumour_nh_build_inputs_pam50:
         """
         Constructs the joint PAM50 expression matrix and cell-line-to-sample mapping
@@ -1526,17 +1609,14 @@ if HAS_PAM50_DIRECTIONS and _TCGA_PAM50_PATH and _DSMZ_PAM50_PATH:
 
 
 # =============================================================================
-# STAGE 3: TUMOUR NEIGHBOURHOOD ANALYSIS
+# TUMOUR-NEIGHBOURHOOD ANALYSIS
 # =============================================================================
+# Stage role: ranks patient tumours around each cell-line within each clustering representation.
 
-# -----------------------------------------------------------------------------
-# RULE: tumour_nh_hc
-#
-# Purpose:
-#   Run tumour-neighbourhood analysis for all directions using hierarchical
-#   clustering outputs. PAM50 directions receive pre-built staged expression
-#   and mapping files via params; feature-set directions resolve from config.
-# -----------------------------------------------------------------------------
+# Rule: tumour_nh_hc
+# Method role: analysis rule that runs tumour-neighbourhood scoring from hierarchical-clustering evidence.
+# Flow: representation-specific consensus inputs -> neighbourhood QC, UMAP, and probability tables.
+# Downstream use: feeds within-representation p-consensus and patient-referenced graph construction.
 rule tumour_nh_hc:
     """
     Computes per-cell-line tumour neighbourhoods for all directions using
@@ -1577,6 +1657,10 @@ rule tumour_nh_hc:
         '''
 
 
+# Rule: tumour_nh_km
+# Method role: analysis rule that runs tumour-neighbourhood scoring from k-means clustering evidence.
+# Flow: Euclidean representation inputs -> neighbourhood QC, UMAP, and probability tables.
+# Downstream use: complements hierarchical-clustering evidence for p-consensus aggregation.
 rule tumour_nh_km:
     """
     k-means neighbourhood pass for all Euclidean directions. PAM50 directions
@@ -1617,9 +1701,14 @@ rule tumour_nh_km:
 
 
 # =============================================================================
-# STAGE 4 PROBABILISTIC NEIGHBOURHOOD CONSENSUS
+# WITHIN-REPRESENTATION P-CONSENSUS
 # =============================================================================
+# Stage role: computes tumour-neighbourhood probabilities within each representation.
 
+# Rule: tumour_nh_consensus
+# Method role: analysis rule that combines tumour-neighbourhood runs within a representation.
+# Flow: HC/KM neighbourhood outputs -> final p-consensus RDS for the direction.
+# Downstream use: supplies cross-representation p-consensus aggregation.
 rule tumour_nh_consensus:
     """
     Probabilistic neighbourhood consensus for every configured direction.
@@ -1652,9 +1741,14 @@ rule tumour_nh_consensus:
 
 
 # =============================================================================
-# STAGE 5: Cell-line Similarity Graph
+# PATIENT-REFERENCED CELL-LINE SIMILARITY GRAPHS
 # =============================================================================
+# Stage role: converts per-representation tumour-neighbourhood evidence into patient-referenced cell-line graph sidecars.
 
+# Rule: cell_line_similarity_graph
+# Method role: analysis rule that converts p-consensus neighbourhood evidence into a cell-line graph per representation.
+# Flow: representation p-consensus output -> graph edges and node annotations.
+# Downstream use: feeds resolved-neighbour and multi-representation support-network stages.
 rule cell_line_similarity_graph:
     input:
         consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction)
@@ -1689,24 +1783,36 @@ rule cell_line_similarity_graph:
           > {log} 2>&1
         '''
 
+# =============================================================================
+# P-CONSENSUS AGGREGATION
+# =============================================================================
+# Stage role: compares p-consensus results across representations and prepares graph-resolution inputs.
 P_CONS_ALL_DIR = os.path.join(TUMOUR_NH_ROOT, "final_consensus_all")
 P_CONS_PLOTS_DIR = os.path.join(P_CONS_ALL_DIR, "plots")
-P_CONS_THESIS_COHORTS = ["brca", "nbl", "rbl"]
-P_CONS_THESIS_COHORT_LABELS = {
+P_CONS_PATIENT_REFERENCED_COHORTS = ["brca", "nbl", "rbl"]
+P_CONS_PATIENT_REFERENCED_COHORT_LABELS = {
     "brca": "BRCA",
     "nbl": "NBL",
     "rbl": "RBL",
 }
-P_CONS_THESIS_FIG_DIR = abspath(
-    os.path.join(
-        config.get("multicohort_cancer", {}).get("outdir", "results/unsupervised/multicohort_cancer"),
-        "thesis_figures",
-    )
+P_CONS_FEATURE_DISTANCE_REPRESENTATION_DIR_ABS = os.path.join(
+    BASE,
+    "results",
+    "unsupervised",
+    "p_consensus",
+    "feature_distance_representations",
 )
-P_CONS_DIRECTION_DUMBBELL_PREFIX = os.path.join(
-    P_CONS_THESIS_FIG_DIR,
-    "Fig_p_consensus_direction_comparison_dumbbell",
+P_CONS_FEATURE_DISTANCE_REPRESENTATION_DIR = os.path.relpath(
+    P_CONS_FEATURE_DISTANCE_REPRESENTATION_DIR_ABS,
+    BASE,
 )
+
+P_CONS_FEATURE_DISTANCE_REPRESENTATION_PREFIX = os.path.join(
+    P_CONS_FEATURE_DISTANCE_REPRESENTATION_DIR,
+    "Fig_p_consensus_feature_distance_representations_dumbbell",
+)
+
+P_CONS_DIRECTION_DUMBBELL_PREFIX = P_CONS_FEATURE_DISTANCE_REPRESENTATION_PREFIX
 
 def p_consensus_direction_summary_for_profile(profile):
     cfgp = get_profile_cfg(profile)
@@ -1720,34 +1826,174 @@ def p_consensus_direction_summary_for_profile(profile):
         "p_consensus_direction_summary.tsv",
     )
 
-_COHORT_UPPER = profile_name.upper()
-# Naming-prefix selector: patient-referenced cohort graphs (BRCA/NBL/RBL etc.) are
-# the cohort-specific outputs derived from tumour/patient-referenced similarity;
-# the multicohort_cancer profile produces the pan-cancer integrated graph and
-# carries the pan_cancer prefix instead. Keeping these two namings distinct is a
-# hard requirement of the patient_referenced naming pass.
-_PR_PREFIX = "pan_cancer_" if IS_MULTICOHORT_PROFILE else "patient_referenced_"
-P_CONS_THESIS_RESOLUTION_PREFIX = os.path.join(
-    P_CONS_PLOTS_DIR,
-    f"Fig_{_COHORT_UPPER}_{_PR_PREFIX}resolved_cell_line_neighbourhood_graph",
+def disease_display_label(cancer_type):
+    """Return a visible full disease name from the active profile cancer type."""
+    label = str(cancer_type or "").strip()
+    lookup = {
+        "BRCA": "Breast Cancer",
+        "BREAST CANCER": "Breast Cancer",
+        "NBL": "Neuroblastoma",
+        "NEUROBLASTOMA": "Neuroblastoma",
+        "RBL": "Retinoblastoma",
+        "RETINOBLASTOMA": "Retinoblastoma",
+    }
+    return lookup.get(label.upper(), label or str(profile_name))
+
+def slugify_label(label):
+    """Convert a visible label into a stable lowercase filename slug."""
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", str(label).strip().lower())
+    return re.sub(r"_+", "_", slug).strip("_")
+
+P_CONS_DISEASE_LABEL = disease_display_label(
+    cfg.get("analysis", {}).get("cancer_type", profile_name)
 )
-P_CONS_THESIS_CONSENSUS_PREFIX = os.path.join(
+P_CONS_DISEASE_SLUG = slugify_label(P_CONS_DISEASE_LABEL)
+P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX = os.path.join(
     P_CONS_PLOTS_DIR,
-    f"Fig_{_COHORT_UPPER}_{_PR_PREFIX}support_threshold_consensus_cell_line_similarity_network",
+    f"per_cellline_feature_distance_{P_CONS_DISEASE_SLUG}_cleveland",
+)
+
+_COHORT_UPPER = profile_name.upper()
+# Naming-prefix selector for patient-referenced graph outputs.  The
+# multicohort_cancer profile is the canonical multicohort result tree, so graph
+# sidecars in that tree use a multicohort_cancer_ prefix rather than the
+# pan_cancer_ namespace reserved for feature-space/ranking outputs.  Figure
+# names already carry Fig_MULTICOHORT_CANCER and therefore omit the repeated
+# multicohort_cancer_ token from the figure stem.
+_PR_PREFIX = "multicohort_cancer_" if IS_MULTICOHORT_PROFILE else "patient_referenced_"
+_PR_FIGURE_PREFIX = "" if IS_MULTICOHORT_PROFILE else _PR_PREFIX
+P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"Fig_{_COHORT_UPPER}_{_PR_FIGURE_PREFIX}resolved_cell_line_neighbourhood_graph",
+)
+P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"Fig_{_COHORT_UPPER}_{_PR_FIGURE_PREFIX}support_threshold_consensus_cell_line_similarity_network",
 )
 P_CONS_SHORTNAMES_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}cell_line_display_names.tsv")
 P_CONS_RESOLVED_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_edges.tsv")
 P_CONS_RESOLVED_NODE_STATS_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_node_stats.tsv")
 P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}support_threshold_consensus_cell_line_similarity_edges.tsv")
+P_CONS_MULTI_REP_EDGE_SUPPORT_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_edge_support_all_pairs.tsv",
+)
+P_CONS_MULTI_REP_MAJORITY_PREFIX = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"Fig_{_COHORT_UPPER}_multi_representation_majority_threshold_consensus_network",
+)
+P_CONS_MULTI_REP_MAJORITY_EDGES_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_majority_threshold_consensus_network_edges.tsv",
+)
+P_CONS_MULTI_REP_MAJORITY_NODE_STATS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_majority_threshold_consensus_network_node_stats.tsv",
+)
+P_CONS_MULTI_REP_MAJORITY_COMPONENTS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_majority_threshold_consensus_network_components.tsv",
+)
+P_CONS_MULTI_REP_UNION_PREFIX = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"Fig_{_COHORT_UPPER}_multi_representation_union_supported_edges_network",
+)
+P_CONS_MULTI_REP_UNION_FULL_LABEL_PREFIX = (
+    P_CONS_MULTI_REP_UNION_PREFIX + "_full_node_labels"
+)
+P_CONS_MULTI_REP_UNION_EDGES_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_edges.tsv",
+)
+P_CONS_MULTI_REP_UNION_NODE_STATS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_node_stats.tsv",
+)
+P_CONS_MULTI_REP_UNION_COMPONENTS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_components.tsv",
+)
+P_CONS_MULTI_REP_UNION_SELECTED_NODE_LABELS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_selected_node_labels.tsv",
+)
+P_CONS_MULTI_REP_UNION_FULL_NODE_LABELS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_full_node_labels.tsv",
+)
+P_CONS_MULTI_REP_UNION_FULL_NODE_STATS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_full_node_labels_node_stats.tsv",
+)
+P_CONS_MULTI_REP_UNION_FULL_COMPONENTS_TSV = os.path.join(
+    P_CONS_PLOTS_DIR,
+    f"{profile_name}_multi_representation_union_supported_edges_network_full_node_labels_components.tsv",
+)
+POST_RESOLUTION_COHORTS = ["NBL", "BRCA", "RBL"]
+POST_RESOLUTION_TABLE_DIR = os.path.join("results", "tables")
+POST_RESOLUTION_STRATIFICATION_TABLES = expand(
+    os.path.join(
+        POST_RESOLUTION_TABLE_DIR,
+        "{cohort}_post_resolution_edge_support_stratification.tsv",
+    ),
+    cohort=POST_RESOLUTION_COHORTS,
+)
+POST_RESOLUTION_COMBINED_STRATIFICATION_TSV = os.path.join(
+    POST_RESOLUTION_TABLE_DIR,
+    "combined_post_resolution_edge_support_stratification.tsv",
+)
+
+def _post_resolution_plots_dir(cohort):
+    cohort_slug = str(cohort).lower()
+    return os.path.join(
+        "results",
+        "unsupervised",
+        cohort_slug,
+        "tumour_neighbourhoods",
+        "final_consensus_all",
+        "plots",
+    )
+
+
+def _post_resolution_union_edges(wildcards):
+    cohort_slug = str(wildcards.cohort).lower()
+    return os.path.join(
+        _post_resolution_plots_dir(wildcards.cohort),
+        f"{cohort_slug}_multi_representation_union_supported_edges_network_edges.tsv",
+    )
+
+
+def _post_resolution_consensus_edges(wildcards):
+    cohort_slug = str(wildcards.cohort).lower()
+    return os.path.join(
+        _post_resolution_plots_dir(wildcards.cohort),
+        f"{cohort_slug}_multi_representation_majority_threshold_consensus_network_edges.tsv",
+    )
+
+
+def _post_resolution_resolved_edges(wildcards):
+    return os.path.join(
+        _post_resolution_plots_dir(wildcards.cohort),
+        "patient_referenced_resolved_cell_line_neighbourhood_graph_edges.tsv",
+    )
+
+
+def _post_resolution_nodes(wildcards):
+    cohort_slug = str(wildcards.cohort).lower()
+    return os.path.join(
+        _post_resolution_plots_dir(wildcards.cohort),
+        f"{cohort_slug}_multi_representation_union_supported_edges_network_node_stats.tsv",
+    )
+
 P_CONS_ANCHOR_AUDIT_TSV            = os.path.join(P_CONS_PLOTS_DIR, f"{_PR_PREFIX}resolved_cell_line_neighbourhood_anchor_centrality_audit.tsv")
 P_CONS_DSMZ_META_CSV = cfgget_path_abs(
     cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"),
     "paths", "dsmz_meta_csv",
 )
-P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX = P_CONS_THESIS_RESOLUTION_PREFIX + "_component_panels"
-P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX = P_CONS_THESIS_CONSENSUS_PREFIX + "_component_panels"
-P_CONS_RESOLVED_INTERACTIVE_HTML = P_CONS_THESIS_RESOLUTION_PREFIX + "_interactive.html"
-P_CONS_SUPPORT_INTERACTIVE_HTML = P_CONS_THESIS_CONSENSUS_PREFIX + "_interactive.html"
+P_CONS_RESOLVED_COMPONENT_PANELS_PREFIX = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + "_component_panels"
+P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + "_component_panels"
+P_CONS_RESOLVED_INTERACTIVE_HTML = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + "_interactive.html"
+P_CONS_SUPPORT_INTERACTIVE_HTML = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + "_interactive.html"
 P_CONS_RESOLVED_COMPONENT_SUMMARY_TSV = os.path.join(
     P_CONS_PLOTS_DIR,
     f"{_PR_PREFIX}resolved_cell_line_neighbourhood_graph_component_summary.tsv",
@@ -1772,12 +2018,6 @@ PAN_CANCER_GRAPH_INSPECTION_TARGETS = (
         P_CONS_RESOLVED_INTERACTIVE_HTML,
         P_CONS_RESOLVED_COMPONENT_SUMMARY_TSV,
         P_CONS_RESOLVED_NODE_LABELS_TSV,
-        P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".pdf",
-        P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".png",
-        P_CONS_SUPPORT_COMPONENT_PANELS_PREFIX + ".svg",
-        P_CONS_SUPPORT_INTERACTIVE_HTML,
-        P_CONS_SUPPORT_COMPONENT_SUMMARY_TSV,
-        P_CONS_SUPPORT_NODE_LABELS_TSV,
     ]
     if IS_MULTICOHORT_PROFILE else []
 )
@@ -1998,6 +2238,10 @@ COMMUNITY_STABILITY_TARGETS = COMMUNITY_STABILITY_OUTPUTS if COMMUNITY_STABILITY
 STUDY_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, config.get("study_design", {}).get("outputs_dirname", "study_design"))
 VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 
+# Rule: summarize_p_consensus_all
+# Method role: aggregates p-consensus outputs across configured feature-distance representations.
+# Flow: per-direction p-consensus RDS files -> ranking, winner, weight, and cross-direction metric tables.
+# Downstream use: selects best-supported representations for resolved-neighbour graph construction and validation.
 rule summarize_p_consensus_all:
     input:
         consensus_rds = [nh_final_consensus_rds(d) for d in AGN_DIRECTIONS],
@@ -2034,6 +2278,44 @@ rule summarize_p_consensus_all:
         '''
 
 
+# Rule: plot_per_cellline_feature_distance_cleveland
+# Method role: final plotting rule for per-cell-line representation support.
+# Flow: p-consensus support tables -> Cleveland-style PDF/PNG diagnostic plot.
+# Downstream use: reporting visualisation only; it does not alter analysis targets.
+rule plot_per_cellline_feature_distance_cleveland:
+    input:
+        cell_dir_summary = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.tsv"),
+        winners_frac = os.path.join(P_CONS_ALL_DIR, "p_consensus_winners_by_frac_ge_thr.tsv"),
+        cfg = CFGFILE_ABS
+    output:
+        pdf = P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".pdf",
+        png = P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".png"
+    params:
+        script = os.path.join(BASE, "scripts", "plot_per_cellline_feature_distance_cleveland.R"),
+        disease_label = P_CONS_DISEASE_LABEL,
+        threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
+    log: os.path.join(LOGROOT, "plot_per_cellline_feature_distance_cleveland.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR} $(dirname {log})
+        Rscript {params.script} \
+          --summary-tsv {input.cell_dir_summary} \
+          --winners-tsv {input.winners_frac} \
+          --out-pdf {output.pdf} \
+          --out-png {output.png} \
+          --disease-label "{params.disease_label}" \
+          --threshold {params.threshold} \
+          > {log} 2>&1
+        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.png} || (echo "ERROR: missing {output.png}" >&2; exit 1)
+        '''
+
+
+# Rule: plot_p_consensus_direction_comparison_dumbbell
+# Method role: supplementary plotting rule visualising p-consensus direction metrics across cohorts.
+# Flow: cohort direction-metric tables -> dumbbell figure and caption text.
+# Downstream use: cross-cohort reporting visualisation, not a modelling step.
 rule plot_p_consensus_direction_comparison_dumbbell:
     input:
         brca = p_consensus_direction_summary_for_profile("brca"),
@@ -2063,120 +2345,15 @@ rule plot_p_consensus_direction_comparison_dumbbell:
           > {log} 2>&1
         '''
 
-
-rule materialize_study_design:
-    input:
-        cfg = CFGFILE_ABS,
-        study_design = STUDY_DESIGN_FILE
-    output:
-        question_txt = os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
-        cohort_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
-        labels_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
-        inference_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
-        endpoint_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv")
-    params:
-        script = os.path.join(BASE, "scripts", "materialize_study_design.R"),
-        config = CFGFILE_ABS,
-        study_design = STUDY_DESIGN_FILE
-    log: os.path.join(LOGROOT, "materialize_study_design.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p $(dirname {output.question_txt})
-        Rscript {params.script}           --config {params.config}           --study-design {params.study_design}           --profile "{profile_name}"           --out-question {output.question_txt}           --out-cohorts {output.cohort_manifest}           --out-labels {output.labels_manifest}           --out-inference {output.inference_manifest}           --out-endpoints {output.endpoint_manifest}           > {log} 2>&1
-        '''
-
-
-rule model_selection_summary:
-    input:
-        cfg = CFGFILE_ABS,
-        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
-        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv"),
-        winning_direction = os.path.join(P_CONS_ALL_DIR, "winning_direction.txt"),
-        graph_nodes = expand(
-            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
-                         "cell_line_similarity_graph_node_annotations_{direction}.tsv"),
-            direction=AGN_DIRECTIONS
-        )
-    output:
-        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
-        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_plot.pdf"),
-        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_notes.txt")
-    params:
-        script = os.path.join(BASE, "validation", "04_model_selection_summary.R"),
-        config = CFGFILE_ABS
-    log: os.path.join(LOGROOT, "model_selection_summary.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p $(dirname {output.summary_tsv})
-        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
-        '''
-
-
-rule neighbourhood_permutation_validation:
-    input:
-        cfg = CFGFILE_ABS,
-        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
-        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv")
-    output:
-        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
-        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_plot.pdf"),
-        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_notes.txt")
-    params:
-        script = os.path.join(BASE, "validation", "01_permutation_test_neighbourhood.R"),
-        config = CFGFILE_ABS
-    log: os.path.join(LOGROOT, "neighbourhood_permutation_validation.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p $(dirname {output.summary_tsv})
-        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
-        '''
-
-
-rule random_baseline_comparison:
-    input:
-        cfg = CFGFILE_ABS,
-        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv")
-    output:
-        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
-        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_plot.pdf"),
-        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_notes.txt")
-    params:
-        script = os.path.join(BASE, "validation", "02_random_baseline_comparison.R"),
-        config = CFGFILE_ABS
-    log: os.path.join(LOGROOT, "random_baseline_comparison.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p $(dirname {output.summary_tsv})
-        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
-        '''
-
-
-rule silhouette_report:
-    input:
-        cfg = CFGFILE_ABS
-    output:
-        report_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
-        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_notes.txt")
-    params:
-        script = os.path.join(BASE, "validation", "03_silhouette_report.R"),
-        config = CFGFILE_ABS
-    log: os.path.join(LOGROOT, "silhouette_report.log")
-    conda: CONDA_ENV_R
-    shell:
-        r'''
-        mkdir -p $(dirname {output.report_tsv})
-        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.report_tsv}           --out-notes {output.notes_txt}           > {log} 2>&1
-        '''
-
-
 # =============================================================================
-# STAGE 6: GRAPH-BASED CONSENSUS NEIGHBOUR RESOLUTION
+# GRAPH-BASED NEIGHBOUR RESOLUTION
 # =============================================================================
+# Stage role: resolves stable cell-line neighbours from patient-referenced support and best-direction evidence.
 
+# Rule: resolve_dsmz_graph_neighbours
+# Method role: graph-resolution rule that resolves stable cell-line neighbours using patient-referenced support.
+# Flow: p-consensus support tables and per-direction graph edges -> resolved-neighbour table and audit sidecars.
+# Downstream use: anchors final graph plotting, validation, DESeq2 grouping, and support-network construction.
 rule resolve_dsmz_graph_neighbours:
     """
     Resolves per-cell-line DSMZ neighbours by intersecting the global best-direction
@@ -2218,114 +2395,107 @@ rule resolve_dsmz_graph_neighbours:
         test -s {output.resolved_tsv} || (echo "ERROR: missing {output.resolved_tsv}" >&2; exit 1)
         '''
 
+# =============================================================================
+# MULTI-REPRESENTATION SUPPORT NETWORKS
+# =============================================================================
+# Stage role: builds support networks by aggregating edges across feature-distance representations.
 
-rule plot_patient_referenced_resolved_cell_line_neighbourhood_graph:
+# Rule: build_multi_representation_majority_threshold_consensus_network
+# Method role: analysis rule that retains edges supported by the configured majority threshold across representations.
+# Flow: per-representation graph edges -> majority-threshold support network and edge-support table.
+# Downstream use: supplies support-network plots and post-resolution support stratification.
+rule build_multi_representation_majority_threshold_consensus_network:
     """
-    Thesis figure for the resolved DSMZ similarity network after graph-based
-    neighbour resolution. The helper also writes short-name, edge-list, and
-    node-stat TSVs into the plot directory for figure provenance.
+    Computes the shared feature--distance representation edge-support table and
+    retains only edges satisfying the majority-style support threshold.
     """
     input:
-        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv"),
-        script = os.path.join(BASE, "scripts", "visualize_resolved_dsmz_graph.py"),
-        style = os.path.join(BASE, "scripts", "graph_plot_style.py")
+        node_universe = P_CONS_SHORTNAMES_TSV,
+        graph_edges = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
     output:
-        png = P_CONS_THESIS_RESOLUTION_PREFIX + ".png",
-        pdf = P_CONS_THESIS_RESOLUTION_PREFIX + ".pdf",
-        svg = P_CONS_THESIS_RESOLUTION_PREFIX + ".svg",
-        shortnames = P_CONS_SHORTNAMES_TSV,
-        edges = P_CONS_RESOLVED_EDGES_TSV,
-        node_stats = P_CONS_RESOLVED_NODE_STATS_TSV,
-        anchor_audit = P_CONS_ANCHOR_AUDIT_TSV
+        edges = P_CONS_MULTI_REP_MAJORITY_EDGES_TSV,
+        edge_support = P_CONS_MULTI_REP_EDGE_SUPPORT_TSV
     params:
-        out_prefix = P_CONS_THESIS_RESOLUTION_PREFIX,
-        label = profile_name.upper(),
-        dense_component_min_size = 8,
-        dense_component_min_density = 0.30,
-        dense_component_expand_factor = 2.00,
-        resolved_component_label_gap = 2.0,
-        resolved_grid_cols = 2,
-        resolved_grid_rows = 2,
-        resolved_cell_width = 96.0,
-        resolved_cell_height = 60.0,
-        resolved_row_gap = 16.0,
-        resolved_col_gap = 18.0,
-        resolved_legend_width = 68.0,
-        resolved_isolate_height = 18.0,
-        resolved_isolate_spacing = 18.0,
-        resolved_isolate_panel_padding_x = 12.0,
-        resolved_isolate_panel_padding_y = 1.4,
-        resolved_isolate_label_band_frac = 0.34,
-        resolved_isolate_max_per_row = 6,
-        resolved_isolate_panel_width_frac = 0.62,
-        resolved_footnote_height = 7.0,
-        resolved_component_cell_fill_x = 0.78,
-        resolved_component_cell_fill_y = 0.72,
-        resolved_dense_component_cell_fill_x = 0.92,
-        resolved_dense_component_cell_fill_y = 0.84,
-        resolved_c2_component_cell_fill_x = 0.88,
-        resolved_c2_component_cell_fill_y = 0.80,
-        c1_x_expand_factor = 3.00,
-        c1_y_expand_factor = 3.00,
-        c2_x_expand_factor = 1.35,
-        c2_y_expand_factor = 1.05,
-        isolate_gap = 8.0,
-        isolate_box_height_factor = 2.00,
-        isolate_label_y_frac = 0.010,
-        isolate_label_left_pad = 14.0,
-        legend_alignment_mode = "component-band"
-    log: os.path.join(LOGROOT, "plot_patient_referenced_resolved_cell_line_neighbourhood_graph.log")
+        script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
+        tumour_nh_dir = TUMOUR_NH_ROOT_ABS,
+        directions = ",".join(CONS_DIRECTIONS),
+        min_support = SIMILARITY_CONSENSUS_MIN_SUPPORT,
+        cohort = profile_name
+    log: os.path.join(LOGROOT, "build_multi_representation_majority_threshold_consensus_network.log")
     conda: CONDA_ENV_PY
     shell:
         r'''
         mkdir -p {P_CONS_PLOTS_DIR}
-        python {input.script} \
-          {input.resolved_tsv} \
-          {params.out_prefix} \
-          {params.label} \
-          --dense-component-min-size {params.dense_component_min_size} \
-          --dense-component-min-density {params.dense_component_min_density} \
-          --dense-component-expand-factor {params.dense_component_expand_factor} \
-          --component-label-gap {params.resolved_component_label_gap} \
-          --component-grid-ncols {params.resolved_grid_cols} \
-          --component-grid-nrows {params.resolved_grid_rows} \
-          --component-cell-width {params.resolved_cell_width} \
-          --component-cell-height {params.resolved_cell_height} \
-          --component-row-gap {params.resolved_row_gap} \
-          --component-col-gap {params.resolved_col_gap} \
-          --legend-width {params.resolved_legend_width} \
-          --isolate-region-height {params.resolved_isolate_height} \
-          --footnote-region-height {params.resolved_footnote_height} \
-          --component-cell-fill-x {params.resolved_component_cell_fill_x} \
-          --component-cell-fill-y {params.resolved_component_cell_fill_y} \
-          --dense-component-cell-fill-x {params.resolved_dense_component_cell_fill_x} \
-          --dense-component-cell-fill-y {params.resolved_dense_component_cell_fill_y} \
-          --c2-component-cell-fill-x {params.resolved_c2_component_cell_fill_x} \
-          --c2-component-cell-fill-y {params.resolved_c2_component_cell_fill_y} \
-          --c1-x-expand-factor {params.c1_x_expand_factor} \
-          --c1-y-expand-factor {params.c1_y_expand_factor} \
-          --c2-x-expand-factor {params.c2_x_expand_factor} \
-          --c2-y-expand-factor {params.c2_y_expand_factor} \
-          --isolate-gap {params.isolate_gap} \
-          --isolate-spacing {params.resolved_isolate_spacing} \
-          --isolate-panel-padding-x {params.resolved_isolate_panel_padding_x} \
-          --isolate-panel-padding-y {params.resolved_isolate_panel_padding_y} \
-          --isolate-label-band-frac {params.resolved_isolate_label_band_frac} \
-          --isolate-max-per-row {params.resolved_isolate_max_per_row} \
-          --isolate-panel-width-frac {params.resolved_isolate_panel_width_frac} \
-          --isolate-box-height-factor {params.isolate_box_height_factor} \
-          --isolate-label-y-frac {params.isolate_label_y_frac} \
-          --isolate-label-left-pad {params.isolate_label_left_pad} \
-          --legend-alignment-mode {params.legend_alignment_mode} \
+        python {params.script} \
+          --tumour_nh_dir {params.tumour_nh_dir} \
+          --out_edges {output.edges} \
+          --out_support {output.edge_support} \
+          --mode majority_threshold \
+          --cohort {params.cohort} \
+          --min_support {params.min_support} \
+          --directions {params.directions} \
+          --name_map {input.node_universe} \
+          --node_universe {input.node_universe} \
+          --require_short \
           > {log} 2>&1
-        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.edges} || (echo "ERROR: missing {output.edges}" >&2; exit 1)
+        test -s {output.edge_support} || (echo "ERROR: missing {output.edge_support}" >&2; exit 1)
         '''
 
+# Rule: build_multi_representation_union_supported_edges_network
+# Method role: analysis rule that retains every edge observed in at least one feature-distance representation.
+# Flow: per-representation graph edges -> union support network and component sidecars.
+# Downstream use: provides a sensitivity view of support-network topology.
+rule build_multi_representation_union_supported_edges_network:
+    """
+    Computes the same feature--distance representation support calculation and
+    retains every edge observed in at least one configured representation.
+    """
+    input:
+        node_universe = P_CONS_SHORTNAMES_TSV,
+        graph_edges = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        edges = P_CONS_MULTI_REP_UNION_EDGES_TSV
+    params:
+        script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
+        tumour_nh_dir = TUMOUR_NH_ROOT_ABS,
+        directions = ",".join(CONS_DIRECTIONS),
+        cohort = profile_name
+    log: os.path.join(LOGROOT, "build_multi_representation_union_supported_edges_network.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        python {params.script} \
+          --tumour_nh_dir {params.tumour_nh_dir} \
+          --out_edges {output.edges} \
+          --mode union_supported_edges \
+          --cohort {params.cohort} \
+          --min_support 1 \
+          --directions {params.directions} \
+          --name_map {input.node_universe} \
+          --node_universe {input.node_universe} \
+          --require_short \
+          > {log} 2>&1
+        test -s {output.edges} || (echo "ERROR: missing {output.edges}" >&2; exit 1)
+        '''
 
+# Rule: build_patient_referenced_support_threshold_consensus_cell_line_similarity_network
+# Method role: analysis rule that builds the patient-referenced support-threshold network from representation edges.
+# Flow: per-direction similarity edges -> consensus edge table, node statistics, and display-name sidecars.
+# Downstream use: supplies the support-threshold final graph and multicohort inspection plots.
 rule build_patient_referenced_support_threshold_consensus_cell_line_similarity_network:
     """
     Aggregates per-direction DSMZ similarity graph edge files into a single
-    consensus edge table for the thesis consensus-network figure.
+    consensus edge table for the support-threshold consensus network figure.
     """
     input:
         shortnames = P_CONS_SHORTNAMES_TSV,
@@ -2362,11 +2532,481 @@ rule build_patient_referenced_support_threshold_consensus_cell_line_similarity_n
         test -s {output.edges} || (echo "ERROR: missing {output.edges}" >&2; exit 1)
         '''
 
+# =============================================================================
+# FINAL GRAPH PLOTTING
+# =============================================================================
+# Stage role: renders final and supplementary graph views without changing graph topology.
 
+# Rule: plot_patient_referenced_resolved_cell_line_neighbourhood_graph
+# Method role: final plotting rule for the resolved-neighbour patient-referenced graph.
+# Flow: resolved graph edges, node statistics, and display names -> PDF/PNG/SVG graph outputs.
+# Downstream use: reporting visualisation only; topology is fixed by the resolution rule.
+rule plot_patient_referenced_resolved_cell_line_neighbourhood_graph:
+    """
+    Patient-referenced resolved-neighbourhood graph figure for the DSMZ
+    similarity network after graph-based neighbour resolution. The helper also
+    writes short-name, edge-list, and node-stat TSVs into the plot directory for
+    figure provenance.
+    """
+    input:
+        resolved_tsv = os.path.join(P_CONS_ALL_DIR, "resolved_dsmz_neighbours.tsv"),
+        script = os.path.join(BASE, "scripts", "visualize_resolved_dsmz_graph.py"),
+        style = os.path.join(BASE, "scripts", "graph_plot_style.py")
+    output:
+        png = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".png",
+        pdf = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".pdf",
+        svg = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".svg",
+        legend_png = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + "_legend.png",
+        legend_pdf = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + "_legend.pdf",
+        legend_svg = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + "_legend.svg",
+        shortnames = P_CONS_SHORTNAMES_TSV,
+        edges = P_CONS_RESOLVED_EDGES_TSV,
+        node_stats = P_CONS_RESOLVED_NODE_STATS_TSV,
+        anchor_audit = P_CONS_ANCHOR_AUDIT_TSV
+    params:
+        out_prefix = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX,
+        legend_out_prefix = P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + "_legend",
+        label = profile_name.upper(),
+        fig_w = graph_layout_value("resolved_patient_graph", "fig_w"),
+        fig_h = graph_layout_value("resolved_patient_graph", "fig_h"),
+        dpi = graph_layout_value("resolved_patient_graph", "dpi"),
+        node_size = graph_layout_value("resolved_patient_graph", "node_size"),
+        font_size = graph_layout_value("resolved_patient_graph", "font_size"),
+        edge_width_min = graph_layout_value("resolved_patient_graph", "edge_width_min"),
+        edge_width_max = graph_layout_value("resolved_patient_graph", "edge_width_max"),
+        legend_mode = graph_layout_value("resolved_patient_graph", "legend_mode"),
+        use_halo_labels_arg = "--use-halo-labels" if graph_layout_value("resolved_patient_graph", "use_halo_labels") else "",
+        halo_linewidth = graph_layout_value("resolved_patient_graph", "halo_linewidth"),
+        halo_color = graph_layout_value("resolved_patient_graph", "halo_color"),
+        dense_component_min_size = graph_layout_value("resolved_patient_graph", "dense_component_min_size"),
+        dense_component_min_density = graph_layout_value("resolved_patient_graph", "dense_component_min_density"),
+        dense_component_expand_factor = graph_layout_value("resolved_patient_graph", "dense_component_expand_factor"),
+        adaptive_component_layout_arg = "--adaptive-component-layout" if graph_layout_value("resolved_patient_graph", "adaptive_component_layout") else "",
+        adaptive_component_min_nodes = graph_layout_value("resolved_patient_graph", "adaptive_component_min_nodes"),
+        adaptive_component_min_density = graph_layout_value("resolved_patient_graph", "adaptive_component_min_density"),
+        adaptive_component_min_expand = graph_layout_value("resolved_patient_graph", "adaptive_component_min_expand"),
+        adaptive_component_max_expand = graph_layout_value("resolved_patient_graph", "adaptive_component_max_expand"),
+        adaptive_component_density_weight = graph_layout_value("resolved_patient_graph", "adaptive_component_density_weight"),
+        adaptive_component_size_weight = graph_layout_value("resolved_patient_graph", "adaptive_component_size_weight"),
+        adaptive_component_label_weight = graph_layout_value("resolved_patient_graph", "adaptive_component_label_weight"),
+        position_fill_x = graph_layout_value("resolved_patient_graph", "position_fill_x"),
+        position_fill_y = graph_layout_value("resolved_patient_graph", "position_fill_y"),
+        axis_margin_frac = graph_layout_value("resolved_patient_graph", "axis_margin_frac"),
+        label_overlap_avoidance_arg = "--label-overlap-avoidance" if graph_layout_value("resolved_patient_graph", "label_overlap_avoidance") else "",
+        label_padding_factor = graph_layout_value("resolved_patient_graph", "label_padding_factor"),
+        label_bbox_margin = graph_layout_value("resolved_patient_graph", "label_bbox_margin"),
+        max_label_overlap_iterations = graph_layout_value("resolved_patient_graph", "max_label_overlap_iterations"),
+        min_label_separation = graph_layout_value("resolved_patient_graph", "min_label_separation"),
+        avoid_isolate_overlap_arg = "--avoid-isolate-overlap" if graph_layout_value("resolved_patient_graph", "avoid_isolate_overlap") else "",
+        min_component_isolate_gap = graph_layout_value("resolved_patient_graph", "min_component_isolate_gap"),
+        isolate_panel_reserved_height = graph_layout_value("resolved_patient_graph", "isolate_panel_reserved_height"),
+        adaptive_isolate_y_shift_arg = "--adaptive-isolate-y-shift" if graph_layout_value("resolved_patient_graph", "adaptive_isolate_y_shift") else "",
+        component_isolate_gap_factor = graph_layout_value("resolved_patient_graph", "component_isolate_gap_factor"),
+        resolved_component_label_gap = graph_layout_value("resolved_patient_graph", "component_label_gap"),
+        resolved_grid_cols = graph_layout_value("resolved_patient_graph", "component_grid_cols"),
+        resolved_grid_rows = graph_layout_value("resolved_patient_graph", "component_grid_rows"),
+        resolved_cell_width = graph_layout_value("resolved_patient_graph", "component_cell_width"),
+        resolved_cell_height = graph_layout_value("resolved_patient_graph", "component_cell_height"),
+        resolved_row_gap = graph_layout_value("resolved_patient_graph", "component_row_gap"),
+        resolved_col_gap = graph_layout_value("resolved_patient_graph", "component_col_gap"),
+        resolved_legend_width = graph_layout_value("resolved_patient_graph", "legend_width"),
+        resolved_isolate_height = graph_layout_value("resolved_patient_graph", "isolate_region_height"),
+        resolved_isolate_spacing = graph_layout_value("resolved_patient_graph", "isolate_spacing"),
+        resolved_isolate_panel_padding_x = graph_layout_value("resolved_patient_graph", "isolate_panel_padding_x"),
+        resolved_isolate_panel_padding_y = graph_layout_value("resolved_patient_graph", "isolate_panel_padding_y"),
+        resolved_isolate_label_band_frac = graph_layout_value("resolved_patient_graph", "isolate_label_band_frac"),
+        resolved_isolate_max_per_row = graph_layout_value("resolved_patient_graph", "isolate_max_per_row"),
+        resolved_isolate_panel_width_frac = graph_layout_value("resolved_patient_graph", "isolate_panel_width_frac"),
+        resolved_footnote_height = graph_layout_value("resolved_patient_graph", "footnote_region_height"),
+        resolved_component_cell_fill_x = graph_layout_value("resolved_patient_graph", "component_cell_fill_x"),
+        resolved_component_cell_fill_y = graph_layout_value("resolved_patient_graph", "component_cell_fill_y"),
+        resolved_dense_component_cell_fill_x = graph_layout_value("resolved_patient_graph", "dense_component_cell_fill_x"),
+        resolved_dense_component_cell_fill_y = graph_layout_value("resolved_patient_graph", "dense_component_cell_fill_y"),
+        resolved_c2_component_cell_fill_x = graph_layout_value("resolved_patient_graph", "c2_component_cell_fill_x"),
+        resolved_c2_component_cell_fill_y = graph_layout_value("resolved_patient_graph", "c2_component_cell_fill_y"),
+        c1_x_expand_factor = graph_layout_value("resolved_patient_graph", "c1_x_expand_factor"),
+        c1_y_expand_factor = graph_layout_value("resolved_patient_graph", "c1_y_expand_factor"),
+        c2_x_expand_factor = graph_layout_value("resolved_patient_graph", "c2_x_expand_factor"),
+        c2_y_expand_factor = graph_layout_value("resolved_patient_graph", "c2_y_expand_factor"),
+        isolate_gap = graph_layout_value("resolved_patient_graph", "isolate_gap"),
+        isolate_box_height_factor = graph_layout_value("resolved_patient_graph", "isolate_box_height_factor"),
+        isolate_label_y_frac = graph_layout_value("resolved_patient_graph", "isolate_label_y_frac"),
+        isolate_label_left_pad = graph_layout_value("resolved_patient_graph", "isolate_label_left_pad"),
+        compact_isolate_panel_arg = "--compact-isolate-panel" if graph_layout_value("resolved_patient_graph", "compact_isolate_panel") else "",
+        isolate_panel_width_mode = graph_layout_value("resolved_patient_graph", "isolate_panel_width_mode"),
+        isolate_panel_spacing = graph_layout_value("resolved_patient_graph", "isolate_panel_spacing"),
+        min_isolate_label_spacing = graph_layout_value("resolved_patient_graph", "min_isolate_label_spacing"),
+        legend_alignment_mode = graph_layout_value("resolved_patient_graph", "legend_alignment_mode")
+    log: os.path.join(LOGROOT, "plot_patient_referenced_resolved_cell_line_neighbourhood_graph.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        "$CONDA_PREFIX/bin/python" {input.script} \
+          {input.resolved_tsv} \
+          {params.out_prefix} \
+          {params.label} \
+          --fig-w {params.fig_w} \
+          --fig-h {params.fig_h} \
+          --dpi {params.dpi} \
+          --node-size {params.node_size} \
+          --font-size {params.font_size} \
+          --edge-width-min {params.edge_width_min} \
+          --edge-width-max {params.edge_width_max} \
+          --legend-mode {params.legend_mode} \
+          --legend-out-prefix {params.legend_out_prefix} \
+          {params.use_halo_labels_arg} \
+          --halo-linewidth {params.halo_linewidth} \
+          --halo-color {params.halo_color} \
+          --dense-component-min-size {params.dense_component_min_size} \
+          --dense-component-min-density {params.dense_component_min_density} \
+          --dense-component-expand-factor {params.dense_component_expand_factor} \
+          {params.adaptive_component_layout_arg} \
+          --adaptive-component-min-nodes {params.adaptive_component_min_nodes} \
+          --adaptive-component-min-density {params.adaptive_component_min_density} \
+          --adaptive-component-min-expand {params.adaptive_component_min_expand} \
+          --adaptive-component-max-expand {params.adaptive_component_max_expand} \
+          --adaptive-component-density-weight {params.adaptive_component_density_weight} \
+          --adaptive-component-size-weight {params.adaptive_component_size_weight} \
+          --adaptive-component-label-weight {params.adaptive_component_label_weight} \
+          --position-fill-x {params.position_fill_x} \
+          --position-fill-y {params.position_fill_y} \
+          --axis-margin-frac {params.axis_margin_frac} \
+          {params.label_overlap_avoidance_arg} \
+          --label-padding-factor {params.label_padding_factor} \
+          --label-bbox-margin {params.label_bbox_margin} \
+          --max-label-overlap-iterations {params.max_label_overlap_iterations} \
+          --min-label-separation {params.min_label_separation} \
+          {params.avoid_isolate_overlap_arg} \
+          --min-component-isolate-gap {params.min_component_isolate_gap} \
+          --isolate-panel-reserved-height {params.isolate_panel_reserved_height} \
+          {params.adaptive_isolate_y_shift_arg} \
+          --component-isolate-gap-factor {params.component_isolate_gap_factor} \
+          --component-label-gap {params.resolved_component_label_gap} \
+          --component-grid-ncols {params.resolved_grid_cols} \
+          --component-grid-nrows {params.resolved_grid_rows} \
+          --component-cell-width {params.resolved_cell_width} \
+          --component-cell-height {params.resolved_cell_height} \
+          --component-row-gap {params.resolved_row_gap} \
+          --component-col-gap {params.resolved_col_gap} \
+          --legend-width {params.resolved_legend_width} \
+          --isolate-region-height {params.resolved_isolate_height} \
+          --footnote-region-height {params.resolved_footnote_height} \
+          --component-cell-fill-x {params.resolved_component_cell_fill_x} \
+          --component-cell-fill-y {params.resolved_component_cell_fill_y} \
+          --dense-component-cell-fill-x {params.resolved_dense_component_cell_fill_x} \
+          --dense-component-cell-fill-y {params.resolved_dense_component_cell_fill_y} \
+          --c2-component-cell-fill-x {params.resolved_c2_component_cell_fill_x} \
+          --c2-component-cell-fill-y {params.resolved_c2_component_cell_fill_y} \
+          --c1-x-expand-factor {params.c1_x_expand_factor} \
+          --c1-y-expand-factor {params.c1_y_expand_factor} \
+          --c2-x-expand-factor {params.c2_x_expand_factor} \
+          --c2-y-expand-factor {params.c2_y_expand_factor} \
+          --isolate-gap {params.isolate_gap} \
+          --isolate-spacing {params.resolved_isolate_spacing} \
+          --isolate-panel-padding-x {params.resolved_isolate_panel_padding_x} \
+          --isolate-panel-padding-y {params.resolved_isolate_panel_padding_y} \
+          --isolate-label-band-frac {params.resolved_isolate_label_band_frac} \
+          --isolate-max-per-row {params.resolved_isolate_max_per_row} \
+          --isolate-panel-width-frac {params.resolved_isolate_panel_width_frac} \
+          --isolate-box-height-factor {params.isolate_box_height_factor} \
+          --isolate-label-y-frac {params.isolate_label_y_frac} \
+          --isolate-label-left-pad {params.isolate_label_left_pad} \
+          {params.compact_isolate_panel_arg} \
+          --isolate-panel-width-mode {params.isolate_panel_width_mode} \
+          --isolate-panel-spacing {params.isolate_panel_spacing} \
+          --min-isolate-label-spacing {params.min_isolate_label_spacing} \
+          --legend-alignment-mode {params.legend_alignment_mode} \
+          > {log} 2>&1
+        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.legend_pdf} || (echo "ERROR: missing {output.legend_pdf}" >&2; exit 1)
+        test -s {output.legend_png} || (echo "ERROR: missing {output.legend_png}" >&2; exit 1)
+        test -s {output.legend_svg} || (echo "ERROR: missing {output.legend_svg}" >&2; exit 1)
+        '''
+
+# Rule: plot_multi_representation_majority_threshold_consensus_network
+# Method role: final plotting rule for the majority-threshold support network.
+# Flow: support-network edges and node sidecars -> PDF/PNG/SVG graph outputs.
+# Downstream use: visualises representation support without changing support thresholds.
+rule plot_multi_representation_majority_threshold_consensus_network:
+    """
+    Plots the majority-threshold consensus network and writes node/component
+    sidecars from the full cohort node universe.
+    """
+    input:
+        edges = P_CONS_MULTI_REP_MAJORITY_EDGES_TSV,
+        node_universe = P_CONS_SHORTNAMES_TSV,
+        script = os.path.join(BASE, "scripts", "plot_consensus_graph.py"),
+        style = os.path.join(BASE, "scripts", "graph_plot_style.py")
+    output:
+        pdf = P_CONS_MULTI_REP_MAJORITY_PREFIX + ".pdf",
+        png = P_CONS_MULTI_REP_MAJORITY_PREFIX + ".png",
+        svg = P_CONS_MULTI_REP_MAJORITY_PREFIX + ".svg",
+        legend_pdf = P_CONS_MULTI_REP_MAJORITY_PREFIX + "_legend.pdf",
+        legend_png = P_CONS_MULTI_REP_MAJORITY_PREFIX + "_legend.png",
+        legend_svg = P_CONS_MULTI_REP_MAJORITY_PREFIX + "_legend.svg",
+        node_stats = P_CONS_MULTI_REP_MAJORITY_NODE_STATS_TSV,
+        components = P_CONS_MULTI_REP_MAJORITY_COMPONENTS_TSV
+    params:
+        out_prefix = P_CONS_MULTI_REP_MAJORITY_PREFIX,
+        legend_out_prefix = P_CONS_MULTI_REP_MAJORITY_PREFIX + "_legend",
+        fig_w = graph_layout_value("multi_representation_majority_graph", "fig_w"),
+        fig_h = graph_layout_value("multi_representation_majority_graph", "fig_h"),
+        dpi = graph_layout_value("multi_representation_majority_graph", "dpi"),
+        node_size = graph_layout_value("multi_representation_majority_graph", "node_size"),
+        font_size = graph_layout_value("multi_representation_majority_graph", "font_size"),
+        edge_width_min = graph_layout_value("multi_representation_majority_graph", "edge_width_min"),
+        edge_width_max = graph_layout_value("multi_representation_majority_graph", "edge_width_max"),
+        legend_mode = graph_layout_value("multi_representation_majority_graph", "legend_mode"),
+        use_halo_labels_arg = "--use-halo-labels" if graph_layout_value("multi_representation_majority_graph", "use_halo_labels") else "",
+        halo_linewidth = graph_layout_value("multi_representation_majority_graph", "halo_linewidth"),
+        halo_color = graph_layout_value("multi_representation_majority_graph", "halo_color"),
+        match_resolved_style_arg = "--match-resolved-style" if graph_layout_value("multi_representation_majority_graph", "match_resolved_style") else "",
+        position_fill_x = graph_layout_value("multi_representation_majority_graph", "position_fill_x"),
+        position_fill_y = graph_layout_value("multi_representation_majority_graph", "position_fill_y"),
+        axis_margin_frac = graph_layout_value("multi_representation_majority_graph", "axis_margin_frac"),
+        compact_isolate_panel_arg = "--compact-isolate-panel" if graph_layout_value("multi_representation_majority_graph", "compact_isolate_panel") else "",
+        isolate_panel_width_mode = graph_layout_value("multi_representation_majority_graph", "isolate_panel_width_mode"),
+        isolate_panel_spacing = graph_layout_value("multi_representation_majority_graph", "isolate_panel_spacing"),
+        isolate_panel_padding_x = graph_layout_value("multi_representation_majority_graph", "isolate_panel_padding_x"),
+        isolate_panel_padding_y = graph_layout_value("multi_representation_majority_graph", "isolate_panel_padding_y"),
+        min_isolate_label_spacing = graph_layout_value("multi_representation_majority_graph", "min_isolate_label_spacing"),
+        adaptive_component_layout_arg = "--adaptive-component-layout" if graph_layout_value("multi_representation_majority_graph", "adaptive_component_layout") else "",
+        adaptive_component_min_nodes = graph_layout_value("multi_representation_majority_graph", "adaptive_component_min_nodes"),
+        adaptive_component_min_density = graph_layout_value("multi_representation_majority_graph", "adaptive_component_min_density"),
+        adaptive_component_min_expand = graph_layout_value("multi_representation_majority_graph", "adaptive_component_min_expand"),
+        adaptive_component_max_expand = graph_layout_value("multi_representation_majority_graph", "adaptive_component_max_expand"),
+        adaptive_component_density_weight = graph_layout_value("multi_representation_majority_graph", "adaptive_component_density_weight"),
+        adaptive_component_size_weight = graph_layout_value("multi_representation_majority_graph", "adaptive_component_size_weight"),
+        adaptive_component_label_weight = graph_layout_value("multi_representation_majority_graph", "adaptive_component_label_weight"),
+        label_overlap_avoidance_arg = "--label-overlap-avoidance" if graph_layout_value("multi_representation_majority_graph", "label_overlap_avoidance") else "",
+        label_padding_factor = graph_layout_value("multi_representation_majority_graph", "label_padding_factor"),
+        label_bbox_margin = graph_layout_value("multi_representation_majority_graph", "label_bbox_margin"),
+        max_label_overlap_iterations = graph_layout_value("multi_representation_majority_graph", "max_label_overlap_iterations"),
+        min_label_separation = graph_layout_value("multi_representation_majority_graph", "min_label_separation"),
+        avoid_isolate_overlap_arg = "--avoid-isolate-overlap" if graph_layout_value("multi_representation_majority_graph", "avoid_isolate_overlap") else "",
+        min_component_isolate_gap = graph_layout_value("multi_representation_majority_graph", "min_component_isolate_gap"),
+        isolate_panel_reserved_height = graph_layout_value("multi_representation_majority_graph", "isolate_panel_reserved_height"),
+        adaptive_isolate_y_shift_arg = "--adaptive-isolate-y-shift" if graph_layout_value("multi_representation_majority_graph", "adaptive_isolate_y_shift") else "",
+        component_isolate_gap_factor = graph_layout_value("multi_representation_majority_graph", "component_isolate_gap_factor"),
+        label = profile_name.upper()
+    log: os.path.join(LOGROOT, "plot_multi_representation_majority_threshold_consensus_network.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        "$CONDA_PREFIX/bin/python" {input.script} \
+          --edges {input.edges} \
+          --nodes {input.node_universe} \
+          --nodes-col short_id \
+          --out {params.out_prefix} \
+          --label {params.label} \
+          --graph-mode majority_threshold \
+          --fig-w {params.fig_w} \
+          --fig-h {params.fig_h} \
+          --dpi {params.dpi} \
+          {params.use_halo_labels_arg} \
+          --halo-linewidth {params.halo_linewidth} \
+          --halo-color {params.halo_color} \
+          {params.match_resolved_style_arg} \
+          --position-fill-x {params.position_fill_x} \
+          --position-fill-y {params.position_fill_y} \
+          --axis-margin-frac {params.axis_margin_frac} \
+          {params.adaptive_component_layout_arg} \
+          --adaptive-component-min-nodes {params.adaptive_component_min_nodes} \
+          --adaptive-component-min-density {params.adaptive_component_min_density} \
+          --adaptive-component-min-expand {params.adaptive_component_min_expand} \
+          --adaptive-component-max-expand {params.adaptive_component_max_expand} \
+          --adaptive-component-density-weight {params.adaptive_component_density_weight} \
+          --adaptive-component-size-weight {params.adaptive_component_size_weight} \
+          --adaptive-component-label-weight {params.adaptive_component_label_weight} \
+          {params.label_overlap_avoidance_arg} \
+          --label-padding-factor {params.label_padding_factor} \
+          --label-bbox-margin {params.label_bbox_margin} \
+          --max-label-overlap-iterations {params.max_label_overlap_iterations} \
+          --min-label-separation {params.min_label_separation} \
+          {params.avoid_isolate_overlap_arg} \
+          --min-component-isolate-gap {params.min_component_isolate_gap} \
+          --isolate-panel-reserved-height {params.isolate_panel_reserved_height} \
+          {params.adaptive_isolate_y_shift_arg} \
+          --component-isolate-gap-factor {params.component_isolate_gap_factor} \
+          --node-size {params.node_size} \
+          --font-size {params.font_size} \
+          --edge-width-min {params.edge_width_min} \
+          --edge-width-max {params.edge_width_max} \
+          {params.compact_isolate_panel_arg} \
+          --isolate-panel-width-mode {params.isolate_panel_width_mode} \
+          --isolate-panel-spacing {params.isolate_panel_spacing} \
+          --isolate-panel-padding-x {params.isolate_panel_padding_x} \
+          --isolate-panel-padding-y {params.isolate_panel_padding_y} \
+          --min-isolate-label-spacing {params.min_isolate_label_spacing} \
+          --legend-mode {params.legend_mode} \
+          --legend-out-prefix {params.legend_out_prefix} \
+          --node-stats-out {output.node_stats} \
+          --components-out {output.components} \
+          > {log} 2>&1
+        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.png} || (echo "ERROR: missing {output.png}" >&2; exit 1)
+        test -s {output.svg} || (echo "ERROR: missing {output.svg}" >&2; exit 1)
+        test -s {output.legend_pdf} || (echo "ERROR: missing {output.legend_pdf}" >&2; exit 1)
+        test -s {output.legend_png} || (echo "ERROR: missing {output.legend_png}" >&2; exit 1)
+        test -s {output.legend_svg} || (echo "ERROR: missing {output.legend_svg}" >&2; exit 1)
+        test -s {output.node_stats} || (echo "ERROR: missing {output.node_stats}" >&2; exit 1)
+        test -s {output.components} || (echo "ERROR: missing {output.components}" >&2; exit 1)
+        '''
+
+# Rule: plot_multi_representation_union_supported_edges_network
+# Method role: supplementary plotting rule for the union support network sensitivity view.
+# Flow: union network edges and node sidecars -> PDF/PNG/SVG graph outputs.
+# Downstream use: visualises union-supported support-network structure alongside majority-threshold outputs.
+rule plot_multi_representation_union_supported_edges_network:
+    """
+    Plots all supported edges. Edges supported by one feature--distance
+    representation are dashed; edges supported by multiple representations are solid.
+    """
+    input:
+        edges = P_CONS_MULTI_REP_UNION_EDGES_TSV,
+        node_universe = P_CONS_SHORTNAMES_TSV,
+        script = os.path.join(BASE, "scripts", "plot_consensus_graph.py"),
+        style = os.path.join(BASE, "scripts", "graph_plot_style.py")
+    output:
+        pdf = P_CONS_MULTI_REP_UNION_PREFIX + ".pdf",
+        png = P_CONS_MULTI_REP_UNION_PREFIX + ".png",
+        svg = P_CONS_MULTI_REP_UNION_PREFIX + ".svg",
+        legend_pdf = P_CONS_MULTI_REP_UNION_PREFIX + "_legend.pdf",
+        legend_png = P_CONS_MULTI_REP_UNION_PREFIX + "_legend.png",
+        legend_svg = P_CONS_MULTI_REP_UNION_PREFIX + "_legend.svg",
+        node_stats = P_CONS_MULTI_REP_UNION_NODE_STATS_TSV,
+        components = P_CONS_MULTI_REP_UNION_COMPONENTS_TSV,
+        full_node_labels = P_CONS_MULTI_REP_UNION_FULL_NODE_LABELS_TSV
+    params:
+        out_prefix = P_CONS_MULTI_REP_UNION_PREFIX,
+        legend_out_prefix = P_CONS_MULTI_REP_UNION_PREFIX + "_legend",
+        fig_w = graph_layout_value("multi_representation_union_graph", "fig_w"),
+        fig_h = graph_layout_value("multi_representation_union_graph", "fig_h"),
+        dpi = graph_layout_value("multi_representation_union_graph", "dpi"),
+        node_size = graph_layout_value("multi_representation_union_graph", "node_size"),
+        font_size = graph_layout_value("multi_representation_union_graph", "font_size"),
+        node_label_mode = graph_layout_value("multi_representation_union_graph", "node_label_mode"),
+        selected_label_max_component_labels = graph_layout_value("multi_representation_union_graph", "selected_label_max_component_labels"),
+        selected_label_min_component_nodes = graph_layout_value("multi_representation_union_graph", "selected_label_min_component_nodes"),
+        selected_label_min_component_density = graph_layout_value("multi_representation_union_graph", "selected_label_min_component_density"),
+        selected_label_min_distance = graph_layout_value("multi_representation_union_graph", "selected_label_min_distance"),
+        edge_width_min = graph_layout_value("multi_representation_union_graph", "edge_width_min"),
+        edge_width_max = graph_layout_value("multi_representation_union_graph", "edge_width_max"),
+        legend_mode = graph_layout_value("multi_representation_union_graph", "legend_mode"),
+        use_halo_labels_arg = "--use-halo-labels" if graph_layout_value("multi_representation_union_graph", "use_halo_labels") else "",
+        halo_linewidth = graph_layout_value("multi_representation_union_graph", "halo_linewidth"),
+        halo_color = graph_layout_value("multi_representation_union_graph", "halo_color"),
+        match_resolved_style_arg = "--match-resolved-style" if graph_layout_value("multi_representation_union_graph", "match_resolved_style") else "",
+        position_fill_x = graph_layout_value("multi_representation_union_graph", "position_fill_x"),
+        position_fill_y = graph_layout_value("multi_representation_union_graph", "position_fill_y"),
+        axis_margin_frac = graph_layout_value("multi_representation_union_graph", "axis_margin_frac"),
+        compact_isolate_panel_arg = "--compact-isolate-panel" if graph_layout_value("multi_representation_union_graph", "compact_isolate_panel") else "",
+        isolate_panel_width_mode = graph_layout_value("multi_representation_union_graph", "isolate_panel_width_mode"),
+        isolate_panel_spacing = graph_layout_value("multi_representation_union_graph", "isolate_panel_spacing"),
+        isolate_panel_padding_x = graph_layout_value("multi_representation_union_graph", "isolate_panel_padding_x"),
+        isolate_panel_padding_y = graph_layout_value("multi_representation_union_graph", "isolate_panel_padding_y"),
+        min_isolate_label_spacing = graph_layout_value("multi_representation_union_graph", "min_isolate_label_spacing"),
+        adaptive_component_layout_arg = "--adaptive-component-layout" if graph_layout_value("multi_representation_union_graph", "adaptive_component_layout") else "",
+        adaptive_component_min_nodes = graph_layout_value("multi_representation_union_graph", "adaptive_component_min_nodes"),
+        adaptive_component_min_density = graph_layout_value("multi_representation_union_graph", "adaptive_component_min_density"),
+        adaptive_component_min_expand = graph_layout_value("multi_representation_union_graph", "adaptive_component_min_expand"),
+        adaptive_component_max_expand = graph_layout_value("multi_representation_union_graph", "adaptive_component_max_expand"),
+        adaptive_component_density_weight = graph_layout_value("multi_representation_union_graph", "adaptive_component_density_weight"),
+        adaptive_component_size_weight = graph_layout_value("multi_representation_union_graph", "adaptive_component_size_weight"),
+        adaptive_component_label_weight = graph_layout_value("multi_representation_union_graph", "adaptive_component_label_weight"),
+        label_overlap_avoidance_arg = "--label-overlap-avoidance" if graph_layout_value("multi_representation_union_graph", "label_overlap_avoidance") else "",
+        label_padding_factor = graph_layout_value("multi_representation_union_graph", "label_padding_factor"),
+        label_bbox_margin = graph_layout_value("multi_representation_union_graph", "label_bbox_margin"),
+        max_label_overlap_iterations = graph_layout_value("multi_representation_union_graph", "max_label_overlap_iterations"),
+        min_label_separation = graph_layout_value("multi_representation_union_graph", "min_label_separation"),
+        avoid_isolate_overlap_arg = "--avoid-isolate-overlap" if graph_layout_value("multi_representation_union_graph", "avoid_isolate_overlap") else "",
+        min_component_isolate_gap = graph_layout_value("multi_representation_union_graph", "min_component_isolate_gap"),
+        isolate_panel_reserved_height = graph_layout_value("multi_representation_union_graph", "isolate_panel_reserved_height"),
+        adaptive_isolate_y_shift_arg = "--adaptive-isolate-y-shift" if graph_layout_value("multi_representation_union_graph", "adaptive_isolate_y_shift") else "",
+        component_isolate_gap_factor = graph_layout_value("multi_representation_union_graph", "component_isolate_gap_factor"),
+        label = profile_name.upper()
+    log: os.path.join(LOGROOT, "plot_multi_representation_union_supported_edges_network.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {P_CONS_PLOTS_DIR}
+        "$CONDA_PREFIX/bin/python" {input.script} \
+          --edges {input.edges} \
+          --nodes {input.node_universe} \
+          --nodes-col short_id \
+          --out {params.out_prefix} \
+          --label {params.label} \
+          --graph-mode union_supported_edges \
+          --node-label-mode {params.node_label_mode} \
+          --selected-label-max-component-labels {params.selected_label_max_component_labels} \
+          --selected-label-min-component-nodes {params.selected_label_min_component_nodes} \
+          --selected-label-min-component-density {params.selected_label_min_component_density} \
+          --selected-label-min-distance {params.selected_label_min_distance} \
+          --fig-w {params.fig_w} \
+          --fig-h {params.fig_h} \
+          --dpi {params.dpi} \
+          {params.use_halo_labels_arg} \
+          --halo-linewidth {params.halo_linewidth} \
+          --halo-color {params.halo_color} \
+          {params.match_resolved_style_arg} \
+          --position-fill-x {params.position_fill_x} \
+          --position-fill-y {params.position_fill_y} \
+          --axis-margin-frac {params.axis_margin_frac} \
+          {params.adaptive_component_layout_arg} \
+          --adaptive-component-min-nodes {params.adaptive_component_min_nodes} \
+          --adaptive-component-min-density {params.adaptive_component_min_density} \
+          --adaptive-component-min-expand {params.adaptive_component_min_expand} \
+          --adaptive-component-max-expand {params.adaptive_component_max_expand} \
+          --adaptive-component-density-weight {params.adaptive_component_density_weight} \
+          --adaptive-component-size-weight {params.adaptive_component_size_weight} \
+          --adaptive-component-label-weight {params.adaptive_component_label_weight} \
+          {params.label_overlap_avoidance_arg} \
+          --label-padding-factor {params.label_padding_factor} \
+          --label-bbox-margin {params.label_bbox_margin} \
+          --max-label-overlap-iterations {params.max_label_overlap_iterations} \
+          --min-label-separation {params.min_label_separation} \
+          {params.avoid_isolate_overlap_arg} \
+          --min-component-isolate-gap {params.min_component_isolate_gap} \
+          --isolate-panel-reserved-height {params.isolate_panel_reserved_height} \
+          {params.adaptive_isolate_y_shift_arg} \
+          --component-isolate-gap-factor {params.component_isolate_gap_factor} \
+          --node-size {params.node_size} \
+          --font-size {params.font_size} \
+          --edge-width-min {params.edge_width_min} \
+          --edge-width-max {params.edge_width_max} \
+          {params.compact_isolate_panel_arg} \
+          --isolate-panel-width-mode {params.isolate_panel_width_mode} \
+          --isolate-panel-spacing {params.isolate_panel_spacing} \
+          --isolate-panel-padding-x {params.isolate_panel_padding_x} \
+          --isolate-panel-padding-y {params.isolate_panel_padding_y} \
+          --min-isolate-label-spacing {params.min_isolate_label_spacing} \
+          --legend-mode {params.legend_mode} \
+          --legend-out-prefix {params.legend_out_prefix} \
+          --node-labels-out {output.full_node_labels} \
+          --node-stats-out {output.node_stats} \
+          --components-out {output.components} \
+          > {log} 2>&1
+        test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.png} || (echo "ERROR: missing {output.png}" >&2; exit 1)
+        test -s {output.svg} || (echo "ERROR: missing {output.svg}" >&2; exit 1)
+        test -s {output.legend_pdf} || (echo "ERROR: missing {output.legend_pdf}" >&2; exit 1)
+        test -s {output.legend_png} || (echo "ERROR: missing {output.legend_png}" >&2; exit 1)
+        test -s {output.legend_svg} || (echo "ERROR: missing {output.legend_svg}" >&2; exit 1)
+        test -s {output.node_stats} || (echo "ERROR: missing {output.node_stats}" >&2; exit 1)
+        test -s {output.components} || (echo "ERROR: missing {output.components}" >&2; exit 1)
+        test -s {output.full_node_labels} || (echo "ERROR: missing {output.full_node_labels}" >&2; exit 1)
+        '''
+
+# Rule: plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network
+# Method role: final plotting rule for the patient-referenced support-threshold consensus network.
+# Flow: consensus edge table, display names, and metadata -> graph figure and legend outputs.
+# Downstream use: reporting visualisation only; network membership is defined upstream.
 rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network:
     """
-    Thesis figure for the consensus DSMZ similarity network aggregated across
-    configured similarity-network directions.
+    Support-threshold consensus network figure for the DSMZ similarity network
+    aggregated across configured similarity-network directions.
     """
     input:
         edges = P_CONS_SIMILARITY_CONSENSUS_EDGES_TSV,
@@ -2374,62 +3014,120 @@ rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_ne
         script = os.path.join(BASE, "scripts", "plot_consensus_graph.py"),
         style = os.path.join(BASE, "scripts", "graph_plot_style.py")
     output:
-        png = P_CONS_THESIS_CONSENSUS_PREFIX + ".png",
-        pdf = P_CONS_THESIS_CONSENSUS_PREFIX + ".pdf",
-        svg = P_CONS_THESIS_CONSENSUS_PREFIX + ".svg"
+        png = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + ".png",
+        pdf = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + ".pdf",
+        svg = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + ".svg",
+        legend_png = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + "_legend.png",
+        legend_pdf = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + "_legend.pdf",
+        legend_svg = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + "_legend.svg"
     params:
-        out_prefix = P_CONS_THESIS_CONSENSUS_PREFIX,
+        out_prefix = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX,
+        legend_out_prefix = P_CONS_SUPPORT_CONSENSUS_NETWORK_PREFIX + "_legend",
         label = profile_name.upper(),
-        component_label_gap = SUPPORT_THRESHOLD_COMPONENT_LABEL_GAP,
-        nbl_component_gap_fraction = SUPPORT_THRESHOLD_NBL_COMPONENT_GAP_FRACTION,
-        nbl_component_min_gap = SUPPORT_THRESHOLD_NBL_COMPONENT_MIN_GAP,
-        legend_anchor_x = SUPPORT_THRESHOLD_LEGEND_ANCHOR_X,
-        legend_anchor_y_arg = SUPPORT_THRESHOLD_LEGEND_ANCHOR_Y_ARG,
-        legend_align_mode = SUPPORT_THRESHOLD_LEGEND_ALIGN_MODE,
-        legend_gap_frac = SUPPORT_THRESHOLD_LEGEND_GAP_FRAC,
-        isolate_label_y_frac = SUPPORT_THRESHOLD_ISOLATE_LABEL_Y_FRAC,
-        isolate_box_height_factor = SUPPORT_THRESHOLD_ISOLATE_BOX_HEIGHT_FACTOR,
-        isolate_gap = SUPPORT_THRESHOLD_ISOLATE_GAP,
-        isolate_label_left_pad = 28.0 if _COHORT_UPPER == "BRCA" else 0.0,
-        isolate_spacing = SUPPORT_THRESHOLD_ISOLATE_SPACING,
-        isolate_panel_padding_x = SUPPORT_THRESHOLD_ISOLATE_PANEL_PADDING_X,
-        isolate_panel_padding_y = SUPPORT_THRESHOLD_ISOLATE_PANEL_PADDING_Y,
-        isolate_label_band_frac = SUPPORT_THRESHOLD_ISOLATE_LABEL_BAND_FRAC,
-        isolate_max_per_row = SUPPORT_THRESHOLD_ISOLATE_MAX_PER_ROW,
-        isolate_panel_width_frac = SUPPORT_THRESHOLD_ISOLATE_PANEL_WIDTH_FRAC,
-        dense_component_min_size = SUPPORT_THRESHOLD_DENSE_COMPONENT_MIN_SIZE,
-        dense_component_min_density = SUPPORT_THRESHOLD_DENSE_COMPONENT_MIN_DENSITY,
-        dense_component_expand_factor = SUPPORT_THRESHOLD_DENSE_COMPONENT_EXPAND_FACTOR,
-        support_grid_cols = SUPPORT_THRESHOLD_COMPONENT_GRID_NCOLS,
-        support_grid_rows = SUPPORT_THRESHOLD_COMPONENT_GRID_NROWS,
-        support_cell_width = SUPPORT_THRESHOLD_COMPONENT_CELL_WIDTH,
-        support_cell_height = SUPPORT_THRESHOLD_COMPONENT_CELL_HEIGHT,
-        support_row_gap = SUPPORT_THRESHOLD_COMPONENT_ROW_GAP,
-        support_col_gap = SUPPORT_THRESHOLD_COMPONENT_COL_GAP,
-        support_legend_width = SUPPORT_THRESHOLD_LEGEND_WIDTH,
-        support_isolate_height = SUPPORT_THRESHOLD_ISOLATE_REGION_HEIGHT,
-        support_footnote_height = SUPPORT_THRESHOLD_FOOTNOTE_REGION_HEIGHT,
-        support_component_cell_fill_x = SUPPORT_THRESHOLD_COMPONENT_CELL_FILL_X,
-        support_component_cell_fill_y = SUPPORT_THRESHOLD_COMPONENT_CELL_FILL_Y,
-        support_dense_component_cell_fill_x = SUPPORT_THRESHOLD_DENSE_COMPONENT_CELL_FILL_X,
-        support_dense_component_cell_fill_y = SUPPORT_THRESHOLD_DENSE_COMPONENT_CELL_FILL_Y,
-        support_c2_component_cell_fill_x = SUPPORT_THRESHOLD_C2_COMPONENT_CELL_FILL_X,
-        support_c2_component_cell_fill_y = SUPPORT_THRESHOLD_C2_COMPONENT_CELL_FILL_Y,
-        c1_x_expand_factor = SUPPORT_THRESHOLD_C1_X_EXPAND_FACTOR,
-        c1_y_expand_factor = SUPPORT_THRESHOLD_C1_Y_EXPAND_FACTOR,
-        c2_x_expand_factor = SUPPORT_THRESHOLD_C2_X_EXPAND_FACTOR,
-        c2_y_expand_factor = SUPPORT_THRESHOLD_C2_Y_EXPAND_FACTOR
+        graph_title = graph_layout_value("support_threshold_consensus_graph", "graph_title"),
+        fig_w = graph_layout_value("support_threshold_consensus_graph", "fig_w"),
+        fig_h = graph_layout_value("support_threshold_consensus_graph", "fig_h"),
+        dpi = graph_layout_value("support_threshold_consensus_graph", "dpi"),
+        node_size = graph_layout_value("support_threshold_consensus_graph", "node_size"),
+        font_size = graph_layout_value("support_threshold_consensus_graph", "font_size"),
+        edge_width_min = graph_layout_value("support_threshold_consensus_graph", "edge_width_min"),
+        edge_width_max = graph_layout_value("support_threshold_consensus_graph", "edge_width_max"),
+        component_label_gap = graph_layout_value("support_threshold_consensus_graph", "component_label_gap"),
+        nbl_component_gap_fraction = graph_layout_value("support_threshold_consensus_graph", "nbl_component_gap_fraction"),
+        nbl_component_min_gap = graph_layout_value("support_threshold_consensus_graph", "nbl_component_min_gap"),
+        legend_anchor_x = graph_layout_value("support_threshold_consensus_graph", "legend_anchor_x"),
+        legend_anchor_y_arg = "" if graph_layout_value("support_threshold_consensus_graph", "legend_anchor_y") is None else f"--legend-anchor-y {float(graph_layout_value('support_threshold_consensus_graph', 'legend_anchor_y'))}",
+        legend_align_mode = graph_layout_value("support_threshold_consensus_graph", "legend_align_mode"),
+        legend_gap_frac = graph_layout_value("support_threshold_consensus_graph", "legend_gap_frac"),
+        legend_mode = graph_layout_value("support_threshold_consensus_graph", "legend_mode"),
+        use_halo_labels_arg = "--use-halo-labels" if graph_layout_value("support_threshold_consensus_graph", "use_halo_labels") else "",
+        halo_linewidth = graph_layout_value("support_threshold_consensus_graph", "halo_linewidth"),
+        halo_color = graph_layout_value("support_threshold_consensus_graph", "halo_color"),
+        match_resolved_style_arg = "--match-resolved-style" if graph_layout_value("support_threshold_consensus_graph", "match_resolved_style") else "",
+        position_fill_x = graph_layout_value("support_threshold_consensus_graph", "position_fill_x"),
+        position_fill_y = graph_layout_value("support_threshold_consensus_graph", "position_fill_y"),
+        axis_margin_frac = graph_layout_value("support_threshold_consensus_graph", "axis_margin_frac"),
+        compact_isolate_panel_arg = "--compact-isolate-panel" if graph_layout_value("support_threshold_consensus_graph", "compact_isolate_panel") else "",
+        isolate_panel_width_mode = graph_layout_value("support_threshold_consensus_graph", "isolate_panel_width_mode"),
+        isolate_panel_spacing = graph_layout_value("support_threshold_consensus_graph", "isolate_panel_spacing"),
+        min_isolate_label_spacing = graph_layout_value("support_threshold_consensus_graph", "min_isolate_label_spacing"),
+        isolate_label_y_frac = graph_layout_value("support_threshold_consensus_graph", "isolate_label_y_frac"),
+        isolate_box_height_factor = graph_layout_value("support_threshold_consensus_graph", "isolate_box_height_factor"),
+        isolate_gap = graph_layout_value("support_threshold_consensus_graph", "isolate_gap"),
+        isolate_label_left_pad = graph_layout_value("support_threshold_consensus_graph", "isolate_label_left_pad"),
+        isolate_spacing = graph_layout_value("support_threshold_consensus_graph", "isolate_spacing"),
+        isolate_panel_padding_x = graph_layout_value("support_threshold_consensus_graph", "isolate_panel_padding_x"),
+        isolate_panel_padding_y = graph_layout_value("support_threshold_consensus_graph", "isolate_panel_padding_y"),
+        isolate_label_band_frac = graph_layout_value("support_threshold_consensus_graph", "isolate_label_band_frac"),
+        isolate_max_per_row = graph_layout_value("support_threshold_consensus_graph", "isolate_max_per_row"),
+        isolate_panel_width_frac = graph_layout_value("support_threshold_consensus_graph", "isolate_panel_width_frac"),
+        dense_component_min_size = graph_layout_value("support_threshold_consensus_graph", "dense_component_min_size"),
+        dense_component_min_density = graph_layout_value("support_threshold_consensus_graph", "dense_component_min_density"),
+        dense_component_expand_factor = graph_layout_value("support_threshold_consensus_graph", "dense_component_expand_factor"),
+        adaptive_component_layout_arg = "--adaptive-component-layout" if graph_layout_value("support_threshold_consensus_graph", "adaptive_component_layout") else "",
+        adaptive_component_min_nodes = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_min_nodes"),
+        adaptive_component_min_density = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_min_density"),
+        adaptive_component_min_expand = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_min_expand"),
+        adaptive_component_max_expand = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_max_expand"),
+        adaptive_component_density_weight = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_density_weight"),
+        adaptive_component_size_weight = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_size_weight"),
+        adaptive_component_label_weight = graph_layout_value("support_threshold_consensus_graph", "adaptive_component_label_weight"),
+        label_overlap_avoidance_arg = "--label-overlap-avoidance" if graph_layout_value("support_threshold_consensus_graph", "label_overlap_avoidance") else "",
+        label_padding_factor = graph_layout_value("support_threshold_consensus_graph", "label_padding_factor"),
+        label_bbox_margin = graph_layout_value("support_threshold_consensus_graph", "label_bbox_margin"),
+        max_label_overlap_iterations = graph_layout_value("support_threshold_consensus_graph", "max_label_overlap_iterations"),
+        min_label_separation = graph_layout_value("support_threshold_consensus_graph", "min_label_separation"),
+        avoid_isolate_overlap_arg = "--avoid-isolate-overlap" if graph_layout_value("support_threshold_consensus_graph", "avoid_isolate_overlap") else "",
+        min_component_isolate_gap = graph_layout_value("support_threshold_consensus_graph", "min_component_isolate_gap"),
+        isolate_panel_reserved_height = graph_layout_value("support_threshold_consensus_graph", "isolate_panel_reserved_height"),
+        adaptive_isolate_y_shift_arg = "--adaptive-isolate-y-shift" if graph_layout_value("support_threshold_consensus_graph", "adaptive_isolate_y_shift") else "",
+        component_isolate_gap_factor = graph_layout_value("support_threshold_consensus_graph", "component_isolate_gap_factor"),
+        support_grid_cols = graph_layout_value("support_threshold_consensus_graph", "component_grid_cols"),
+        support_grid_rows = graph_layout_value("support_threshold_consensus_graph", "component_grid_rows"),
+        support_cell_width = graph_layout_value("support_threshold_consensus_graph", "component_cell_width"),
+        support_cell_height = graph_layout_value("support_threshold_consensus_graph", "component_cell_height"),
+        support_row_gap = graph_layout_value("support_threshold_consensus_graph", "component_row_gap"),
+        support_col_gap = graph_layout_value("support_threshold_consensus_graph", "component_col_gap"),
+        support_legend_width = graph_layout_value("support_threshold_consensus_graph", "legend_width"),
+        support_isolate_height = graph_layout_value("support_threshold_consensus_graph", "isolate_region_height"),
+        support_footnote_height = graph_layout_value("support_threshold_consensus_graph", "footnote_region_height"),
+        support_component_cell_fill_x = graph_layout_value("support_threshold_consensus_graph", "component_cell_fill_x"),
+        support_component_cell_fill_y = graph_layout_value("support_threshold_consensus_graph", "component_cell_fill_y"),
+        support_dense_component_cell_fill_x = graph_layout_value("support_threshold_consensus_graph", "dense_component_cell_fill_x"),
+        support_dense_component_cell_fill_y = graph_layout_value("support_threshold_consensus_graph", "dense_component_cell_fill_y"),
+        support_c2_component_cell_fill_x = graph_layout_value("support_threshold_consensus_graph", "c2_component_cell_fill_x"),
+        support_c2_component_cell_fill_y = graph_layout_value("support_threshold_consensus_graph", "c2_component_cell_fill_y"),
+        c1_x_expand_factor = graph_layout_value("support_threshold_consensus_graph", "c1_x_expand_factor"),
+        c1_y_expand_factor = graph_layout_value("support_threshold_consensus_graph", "c1_y_expand_factor"),
+        c2_x_expand_factor = graph_layout_value("support_threshold_consensus_graph", "c2_x_expand_factor"),
+        c2_y_expand_factor = graph_layout_value("support_threshold_consensus_graph", "c2_y_expand_factor")
     log: os.path.join(LOGROOT, "plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network.log")
     conda: CONDA_ENV_PY
     shell:
         r'''
         mkdir -p {P_CONS_PLOTS_DIR}
-        python {input.script} \
+        "$CONDA_PREFIX/bin/python" {input.script} \
           --edges {input.edges} \
           --nodes {input.shortnames} \
           --nodes-col short_id \
           --out {params.out_prefix} \
           --label {params.label} \
+          --graph-mode majority_threshold \
+          --graph-title "{params.graph_title}" \
+          --fig-w {params.fig_w} \
+          --fig-h {params.fig_h} \
+          --dpi {params.dpi} \
+          {params.use_halo_labels_arg} \
+          --halo-linewidth {params.halo_linewidth} \
+          --halo-color {params.halo_color} \
+          {params.match_resolved_style_arg} \
+          --position-fill-x {params.position_fill_x} \
+          --position-fill-y {params.position_fill_y} \
+          --axis-margin-frac {params.axis_margin_frac} \
+          --node-size {params.node_size} \
+          --font-size {params.font_size} \
+          --edge-width-min {params.edge_width_min} \
+          --edge-width-max {params.edge_width_max} \
           --component-label-gap {params.component_label_gap} \
           --nbl-component-gap-fraction {params.nbl_component_gap_fraction} \
           --nbl-component-min-gap {params.nbl_component_min_gap} \
@@ -2437,6 +3135,12 @@ rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_ne
           {params.legend_anchor_y_arg} \
           --legend-align-mode {params.legend_align_mode} \
           --legend-gap-frac {params.legend_gap_frac} \
+          --legend-mode {params.legend_mode} \
+          --legend-out-prefix {params.legend_out_prefix} \
+          {params.compact_isolate_panel_arg} \
+          --isolate-panel-width-mode {params.isolate_panel_width_mode} \
+          --isolate-panel-spacing {params.isolate_panel_spacing} \
+          --min-isolate-label-spacing {params.min_isolate_label_spacing} \
           --isolate-label-y-frac {params.isolate_label_y_frac} \
           --isolate-box-height-factor {params.isolate_box_height_factor} \
           --isolate-gap {params.isolate_gap} \
@@ -2450,6 +3154,24 @@ rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_ne
           --dense-component-min-size {params.dense_component_min_size} \
           --dense-component-min-density {params.dense_component_min_density} \
           --dense-component-expand-factor {params.dense_component_expand_factor} \
+          {params.adaptive_component_layout_arg} \
+          --adaptive-component-min-nodes {params.adaptive_component_min_nodes} \
+          --adaptive-component-min-density {params.adaptive_component_min_density} \
+          --adaptive-component-min-expand {params.adaptive_component_min_expand} \
+          --adaptive-component-max-expand {params.adaptive_component_max_expand} \
+          --adaptive-component-density-weight {params.adaptive_component_density_weight} \
+          --adaptive-component-size-weight {params.adaptive_component_size_weight} \
+          --adaptive-component-label-weight {params.adaptive_component_label_weight} \
+          {params.label_overlap_avoidance_arg} \
+          --label-padding-factor {params.label_padding_factor} \
+          --label-bbox-margin {params.label_bbox_margin} \
+          --max-label-overlap-iterations {params.max_label_overlap_iterations} \
+          --min-label-separation {params.min_label_separation} \
+          {params.avoid_isolate_overlap_arg} \
+          --min-component-isolate-gap {params.min_component_isolate_gap} \
+          --isolate-panel-reserved-height {params.isolate_panel_reserved_height} \
+          {params.adaptive_isolate_y_shift_arg} \
+          --component-isolate-gap-factor {params.component_isolate_gap_factor} \
           --component-grid-ncols {params.support_grid_cols} \
           --component-grid-nrows {params.support_grid_rows} \
           --component-cell-width {params.support_cell_width} \
@@ -2471,11 +3193,19 @@ rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_ne
           --c2-y-expand-factor {params.c2_y_expand_factor} \
           > {log} 2>&1
         test -s {output.pdf} || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+        test -s {output.png} || (echo "ERROR: missing {output.png}" >&2; exit 1)
+        test -s {output.svg} || (echo "ERROR: missing {output.svg}" >&2; exit 1)
+        test -s {output.legend_pdf} || (echo "ERROR: missing {output.legend_pdf}" >&2; exit 1)
+        test -s {output.legend_png} || (echo "ERROR: missing {output.legend_png}" >&2; exit 1)
+        test -s {output.legend_svg} || (echo "ERROR: missing {output.legend_svg}" >&2; exit 1)
         '''
-
 
 if IS_MULTICOHORT_PROFILE:
 
+    # Rule: plot_pan_cancer_resolved_graph_inspection
+    # Method role: supplementary plotting rule for dense multicohort resolved-graph inspection.
+    # Flow: resolved graph sidecars -> component panels, interactive HTML, and node-label tables.
+    # Downstream use: audit and visual inspection; it does not alter resolved neighbours.
     rule plot_pan_cancer_resolved_graph_inspection:
         """
         Component-panel and interactive inspection outputs for the dense
@@ -2496,7 +3226,7 @@ if IS_MULTICOHORT_PROFILE:
             component_summary = P_CONS_RESOLVED_COMPONENT_SUMMARY_TSV,
             node_labels = P_CONS_RESOLVED_NODE_LABELS_TSV
         params:
-            title_label = "Pan-cancer resolved cell-line neighbourhood graph"
+            title_label = "Resolved multicohort cell-line neighbourhood graph"
         log: os.path.join(LOGROOT, "plot_pan_cancer_resolved_graph_inspection.log")
         conda: CONDA_ENV_PY
         shell:
@@ -2525,6 +3255,10 @@ if IS_MULTICOHORT_PROFILE:
             '''
 
 
+    # Rule: plot_pan_cancer_support_threshold_graph_inspection
+    # Method role: supplementary plotting rule for dense multicohort support-threshold graph inspection.
+    # Flow: support-threshold graph sidecars -> component panels, interactive HTML, and node-label tables.
+    # Downstream use: audit and visual inspection; it does not alter support-network edges.
     rule plot_pan_cancer_support_threshold_graph_inspection:
         """
         Component-panel and interactive inspection outputs for the dense
@@ -2544,7 +3278,7 @@ if IS_MULTICOHORT_PROFILE:
             component_summary = P_CONS_SUPPORT_COMPONENT_SUMMARY_TSV,
             node_labels = P_CONS_SUPPORT_NODE_LABELS_TSV
         params:
-            title_label = "Pan-cancer support-threshold consensus cell-line similarity network"
+            title_label = "Multicohort support-threshold consensus network"
         log: os.path.join(LOGROOT, "plot_pan_cancer_support_threshold_graph_inspection.log")
         conda: CONDA_ENV_PY
         shell:
@@ -2572,6 +3306,149 @@ if IS_MULTICOHORT_PROFILE:
             '''
 
 
+# =============================================================================
+# STUDY-DESIGN MATERIALISATION
+# =============================================================================
+# Stage role: exports configured study-design metadata used by validation and reporting.
+
+# Rule: materialize_study_design
+# Method role: metadata rule that exports the configured study design for reporting and validation.
+# Flow: project config and study-design YAML -> cohort, label, inference, and endpoint manifests.
+# Downstream use: documents the design assumptions used by downstream analyses.
+rule materialize_study_design:
+    input:
+        cfg = CFGFILE_ABS,
+        study_design = STUDY_DESIGN_FILE
+    output:
+        question_txt = os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
+        cohort_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
+        labels_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
+        inference_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
+        endpoint_manifest = os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "materialize_study_design.R"),
+        config = CFGFILE_ABS,
+        study_design = STUDY_DESIGN_FILE
+    log: os.path.join(LOGROOT, "materialize_study_design.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.question_txt})
+        Rscript {params.script}           --config {params.config}           --study-design {params.study_design}           --profile "{profile_name}"           --out-question {output.question_txt}           --out-cohorts {output.cohort_manifest}           --out-labels {output.labels_manifest}           --out-inference {output.inference_manifest}           --out-endpoints {output.endpoint_manifest}           > {log} 2>&1
+        '''
+
+# =============================================================================
+# VALIDATION ANALYSES
+# =============================================================================
+# Stage role: runs model-selection, permutation, baseline, and separation diagnostics without redefining targets.
+
+# Rule: model_selection_summary
+# Method role: validation rule evaluating selected representations and model-selection evidence.
+# Flow: p-consensus support tables and graph annotations -> model-selection table, plot, and notes.
+# Downstream use: diagnostic reporting; it does not choose new workflow targets.
+rule model_selection_summary:
+    input:
+        cfg = CFGFILE_ABS,
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
+        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv"),
+        winning_direction = os.path.join(P_CONS_ALL_DIR, "winning_direction.txt"),
+        graph_nodes = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_node_annotations_{direction}.tsv"),
+            direction=AGN_DIRECTIONS
+        )
+    output:
+        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
+        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_plot.pdf"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "04_model_selection_summary.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "model_selection_summary.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.summary_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+# Rule: neighbourhood_permutation_validation
+# Method role: validation rule evaluating observed neighbourhood metrics against permutation expectations.
+# Flow: p-consensus ranking tables -> permutation metrics, diagnostic plot, and notes.
+# Downstream use: sensitivity evidence for neighbourhood signal, not a replacement analysis.
+rule neighbourhood_permutation_validation:
+    input:
+        cfg = CFGFILE_ABS,
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv"),
+        long_tbl = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.long.tsv")
+    output:
+        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
+        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_plot.pdf"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "01_permutation_test_neighbourhood.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "neighbourhood_permutation_validation.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.summary_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+# Rule: random_baseline_comparison
+# Method role: validation rule evaluating resolved rankings against a random-baseline distribution.
+# Flow: ranked p-consensus cell-line table -> baseline metrics, plot, and notes.
+# Downstream use: contextualises ranking behaviour without changing graph outputs.
+rule random_baseline_comparison:
+    input:
+        cfg = CFGFILE_ABS,
+        ranked_best = os.path.join(P_CONS_ALL_DIR, "p_consensus_best_cell_lines_ranked.tsv")
+    output:
+        summary_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
+        plot_pdf = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_plot.pdf"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "02_random_baseline_comparison.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "random_baseline_comparison.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.summary_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.summary_tsv}           --out-plot {output.plot_pdf}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+# Rule: silhouette_report
+# Method role: validation rule reporting separation diagnostics for configured representations.
+# Flow: profile config -> silhouette/separation report and notes.
+# Downstream use: diagnostic reporting only.
+rule silhouette_report:
+    input:
+        cfg = CFGFILE_ABS
+    output:
+        report_tsv = os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
+        notes_txt = os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_notes.txt")
+    params:
+        script = os.path.join(BASE, "validation", "03_silhouette_report.R"),
+        config = CFGFILE_ABS
+    log: os.path.join(LOGROOT, "silhouette_report.log")
+    conda: CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p $(dirname {output.report_tsv})
+        Rscript {params.script}           --config {params.config}           --profile "{profile_name}"           --out-tsv {output.report_tsv}           --out-notes {output.notes_txt}           > {log} 2>&1
+        '''
+
+
+
+# Rule: community_stability_analysis
+# Method role: sensitivity analysis evaluating community assignments across feature-distance representations.
+# Flow: resolved graph, display names, and direction-specific annotations -> stability tables and diagnostic figures.
+# Downstream use: supplementary evidence on community robustness, not final community selection.
 rule community_stability_analysis:
     """
     Cross-direction cell-line graph community stability diagnostic.
@@ -2626,10 +3503,87 @@ rule community_stability_analysis:
         '''
 
 
-# =============================================================================
-# STAGE 6b: MULTICOHORT_CANCER LEIDEN COMMUNITY DETECTION
-# =============================================================================
+# Rule: post_resolution_edge_support_stratification
+# Method role: supplementary analysis stratifying resolved graph edges by representation support.
+# Flow: resolved/support network sidecars for one cohort -> edge-support stratification table and plots.
+# Downstream use: cohort-level audit of post-resolution support.
+rule post_resolution_edge_support_stratification:
+    """
+    Downstream audit of edge support after resolved-neighbour graph construction.
 
+    This rule does not modify the union-supported, support-threshold consensus,
+    or resolved-neighbour graphs. It reads their existing edge/node sidecars and
+    classifies each focal cohort cell line by the highest post-resolution edge
+    evidence available.
+    """
+    input:
+        union_edges = _post_resolution_union_edges,
+        consensus_edges = _post_resolution_consensus_edges,
+        resolved_edges = _post_resolution_resolved_edges,
+        nodes = _post_resolution_nodes
+    output:
+        table = os.path.join(
+            POST_RESOLUTION_TABLE_DIR,
+            "{cohort}_post_resolution_edge_support_stratification.tsv",
+        )
+    wildcard_constraints:
+        cohort = "NBL|BRCA|RBL"
+    params:
+        script = os.path.join(BASE, "scripts", "post_resolution_edge_support_stratification.py")
+    log:
+        os.path.join("logs", "post_resolution_edge_support_stratification", "{cohort}.log")
+    conda:
+        CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {POST_RESOLUTION_TABLE_DIR} $(dirname {log})
+        python {params.script} classify \
+          --cohort {wildcards.cohort} \
+          --union-edges {input.union_edges} \
+          --consensus-edges {input.consensus_edges} \
+          --resolved-edges {input.resolved_edges} \
+          --nodes {input.nodes} \
+          --out {output.table} \
+          > {log} 2>&1
+        test -s {output.table} || (echo "ERROR: missing {output.table}" >&2; exit 1)
+        '''
+
+
+# Rule: combine_post_resolution_edge_support_stratification
+# Method role: collector target combining post-resolution support stratifications across cohorts.
+# Flow: cohort stratification tables -> combined support-stratification table.
+# Downstream use: cross-cohort supplementary table for reporting.
+rule combine_post_resolution_edge_support_stratification:
+    input:
+        tables = POST_RESOLUTION_STRATIFICATION_TABLES
+    output:
+        table = POST_RESOLUTION_COMBINED_STRATIFICATION_TSV
+    params:
+        script = os.path.join(BASE, "scripts", "post_resolution_edge_support_stratification.py")
+    log:
+        os.path.join("logs", "post_resolution_edge_support_stratification", "combined.log")
+    conda:
+        CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {POST_RESOLUTION_TABLE_DIR} $(dirname {log})
+        python {params.script} combine \
+          --out {output.table} \
+          {input.tables} \
+          > {log} 2>&1
+        test -s {output.table} || (echo "ERROR: missing {output.table}" >&2; exit 1)
+        '''
+
+
+# =============================================================================
+# AUDIT AND SUPPLEMENTARY GRAPH ANALYSES
+# =============================================================================
+# Stage role: computes graph audit tables, stratifications, and supplementary community reports.
+
+# Rule: compute_multicohort_cancer_communities
+# Method role: supplementary graph analysis assigning communities in the multicohort resolved graph.
+# Flow: resolved graph sidecars -> community assignments, modularity, layout, and figure outputs.
+# Downstream use: audit/supplementary community report for the multicohort graph.
 rule compute_multicohort_cancer_communities:
     """
     Unweighted Leiden community detection on the final resolved MULTICOHORT_CANCER
@@ -2690,8 +3644,9 @@ rule compute_multicohort_cancer_communities:
         '''
 
 # =============================================================================
-# STAGE 7: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS
+# DESEQ2 MARKER ANALYSIS
 # =============================================================================
+# Stage role: derives graph-informed marker contrasts from resolved isolates and component anchors.
 # Gated to brca, nbl, and rbl only — the three profiles that have
 # dsmz_counts_rds + dsmz_meta_csv configured and whose metadata schema is
 # compatible with prepare_deseq2_inputs.R.  heme and pan_cancer are deferred.
@@ -2705,7 +3660,9 @@ DESEQ2_ISOLATE_DIR     = os.path.join(UNSUP_REL, DESEQ2_MARKER_OUTDIR_NAME)
 DESEQ2_ISOLATE_DIR_ABS = os.path.join(UNSUP,     DESEQ2_MARKER_OUTDIR_NAME)
 DESEQ2_COMP_DIR     = os.path.join(UNSUP_REL, "deseq2", "component_vs_rest")
 DESEQ2_COMP_DIR_ABS = os.path.join(UNSUP,     "deseq2", "component_vs_rest")
-
+DESEQ2_INPUTS_PROFILE_CFG = cfg.get("deseq2_inputs", {})
+DESEQ2_INPUTS_CFG = deep_merge(config.get("defaults", {}).get("deseq2_inputs", {}), DESEQ2_INPUTS_PROFILE_CFG)
+DESEQ2_USE_STAGED_INPUTS = bool(DESEQ2_INPUTS_CFG.get("use_staged_inputs", False))
 _enabled_profiles = DESEQ2_CFG.get("enabled_profiles") or ["brca", "nbl", "rbl"]
 DESEQ2_ENABLED_PROFILES = {str(p) for p in _enabled_profiles}
 _enabled_override = DESEQ2_PROFILE_CFG.get("enabled")
@@ -2713,6 +3670,69 @@ if _enabled_override is None:
     DESEQ2_ENABLED = profile_name in DESEQ2_ENABLED_PROFILES
 else:
     DESEQ2_ENABLED = bool(_enabled_override)
+
+def deseq2_staged_input_path(key, default_rel):
+    """Resolve a per-cohort staged DESeq2 input path, failing only when DESeq2 is active."""
+    by_profile = DESEQ2_INPUTS_CFG.get(key, {})
+    if by_profile is None:
+        by_profile = {}
+    if not isinstance(by_profile, dict):
+        raise ValueError(f"deseq2_inputs.{key} must map profile names to paths")
+    rel = by_profile.get(profile_name)
+    if DESEQ2_USE_STAGED_INPUTS and DESEQ2_ENABLED and not rel:
+        raise ValueError(
+            f"deseq2_inputs.use_staged_inputs is true but deseq2_inputs.{key}.{profile_name} is missing"
+        )
+    return rel or default_rel
+
+
+def deseq2_expected_samples():
+    """Return the configured staged sample count for the active profile, if set."""
+    by_profile = DESEQ2_INPUTS_CFG.get("expected_samples", {})
+    if not isinstance(by_profile, dict):
+        return ""
+    value = by_profile.get(profile_name, "")
+    return "" if value is None else str(value)
+
+
+def looks_like_transformed_count_path(path):
+    """Catch common transformed-expression path tokens before DESeq2 consumes them."""
+    name = os.path.basename(str(path)).lower()
+    tokens = ("vst", "tpm", "fpkm", "normalised", "normalized", "scaled", "batch", "corrected")
+    return any(re.search(rf"(^|[^a-z0-9]){token}([^a-z0-9]|$)", name) for token in tokens)
+
+
+DESEQ2_GENERATED_INPUT_DIR = (
+    os.path.join(DESEQ2_INPUT_DIR, "_generated_from_raw")
+    if DESEQ2_USE_STAGED_INPUTS
+    else DESEQ2_INPUT_DIR
+)
+DESEQ2_GENERATED_INPUT_DIR_ABS = (
+    os.path.join(DESEQ2_INPUT_DIR_ABS, "_generated_from_raw")
+    if DESEQ2_USE_STAGED_INPUTS
+    else DESEQ2_INPUT_DIR_ABS
+)
+DESEQ2_COUNTS_TSV = deseq2_staged_input_path(
+    "staged_counts", os.path.join(DESEQ2_GENERATED_INPUT_DIR, "counts.tsv")
+)
+DESEQ2_META_COMP_TSV = deseq2_staged_input_path(
+    "staged_metadata", os.path.join(DESEQ2_GENERATED_INPUT_DIR, "metadata_with_components.tsv")
+)
+DESEQ2_ISOLATE_CSV = deseq2_staged_input_path(
+    "staged_isolate_list", os.path.join(DESEQ2_GENERATED_INPUT_DIR, "isolate_list.csv")
+)
+DESEQ2_ANCHOR_LIST_CSV = deseq2_staged_input_path(
+    "staged_anchor_list", os.path.join(DESEQ2_GENERATED_INPUT_DIR, "anchor_list.csv")
+)
+DESEQ2_ANCHOR_COMPONENTS_TSV = deseq2_staged_input_path(
+    "staged_anchor_components", os.path.join(DESEQ2_GENERATED_INPUT_DIR, "anchor_components.tsv")
+)
+DESEQ2_COMPONENTS_LIST_TXT = deseq2_staged_input_path(
+    "staged_components", os.path.join(DESEQ2_GENERATED_INPUT_DIR, "components_list.txt")
+)
+DESEQ2_STAGED_VALIDATION_TSV = os.path.join(DESEQ2_INPUT_DIR, "staged_input_validation.tsv")
+DESEQ2_STAGED_VALIDATION_INPUT = DESEQ2_STAGED_VALIDATION_TSV if DESEQ2_USE_STAGED_INPUTS else []
+DESEQ2_EXPECTED_SAMPLE_COUNT = deseq2_expected_samples()
 
 # Cross-direction aggregated graph node stats (produced by aggregate_graph_node_stats)
 NODE_STATS_TSV = os.path.join(
@@ -2723,14 +3743,10 @@ DESEQ2_NODE_STATS_TSV = P_CONS_RESOLVED_NODE_STATS_TSV
 
 if DESEQ2_ENABLED:
 
-    # -------------------------------------------------------------------------
-    # RULE: aggregate_graph_node_stats
-    #
-    # Picks the best-direction graph node annotations and writes a single
-    # patient_referenced_aggregated_cell_line_similarity_graph_node_stats.tsv
-    # (or pan_cancer_aggregated_… for the multicohort profile) in P_CONS_ALL_DIR.
-    # Best direction is selected at runtime from p_consensus_direction_summary.tsv.
-    # -------------------------------------------------------------------------
+    # Rule: aggregate_graph_node_stats
+    # Method role: DESeq2 staging rule that selects graph-derived node annotations for marker contrasts.
+    # Flow: p-consensus support tables and graph node sidecars -> aggregated node-statistics table.
+    # Downstream use: supplies component/isolate labels for DESeq2 input preparation.
     rule aggregate_graph_node_stats:
         input:
             dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
@@ -2772,16 +3788,75 @@ if DESEQ2_ENABLED:
             '''
 
 
-    # Resolved paths for DSMZ raw counts and metadata used by prepare_deseq2_inputs.R.
+    # Resolved paths for DSMZ raw counts and metadata used only when staged DESeq2
+    # inputs are disabled.
     DSMZ_COUNTS_RDS = cfgget_path_abs("data/dsmz/DSMZ_count_gene.rds", "paths", "dsmz_counts_rds")
     DSMZ_META_CSV   = cfgget_path_abs(
         cfgget_path_rel("data/dsmz/DSMZ_metadata.csv", "paths", "meta_tsv"),
         "paths", "dsmz_meta_csv"
     )
+    if not DESEQ2_USE_STAGED_INPUTS and looks_like_transformed_count_path(DSMZ_COUNTS_RDS):
+        raise ValueError(
+            "Unsafe DESeq2 count source: paths.dsmz_counts_rds appears to reference "
+            f"a transformed expression matrix ({DSMZ_COUNTS_RDS}). Configure "
+            "deseq2_inputs.use_staged_inputs: true with validated raw-count staged inputs, "
+            "or point paths.dsmz_counts_rds at raw integer counts."
+        )
 
-    # -----------------------------------------------------------------------------
-    # RULE: prepare_deseq2_inputs
-    # -----------------------------------------------------------------------------
+    # Rule: validate_deseq2_staged_inputs
+    # Method role: validation rule checking externally staged DESeq2 input tables before marker analysis.
+    # Flow: staged count, metadata, isolate, and component files -> validation manifest.
+    # Downstream use: guards DESeq2 marker rules against malformed staged inputs.
+    rule validate_deseq2_staged_inputs:
+        """
+        Checks configured staged count, metadata, isolate, anchor, and component
+        sidecars before marker DESeq2 rules are allowed to run.
+        """
+        input:
+            counts_tsv            = DESEQ2_COUNTS_TSV,
+            meta_comp             = DESEQ2_META_COMP_TSV,
+            isolate_csv           = DESEQ2_ISOLATE_CSV,
+            anchor_list_csv       = DESEQ2_ANCHOR_LIST_CSV,
+            anchor_components_tsv = DESEQ2_ANCHOR_COMPONENTS_TSV,
+            components_list       = DESEQ2_COMPONENTS_LIST_TXT,
+            node_stats            = DESEQ2_NODE_STATS_TSV,
+            anchor_audit          = P_CONS_ANCHOR_AUDIT_TSV
+        output:
+            validation_tsv = DESEQ2_STAGED_VALIDATION_TSV
+        params:
+            script = os.path.join(BASE, "scripts", "validate_deseq2_staged_inputs.R"),
+            cohort = profile_name,
+            sample_id_col = DESEQ2_CFG.get("staged_sample_id_col", "sample_id"),
+            cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line"),
+            component_col = DESEQ2_CFG.get("component_col", "component"),
+            expected_samples = DESEQ2_EXPECTED_SAMPLE_COUNT
+        log: os.path.join(LOGROOT, "validate_deseq2_staged_inputs.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript {params.script} \
+              --cohort "{params.cohort}" \
+              --counts {input.counts_tsv} \
+              --metadata {input.meta_comp} \
+              --isolate_list {input.isolate_csv} \
+              --anchor_list {input.anchor_list_csv} \
+              --anchor_components {input.anchor_components_tsv} \
+              --components_list {input.components_list} \
+              --node_stats {input.node_stats} \
+              --anchor_audit {input.anchor_audit} \
+              --sample_id_col {params.sample_id_col} \
+              --cell_line_col {params.cell_line_col} \
+              --component_col {params.component_col} \
+              --expected_samples "{params.expected_samples}" \
+              --output {output.validation_tsv} \
+              > {log} 2>&1
+            test -s {output.validation_tsv} || (echo "ERROR: missing {output.validation_tsv}" >&2; exit 1)
+            '''
+
+    # Rule: prepare_deseq2_inputs
+    # Method role: data-preparation rule that builds DESeq2 count and metadata tables from resolved graph labels.
+    # Flow: DSMZ counts/metadata and graph node annotations -> staged DESeq2 input tables.
+    # Downstream use: supplies isolate, component, and anchor marker contrasts.
     rule prepare_deseq2_inputs:
         """
         Extracts disease-specific raw counts and metadata from DSMZ archives,
@@ -2793,15 +3868,21 @@ if DESEQ2_ENABLED:
             dsmz_meta   = DSMZ_META_CSV,
             node_stats  = DESEQ2_NODE_STATS_TSV
         output:
-            counts_tsv   = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-            metadata_tsv = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv")
+            counts_tsv   = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "counts.tsv"),
+            metadata_tsv = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "metadata.tsv")
         params:
             script = os.path.join(BASE, "scripts", "prepare_deseq2_inputs.R"),
-            outdir = DESEQ2_INPUT_DIR_ABS
+            outdir = DESEQ2_GENERATED_INPUT_DIR_ABS,
+            use_staged_inputs = DESEQ2_USE_STAGED_INPUTS
         log: os.path.join(LOGROOT, "prepare_deseq2_inputs.log")
         conda: CONDA_ENV_R
         shell:
             r'''
+            if [ "{params.use_staged_inputs}" = "True" ]; then
+                echo "ERROR: prepare_deseq2_inputs is not a marker DESeq2 dependency when deseq2_inputs.use_staged_inputs is true." >&2
+                echo "ERROR: Set deseq2_inputs.use_staged_inputs: false only after paths.dsmz_counts_rds is confirmed as raw integer counts." >&2
+                exit 1
+            fi
             mkdir -p {params.outdir}
             Rscript {params.script} \
               --profile "{profile_name}" \
@@ -2814,10 +3895,10 @@ if DESEQ2_ENABLED:
             test -s {output.metadata_tsv} || (echo "ERROR: missing {output.metadata_tsv}" >&2; exit 1)
             '''
 
-
-    # -----------------------------------------------------------------------------
-    # RULE: add_component_to_metadata
-    # -----------------------------------------------------------------------------
+    # Rule: add_component_to_metadata
+    # Method role: DESeq2 staging rule that joins resolved component/isolate labels onto sample metadata.
+    # Flow: staged metadata plus graph node statistics -> component-annotated metadata table.
+    # Downstream use: provides grouping labels for DESeq2 contrast generation.
     rule add_component_to_metadata:
         """
         Joins graph-derived component and is_isolate columns onto the staged
@@ -2825,10 +3906,10 @@ if DESEQ2_ENABLED:
         stats as the source of component assignments.
         """
         input:
-            meta       = os.path.join(DESEQ2_INPUT_DIR, "metadata.tsv"),
+            meta       = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "metadata.tsv"),
             node_stats = DESEQ2_NODE_STATS_TSV
         output:
-            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+            meta_comp = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "metadata_with_components.tsv")
         params:
             script       = os.path.join(BASE, "scripts", "add_component_to_metadata.R"),
             cell_line_col = DESEQ2_CFG.get("cell_line_col", "cell_line")
@@ -2845,10 +3926,10 @@ if DESEQ2_ENABLED:
             test -s {output.meta_comp} || (echo "ERROR: missing {output.meta_comp}" >&2; exit 1)
             '''
 
-
-    # -----------------------------------------------------------------------------
-    # RULE: derive_isolate_list
-    # -----------------------------------------------------------------------------
+    # Rule: derive_isolate_list
+    # Method role: DESeq2 staging rule that extracts resolved isolate cell-lines.
+    # Flow: component-annotated metadata -> isolate list CSV.
+    # Downstream use: defines isolate-vs-reference marker contrasts.
     rule derive_isolate_list:
         """
         Extracts the comma-separated list of isolate cell lines (is_isolate == TRUE)
@@ -2858,10 +3939,10 @@ if DESEQ2_ENABLED:
         Fails clearly if required columns are absent.
         """
         input:
-            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+            meta_comp = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "metadata_with_components.tsv")
         output:
-            isolate_csv = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv"),
-            isolate_tsv = os.path.join(DESEQ2_INPUT_DIR, "isolate_cell_lines.tsv")
+            isolate_csv = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "isolate_list.csv"),
+            isolate_tsv = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "isolate_cell_lines.tsv")
         log: os.path.join(LOGROOT, "derive_isolate_list.log")
         shell:
             r'''
@@ -2884,10 +3965,10 @@ if DESEQ2_ENABLED:
             awk -F'\t' 'NR>1 {{ print $1 }}' {output.isolate_tsv} | sort -u | paste -sd',' > {output.isolate_csv}
             '''
 
-
-    # -----------------------------------------------------------------------------
-    # RULE: derive_components_list
-    # -----------------------------------------------------------------------------
+    # Rule: derive_components_list
+    # Method role: DESeq2 staging rule that extracts resolved graph components.
+    # Flow: component-annotated metadata -> component list file.
+    # Downstream use: defines component-vs-rest marker contrasts.
     rule derive_components_list:
         """
         Extracts unique non-singleton component IDs from metadata_with_components.tsv.
@@ -2896,10 +3977,10 @@ if DESEQ2_ENABLED:
         a component-size manifest for reproducibility and reporting.
         """
         input:
-            meta_comp = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv")
+            meta_comp = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "metadata_with_components.tsv")
         output:
-            comp_list = os.path.join(DESEQ2_INPUT_DIR, "components_list.txt"),
-            comp_tsv  = os.path.join(DESEQ2_INPUT_DIR, "component_cell_line_summary.tsv")
+            comp_list = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "components_list.txt"),
+            comp_tsv  = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "component_cell_line_summary.tsv")
         log: os.path.join(LOGROOT, "derive_components_list.log")
         shell:
             r'''
@@ -2935,10 +4016,10 @@ if DESEQ2_ENABLED:
             awk -F'\t' 'NR>1 && $3=="TRUE" {{ print $1 }}' {output.comp_tsv} | sort -n > {output.comp_list}
             '''
 
-
-    # -----------------------------------------------------------------------------
-    # RULE: derive_anchor_list
-    # -----------------------------------------------------------------------------
+    # Rule: derive_anchor_list
+    # Method role: DESeq2 staging rule that identifies anchor cell-lines and their components.
+    # Flow: graph node statistics and component metadata -> anchor list and component mapping.
+    # Downstream use: supports anchor-aware directional marker tables.
     rule derive_anchor_list:
         """
         Extracts canonical anchor cell lines from
@@ -2964,8 +4045,8 @@ if DESEQ2_ENABLED:
         input:
             anchor_audit = P_CONS_ANCHOR_AUDIT_TSV
         output:
-            anchor_list_csv       = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
-            anchor_components_tsv = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv")
+            anchor_list_csv       = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "anchor_list.csv"),
+            anchor_components_tsv = os.path.join(DESEQ2_GENERATED_INPUT_DIR, "anchor_components.tsv")
         log: os.path.join(LOGROOT, "derive_anchor_list.log")
         shell:
             r'''
@@ -3003,10 +4084,10 @@ if DESEQ2_ENABLED:
             echo "[derive_anchor_list] anchor_components rows: $(wc -l < {output.anchor_components_tsv})" >> {log}
             '''
 
-
-    # -----------------------------------------------------------------------------
-    # RULE: deseq2_isolate_degs
-    # -----------------------------------------------------------------------------
+    # Rule: deseq2_isolate_degs
+    # Method role: marker-analysis rule for isolate-centred DESeq2 contrasts.
+    # Flow: staged counts/metadata and isolate labels -> isolate marker tables and QC files.
+    # Downstream use: contributes directional marker tables and enrichment query sets.
     rule deseq2_isolate_degs:
         """
         Runs DESeq2 contrasts for each graph-derived group identified in the
@@ -3019,12 +4100,12 @@ if DESEQ2_ENABLED:
         QC, and a recurrence-based unique feature set.
         """
         input:
-            counts_tsv            = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-            meta_comp             = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
-            isolate_csv           = os.path.join(DESEQ2_INPUT_DIR, "isolate_list.csv"),
-            isolate_tsv           = os.path.join(DESEQ2_INPUT_DIR, "isolate_cell_lines.tsv"),
-            anchor_list_csv       = os.path.join(DESEQ2_INPUT_DIR, "anchor_list.csv"),
-            anchor_components_tsv = os.path.join(DESEQ2_INPUT_DIR, "anchor_components.tsv")
+            validation            = DESEQ2_STAGED_VALIDATION_INPUT,
+            counts_tsv            = DESEQ2_COUNTS_TSV,
+            meta_comp             = DESEQ2_META_COMP_TSV,
+            isolate_csv           = DESEQ2_ISOLATE_CSV,
+            anchor_list_csv       = DESEQ2_ANCHOR_LIST_CSV,
+            anchor_components_tsv = DESEQ2_ANCHOR_COMPONENTS_TSV
         output:
             size_factors = os.path.join(DESEQ2_ISOLATE_DIR, "qc", "size_factors.tsv"),
             manifest     = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv"),
@@ -3045,11 +4126,23 @@ if DESEQ2_ENABLED:
             lfc_anchor    = DESEQ2_CFG.get("lfc_anchor",  1.0),
             topN_anchor   = DESEQ2_CFG.get("topN_anchor", 200),
             min_baseMean  = DESEQ2_CFG.get("min_baseMean", 10),
-            recurrence_k  = DESEQ2_CFG.get("recurrence_k", 2)
+            recurrence_k  = DESEQ2_CFG.get("recurrence_k", 2),
+            validation_required = DESEQ2_USE_STAGED_INPUTS
         log: os.path.join(LOGROOT, "deseq2_isolate_degs.log")
         conda: CONDA_ENV_R
         shell:
             r'''
+            if [ "{params.validation_required}" = "True" ]; then
+                if [ ! -s {input.validation} ]; then
+                    echo "ERROR: staged DESeq2 input validation file is missing: {input.validation}" >&2
+                    exit 1
+                fi
+                if awk -F'\t' 'NR>1 && $3!="PASS" {{ bad=1 }} END {{ exit bad ? 0 : 1 }}' {input.validation}; then
+                    echo "ERROR: staged DESeq2 inputs failed validation; see {input.validation}" >&2
+                    awk -F'\t' 'NR==1 || $3!="PASS"' {input.validation} >&2
+                    exit 1
+                fi
+            fi
             ISOLATE_LIST=$(cat {input.isolate_csv})
             ANCHOR_LIST=$(cat {input.anchor_list_csv})
             if [ -z "$ISOLATE_LIST" ] && [ -z "$ANCHOR_LIST" ]; then
@@ -3087,9 +4180,10 @@ if DESEQ2_ENABLED:
     DESEQ2_DIRECTIONAL_MARKER_DIR = os.path.join(DESEQ2_ISOLATE_DIR, "directional_markers")
     DESEQ2_DIRECTIONAL_MARKER_DIR_ABS = os.path.join(DESEQ2_ISOLATE_DIR_ABS, "directional_markers")
 
-    # -----------------------------------------------------------------------------
-    # RULE: write_deseq2_directional_marker_tables
-    # -----------------------------------------------------------------------------
+    # Rule: write_deseq2_directional_marker_tables
+    # Method role: marker reporting rule converting DESeq2 isolate outputs into direction-specific tables.
+    # Flow: isolate marker outputs plus anchor/component labels -> directional marker tables.
+    # Downstream use: supplies marker post-processing and enrichment inputs.
     rule write_deseq2_directional_marker_tables:
         """
         Organise retained DESeq2 marker genes into directional marker tables
@@ -3127,6 +4221,10 @@ if DESEQ2_ENABLED:
               > {log} 2>&1
             '''
 
+    # Rule: write_all_deseq2_directional_marker_tables
+    # Method role: collector target requiring all direction-specific marker tables.
+    # Flow: expected marker-table outputs -> Snakemake dependency aggregation only.
+    # Downstream use: provides a stage-level marker target without performing a new analysis.
     rule write_all_deseq2_directional_marker_tables:
         """
         Aggregate target for the active profile's directional marker files.
@@ -3134,9 +4232,10 @@ if DESEQ2_ENABLED:
         input:
             rules.write_deseq2_directional_marker_tables.output
 
-    # -----------------------------------------------------------------------------
-    # RULE: deseq2_component_vs_rest_all
-    # -----------------------------------------------------------------------------
+    # Rule: deseq2_component_vs_rest_all
+    # Method role: marker-analysis collector that completes component-vs-rest DESeq2 contrasts.
+    # Flow: component marker outputs -> completion sentinel.
+    # Downstream use: signals marker-analysis completion for PIPELINE_TARGET assembly.
     rule deseq2_component_vs_rest_all:
         """
         Runs deseq2_component_vs_rest.R once per component in components_list.txt.
@@ -3144,10 +4243,10 @@ if DESEQ2_ENABLED:
         A sentinel .done file is written only after all components complete.
         """
         input:
-            counts_tsv = os.path.join(DESEQ2_INPUT_DIR, "counts.tsv"),
-            meta_comp  = os.path.join(DESEQ2_INPUT_DIR, "metadata_with_components.tsv"),
-            comp_list  = os.path.join(DESEQ2_INPUT_DIR, "components_list.txt"),
-            comp_tsv   = os.path.join(DESEQ2_INPUT_DIR, "component_cell_line_summary.tsv"),
+            validation = DESEQ2_STAGED_VALIDATION_INPUT,
+            counts_tsv = DESEQ2_COUNTS_TSV,
+            meta_comp  = DESEQ2_META_COMP_TSV,
+            comp_list  = DESEQ2_COMPONENTS_LIST_TXT,
             isolate_manifest = os.path.join(DESEQ2_ISOLATE_DIR, "markers", "marker_sets_manifest.tsv")
         output:
             done = touch(os.path.join(DESEQ2_COMP_DIR, ".done"))
@@ -3158,11 +4257,23 @@ if DESEQ2_ENABLED:
             sample_id_col = DESEQ2_CFG.get("staged_sample_id_col", "sample_id"),
             fdr           = DESEQ2_CFG.get("fdr_component", 0.05),
             lfc           = DESEQ2_CFG.get("lfc_component", 1.0),
-            topN          = DESEQ2_CFG.get("topN_component", 500)
+            topN          = DESEQ2_CFG.get("topN_component", 500),
+            validation_required = DESEQ2_USE_STAGED_INPUTS
         log: os.path.join(LOGROOT, "deseq2_component_vs_rest_all.log")
         conda: CONDA_ENV_R
         shell:
             r'''
+            if [ "{params.validation_required}" = "True" ]; then
+                if [ ! -s {input.validation} ]; then
+                    echo "ERROR: staged DESeq2 input validation file is missing: {input.validation}" >&2
+                    exit 1
+                fi
+                if awk -F'\t' 'NR>1 && $3!="PASS" {{ bad=1 }} END {{ exit bad ? 0 : 1 }}' {input.validation}; then
+                    echo "ERROR: staged DESeq2 inputs failed validation; see {input.validation}" >&2
+                    awk -F'\t' 'NR==1 || $3!="PASS"' {input.validation} >&2
+                    exit 1
+                fi
+            fi
             mkdir -p {params.outdir}
             echo "[START] Component-vs-rest loop" > {log}
             if [ ! -s {input.comp_list} ]; then
@@ -3189,8 +4300,9 @@ if DESEQ2_ENABLED:
 
 
 # =============================================================================
-# STAGE 7B: GENE SET ENRICHMENT ANALYSIS
+# ENRICHMENT ANALYSIS
 # =============================================================================
+# Stage role: prepares and reports g:Profiler enrichment from DESeq2-derived marker sets.
 
 ENRICH_PROFILE_CFG = cfg.get("enrichment", {})
 ENRICH_CFG = deep_merge(config.get("defaults", {}).get("enrichment", {}), ENRICH_PROFILE_CFG)
@@ -3209,8 +4321,76 @@ _ENRICH_DISEASE_PROFILES = ENRICH_CFG.get(
 )
 _ENRICH_DISEASE_PROFILES = [str(p) for p in _ENRICH_DISEASE_PROFILES]
 
+GPROFILER_QUERY_OUTDIR_REL = os.path.join(
+    "results", "unsupervised", "pan_cancer", "enrichment", "query_sets", "gprofiler_by_cohort"
+)
+GPROFILER_FEATURE_TABLE = os.path.join(
+    "results", "unsupervised", "pan_cancer", "feature_space", "pan_cancer_features.tsv"
+)
+_retained_source_contrasts = (
+    config.get("external_inputs", {}).get("retained_source_contrasts")
+    or os.environ.get("GPROFILER_RETAINED_SOURCE_CONTRASTS", "")
+)
+GPROFILER_RETAINED_SOURCE_CONTRASTS = (
+    cfg_path(_retained_source_contrasts) if _retained_source_contrasts else ""
+)
+
+# Rule: build_gprofiler_by_cohort_query_sets
+# Method role: enrichment preparation rule for current pan-cancer marker-framework query sets.
+# Flow: marker-derived pan-cancer feature table -> cohort-specific g:Profiler query/background files.
+# Downstream use: prepares local enrichment inputs without running g:Profiler.
+rule build_gprofiler_by_cohort_query_sets:
+    """
+    Build validated cohort-specific g:Profiler query lists from the current
+    pan-cancer feature table. This does not run g:Profiler.
+    """
+    input:
+        features = GPROFILER_FEATURE_TABLE,
+        script = os.path.join(SCRIPTS_DIR, "build_gprofiler_query_sets_from_pan_cancer_features.py")
+    output:
+        manifest = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "query_manifest.tsv"),
+        BRCA_all = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "BRCA_all.txt"),
+        BRCA_UP = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "BRCA_UP.txt"),
+        BRCA_DOWN = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "BRCA_DOWN.txt"),
+        BRCA_MIXED = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "BRCA_MIXED.txt"),
+        NBL_all = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "NBL_all.txt"),
+        NBL_UP = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "NBL_UP.txt"),
+        NBL_DOWN = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "NBL_DOWN.txt"),
+        NBL_MIXED = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "NBL_MIXED.txt"),
+        RBL_all = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "RBL_all.txt"),
+        RBL_UP = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "RBL_UP.txt"),
+        RBL_DOWN = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "RBL_DOWN.txt"),
+        RBL_MIXED = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "RBL_MIXED.txt"),
+        gmt_all = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "gprofiler_by_cohort_all.gmt"),
+        gmt_directional = os.path.join(GPROFILER_QUERY_OUTDIR_REL, "gprofiler_by_cohort_directional.gmt")
+    params:
+        outdir = GPROFILER_QUERY_OUTDIR_REL,
+        retained_source_contrasts = GPROFILER_RETAINED_SOURCE_CONTRASTS
+    log:
+        os.path.join(LOGROOT, "build_gprofiler_by_cohort_query_sets.log")
+    conda:
+        CONDA_ENV_PY
+    shell:
+        r"""
+        python "{input.script}" \
+          --features "{input.features}" \
+          --outdir "{params.outdir}" \
+          --retained_source_contrasts "{params.retained_source_contrasts}" \
+          > "{log}" 2>&1
+        for f in {output}; do
+          test -e "$f" || (echo "ERROR: missing $f" >&2; exit 1)
+        done
+        test -s "{output.manifest}" || (echo "ERROR: missing {output.manifest}" >&2; exit 1)
+        test -s "{output.gmt_all}" || (echo "ERROR: missing {output.gmt_all}" >&2; exit 1)
+        test -s "{output.gmt_directional}" || (echo "ERROR: missing {output.gmt_directional}" >&2; exit 1)
+        """
+
 if ENRICH_ENABLED:
 
+    # Rule: build_enrichment_query_sets
+    # Method role: enrichment preparation rule that builds query genes and custom backgrounds from marker outputs.
+    # Flow: DESeq2 isolate/component marker tables -> enrichment query manifest and skipped-query audit.
+    # Downstream use: supplies reproducible inputs for g:Profiler execution.
     rule build_enrichment_query_sets:
         """
         Build enrichment query gene sets and matched custom backgrounds from
@@ -3227,6 +4407,7 @@ if ENRICH_ENABLED:
             component_done = os.path.join(DESEQ2_COMP_DIR, ".done")
         output:
             query_manifest = os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"),
+            query_summary = os.path.join(ENRICH_DIR_REL, "query_sets", "query_summary.tsv"),
             skipped_queries = os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"),
             done = touch(os.path.join(ENRICH_DIR_REL, "query_sets", ".done"))
         params:
@@ -3278,8 +4459,14 @@ if ENRICH_ENABLED:
               > "{log}" 2>&1
 
             test -s "{output.query_manifest}" || (echo "ERROR: missing {output.query_manifest}" >&2; exit 1)
+            test -s "{output.query_summary}" || (echo "ERROR: missing {output.query_summary}" >&2; exit 1)
+            test -s "{output.skipped_queries}" || (echo "ERROR: missing {output.skipped_queries}" >&2; exit 1)
             '''
 
+    # Rule: run_gprofiler_enrichment
+    # Method role: enrichment analysis rule that runs g:Profiler from the prepared query manifest.
+    # Flow: query/background manifest -> g:Profiler result corpus and provenance tables.
+    # Downstream use: feeds top-term selection and enrichment heatmap plotting.
     rule run_gprofiler_enrichment:
         """
         Run g:Profiler enrichment for all non-skipped query sets listed in the
@@ -3338,6 +4525,10 @@ if ENRICH_ENABLED:
             '''
 
 
+    # Rule: build_enrichment_summary_top_terms
+    # Method role: enrichment reporting rule selecting top terms from g:Profiler results.
+    # Flow: g:Profiler corpus -> compact top-term table.
+    # Downstream use: supplies the enrichment heatmap and reporting tables.
     rule build_enrichment_summary_top_terms:
         input:
             top_terms = os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"),
@@ -3352,6 +4543,10 @@ if ENRICH_ENABLED:
         shell:
             "Rscript {params.script} --input {input.top_terms} --query-manifest {input.query_manifest} --output {output.summary} > {log} 2>&1 && test -s {output.summary} && test -s {output.provenance}"
 
+    # Rule: plot_enrichment_top_terms_heatmap
+    # Method role: plotting rule for top enrichment terms across marker-derived query sets.
+    # Flow: top-term table -> enrichment heatmap figure.
+    # Downstream use: reporting visualisation only.
     rule plot_enrichment_top_terms_heatmap:
         input:
             summary = os.path.join(ENRICH_DIR_REL, "enrichment_summary_top_terms.tsv")
@@ -3372,10 +4567,16 @@ if ENRICH_ENABLED:
 
 
 # =============================================================================
-# STAGE 8: MARKER POST-PROCESSING (CONSENSUS → FEATURES → EXPRESSION → MAPPING)
+# MARKER POST-PROCESSING
 # =============================================================================
+# Stage role: converts cohort marker tables into marker-derived feature panels and pan-cancer outputs.
 
 MARKER_POST_CFG = config.get("defaults", {}).get("marker_postprocessing", {})
+# Boundary note: results/unsupervised/pan_cancer/ is an output namespace.
+# The multicohort_cancer profile is currently the workflow entrypoint that
+# resolves these downstream cross-cohort/pan-cancer targets because they depend
+# on BRCA/NBL/RBL marker and expression artefacts. Treat the names as related
+# routing layers, not interchangeable analysis labels.
 MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False)) and profile_name == "multicohort_cancer"
 
 if MARKER_POST_ENABLED:
@@ -3418,6 +4619,10 @@ if MARKER_POST_ENABLED:
     def profile_marker_tables_rel(profile):
         return os.path.join("results", "unsupervised", profile, "deseq2_markers", "tables")
 
+    # Rule: ensure_profile_deseq2_markers
+    # Method role: marker post-processing rule that verifies required per-profile DESeq2 marker artefacts exist.
+    # Flow: expected profile marker files -> readiness sentinel.
+    # Downstream use: prevents pan-cancer feature construction from using incomplete marker inputs.
     rule ensure_profile_deseq2_markers:
         """
         Build graph-derived isolate-vs-rest DESeq2 marker outputs for a disease
@@ -3459,6 +4664,10 @@ if MARKER_POST_ENABLED:
             test -s "{output.session_info}" || (echo "ERROR: missing {output.session_info}" >&2; exit 1)
             '''
 
+    # Rule: build_component_consensus_markers
+    # Method role: marker post-processing rule that builds component-level consensus marker outputs.
+    # Flow: per-profile directional marker tables -> consensus marker exports.
+    # Downstream use: supplies the marker-derived pan-cancer feature panel.
     rule build_component_consensus_markers:
         """Build per-profile consensus markers and summary exports."""
         input:
@@ -3519,6 +4728,32 @@ if MARKER_POST_ENABLED:
     PAN_FEATURES_DOWN = abspath(PAN_CANCER_MP_CFG.get("final_features_down", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.DOWN.txt")))
     PAN_FEATURES_SUMMARY = abspath(PAN_CANCER_MP_CFG.get("build_summary_tsv", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_summary.tsv")))
     PAN_FEATURES_REPORT = abspath(PAN_CANCER_MP_CFG.get("build_report_md", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_report.md")))
+    PAN_FEATURES_GENE_EVIDENCE = abspath(os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_gene_evidence.tsv"))
+    PAN_FEATURES_METHOD = PAN_CANCER_MP_CFG.get("method", "ranked_marker_source_pan_cancer_panel")
+    PAN_FEATURES_PREFIX = PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("output_prefix", "ranked_marker_source_panel")
+    PAN_FEATURES_RANKED_BY_COHORT = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_cohort.tsv"))
+    PAN_FEATURES_RANKED_BY_MARKER_SOURCE_CLASS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_marker_source_class.tsv"))
+    PAN_FEATURES_RANKED_BY_EVIDENCE_CLASS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_evidence_class.tsv"))
+    PAN_FEATURES_RANKING_COMPONENTS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_ranking_components.tsv"))
+    PAN_FEATURES_QUANTILE_THRESHOLDS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_quantile_thresholds.tsv"))
+    PAN_FEATURES_SENSITIVITY = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_sensitivity_summary.tsv"))
+    PAN_FEATURES_SELECTED_ROWS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_selected_marker_source_class_rows.tsv"))
+    PAN_FEATURES_VALIDATION = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_validation.tsv"))
+    PAN_FEATURES_REMOVED_VS_PREVIOUS177 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous177.tsv"))
+    PAN_FEATURES_ADDED_VS_PREVIOUS177 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous177.tsv"))
+    PAN_FEATURES_OVERLAP_VS_PREVIOUS177 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous177.tsv"))
+    PAN_FEATURES_REMOVED_VS_PREVIOUS125 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous125.tsv"))
+    PAN_FEATURES_ADDED_VS_PREVIOUS125 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous125.tsv"))
+    PAN_FEATURES_OVERLAP_VS_PREVIOUS125 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous125.tsv"))
+    PAN_FEATURES_RANKED_REPORT = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_report.md"))
+    PAN_FEATURES_RANKED_MANIFEST = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_manifest.tsv"))
+    PAN_FEATURES_ACTIVE_MANIFEST = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_active_directory_manifest.tsv"))
+    PAN_FEATURES_DOWNSTREAM_PLAN = abspath(os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_plan_from_ranked_marker_source_panel.md"))
+    PAN_FEATURES_DOWNSTREAM_TARGETS = abspath(os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_targets.tsv"))
+    PAN_FEATURES_DOWNSTREAM_DRYRUN = abspath(os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_dryrun.log"))
+    PAN_FEATURES_THESIS_NOTES = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_thesis_update_notes.md"))
+    PAN_FEATURES_PREVIOUS177 = abspath(PAN_CANCER_MP_CFG.get("previous177_features_tsv", "results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016/pan_cancer_features.tsv"))
+    PAN_FEATURES_PREVIOUS125_CFG = PAN_CANCER_MP_CFG.get("previous125_features_tsv", "")
 
     def _profile_dir_args():
         args = []
@@ -3548,6 +4783,10 @@ if MARKER_POST_ENABLED:
             )
         return " ".join(args)
 
+    # Rule: build_pan_cancer_features
+    # Method role: feature-construction rule combining cohort marker tables into a marker-derived feature panel.
+    # Flow: per-profile marker tables and previous feature baselines -> pan-cancer feature table and audits.
+    # Downstream use: defines the curated pan-cancer feature space.
     rule build_pan_cancer_features:
         """Merge per-profile summaries into a pan-cancer feature panel."""
         input:
@@ -3561,14 +4800,56 @@ if MARKER_POST_ENABLED:
             up_txt      = PAN_FEATURES_UP,
             down_txt    = PAN_FEATURES_DOWN,
             summary_tsv = PAN_FEATURES_SUMMARY,
+            gene_evidence_tsv = PAN_FEATURES_GENE_EVIDENCE,
+            ranked_by_cohort_tsv = PAN_FEATURES_RANKED_BY_COHORT,
+            ranked_by_marker_source_class_tsv = PAN_FEATURES_RANKED_BY_MARKER_SOURCE_CLASS,
+            ranked_by_evidence_class_tsv = PAN_FEATURES_RANKED_BY_EVIDENCE_CLASS,
+            ranking_components_tsv = PAN_FEATURES_RANKING_COMPONENTS,
+            quantile_thresholds_tsv = PAN_FEATURES_QUANTILE_THRESHOLDS,
+            sensitivity_summary_tsv = PAN_FEATURES_SENSITIVITY,
+            selected_marker_source_class_rows_tsv = PAN_FEATURES_SELECTED_ROWS,
+            validation_tsv = PAN_FEATURES_VALIDATION,
+            removed_vs_previous177_tsv = PAN_FEATURES_REMOVED_VS_PREVIOUS177,
+            added_vs_previous177_tsv = PAN_FEATURES_ADDED_VS_PREVIOUS177,
+            overlap_vs_previous177_tsv = PAN_FEATURES_OVERLAP_VS_PREVIOUS177,
+            removed_vs_previous125_tsv = PAN_FEATURES_REMOVED_VS_PREVIOUS125,
+            added_vs_previous125_tsv = PAN_FEATURES_ADDED_VS_PREVIOUS125,
+            overlap_vs_previous125_tsv = PAN_FEATURES_OVERLAP_VS_PREVIOUS125,
+            ranked_report_md = PAN_FEATURES_RANKED_REPORT,
+            ranked_manifest_tsv = PAN_FEATURES_RANKED_MANIFEST,
+            active_directory_manifest_tsv = PAN_FEATURES_ACTIVE_MANIFEST,
+            downstream_plan_md = PAN_FEATURES_DOWNSTREAM_PLAN,
+            downstream_targets_tsv = PAN_FEATURES_DOWNSTREAM_TARGETS,
+            downstream_dryrun_log = PAN_FEATURES_DOWNSTREAM_DRYRUN,
+            thesis_update_notes_md = PAN_FEATURES_THESIS_NOTES,
             report_md   = PAN_FEATURES_REPORT,
             done_file   = os.path.join(PAN_FEATURES_OUTDIR_ABS, "pan_cancer_features_done.txt")
         params:
             script=os.path.join(SCRIPTS_DIR, "build_pan_cancer_features.py"),
             outdir=PAN_FEATURES_OUTDIR_ABS,
+            method=PAN_FEATURES_METHOD,
             profile_marker_dirs=_profile_marker_dir_args(),
             profile_marker_manifests=_profile_marker_manifest_args(),
+            recurrence_k=PAN_CANCER_MP_CFG.get("recurrence_k", DESEQ2_CFG.get("recurrence_k", 2)),
+            desired_min_size=PAN_CANCER_MP_CFG.get("desired_min_size", 200),
+            marker_source_recurrence="--marker-source-recurrence" if PAN_CANCER_MP_CFG.get("marker_source_recurrence", True) else "",
+            singleton_source_policy=PAN_CANCER_MP_CFG.get("singleton_source_policy", "ranked_quantile"),
+            disable_old_isolate_rescue="--disable-old-isolate-rescue" if PAN_CANCER_MP_CFG.get("disable_old_isolate_rescue", True) else "",
             cap_isolate=PAN_CANCER_MP_CFG.get("cap_isolate", 0),
+            primary_rule=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("primary_rule", "auto"),
+            padj_quantile=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("padj_quantile", 0.25),
+            abs_log2fc_quantile=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("abs_log2fc_quantile", 0.75),
+            relaxed_minimum_criteria=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("relaxed_iqr", {}).get("minimum_criteria_met", 2),
+            strict_basemean_threshold=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("strict_iqr", {}).get("baseMean_threshold", "median"),
+            previous_feature_sets=(
+                "--previous-feature-set previous177=" + shlex.quote(PAN_FEATURES_PREVIOUS177)
+                + (
+                    " --previous-feature-set previous125=" + shlex.quote(abspath(PAN_FEATURES_PREVIOUS125_CFG))
+                    if PAN_FEATURES_PREVIOUS125_CFG else ""
+                )
+            ),
+            previous177_backup_dir=abspath(PAN_CANCER_MP_CFG.get("previous177_backup_dir", "results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016")),
+            backup_dir=abspath(PAN_CANCER_MP_CFG.get("active_backup_dir", "")) if PAN_CANCER_MP_CFG.get("active_backup_dir", "") else "",
             remove_ribo_mt="--remove-ribo-mt" if PAN_CANCER_MP_CFG.get("remove_ribo_mt", False) else "",
             gene_annot=("--gene-annotation-tsv " + abspath(PAN_CANCER_MP_CFG["gene_annotation_tsv"]))
                         if PAN_CANCER_MP_CFG.get("gene_annotation_tsv") else ""
@@ -3581,7 +4862,21 @@ if MARKER_POST_ENABLED:
               {params.profile_marker_dirs} \
               {params.profile_marker_manifests} \
               --output-dir "{params.outdir}" \
+              --method "{params.method}" \
+              --recurrence-k {params.recurrence_k} \
+              --desired-min-size {params.desired_min_size} \
+              {params.marker_source_recurrence} \
+              --singleton-source-policy "{params.singleton_source_policy}" \
+              {params.disable_old_isolate_rescue} \
               --cap-isolate {params.cap_isolate} \
+              --primary-rule "{params.primary_rule}" \
+              --strict-basemean-threshold "{params.strict_basemean_threshold}" \
+              --padj-quantile {params.padj_quantile} \
+              --abs-log2fc-quantile {params.abs_log2fc_quantile} \
+              --relaxed-minimum-criteria {params.relaxed_minimum_criteria} \
+              {params.previous_feature_sets} \
+              --previous177-backup-dir "{params.previous177_backup_dir}" \
+              --backup-dir "{params.backup_dir}" \
               {params.remove_ribo_mt} \
               {params.gene_annot} \
               > "{log}" 2>&1
@@ -3625,6 +4920,10 @@ if MARKER_POST_ENABLED:
     if _PAN_EXPR_HEME_PATH:
         _PAN_EXPR_INPUTS.append(_PAN_EXPR_HEME_PATH)
 
+    # Rule: build_pan_cancer_feature_expression_matrix
+    # Method role: expression-construction rule that restricts tumour/cell-line matrices to the marker-derived feature panel.
+    # Flow: cohort VST inputs plus feature table -> pan-cancer feature-space expression matrix.
+    # Downstream use: supplies UMAP, mapping, ranking, and pan-cancer graph analyses.
     rule build_pan_cancer_feature_expression_matrix:
         """Combine per-profile VST inputs into the feature-restricted pan-cancer matrix."""
         input:
@@ -3658,6 +4957,10 @@ if MARKER_POST_ENABLED:
               > "{log}" 2>&1
             '''
 
+    # Rule: build_pan_cancer_feature_expression_matrix_cell_lines_only
+    # Method role: expression-construction rule for cell-line-only pan-cancer feature-space analyses.
+    # Flow: configured cell-line VST inputs plus feature table -> cell-line-only feature matrix.
+    # Downstream use: supplies cell-line-only similarity network and community sensitivity analyses.
     rule build_pan_cancer_feature_expression_matrix_cell_lines_only:
         """Build a feature-restricted pan-cancer matrix containing cell lines only."""
         input:
@@ -3710,11 +5013,43 @@ if MARKER_POST_ENABLED:
     else:
         PAN_ALIGNMENT_UMAP_METRICS = [str(m).strip() for m in _PAN_ALIGNMENT_UMAP_METRICS_RAW if str(m).strip()]
 
-    def pan_alignment_umap_tag(metric):
-        return "DEG_SET_" + re.sub(r"[^A-Za-z0-9]+", "_", metric)
+    PAN_ALIGNMENT_UMAP_SOURCE_META = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+        "source_metadata_tsv",
+        "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"
+    ))
+    PAN_ALIGNMENT_UMAP_FIGURE_WIDTH = float(PAN_ALIGNMENT_UMAP_CFG.get("figure_width", 9.0))
+    PAN_ALIGNMENT_UMAP_FIGURE_HEIGHT = float(PAN_ALIGNMENT_UMAP_CFG.get("figure_height", 7.0))
+    PAN_ALIGNMENT_UMAP_SLIDE_WIDTH = float(PAN_ALIGNMENT_UMAP_CFG.get("slide_width", 13.33))
+    PAN_ALIGNMENT_UMAP_SLIDE_HEIGHT = float(PAN_ALIGNMENT_UMAP_CFG.get("slide_height", 7.5))
+    PAN_ALIGNMENT_UMAP_LEGEND_POSITION = PAN_ALIGNMENT_UMAP_CFG.get("legend_position", "bottom")
+    PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SLIDE_THRESHOLD = int(PAN_ALIGNMENT_UMAP_CFG.get("source_cancer_slide_threshold", 6))
 
-    def pan_alignment_umap_stem(metric):
-        return "pan_cancer_tumour_cell_line_alignment_umap_" + pan_alignment_umap_tag(metric)
+    def alignment_umap_metric_label(metric):
+        return re.sub(r"[^A-Za-z0-9]+", "_", metric)
+
+    def alignment_umap_stem(out_stem, feature_label, metric, view=None):
+        parts = [out_stem, feature_label]
+        if view:
+            parts.append(view)
+        parts.append(alignment_umap_metric_label(metric))
+        return "_".join(parts)
+
+    def alignment_umap_outputs(outdir, prefix, out_stem, feature_label, metrics, ext, view=None):
+        return [
+            os.path.join(
+                outdir,
+                f"{prefix}_{alignment_umap_stem(out_stem, feature_label, m, view)}.{ext}"
+            )
+            for m in metrics
+        ]
+
+    def pan_alignment_umap_stem(metric, view=None):
+        return alignment_umap_stem(
+            "pan_cancer_tumour_cell_line_alignment_umap",
+            "DEG_SET",
+            metric,
+            view
+        )
 
     PAN_ALIGNMENT_UMAP_PDFS = [
         os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m)}.pdf")
@@ -3732,28 +5067,74 @@ if MARKER_POST_ENABLED:
         os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"coords_{pan_alignment_umap_stem(m)}.tsv")
         for m in PAN_ALIGNMENT_UMAP_METRICS
     ]
+    PAN_ALIGNMENT_UMAP_SOURCE_PDFS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m, 'SOURCE')}.pdf")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SOURCE_SVGS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m, 'SOURCE')}.svg")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SOURCE_PNGS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m, 'SOURCE')}.png")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SOURCE_CANCER_PDFS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m, 'SOURCE_CANCER')}.pdf")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SVGS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m, 'SOURCE_CANCER')}.svg")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SOURCE_CANCER_PNGS = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"Fig_{pan_alignment_umap_stem(m, 'SOURCE_CANCER')}.png")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
+    PAN_ALIGNMENT_UMAP_SOURCE_COMPOSITION = [
+        os.path.join(PAN_ALIGNMENT_UMAP_OUTDIR, f"source_composition_{pan_alignment_umap_stem(m)}.tsv")
+        for m in PAN_ALIGNMENT_UMAP_METRICS
+    ]
     PAN_ALIGNMENT_UMAP_SUMMARY = os.path.join(
         PAN_ALIGNMENT_UMAP_OUTDIR,
         "summary_pan_cancer_tumour_cell_line_alignment_umap.tsv"
     )
 
+    # Rule: plot_pan_cancer_tumour_cell_line_alignment_umap
+    # Method role: diagnostic plotting rule for tumour/cell-line alignment in the pan-cancer feature space.
+    # Flow: feature-space expression matrix and metadata -> UMAP coordinates, composition tables, and figures.
+    # Downstream use: visualises alignment; it does not define mapping or ranking outputs.
     rule plot_pan_cancer_tumour_cell_line_alignment_umap:
-        """Generate thesis-facing pan-cancer tumour/cell-line alignment UMAPs."""
+        """Generate pan-cancer tumour/cell-line alignment UMAPs."""
         input:
             expr_rds = PAN_EXPR_RDS,
             meta_tsv = PAN_ALIGNMENT_UMAP_META,
+            source_meta_tsv = PAN_ALIGNMENT_UMAP_SOURCE_META,
             genes = PAN_FEATURES_CLEAN,
             script = os.path.join(SCRIPTS_DIR, "plot_pan_cancer_tumour_cell_line_alignment_umap.R")
         output:
             pdf = PAN_ALIGNMENT_UMAP_PDFS,
             svg = PAN_ALIGNMENT_UMAP_SVGS,
             png = PAN_ALIGNMENT_UMAP_PNGS,
+            source_pdf = PAN_ALIGNMENT_UMAP_SOURCE_PDFS,
+            source_svg = PAN_ALIGNMENT_UMAP_SOURCE_SVGS,
+            source_png = PAN_ALIGNMENT_UMAP_SOURCE_PNGS,
+            source_cancer_pdf = PAN_ALIGNMENT_UMAP_SOURCE_CANCER_PDFS,
+            source_cancer_svg = PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SVGS,
+            source_cancer_png = PAN_ALIGNMENT_UMAP_SOURCE_CANCER_PNGS,
             coords = PAN_ALIGNMENT_UMAP_COORDS,
+            source_composition = PAN_ALIGNMENT_UMAP_SOURCE_COMPOSITION,
             summary = PAN_ALIGNMENT_UMAP_SUMMARY
         params:
             outdir = PAN_ALIGNMENT_UMAP_OUTDIR,
             metrics = ",".join(PAN_ALIGNMENT_UMAP_METRICS),
-            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "thesis")
+            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "deg_set_alignment"),
+            figure_width = PAN_ALIGNMENT_UMAP_FIGURE_WIDTH,
+            figure_height = PAN_ALIGNMENT_UMAP_FIGURE_HEIGHT,
+            slide_width = PAN_ALIGNMENT_UMAP_SLIDE_WIDTH,
+            slide_height = PAN_ALIGNMENT_UMAP_SLIDE_HEIGHT,
+            legend_position = PAN_ALIGNMENT_UMAP_LEGEND_POSITION,
+            source_cancer_slide_threshold = PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SLIDE_THRESHOLD
         threads: 8
         log: os.path.join(LOGROOT, "plot_pan_cancer_tumour_cell_line_alignment_umap.log")
         conda: CONDA_ENV_R
@@ -3764,15 +5145,165 @@ if MARKER_POST_ENABLED:
               --pipe_root "{BASE}" \
               --expr_rds "{input.expr_rds}" \
               --meta_tsv "{input.meta_tsv}" \
+              --source_meta_tsv "{input.source_meta_tsv}" \
               --deg_set "{input.genes}" \
               --outdir "{params.outdir}" \
               --dist_metrics "{params.metrics}" \
               --page "{params.page}" \
+              --width "{params.figure_width}" \
+              --height "{params.figure_height}" \
+              --slide_width "{params.slide_width}" \
+              --slide_height "{params.slide_height}" \
+              --legend_position "{params.legend_position}" \
+              --source_cancer_slide_threshold "{params.source_cancer_slide_threshold}" \
               > "{log}" 2>&1
-            for f in {output.pdf} {output.svg} {output.png} {output.coords} "{output.summary}"; do
+            for f in {output.pdf} {output.svg} {output.png} {output.source_pdf} {output.source_svg} {output.source_png} {output.source_cancer_pdf} {output.source_cancer_svg} {output.source_cancer_png} {output.coords} {output.source_composition} "{output.summary}"; do
               test -s "$f" || (echo "ERROR: missing or empty $f" >&2; exit 1)
             done
             '''
+
+    # ==========================================================================
+    # OPTIONAL DIAGNOSTIC: raw all-gene tumour/cell-line UMAP
+    # ==========================================================================
+    # This rule is activated only when a true raw expression matrix is configured.
+    # It intentionally does not fall back to the VST all-gene matrix, so the raw,
+    # VST-all-gene, and pan-cancer feature-set spaces remain distinct.
+    RAW_ALLGENE_UMAP_EXPR_CFG = (
+        PAN_ALIGNMENT_UMAP_CFG.get("raw_all_gene_expr_rds")
+        or PAN_ALIGNMENT_UMAP_CFG.get("raw_expr_rds")
+        or ""
+    )
+    RAW_ALLGENE_UMAP_TARGETS = []
+    if RAW_ALLGENE_UMAP_EXPR_CFG:
+        RAW_ALLGENE_UMAP_OUTDIR = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+            "raw_output_dir",
+            "results/unsupervised/pan_cancer/raw_all_gene_tumour_cell_line_umap"
+        ))
+        RAW_ALLGENE_UMAP_EXPR_RDS = abspath(RAW_ALLGENE_UMAP_EXPR_CFG)
+        RAW_ALLGENE_UMAP_META_TSV = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+            "raw_metadata_tsv",
+            PAN_ALIGNMENT_UMAP_META
+        ))
+        RAW_ALLGENE_UMAP_SOURCE_META = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+            "raw_source_metadata_tsv",
+            PAN_ALIGNMENT_UMAP_SOURCE_META
+        ))
+        RAW_ALLGENE_UMAP_METRICS = PAN_ALIGNMENT_UMAP_METRICS
+        RAW_ALLGENE_UMAP_LABEL = "RAW_ALL_GENES"
+        RAW_ALLGENE_UMAP_STEM = "tumour_cell_line_alignment_umap"
+        RAW_ALLGENE_UMAP_PDFS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "pdf"
+        )
+        RAW_ALLGENE_UMAP_SVGS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "svg"
+        )
+        RAW_ALLGENE_UMAP_PNGS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "png"
+        )
+        RAW_ALLGENE_UMAP_COORDS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "coords", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "tsv"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_PDFS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "pdf", "SOURCE"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_SVGS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "svg", "SOURCE"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_PNGS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "png", "SOURCE"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_CANCER_PDFS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "pdf", "SOURCE_CANCER"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_CANCER_SVGS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "svg", "SOURCE_CANCER"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_CANCER_PNGS = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "Fig", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "png", "SOURCE_CANCER"
+        )
+        RAW_ALLGENE_UMAP_SOURCE_COMPOSITION = alignment_umap_outputs(
+            RAW_ALLGENE_UMAP_OUTDIR, "source_composition", RAW_ALLGENE_UMAP_STEM,
+            RAW_ALLGENE_UMAP_LABEL, RAW_ALLGENE_UMAP_METRICS, "tsv"
+        )
+        RAW_ALLGENE_UMAP_SUMMARY = os.path.join(
+            RAW_ALLGENE_UMAP_OUTDIR,
+            f"summary_{RAW_ALLGENE_UMAP_STEM}_{RAW_ALLGENE_UMAP_LABEL}.tsv"
+        )
+        RAW_ALLGENE_UMAP_TARGETS = (
+            RAW_ALLGENE_UMAP_PDFS + RAW_ALLGENE_UMAP_SVGS + RAW_ALLGENE_UMAP_PNGS +
+            RAW_ALLGENE_UMAP_SOURCE_PDFS + RAW_ALLGENE_UMAP_SOURCE_SVGS + RAW_ALLGENE_UMAP_SOURCE_PNGS +
+            RAW_ALLGENE_UMAP_SOURCE_CANCER_PDFS + RAW_ALLGENE_UMAP_SOURCE_CANCER_SVGS + RAW_ALLGENE_UMAP_SOURCE_CANCER_PNGS +
+            RAW_ALLGENE_UMAP_COORDS + RAW_ALLGENE_UMAP_SOURCE_COMPOSITION + [RAW_ALLGENE_UMAP_SUMMARY]
+        )
+
+        # Rule: plot_raw_all_gene_tumour_cell_line_alignment_umap
+        # Method role: optional diagnostic plotting rule for raw all-gene tumour/cell-line alignment.
+        # Flow: configured raw all-gene matrix -> UMAP diagnostics and source-composition tables.
+        # Downstream use: context visualisation only; it is gated by configured raw inputs.
+        rule plot_raw_all_gene_tumour_cell_line_alignment_umap:
+            """Optional raw-expression all-gene tumour/cell-line alignment UMAPs."""
+            input:
+                expr_rds = RAW_ALLGENE_UMAP_EXPR_RDS,
+                meta_tsv = RAW_ALLGENE_UMAP_META_TSV,
+                source_meta_tsv = RAW_ALLGENE_UMAP_SOURCE_META,
+                script = os.path.join(SCRIPTS_DIR,
+                    "plot_pan_cancer_tumour_cell_line_alignment_umap.R")
+            output:
+                pdf = RAW_ALLGENE_UMAP_PDFS,
+                svg = RAW_ALLGENE_UMAP_SVGS,
+                png = RAW_ALLGENE_UMAP_PNGS,
+                source_pdf = RAW_ALLGENE_UMAP_SOURCE_PDFS,
+                source_svg = RAW_ALLGENE_UMAP_SOURCE_SVGS,
+                source_png = RAW_ALLGENE_UMAP_SOURCE_PNGS,
+                source_cancer_pdf = RAW_ALLGENE_UMAP_SOURCE_CANCER_PDFS,
+                source_cancer_svg = RAW_ALLGENE_UMAP_SOURCE_CANCER_SVGS,
+                source_cancer_png = RAW_ALLGENE_UMAP_SOURCE_CANCER_PNGS,
+                coords = RAW_ALLGENE_UMAP_COORDS,
+                source_composition = RAW_ALLGENE_UMAP_SOURCE_COMPOSITION,
+                summary = RAW_ALLGENE_UMAP_SUMMARY
+            params:
+                outdir = RAW_ALLGENE_UMAP_OUTDIR,
+                metrics = ",".join(RAW_ALLGENE_UMAP_METRICS),
+                feature_label = RAW_ALLGENE_UMAP_LABEL,
+                out_stem = RAW_ALLGENE_UMAP_STEM,
+                summary_basename = os.path.basename(RAW_ALLGENE_UMAP_SUMMARY),
+                page = PAN_ALIGNMENT_UMAP_CFG.get("raw_page", "all_gene_alignment")
+            threads: 8
+            log: os.path.join(LOGROOT, "plot_raw_all_gene_tumour_cell_line_alignment_umap.log")
+            conda: CONDA_ENV_R
+            shell:
+                r'''
+                mkdir -p "{params.outdir}"
+                export TMPDIR="{params.outdir}/.umap_tmp"
+                mkdir -p "$TMPDIR"
+                Rscript "{input.script}" \
+                  --pipe_root "{BASE}" \
+                  --expr_rds "{input.expr_rds}" \
+                  --meta_tsv "{input.meta_tsv}" \
+                  --source_meta_tsv "{input.source_meta_tsv}" \
+                  --feature_mode all_genes \
+                  --feature_label "{params.feature_label}" \
+                  --out_stem "{params.out_stem}" \
+                  --summary_basename "{params.summary_basename}" \
+                  --outdir "{params.outdir}" \
+                  --dist_metrics "{params.metrics}" \
+                  --page "{params.page}" \
+                  > "{log}" 2>&1
+                rm -rf "$TMPDIR"
+                for f in {output.pdf} {output.svg} {output.png} {output.source_pdf} {output.source_svg} {output.source_png} {output.source_cancer_pdf} {output.source_cancer_svg} {output.source_cancer_png} {output.coords} {output.source_composition} "{output.summary}"; do
+                  test -s "$f" || (echo "ERROR: missing or empty $f" >&2; exit 1)
+                done
+                '''
 
     # ==========================================================================
     # DIAGNOSTIC: VST all-gene tumour/cell-line UMAP (BRCA + NBL + RBL)
@@ -3782,7 +5313,7 @@ if MARKER_POST_ENABLED:
     # NA + zero-variance filtering on the merged matrix), with no class label
     # used during fitting and no pan-cancer feature subsetting. Filenames use
     # the VST_ALL_GENE label to keep this run's outputs cleanly separable from
-    # the thesis-facing DEG-set outputs above.
+    # the DEG-set alignment outputs above.
     VST_ALLGENE_UMAP_OUTDIR = abspath(
         "results/unsupervised/pan_cancer/vst_all_gene_tumour_cell_line_umap"
     )
@@ -3802,23 +5333,48 @@ if MARKER_POST_ENABLED:
     VST_ALLGENE_UMAP_LABEL   = "VST_ALL_GENE"
     VST_ALLGENE_UMAP_STEM    = "tumour_cell_line_alignment_umap"
 
-    def _vst_allgene_basename(prefix, metric, ext):
-        return f"{prefix}_{VST_ALLGENE_UMAP_STEM}_{VST_ALLGENE_UMAP_LABEL}_{metric}.{ext}"
-
     VST_ALLGENE_UMAP_PDFS = [
-        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("Fig", m, "pdf"))
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m)}.pdf")
         for m in VST_ALLGENE_UMAP_METRICS
     ]
     VST_ALLGENE_UMAP_SVGS = [
-        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("Fig", m, "svg"))
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m)}.svg")
         for m in VST_ALLGENE_UMAP_METRICS
     ]
     VST_ALLGENE_UMAP_PNGS = [
-        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("Fig", m, "png"))
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m)}.png")
         for m in VST_ALLGENE_UMAP_METRICS
     ]
     VST_ALLGENE_UMAP_COORDS = [
-        os.path.join(VST_ALLGENE_UMAP_OUTDIR, _vst_allgene_basename("coords", m, "tsv"))
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"coords_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m)}.tsv")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_PDFS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m, 'SOURCE')}.pdf")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_SVGS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m, 'SOURCE')}.svg")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_PNGS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m, 'SOURCE')}.png")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_CANCER_PDFS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m, 'SOURCE_CANCER')}.pdf")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_CANCER_SVGS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m, 'SOURCE_CANCER')}.svg")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_CANCER_PNGS = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"Fig_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m, 'SOURCE_CANCER')}.png")
+        for m in VST_ALLGENE_UMAP_METRICS
+    ]
+    VST_ALLGENE_UMAP_SOURCE_COMPOSITION = [
+        os.path.join(VST_ALLGENE_UMAP_OUTDIR, f"source_composition_{alignment_umap_stem(VST_ALLGENE_UMAP_STEM, VST_ALLGENE_UMAP_LABEL, m)}.tsv")
         for m in VST_ALLGENE_UMAP_METRICS
     ]
     VST_ALLGENE_UMAP_SUMMARY = os.path.join(
@@ -3840,6 +5396,10 @@ if MARKER_POST_ENABLED:
         "joint_metadata.tsv"
     )
 
+    # Rule: merge_vst_all_genes_brca_nbl_rbl
+    # Method role: diagnostic data-preparation rule that merges cohort VST matrices without feature subsetting.
+    # Flow: BRCA/NBL/RBL VST matrices and multicohort metadata -> all-gene VST expression matrix.
+    # Downstream use: supplies the VST all-gene UMAP diagnostic.
     rule merge_vst_all_genes_brca_nbl_rbl:
         """
         Merge BRCA + NBL + RBL joint VST tumour/cell-line matrices on the
@@ -3877,24 +5437,36 @@ if MARKER_POST_ENABLED:
             done
             '''
 
+    # Rule: plot_vst_all_gene_tumour_cell_line_alignment_umap
+    # Method role: diagnostic plotting rule for all-gene VST tumour/cell-line alignment.
+    # Flow: merged all-gene VST matrix -> UMAP diagnostics and source-composition tables.
+    # Downstream use: context visualisation against the marker-derived feature space.
     rule plot_vst_all_gene_tumour_cell_line_alignment_umap:
         """
         Unsupervised diagnostic UMAP on the BRCA+NBL+RBL VST all-gene merged
         matrix. Uses the same plotting script as the pan-cancer DEG-set
-        thesis figure, invoked with --feature_mode=all_genes and the
+        alignment figure, invoked with --feature_mode=all_genes and the
         VST_ALL_GENE label so output filenames remain disjoint from the
-        thesis-facing DEG-set outputs.
+        DEG-set alignment outputs.
         """
         input:
             expr_rds = VST_ALLGENE_UMAP_EXPR_RDS,
             meta_tsv = VST_ALLGENE_UMAP_META_TSV,
+            source_meta_tsv = VST_ALLGENE_JOINT_META,
             script   = os.path.join(SCRIPTS_DIR,
                 "plot_pan_cancer_tumour_cell_line_alignment_umap.R")
         output:
             pdf     = VST_ALLGENE_UMAP_PDFS,
             svg     = VST_ALLGENE_UMAP_SVGS,
             png     = VST_ALLGENE_UMAP_PNGS,
+            source_pdf = VST_ALLGENE_UMAP_SOURCE_PDFS,
+            source_svg = VST_ALLGENE_UMAP_SOURCE_SVGS,
+            source_png = VST_ALLGENE_UMAP_SOURCE_PNGS,
+            source_cancer_pdf = VST_ALLGENE_UMAP_SOURCE_CANCER_PDFS,
+            source_cancer_svg = VST_ALLGENE_UMAP_SOURCE_CANCER_SVGS,
+            source_cancer_png = VST_ALLGENE_UMAP_SOURCE_CANCER_PNGS,
             coords  = VST_ALLGENE_UMAP_COORDS,
+            source_composition = VST_ALLGENE_UMAP_SOURCE_COMPOSITION,
             summary = VST_ALLGENE_UMAP_SUMMARY
         params:
             outdir           = VST_ALLGENE_UMAP_OUTDIR,
@@ -3902,7 +5474,7 @@ if MARKER_POST_ENABLED:
             feature_label    = VST_ALLGENE_UMAP_LABEL,
             out_stem         = VST_ALLGENE_UMAP_STEM,
             summary_basename = os.path.basename(VST_ALLGENE_UMAP_SUMMARY),
-            page             = "thesis"
+            page             = "all_gene_alignment"
         threads: 8
         log: os.path.join(LOGROOT, "plot_vst_all_gene_tumour_cell_line_alignment_umap.log")
         conda: CONDA_ENV_R
@@ -3918,6 +5490,7 @@ if MARKER_POST_ENABLED:
               --pipe_root "{BASE}" \
               --expr_rds "{input.expr_rds}" \
               --meta_tsv "{input.meta_tsv}" \
+              --source_meta_tsv "{input.source_meta_tsv}" \
               --feature_mode all_genes \
               --feature_label "{params.feature_label}" \
               --out_stem "{params.out_stem}" \
@@ -3927,7 +5500,7 @@ if MARKER_POST_ENABLED:
               --page "{params.page}" \
               > "{log}" 2>&1
             rm -rf "$TMPDIR"
-            for f in {output.pdf} {output.svg} {output.png} {output.coords} "{output.summary}"; do
+            for f in {output.pdf} {output.svg} {output.png} {output.source_pdf} {output.source_svg} {output.source_png} {output.source_cancer_pdf} {output.source_cancer_svg} {output.source_cancer_png} {output.coords} {output.source_composition} "{output.summary}"; do
               test -s "$f" || (echo "ERROR: missing or empty $f" >&2; exit 1)
             done
             '''
@@ -3935,12 +5508,16 @@ if MARKER_POST_ENABLED:
     MAPPING_OUTDIR = abspath(MAPPING_CFG.get("output_dir", "results/unsupervised/pan_cancer/tumour_mapping"))
 
     def mapping_metrics_summary():
-        return os.path.join(MAPPING_OUTDIR, "metrics_summary.tsv")
+        return os.path.join(MAPPING_OUTDIR, "metrics_summary_group_level.tsv")
 
     # Precompute optional CLI fragment for gene-symbol-map.
     _MAPPING_GENE_MAP_RAW = MAPPING_CFG.get("gene_symbol_map", "")
     _MAPPING_GENE_MAP_ARG = f'--gene-symbol-map "{_MAPPING_GENE_MAP_RAW}"' if _MAPPING_GENE_MAP_RAW else ""
 
+    # Rule: score_tumour_cellline_mapping
+    # Method role: mapping/ranking rule that scores tumour-to-cell-line similarity in the pan-cancer feature space.
+    # Flow: feature-space expression matrix and metadata -> mapping metrics and ranking tables.
+    # Downstream use: supplies pan-cancer ranking diagnostics and ECDF plots.
     rule score_tumour_cellline_mapping:
         """Score tumour-to-cell-line mappings using the combined expression object."""
         input:
@@ -3948,12 +5525,17 @@ if MARKER_POST_ENABLED:
             genes = PAN_FEATURES_CLEAN
         output:
             metrics_summary = mapping_metrics_summary(),
-            tumour_rankings = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_rankings.tsv"),
-            tumour_summary = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_mapping_summary.tsv"),
-            tumour_scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_scores.rds"),
+            tumour_rankings = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_group_rankings.tsv"),
+            tumour_summary = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_mapping_group_summary.tsv"),
+            tumour_scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_group_scores.rds"),
+            tumour_scores_long = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_group_scores_long.tsv.gz"),
+            tumour_metrics = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "metrics_summary_group_level.tsv"),
             cellline_rankings = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_to_tumour_rankings.tsv"),
             cellline_summary = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_mapping_summary.tsv"),
-            cellline_metrics = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_metrics_overall.tsv")
+            cellline_metrics = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_metrics_overall.tsv"),
+            cellline_metrics_summary = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "metrics_summary.tsv"),
+            cellline_scores = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_tumour_scores.rds"),
+            cellline_scores_long = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_tumour_scores_long.tsv.gz")
         params:
             script=os.path.join(SCRIPTS_DIR, "score_tumour_cellline_mapping.R"),
             outdir=MAPPING_OUTDIR,
@@ -3988,6 +5570,10 @@ if MARKER_POST_ENABLED:
     PAN_FIG_DIR = os.path.join(PAN_CANCER_DIR, "figures")
     PAN_COR_RDS = os.path.join(PAN_CANCER_DIR, "pan_cancer_cor.rds")
 
+    # Rule: compute_pan_cancer_correlation
+    # Method role: similarity analysis rule computing cell-line/tumour correlations in the pan-cancer feature space.
+    # Flow: feature-space expression matrix -> correlation matrix.
+    # Downstream use: feeds graph construction and tumour-cell-line mapping tables.
     rule compute_pan_cancer_correlation:
         input: expr = PAN_EXPR_RDS
         output: cor = PAN_COR_RDS
@@ -3996,6 +5582,10 @@ if MARKER_POST_ENABLED:
         conda: CONDA_ENV_R
         shell: "mkdir -p {PAN_CANCER_DIR} && Rscript {params.script} --input {input.expr} --output {output.cor} --method {params.method} > {log} 2>&1 && test -s {output.cor}"
 
+    # Rule: build_pan_cancer_graph
+    # Method role: graph-construction rule that constructs transcriptomic similarity in the pan-cancer feature space.
+    # Flow: pan-cancer correlation matrix -> graph edge and node sidecars.
+    # Downstream use: supplies community analysis, inspection, and graph plotting.
     rule build_pan_cancer_graph:
         input: cor = PAN_COR_RDS
         output:
@@ -4006,6 +5596,10 @@ if MARKER_POST_ENABLED:
         conda: CONDA_ENV_R
         shell: "mkdir -p {params.outdir} && Rscript {params.script} --cor-matrix {input.cor} --k {params.k} --min-cor {params.min_cor} --output-dir {params.outdir} > {log} 2>&1 && test -s {output.edges} && test -s {output.components}"
 
+    # Rule: compute_pan_cancer_communities
+    # Method role: graph analysis rule assigning communities on the pan-cancer similarity graph.
+    # Flow: graph edges and metadata -> community assignments and metrics.
+    # Downstream use: annotates graph plots and ranking diagnostics.
     rule compute_pan_cancer_communities:
         input:
             edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
@@ -4018,6 +5612,10 @@ if MARKER_POST_ENABLED:
         conda: CONDA_ENV_R
         shell: "mkdir -p {params.outdir} && Rscript {params.script} --edges {input.edges} --meta {input.meta} --out {output.communities} --outdir {params.outdir} --method both --seed {params.seed} > {log} 2>&1 && test -s {output.communities}"
 
+    # Rule: inspect_pan_cancer_graph
+    # Method role: diagnostic rule auditing pan-cancer graph structure and metadata coverage.
+    # Flow: graph sidecars and community assignments -> inspection tables.
+    # Downstream use: supports graph QA before final plotting.
     rule inspect_pan_cancer_graph:
         input:
             edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
@@ -4031,6 +5629,10 @@ if MARKER_POST_ENABLED:
         conda: CONDA_ENV_R
         shell: "Rscript {params.script} --graph-dir {params.graph_dir} --inspection-dir {params.inspection_dir} > {log} 2>&1 && test -s {output.bridges}"
 
+    # Rule: plot_pan_cancer_graph
+    # Method role: plotting rule for the pan-cancer feature-space similarity graph.
+    # Flow: graph sidecars, communities, and layout inputs -> final pan-cancer graph figure.
+    # Downstream use: reporting visualisation only.
     rule plot_pan_cancer_graph:
         input:
             edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
@@ -4044,82 +5646,82 @@ if MARKER_POST_ENABLED:
         params: script = os.path.join(SCRIPTS_DIR, "plot_pan_cancer_graph.R"), outdir = PAN_FIG_DIR
         log: os.path.join(LOGROOT, "plot_pan_cancer_graph.log")
         conda: CONDA_ENV_R
-        shell: "mkdir -p {params.outdir} && Rscript {params.script} --edges {input.edges} --components {input.components} --meta {input.meta} --outdir {params.outdir} --expected-gene-count 0 > {log} 2>&1 && printf 'figure_name\tscript\tcommand\tgit_commit\ttimestamp\tinput_files\toutput_files\tupstream_tables\tkey_parameters\tsoftware_versions\tfigure_type\tsource_pipeline_root\tcopied_to_thesis_path\tlegacy_source_path\tnotes\nFig_pan_cancer_graph.pdf\tscripts/plot_pan_cancer_graph.R\tRscript scripts/plot_pan_cancer_graph.R\tunavailable_not_git_worktree\tNA\t{input.edges};{input.components};{input.meta}\t{output.pdf};{output.components_pdf};{output.size_pdf}\t{input.edges};{input.components}\texpected_gene_count=infer_from_rds_genes\tR/igraph/ggplot2\tpan_cancer\t/work/ugbogu/pipeline\t\t\tTranscriptomic similarity network for prioritisation and neighbourhood assignment only\n' > {output.provenance} && test -s {output.pdf}"
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --edges {input.edges} --components {input.components} --meta {input.meta} --outdir {params.outdir} --expected-gene-count 0 > {log} 2>&1 && printf 'figure_name\tscript\tcommand\tgit_commit\ttimestamp\tinput_files\toutput_files\tupstream_tables\tkey_parameters\tsoftware_versions\tfigure_type\tsource_pipeline_root\tcopied_to_figure_export_path\tlegacy_source_path\tnotes\nFig_pan_cancer_graph.pdf\tscripts/plot_pan_cancer_graph.R\tRscript scripts/plot_pan_cancer_graph.R\tunavailable_not_git_worktree\tNA\t{input.edges};{input.components};{input.meta}\t{output.pdf};{output.components_pdf};{output.size_pdf}\t{input.edges};{input.components}\texpected_gene_count=infer_from_rds_genes\tR/igraph/ggplot2\tpan_cancer\t{PIPE_ROOT}\t\t\tTranscriptomic similarity network for prioritisation and neighbourhood assignment only\n' > {output.provenance} && test -s {output.pdf}"
 
-    rule plot_cellline_centred_figures:
-        """
-        Legacy bar-chart summaries for cell-line-centred similarity mapping.
-        Uses simple top-k fraction statistics from score_tumour_cellline_mapping.R;
-        does NOT compute Precision@k bootstrap confidence intervals.
-
-        THIS IS NOT the four-panel Precision@k / bootstrap figure.
-        The verified Precision@k bootstrap figure is produced by the
-        cellline_precision_at_k rule (script: cellline_centred_precision_at_k.R).
-
-        These outputs are legacy products retained for compatibility.
-        """
-        input:
-            metrics_summary = mapping_metrics_summary(),
-            tumour_rank = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_rankings.tsv"),
-            cell_rank = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_to_tumour_rankings.tsv"),
-            cell_metrics = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_metrics_overall.tsv")
-        output:
-            topk_bar_chart = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_tumour_retrieval.pdf"),
-            confidence = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_confidence_scores.pdf"),
-            component = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_component_mapping.pdf"),
-            replicate = os.path.join(MAPPING_OUTDIR, "cellline_centred", "Fig_cellline_centred_replicate_sensitivity.pdf"),
-            provenance = os.path.join(MAPPING_OUTDIR, "cellline_centred", "cellline_centred_figure_provenance.tsv")
-        params: script = os.path.join(SCRIPTS_DIR, "plot_cellline_centred_figures.R"), outdir = os.path.join(MAPPING_OUTDIR, "cellline_centred"), top_k = MAPPING_CFG.get("top_k", 10), top_n = 50
-        log: os.path.join(LOGROOT, "plot_cellline_centred_figures.log")
-        conda: CONDA_ENV_R
-        shell: "mkdir -p {params.outdir} && Rscript {params.script} --mapping-dir {MAPPING_OUTDIR} --outdir {params.outdir} --top-k {params.top_k} --top-n {params.top_n} > {log} 2>&1 && test -s {output.topk_bar_chart} && test -s {output.provenance}"
-
+    # Rule: cellline_precision_at_k
+    # Method role: ranking diagnostic computing cell-line-centred tumour retrieval metrics.
+    # Flow: mapping/ranking tables -> precision-at-k, rank-metric, and provenance outputs.
+    # Downstream use: supports cautious ranking-based agreement assessment.
     rule cellline_precision_at_k:
         """
-        Cell-line-centred Precision@k bootstrap analysis.
+        Cell-line-centred tumour ranking analysis with standalone retained plots.
 
-        For each biological cell-line group (replicate profiles collapsed by
-        arithmetic mean Spearman correlation before ranking), computes Precision@k
-        across multiple top-k thresholds.  Bootstrap confidence intervals use
-        B = 2000 resamples (with replacement) over biological cell-line groups,
-        with 2.5th and 97.5th empirical percentiles as bounds.
-
-        Lineage-stratified Precision@k summaries are computed separately within
-        each lineage (BRCA, NBL, RBL) and as an Overall summary.
-
-        Produces the four-panel figure (Fig_cellline_centred_tumour_class_similarity.pdf):
-          A  Top-1 lineage confusion matrix
-          B  Mean Precision@k with 95% bootstrap CI ribbons per cohort
-          C  Same-lineage tumour rank percentile distributions per cell line
-          D  Lineage composition of the top-k tumour neighbourhood
-
-        This is the verified Drive pipeline computation.  Bootstrap seed = 20260603.
-        tumour_components.tsv is optional (Panel B unaffected when absent).
-
-        Expected QC values:
-          raw profile-level observations : 58
-          biological cell-line groups    : 56 (after replicate profile aggregation)
-          BRCA groups : 29 | NBL groups : 18 | RBL groups : 9
-          tumour samples               : 1,128
+        Replicate profiles are collapsed to biological cell-line groups by
+        arithmetic mean Spearman correlation before ranking. Retained plots are
+        standalone PDF/PNG outputs with enlarged fonts; confidence-margin and
+        top-10 score-distribution diagnostics are not retained plot targets.
         """
         input:
             c2t_long = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity",
                                     "cellline_tumour_scores_long.tsv.gz"),
             t2c_long = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity",
-                                    "tumour_cellline_scores_long.tsv.gz")
+                                    "tumour_cellline_group_scores_long.tsv.gz"),
+            components = os.path.join(PAN_GRAPH_DIR, "pan_cancer_components.tsv")
         output:
-            precision_fig = os.path.join(MAPPING_OUTDIR,
+            top1_pdf = os.path.join(MAPPING_OUTDIR,
                                 "cellline_similarity_precision_bootstrap",
-                                "Fig_cellline_centred_tumour_class_similarity.pdf"),
-            precision_at_k_fig = os.path.join(MAPPING_OUTDIR,
+                                "Fig_cellline_to_tumour_top1_lineage_agreement.pdf"),
+            top1_png = os.path.join(MAPPING_OUTDIR,
                                 "cellline_similarity_precision_bootstrap",
-                                "Fig_cellline_centred_precision_at_k.pdf"),
+                                "Fig_cellline_to_tumour_top1_lineage_agreement.png"),
+            precision_pdf = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_precision_at_k.pdf"),
+            precision_png = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_precision_at_k.png"),
+            rank_percentile_pdf = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_same_lineage_rank_percentile.pdf"),
+            rank_percentile_png = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_same_lineage_rank_percentile.png"),
+            top50_lineage_pdf = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_top50_lineage_composition.pdf"),
+            top50_lineage_png = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_top50_lineage_composition.png"),
+            top50_component_pdf = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_top50_component_composition.pdf"),
+            top50_component_png = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "Fig_cellline_to_tumour_top50_component_composition.png"),
+            top1_accuracy = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_top1_accuracy.tsv"),
             topk_metrics  = os.path.join(MAPPING_OUTDIR,
                                 "cellline_similarity_precision_bootstrap",
                                 "cellline_topk_metrics.tsv"),
+            topk_lineage_composition = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_topk_lineage_composition.tsv"),
+            component_summary = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "cellline_component_mapping_summary.tsv"),
             rank_summary  = os.path.join(MAPPING_OUTDIR,
                                 "cellline_similarity_precision_bootstrap",
                                 "cellline_centred_rank_summary.tsv"),
+            replicate_mapping = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "replicate_collapse_mapping.tsv"),
+            reciprocal_summary = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "reciprocal_mapping_summary.tsv"),
+            reciprocal_per_cellline = os.path.join(MAPPING_OUTDIR,
+                                "cellline_similarity_precision_bootstrap",
+                                "reciprocal_per_cell_line.tsv"),
             qc_log        = os.path.join(MAPPING_OUTDIR,
                                 "cellline_similarity_precision_bootstrap",
                                 "cellline_centred_QC_log.txt"),
@@ -4140,20 +5742,28 @@ if MARKER_POST_ENABLED:
             Rscript "{params.script}" \
               --mapping-dir "{params.mapping_dir}" \
               --outdir "{params.outdir}" \
+              --tumour-components "{input.components}" \
               > "{log}" 2>&1
-            test -s "{output.precision_fig}" || \
-              (echo "ERROR: missing {output.precision_fig}" >&2; exit 1)
-            test -s "{output.precision_at_k_fig}" || \
-              (echo "ERROR: missing {output.precision_at_k_fig}" >&2; exit 1)
-            test -s "{output.topk_metrics}" || \
-              (echo "ERROR: missing {output.topk_metrics}" >&2; exit 1)
+            test -s "{output.top1_pdf}" || (echo "ERROR: missing {output.top1_pdf}" >&2; exit 1)
+            test -s "{output.top1_png}" || (echo "ERROR: missing {output.top1_png}" >&2; exit 1)
+            test -s "{output.precision_pdf}" || (echo "ERROR: missing {output.precision_pdf}" >&2; exit 1)
+            test -s "{output.precision_png}" || (echo "ERROR: missing {output.precision_png}" >&2; exit 1)
+            test -s "{output.rank_percentile_pdf}" || (echo "ERROR: missing {output.rank_percentile_pdf}" >&2; exit 1)
+            test -s "{output.rank_percentile_png}" || (echo "ERROR: missing {output.rank_percentile_png}" >&2; exit 1)
+            test -s "{output.top50_lineage_pdf}" || (echo "ERROR: missing {output.top50_lineage_pdf}" >&2; exit 1)
+            test -s "{output.top50_lineage_png}" || (echo "ERROR: missing {output.top50_lineage_png}" >&2; exit 1)
+            test -s "{output.top50_component_pdf}" || (echo "ERROR: missing {output.top50_component_pdf}" >&2; exit 1)
+            test -s "{output.top50_component_png}" || (echo "ERROR: missing {output.top50_component_png}" >&2; exit 1)
+            test -s "{output.topk_metrics}" || (echo "ERROR: missing {output.topk_metrics}" >&2; exit 1)
+            test -s "{output.component_summary}" || (echo "ERROR: missing {output.component_summary}" >&2; exit 1)
             # Provenance record
             printf 'field\tvalue\n' > {output.provenance}
             printf 'script\t{params.script}\n' >> {output.provenance}
             printf 'mapping_dir\t{params.mapping_dir}\n' >> {output.provenance}
             printf 'outdir\t{params.outdir}\n' >> {output.provenance}
+            printf 'component_input\t{input.components}\n' >> {output.provenance}
             printf 'timestamp\t%s\n' "$(date -Iseconds)" >> {output.provenance}
-            printf 'source_pipeline\tJarvis:/work/ugbogu/pipeline\n' >> {output.provenance}
+            printf 'source_pipeline\t{PIPE_ROOT}\n' >> {output.provenance}
             printf 'bootstrap_resamples\t2000\n' >> {output.provenance}
             printf 'bootstrap_statistic\tmean_precision_at_k\n' >> {output.provenance}
             printf 'bootstrap_bounds\t2.5th_97.5th_percentile\n' >> {output.provenance}
@@ -4163,24 +5773,285 @@ if MARKER_POST_ENABLED:
             '''
 
 
-    rule plot_ecdf_model_prioritisation:
+    # Rule: plot_tumour_to_cellline_rank_ecdf_top10_fraction
+    # Method role: diagnostic plotting rule for tumour-to-cell-line rank distributions and top-10 fraction.
+    # Flow: tumour-to-cell-line ranking outputs -> ECDF and top-10 fraction figures.
+    # Downstream use: visualises ranking behaviour without asserting biological equivalence.
+    rule plot_tumour_to_cellline_rank_ecdf_top10_fraction:
         input:
             metrics_summary = mapping_metrics_summary(),
-            scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_scores.rds"),
+            scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_group_scores.rds"),
             meta = PAN_EXPR_RDS
         output:
-            pdf = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.pdf"),
-            png = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.png"),
-            svg = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.svg"),
+            rank_ecdf_pdf = os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.pdf"),
+            rank_ecdf_png = os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.png"),
+            top10_fraction_pdf = os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_top10_fraction.pdf"),
+            top10_fraction_png = os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_top10_fraction.png"),
             summary = os.path.join(PAN_FIG_DIR, "ecdf_plots", "model_prioritisation_rank_summary.tsv"),
-            provenance = os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined_provenance.tsv")
+            label_map = os.path.join(PAN_FIG_DIR, "ecdf_plots", "model_prioritisation_display_label_mapping.tsv"),
+            provenance = os.path.join(PAN_FIG_DIR, "ecdf_plots", "tumour_to_cellline_rank_ecdf_top10_fraction_provenance.tsv")
         params: script = os.path.join(SCRIPTS_DIR, "plot_ecdf_rank_combined_pub.R"), outdir = os.path.join(PAN_FIG_DIR, "ecdf_plots"), pipeline_dir = PAN_CANCER_DIR, top_k = MAPPING_CFG.get("top_k", 10), n_show = 4
-        log: os.path.join(LOGROOT, "plot_ecdf_model_prioritisation.log")
+        log: os.path.join(LOGROOT, "plot_tumour_to_cellline_rank_ecdf_top10_fraction.log")
         conda: CONDA_ENV_R
-        shell: "mkdir -p {params.outdir} && Rscript {params.script} --pipeline-dir {params.pipeline_dir} --score-rds {input.scores} --meta-rds {input.meta} --outdir {params.outdir} --n-show {params.n_show} --top-k {params.top_k} > {log} 2>&1 && test -s {output.pdf} && test -s {output.provenance}"
+        shell: "mkdir -p {params.outdir} && Rscript {params.script} --pipeline-dir {params.pipeline_dir} --score-rds {input.scores} --meta-rds {input.meta} --outdir {params.outdir} --n-show {params.n_show} --top-k {params.top_k} > {log} 2>&1 && test -s {output.rank_ecdf_pdf} && test -s {output.rank_ecdf_png} && test -s {output.top10_fraction_pdf} && test -s {output.top10_fraction_png} && test -s {output.summary} && test -s {output.provenance}"
 
 
-# ---------------------------------------------------------------------------
+    PAN_RANKING_DIAGNOSTICS_DIR = os.path.join(PAN_CANCER_DIR, "ranking", "diagnostics")
+    PAN_T2C_MRR_AT10_BY_TUMOUR = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "tumour_to_cellline_mrr_at10_by_tumour.tsv",
+    )
+    PAN_T2C_MRR_AT10_BY_COHORT = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "tumour_to_cellline_mrr_at10_by_cohort.tsv",
+    )
+    PAN_T2C_MRR_AT10_PDF = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "Fig_tumour_to_cellline_mrr_at10_distribution.pdf",
+    )
+    PAN_T2C_MRR_AT10_PNG = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "Fig_tumour_to_cellline_mrr_at10_distribution.png",
+    )
+    PAN_C2T_COMPONENT_SAME_TABLE = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "cellline_to_tumour_same_cancer_top50_component_composition.tsv",
+    )
+    PAN_C2T_COMPONENT_ALL_TABLE = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "cellline_to_tumour_all_top50_component_composition.tsv",
+    )
+    PAN_C2T_COMPONENT_SUMMARY_TABLE = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "cellline_to_tumour_component_composition_summary.tsv",
+    )
+    PAN_C2T_COMPONENT_SAME_PDF = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "Fig_cellline_to_tumour_same_cancer_top50_component_composition.pdf",
+    )
+    PAN_C2T_COMPONENT_SAME_PNG = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "Fig_cellline_to_tumour_same_cancer_top50_component_composition.png",
+    )
+    PAN_C2T_COMPONENT_ALL_PDF = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "Fig_cellline_to_tumour_all_top50_component_composition.pdf",
+    )
+    PAN_C2T_COMPONENT_ALL_PNG = os.path.join(
+        PAN_RANKING_DIAGNOSTICS_DIR,
+        "Fig_cellline_to_tumour_all_top50_component_composition.png",
+    )
+
+    # Rule: plot_tumour_to_cellline_mrr_at10_distribution
+    # Method role: diagnostic plotting rule for tumour-to-cell-line MRR@10 metrics.
+    # Flow: ranking metrics -> cohort-level MRR@10 tables and figures.
+    # Downstream use: supplements ranking-based agreement assessment.
+    rule plot_tumour_to_cellline_mrr_at10_distribution:
+        """Build tumour-level RR@10 tables and a thesis-readable MRR@10 distribution plot."""
+        input:
+            script = os.path.join(SCRIPTS_DIR, "plot_tumour_to_cellline_mrr_at10_distribution.R"),
+            tumour_rankings = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_group_rankings.tsv"),
+            tumour_metrics = os.path.join(MAPPING_OUTDIR, "metrics_summary_group_level.tsv")
+        output:
+            by_tumour = PAN_T2C_MRR_AT10_BY_TUMOUR,
+            by_cohort = PAN_T2C_MRR_AT10_BY_COHORT,
+            pdf = PAN_T2C_MRR_AT10_PDF,
+            png = PAN_T2C_MRR_AT10_PNG
+        params:
+            outdir = PAN_RANKING_DIAGNOSTICS_DIR,
+            top_k = MAPPING_CFG.get("top_k", 10),
+            expected_groups = 56
+        log: os.path.join(LOGROOT, "plot_tumour_to_cellline_mrr_at10_distribution.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{input.script}" \
+              --rankings "{input.tumour_rankings}" \
+              --metrics "{input.tumour_metrics}" \
+              --by-tumour "{output.by_tumour}" \
+              --by-cohort "{output.by_cohort}" \
+              --pdf "{output.pdf}" \
+              --png "{output.png}" \
+              --top-k {params.top_k} \
+              --expected-groups {params.expected_groups} \
+              > "{log}" 2>&1
+            test -s "{output.by_tumour}" || (echo "ERROR: missing {output.by_tumour}" >&2; exit 1)
+            test -s "{output.by_cohort}" || (echo "ERROR: missing {output.by_cohort}" >&2; exit 1)
+            test -s "{output.pdf}" || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+            test -s "{output.png}" || (echo "ERROR: missing {output.png}" >&2; exit 1)
+            '''
+
+    # Rule: plot_cellline_to_tumour_same_cancer_component_composition
+    # Method role: diagnostic plotting rule for same-cancer component composition in cell-line-to-tumour rankings.
+    # Flow: cell-line-centred ranking tables -> same-cancer composition table and figure.
+    # Downstream use: reports ranking composition in the configured feature space.
+    rule plot_cellline_to_tumour_same_cancer_component_composition:
+        """Build same-cancer-type top-50 component composition for cell-line-to-tumour ranks."""
+        input:
+            script = os.path.join(SCRIPTS_DIR, "plot_cellline_to_tumour_component_composition.R"),
+            scores_long = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_tumour_scores_long.tsv.gz"),
+            components = os.path.join(PAN_GRAPH_DIR, "pan_cancer_components.tsv")
+        output:
+            table = PAN_C2T_COMPONENT_SAME_TABLE,
+            pdf = PAN_C2T_COMPONENT_SAME_PDF,
+            png = PAN_C2T_COMPONENT_SAME_PNG
+        params:
+            outdir = PAN_RANKING_DIAGNOSTICS_DIR,
+            top_n = 50
+        log: os.path.join(LOGROOT, "plot_cellline_to_tumour_same_cancer_component_composition.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{input.script}" \
+              --mode same \
+              --scores-long "{input.scores_long}" \
+              --components "{input.components}" \
+              --top-n {params.top_n} \
+              --same-table "{output.table}" \
+              --same-pdf "{output.pdf}" \
+              --same-png "{output.png}" \
+              > "{log}" 2>&1
+            test -s "{output.table}" || (echo "ERROR: missing {output.table}" >&2; exit 1)
+            test -s "{output.pdf}" || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+            test -s "{output.png}" || (echo "ERROR: missing {output.png}" >&2; exit 1)
+            '''
+
+    # Rule: plot_cellline_to_tumour_all_top50_component_composition
+    # Method role: diagnostic plotting rule for all top-50 component composition in cell-line-to-tumour rankings.
+    # Flow: cell-line-centred ranking tables -> all-lineage top-50 composition table and figure.
+    # Downstream use: complements same-cancer composition diagnostics.
+    rule plot_cellline_to_tumour_all_top50_component_composition:
+        """Build all-top-50 component composition for cell-line-to-tumour ranks."""
+        input:
+            script = os.path.join(SCRIPTS_DIR, "plot_cellline_to_tumour_component_composition.R"),
+            scores_long = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_tumour_scores_long.tsv.gz"),
+            components = os.path.join(PAN_GRAPH_DIR, "pan_cancer_components.tsv"),
+            same_table = PAN_C2T_COMPONENT_SAME_TABLE
+        output:
+            table = PAN_C2T_COMPONENT_ALL_TABLE,
+            summary = PAN_C2T_COMPONENT_SUMMARY_TABLE,
+            pdf = PAN_C2T_COMPONENT_ALL_PDF,
+            png = PAN_C2T_COMPONENT_ALL_PNG
+        params:
+            outdir = PAN_RANKING_DIAGNOSTICS_DIR,
+            top_n = 50
+        log: os.path.join(LOGROOT, "plot_cellline_to_tumour_all_top50_component_composition.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{input.script}" \
+              --mode all \
+              --scores-long "{input.scores_long}" \
+              --components "{input.components}" \
+              --top-n {params.top_n} \
+              --same-table "{input.same_table}" \
+              --all-table "{output.table}" \
+              --summary-table "{output.summary}" \
+              --all-pdf "{output.pdf}" \
+              --all-png "{output.png}" \
+              > "{log}" 2>&1
+            test -s "{output.table}" || (echo "ERROR: missing {output.table}" >&2; exit 1)
+            test -s "{output.summary}" || (echo "ERROR: missing {output.summary}" >&2; exit 1)
+            test -s "{output.pdf}" || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
+            test -s "{output.png}" || (echo "ERROR: missing {output.png}" >&2; exit 1)
+            '''
+
+    # Rule: pan_cancer_ranking_plot_outputs
+    # Method role: collector target for pan-cancer ranking diagnostic plots and tables.
+    # Flow: expected diagnostic output paths -> Snakemake dependency aggregation only.
+    # Downstream use: provides a stage-level plotting target without performing a new analysis.
+    rule pan_cancer_ranking_plot_outputs:
+        """Requested retained ranking plot outputs for correlation-based transcriptomic similarity analyses."""
+        input:
+            os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.pdf"),
+            os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.png"),
+            os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_top10_fraction.pdf"),
+            os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_top10_fraction.png"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_top1_lineage_agreement.pdf"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_top1_lineage_agreement.png"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_precision_at_k.pdf"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_precision_at_k.png"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_same_lineage_rank_percentile.pdf"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_same_lineage_rank_percentile.png"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_top50_lineage_composition.pdf"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_top50_lineage_composition.png"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_top50_component_composition.pdf"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap", "Fig_cellline_to_tumour_top50_component_composition.png"),
+            PAN_T2C_MRR_AT10_PDF,
+            PAN_T2C_MRR_AT10_PNG,
+            PAN_C2T_COMPONENT_SAME_TABLE,
+            PAN_C2T_COMPONENT_ALL_TABLE,
+            PAN_C2T_COMPONENT_SUMMARY_TABLE,
+            PAN_C2T_COMPONENT_SAME_PDF,
+            PAN_C2T_COMPONENT_SAME_PNG,
+            PAN_C2T_COMPONENT_ALL_PDF,
+            PAN_C2T_COMPONENT_ALL_PNG
+
+    # Rule: build_pan_cancer_bidirectional_ranking_diagnostics
+    # Method role: ranking diagnostic rule checking bidirectional tumour-cell-line ranking tables.
+    # Flow: tumour-to-cell-line and cell-line-to-tumour outputs -> crosscheck table and diagnostic tables.
+    # Downstream use: QA for pan-cancer ranking reports.
+    rule build_pan_cancer_bidirectional_ranking_diagnostics:
+        """Build downstream ECDF and top-1 cancer-type agreement diagnostics for bidirectional ranking."""
+        input:
+            script = os.path.join(SCRIPTS_DIR, "build_bidirectional_ranking_diagnostics.R"),
+            tumour_scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_group_scores.rds"),
+            cellline_scores = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_tumour_scores.rds"),
+            tumour_rankings = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_to_cellline_group_rankings.tsv"),
+            cellline_rankings = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_to_tumour_rankings.tsv"),
+            tumour_summary = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_mapping_group_summary.tsv"),
+            cellline_summary = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "cellline_mapping_summary.tsv"),
+            tumour_metrics = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "metrics_summary_group_level.tsv"),
+            cellline_metrics = os.path.join(MAPPING_OUTDIR, "cellline_to_tumour_similarity", "metrics_summary.tsv")
+        output:
+            tumour_ecdf = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_first_same_lineage_ecdf.tsv"),
+            tumour_ecdf_pdf = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_first_same_lineage_ecdf.pdf"),
+            tumour_ecdf_png = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_first_same_lineage_ecdf.png"),
+            tumour_first_ranks = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_first_match_ranks.tsv"),
+            tumour_confusion_counts = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_top1_confusion_matrix_counts.tsv"),
+            tumour_confusion_fraction = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_top1_confusion_matrix_row_fraction.tsv"),
+            tumour_confusion_pdf = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_top1_confusion_matrix.pdf"),
+            tumour_confusion_png = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "tumour_to_cell_line_top1_confusion_matrix.png"),
+            cellline_ecdf = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_first_same_lineage_ecdf.tsv"),
+            cellline_ecdf_pdf = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_first_same_lineage_ecdf.pdf"),
+            cellline_ecdf_png = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_first_same_lineage_ecdf.png"),
+            cellline_first_ranks = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_first_match_ranks.tsv"),
+            cellline_confusion_counts = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_top1_confusion_matrix_counts.tsv"),
+            cellline_confusion_fraction = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_top1_confusion_matrix_row_fraction.tsv"),
+            cellline_confusion_pdf = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_top1_confusion_matrix.pdf"),
+            cellline_confusion_png = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "cell_line_to_tumour_top1_confusion_matrix.png"),
+            crosscheck = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "ranking_diagnostic_metric_crosscheck.tsv"),
+            manifest = os.path.join(PAN_RANKING_DIAGNOSTICS_DIR, "ranking_diagnostics_manifest.tsv")
+        params:
+            outdir = PAN_RANKING_DIAGNOSTICS_DIR
+        log: os.path.join(LOGROOT, "build_pan_cancer_bidirectional_ranking_diagnostics.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{input.script}" \
+              --tumour-score-rds "{input.tumour_scores}" \
+              --cellline-score-rds "{input.cellline_scores}" \
+              --tumour-rankings "{input.tumour_rankings}" \
+              --cellline-rankings "{input.cellline_rankings}" \
+              --tumour-summary "{input.tumour_summary}" \
+              --cellline-summary "{input.cellline_summary}" \
+              --tumour-metrics "{input.tumour_metrics}" \
+              --cellline-metrics "{input.cellline_metrics}" \
+              --outdir "{params.outdir}" \
+              > "{log}" 2>&1
+            test -s "{output.crosscheck}" || (echo "ERROR: missing {output.crosscheck}" >&2; exit 1)
+            test -s "{output.manifest}" || (echo "ERROR: missing {output.manifest}" >&2; exit 1)
+            '''
+
+
+# =============================================================================
+# PAN-CANCER CELL-LINE-ONLY SIMILARITY NETWORK AND SENSITIVITY ANALYSES
+# =============================================================================
+# Stage role: analyses cell-line-only similarity and community structure in configured pan-cancer feature spaces.
 # Pan-cancer cell line similarity network -- BUILD pipeline
 # Enabled via config key: pan_cancer_cell_line_similarity
 # ---------------------------------------------------------------------------
@@ -4191,19 +6062,114 @@ if _PAN_CELL_LINE_SIM_CFG:
     _CL_SIM_DIR    = abspath(_PAN_CELL_LINE_SIM_CFG.get("output_dir", "results/unsupervised/pan_cancer/cell_line_similarity"))
     _CL_SIM_COR    = _PAN_CELL_LINE_SIM_CFG.get("correlation", "spearman")
     _CL_SIM_K      = _PAN_CELL_LINE_SIM_CFG.get("k", 20)
-    _CL_SIM_EXPECTED_GENES = _PAN_CELL_LINE_SIM_CFG.get("expected_genes", 171)
+    _CL_SIM_FEATURES_CLEAN = (
+        config.get("defaults", {})
+        .get("marker_postprocessing", {})
+        .get("pan_cancer", {})
+        .get(
+            "final_features_clean",
+            "results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt",
+        )
+    )
+
+    def _infer_pan_cancer_feature_count(path, fallback_path=None):
+        candidates = [abspath(path)]
+        if fallback_path:
+            candidates.append(abspath(fallback_path))
+        feature_path = next((candidate for candidate in candidates if os.path.exists(candidate)), None)
+        if feature_path is None:
+            raise FileNotFoundError(
+                "Cannot infer pan_cancer_cell_line_similarity.expected_genes; "
+                "none of the configured feature lists exists: " + ", ".join(candidates)
+            )
+        with open(feature_path, "r", encoding="utf-8") as handle:
+            return sum(1 for line in handle if line.strip())
+
+    def _resolve_cell_line_expected_genes(raw_value, feature_path, fallback_path=None):
+        if raw_value is None:
+            return _infer_pan_cancer_feature_count(feature_path, fallback_path)
+        if isinstance(raw_value, str) and raw_value.strip().lower() in (
+            "", "auto", "infer", "dynamic"
+        ):
+            return _infer_pan_cancer_feature_count(feature_path, fallback_path)
+        return int(raw_value)
+
+    _CL_SIM_EXPECTED_GENES = _resolve_cell_line_expected_genes(
+        _PAN_CELL_LINE_SIM_CFG.get("expected_genes", "auto"),
+        _CL_SIM_FEATURES_CLEAN,
+        _PAN_CELL_LINE_SIM_CFG.get("expected_genes_fallback_file"),
+    )
     _CL_SIM_EXPECTED_NODES = _PAN_CELL_LINE_SIM_CFG.get("expected_nodes", 167)
     _CL_SIM_SEED   = _PAN_CELL_LINE_SIM_CFG.get("seed", 1)
     _CL_SIM_LEIDEN_RESOLUTION = _PAN_CELL_LINE_SIM_CFG.get("leiden_resolution", 1.0)
+    _CL_SIM_LEIDEN_RESOLUTION_SWEEP = _PAN_CELL_LINE_SIM_CFG.get(
+        "leiden_resolution_sweep",
+        [0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2,
+         0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.75, 1.0],
+    )
+    _CL_SIM_LOUVAIN_RESOLUTION_SWEEP = _PAN_CELL_LINE_SIM_CFG.get(
+        "louvain_resolution_sweep",
+        [0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2,
+         0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.75, 1.0],
+    )
+    _CL_SIM_FULL_CFG = _PAN_CELL_LINE_SIM_CFG.get("full_expression", {})
+
+    def _format_cell_line_resolution_sweep(raw_value):
+        if isinstance(raw_value, str):
+            return raw_value
+        if isinstance(raw_value, (int, float)):
+            return str(raw_value)
+        return ",".join(str(v) for v in raw_value)
+
+    _CL_SIM_LEIDEN_RESOLUTION_SWEEP_ARG = _format_cell_line_resolution_sweep(
+        _CL_SIM_LEIDEN_RESOLUTION_SWEEP
+    )
+    _CL_SIM_LOUVAIN_RESOLUTION_SWEEP_ARG = _format_cell_line_resolution_sweep(
+        _CL_SIM_LOUVAIN_RESOLUTION_SWEEP
+    )
     _CL_SIM_EDGES  = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_graph_edges.tsv")
     _CL_SIM_META   = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_node_metadata.tsv")
     _CL_SIM_COMMS  = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_communities.tsv")
     _CL_SIM_LEIDEN_COMMS = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_leiden_communities.tsv")
     _CL_SIM_COMMUNITY_METRICS = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_community_metrics.tsv")
     _CL_SIM_LINEAGE_DISCORDANT = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_lineage_discordant_profiles.tsv")
+    _CL_SIM_LEIDEN_SWEEP_ASSIGNMENTS = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_leiden_resolution_sweep_assignments.tsv")
+    _CL_SIM_LEIDEN_SWEEP_SUMMARY = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_leiden_resolution_sweep_summary.tsv")
+    _CL_SIM_LEIDEN_SWEEP_PLOT = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_leiden_resolution_sweep_diagnostic.pdf")
+    _CL_SIM_LOUVAIN_SWEEP_ASSIGNMENTS = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_louvain_resolution_sweep_assignments.tsv")
+    _CL_SIM_LOUVAIN_SWEEP_SUMMARY = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_louvain_resolution_sweep_summary.tsv")
+    _CL_SIM_LOUVAIN_SWEEP_PLOT = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_louvain_resolution_sweep_diagnostic.pdf")
+    _CL_SIM_FULL_DIR = abspath(_CL_SIM_FULL_CFG.get(
+        "output_dir",
+        os.path.join(_CL_SIM_DIR, "dsmz_joint_expression")
+    ))
+    _CL_SIM_FULL_DSMZ_VST = abspath(_CL_SIM_FULL_CFG.get(
+        "dsmz_vst_rds",
+        "data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds"
+    ))
+    _CL_SIM_FULL_DSMZ_META = abspath(_CL_SIM_FULL_CFG.get(
+        "dsmz_metadata_tsv",
+        "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"
+    ))
+    _CL_SIM_FULL_HEME_VST = abspath(_CL_SIM_FULL_CFG.get(
+        "heme_vst_rds",
+        "data/heme/heme_joint_expr_vst_batch_corrected.rds"
+    ))
+    _CL_SIM_FULL_EXPECTED_NODES = _CL_SIM_FULL_CFG.get("expected_nodes", 167)
+    _CL_SIM_FULL_EXPR = os.path.join(_CL_SIM_FULL_DIR, "dsmz_joint_expression_cell_line_expr.rds")
+    _CL_SIM_FULL_META_OBJECT = os.path.join(_CL_SIM_FULL_DIR, "dsmz_joint_expression_cell_line_metadata.tsv")
+    _CL_SIM_FULL_EDGES = os.path.join(_CL_SIM_FULL_DIR, "pan_cancer_cell_line_graph_edges.tsv")
+    _CL_SIM_FULL_META = os.path.join(_CL_SIM_FULL_DIR, "pan_cancer_cell_line_node_metadata.tsv")
+    _CL_SIM_FULL_LOUVAIN_SWEEP_ASSIGNMENTS = os.path.join(_CL_SIM_FULL_DIR, "dsmz_joint_expression_cell_line_louvain_resolution_sweep_assignments.tsv")
+    _CL_SIM_FULL_LOUVAIN_SWEEP_SUMMARY = os.path.join(_CL_SIM_FULL_DIR, "dsmz_joint_expression_cell_line_louvain_resolution_sweep_summary.tsv")
+    _CL_SIM_FULL_LOUVAIN_SWEEP_PLOT = os.path.join(_CL_SIM_FULL_DIR, "dsmz_joint_expression_cell_line_louvain_resolution_sweep_diagnostic.pdf")
     _CL_SIM_LAYOUT = os.path.join(_CL_SIM_DIR, "pan_cancer_cell_line_layout.tsv")
     _CL_SIM_VAL_DIR = os.path.join(_CL_SIM_DIR, "community_validation")
 
+    # Rule: build_pan_cancer_cell_line_similarity_graph
+    # Method role: graph-construction rule for cell-line-only similarity in the marker-derived feature space.
+    # Flow: cell-line-only feature matrix -> cell-line graph edges and metadata.
+    # Downstream use: supplies cell-line community analysis and resolution sweeps.
     rule build_pan_cancer_cell_line_similarity_graph:
         input:
             expr_rds = _CL_SIM_EXPR
@@ -4234,6 +6200,10 @@ if _PAN_CELL_LINE_SIM_CFG:
             test -s "{output.metadata}"
             '''
 
+    # Rule: compute_pan_cancer_cell_line_communities
+    # Method role: graph analysis rule assigning cell-line communities in the marker-derived feature space.
+    # Flow: cell-line graph edges and metadata -> community assignments, metrics, and discordance tables.
+    # Downstream use: annotates cell-line-only network validation and plotting.
     rule compute_pan_cancer_cell_line_communities:
         input:
             edges    = _CL_SIM_EDGES,
@@ -4267,6 +6237,190 @@ if _PAN_CELL_LINE_SIM_CFG:
             test -s "{output.lineage_discordant}"
             '''
 
+    # Rule: compute_pan_cancer_cell_line_leiden_resolution_sweep
+    # Method role: sensitivity analysis over Leiden resolutions for the cell-line-only graph.
+    # Flow: cell-line graph/community outputs -> resolution-sweep assignments, metrics, and diagnostic plot.
+    # Downstream use: assesses community sensitivity without replacing configured community outputs.
+    rule compute_pan_cancer_cell_line_leiden_resolution_sweep:
+        input:
+            edges    = _CL_SIM_EDGES,
+            metadata = _CL_SIM_META,
+            communities = _CL_SIM_COMMS,
+            leiden_communities = _CL_SIM_LEIDEN_COMMS,
+            community_metrics = _CL_SIM_COMMUNITY_METRICS,
+            lineage_discordant = _CL_SIM_LINEAGE_DISCORDANT
+        output:
+            leiden_sweep_assignments = _CL_SIM_LEIDEN_SWEEP_ASSIGNMENTS,
+            leiden_sweep_summary = _CL_SIM_LEIDEN_SWEEP_SUMMARY,
+            leiden_sweep_plot = _CL_SIM_LEIDEN_SWEEP_PLOT
+        params:
+            script = os.path.join(SCRIPTS_DIR, "compute_pan_cancer_cell_line_communities.R"),
+            seed   = _CL_SIM_SEED,
+            leiden_resolution = _CL_SIM_LEIDEN_RESOLUTION,
+            leiden_resolution_sweep = _CL_SIM_LEIDEN_RESOLUTION_SWEEP_ARG
+        log: os.path.join(LOGROOT, "compute_pan_cancer_cell_line_leiden_resolution_sweep.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript "{params.script}" \
+              --edges "{input.edges}" \
+              --meta "{input.metadata}" \
+              --out "{input.communities}" \
+              --leiden-out "{input.leiden_communities}" \
+              --community-metrics-out "{input.community_metrics}" \
+              --lineage-discordant-out "{input.lineage_discordant}" \
+              --seed {params.seed} \
+              --leiden-resolution {params.leiden_resolution} \
+              --leiden-resolution-sweep "{params.leiden_resolution_sweep}" \
+              --leiden-sweep-assignments-out "{output.leiden_sweep_assignments}" \
+              --leiden-sweep-summary-out "{output.leiden_sweep_summary}" \
+              --leiden-sweep-plot-out "{output.leiden_sweep_plot}" \
+              > "{log}" 2>&1
+            test -s "{output.leiden_sweep_assignments}"
+            test -s "{output.leiden_sweep_summary}"
+            test -s "{output.leiden_sweep_plot}"
+            '''
+
+    # Rule: compute_pan_cancer_cell_line_louvain_resolution_sweep
+    # Method role: sensitivity analysis over Louvain resolutions for the cell-line-only graph.
+    # Flow: cell-line graph edges and metadata -> resolution-sweep assignments, metrics, and diagnostic plot.
+    # Downstream use: compares community-resolution behaviour across algorithms.
+    rule compute_pan_cancer_cell_line_louvain_resolution_sweep:
+        input:
+            edges    = _CL_SIM_EDGES,
+            metadata = _CL_SIM_META
+        output:
+            louvain_sweep_assignments = _CL_SIM_LOUVAIN_SWEEP_ASSIGNMENTS,
+            louvain_sweep_summary = _CL_SIM_LOUVAIN_SWEEP_SUMMARY,
+            louvain_sweep_plot = _CL_SIM_LOUVAIN_SWEEP_PLOT
+        params:
+            script = os.path.join(SCRIPTS_DIR, "compute_cell_line_louvain_resolution_sweep.R"),
+            seed   = _CL_SIM_SEED,
+            louvain_resolution_sweep = _CL_SIM_LOUVAIN_RESOLUTION_SWEEP_ARG,
+            feature_source = "marker_derived_pan_cancer_feature_space"
+        log: os.path.join(LOGROOT, "compute_pan_cancer_cell_line_louvain_resolution_sweep.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript "{params.script}" \
+              --edges "{input.edges}" \
+              --meta "{input.metadata}" \
+              --feature-source "{params.feature_source}" \
+              --resolution-sweep "{params.louvain_resolution_sweep}" \
+              --seed {params.seed} \
+              --assignments-out "{output.louvain_sweep_assignments}" \
+              --summary-out "{output.louvain_sweep_summary}" \
+              --plot-out "{output.louvain_sweep_plot}" \
+              > "{log}" 2>&1
+            test -s "{output.louvain_sweep_assignments}"
+            test -s "{output.louvain_sweep_summary}"
+            test -s "{output.louvain_sweep_plot}"
+            '''
+
+    # Rule: build_dsmz_joint_expression_cell_line_object
+    # Method role: data-preparation rule building a full DSMZ cell-line expression object for sensitivity analysis.
+    # Flow: DSMZ and HEME VST inputs plus metadata -> joint cell-line expression object and metadata table.
+    # Downstream use: supplies full-expression cell-line similarity sensitivity analysis.
+    rule build_dsmz_joint_expression_cell_line_object:
+        input:
+            dsmz_vst = _CL_SIM_FULL_DSMZ_VST,
+            dsmz_metadata = _CL_SIM_FULL_DSMZ_META,
+            heme_vst = _CL_SIM_FULL_HEME_VST
+        output:
+            expr_rds = _CL_SIM_FULL_EXPR,
+            metadata = _CL_SIM_FULL_META_OBJECT
+        params:
+            script = os.path.join(SCRIPTS_DIR, "build_dsmz_joint_expression_cell_line_object.R"),
+            outdir = _CL_SIM_FULL_DIR
+        log: os.path.join(LOGROOT, "build_dsmz_joint_expression_cell_line_object.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{params.script}" \
+              --dsmz-vst "{input.dsmz_vst}" \
+              --dsmz-meta "{input.dsmz_metadata}" \
+              --heme-vst "{input.heme_vst}" \
+              --output "{output.expr_rds}" \
+              --output-metadata "{output.metadata}" \
+              > "{log}" 2>&1
+            test -s "{output.expr_rds}"
+            test -s "{output.metadata}"
+            '''
+
+    # Rule: build_dsmz_joint_expression_cell_line_similarity_graph
+    # Method role: graph-construction rule for full-expression DSMZ cell-line similarity sensitivity analysis.
+    # Flow: full DSMZ joint expression object -> similarity graph edges and metadata.
+    # Downstream use: supplies full-expression Louvain resolution sweep.
+    rule build_dsmz_joint_expression_cell_line_similarity_graph:
+        input:
+            expr_rds = _CL_SIM_FULL_EXPR
+        output:
+            edges    = _CL_SIM_FULL_EDGES,
+            metadata = _CL_SIM_FULL_META
+        params:
+            script  = os.path.join(SCRIPTS_DIR, "build_pan_cancer_cell_line_similarity_graph.R"),
+            outdir  = _CL_SIM_FULL_DIR,
+            k       = _CL_SIM_K,
+            correlation = _CL_SIM_COR,
+            expected_nodes = _CL_SIM_FULL_EXPECTED_NODES
+        log: os.path.join(LOGROOT, "build_dsmz_joint_expression_cell_line_similarity_graph.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            mkdir -p "{params.outdir}"
+            Rscript "{params.script}" \
+              --expr-rds "{input.expr_rds}" \
+              --output-dir "{params.outdir}" \
+              --k {params.k} \
+              --correlation "{params.correlation}" \
+              --expected-genes 0 \
+              --expected-nodes {params.expected_nodes} \
+              > "{log}" 2>&1
+            test -s "{output.edges}"
+            test -s "{output.metadata}"
+            '''
+
+    # Rule: compute_dsmz_joint_expression_cell_line_louvain_resolution_sweep
+    # Method role: sensitivity analysis over Louvain resolutions for the full-expression DSMZ graph.
+    # Flow: full-expression graph sidecars -> resolution-sweep assignments, metrics, and diagnostic plot.
+    # Downstream use: compares feature-space and full-expression community behaviour.
+    rule compute_dsmz_joint_expression_cell_line_louvain_resolution_sweep:
+        input:
+            edges    = _CL_SIM_FULL_EDGES,
+            metadata = _CL_SIM_FULL_META
+        output:
+            louvain_sweep_assignments = _CL_SIM_FULL_LOUVAIN_SWEEP_ASSIGNMENTS,
+            louvain_sweep_summary = _CL_SIM_FULL_LOUVAIN_SWEEP_SUMMARY,
+            louvain_sweep_plot = _CL_SIM_FULL_LOUVAIN_SWEEP_PLOT
+        params:
+            script = os.path.join(SCRIPTS_DIR, "compute_cell_line_louvain_resolution_sweep.R"),
+            seed   = _CL_SIM_SEED,
+            louvain_resolution_sweep = _CL_SIM_LOUVAIN_RESOLUTION_SWEEP_ARG,
+            feature_source = "full_dsmz_joint_expression"
+        log: os.path.join(LOGROOT, "compute_dsmz_joint_expression_cell_line_louvain_resolution_sweep.log")
+        conda: CONDA_ENV_R
+        shell:
+            r'''
+            Rscript "{params.script}" \
+              --edges "{input.edges}" \
+              --meta "{input.metadata}" \
+              --feature-source "{params.feature_source}" \
+              --resolution-sweep "{params.louvain_resolution_sweep}" \
+              --seed {params.seed} \
+              --assignments-out "{output.louvain_sweep_assignments}" \
+              --summary-out "{output.louvain_sweep_summary}" \
+              --plot-out "{output.louvain_sweep_plot}" \
+              > "{log}" 2>&1
+            test -s "{output.louvain_sweep_assignments}"
+            test -s "{output.louvain_sweep_summary}"
+            test -s "{output.louvain_sweep_plot}"
+            '''
+
+    # Rule: compute_pan_cancer_cell_line_validation
+    # Method role: validation rule computing modularity and assortativity for cell-line communities.
+    # Flow: cell-line graph, communities, and metadata -> validation tables.
+    # Downstream use: reports graph/community diagnostics without changing community assignments.
     rule compute_pan_cancer_cell_line_validation:
         input:
             edges       = _CL_SIM_EDGES,
@@ -4295,6 +6449,10 @@ if _PAN_CELL_LINE_SIM_CFG:
             test -s "{output.assortativity}"
             '''
 
+    # Rule: compute_pan_cancer_cell_line_layout
+    # Method role: layout rule computing fixed coordinates for the cell-line-only graph.
+    # Flow: cell-line graph edges -> layout table.
+    # Downstream use: supplies manual two-panel cell-line network plotting.
     rule compute_pan_cancer_cell_line_layout:
         input:
             edges = _CL_SIM_EDGES
@@ -4308,7 +6466,10 @@ if _PAN_CELL_LINE_SIM_CFG:
         shell: "Rscript {params.script} --edges {input.edges} --out {output.layout} --seed {params.seed} > {log} 2>&1 && test -s {output.layout}"
 
 
-# ---------------------------------------------------------------------------
+# =============================================================================
+# OPTIONAL / MANUAL PLOTTING RULES
+# =============================================================================
+# Stage role: contains configured reporting plots that can be added to the automated target list.
 # Pan-cancer cell line similarity network -- two-panel figure
 # Cell-line-to-cell-line transcriptomic similarity (not cell-line-to-tumour).
 # Enabled and configured via config key: pan_cancer_cell_line_plot
@@ -4320,8 +6481,8 @@ if _PAN_CELL_LINE_SIM_CFG:
 #     layout_tsv:      path to layout TSV     (columns: sample, x, y)
 #     output_dir:      directory for output PDF and PNG
 #
-# Run manually:  snakemake plot_pan_cancer_cell_line_two_panel --cores 1
-# Not part of the automated pipeline; do NOT add to PIPELINE_TARGET.
+# Manual target command: snakemake plot_pan_cancer_cell_line_two_panel --cores 1
+# Included in pan-cancer marker-postprocessing targets when configured.
 # ---------------------------------------------------------------------------
 _PAN_CELL_LINE_PLOT_CFG = config.get("pan_cancer_cell_line_plot", {})
 
@@ -4330,7 +6491,31 @@ if _PAN_CELL_LINE_PLOT_CFG:
     _PLOT_COMMS  = abspath(_PAN_CELL_LINE_PLOT_CFG["communities_tsv"])
     _PLOT_LAYOUT = abspath(_PAN_CELL_LINE_PLOT_CFG["layout_tsv"])
     _PLOT_OUTDIR = abspath(_PAN_CELL_LINE_PLOT_CFG["output_dir"])
+    _PLOT_PDF = os.path.join(
+        _PLOT_OUTDIR,
+        "Fig_pan_cancer_cell_line_similarity_network_lineage_community.pdf",
+    )
+    _PLOT_PNG = os.path.join(
+        _PLOT_OUTDIR,
+        "Fig_pan_cancer_cell_line_similarity_network_lineage_community.png",
+    )
+    _PLOT_LOUVAIN_ALIAS_PDF = os.path.join(
+        _PLOT_OUTDIR,
+        _PAN_CELL_LINE_PLOT_CFG.get(
+            "louvain_alias_pdf",
+            "Fig_pan_cancer_cell_line_louvain.pdf",
+        ),
+    )
+    _PLOT_FIGURE_WIDTH = float(_PAN_CELL_LINE_PLOT_CFG.get("figure_width", 11.2))
+    _PLOT_FIGURE_HEIGHT = float(_PAN_CELL_LINE_PLOT_CFG.get("figure_height", 5.0))
+    _PLOT_PANEL_WIDTH = float(_PAN_CELL_LINE_PLOT_CFG.get("panel_width", 4.75))
+    _PLOT_LEGEND_WIDTH = float(_PAN_CELL_LINE_PLOT_CFG.get("legend_width", 1.70))
+    _PLOT_LEGEND_MODE = _PAN_CELL_LINE_PLOT_CFG.get("legend_mode", "separate")
 
+    # Rule: plot_pan_cancer_cell_line_two_panel
+    # Method role: plotting rule for a two-panel cell-line-only similarity network figure.
+    # Flow: edge list, communities, layout, and config-driven dimensions -> lineage/community PDF and PNG.
+    # Downstream use: reporting figure and stable Louvain/community PDF alias.
     rule plot_pan_cancer_cell_line_two_panel:
         """Two-panel figure: pan-cancer cell line transcriptomic similarity
         network (cell-line-to-cell-line, not cell-line-to-tumour).
@@ -4343,11 +6528,17 @@ if _PAN_CELL_LINE_PLOT_CFG:
             comms  = _PLOT_COMMS,
             layout = _PLOT_LAYOUT
         output:
-            pdf = os.path.join(_PLOT_OUTDIR, "Fig_pan_cancer_cell_line_similarity_network_lineage_community.pdf"),
-            png = os.path.join(_PLOT_OUTDIR, "Fig_pan_cancer_cell_line_similarity_network_lineage_community.png")
+            pdf = _PLOT_PDF,
+            png = _PLOT_PNG,
+            louvain_pdf = _PLOT_LOUVAIN_ALIAS_PDF
         params:
             script = os.path.join(SCRIPTS_DIR, "plot_pan_cancer_two_panel.R"),
-            outdir = _PLOT_OUTDIR
+            outdir = _PLOT_OUTDIR,
+            figure_width = _PLOT_FIGURE_WIDTH,
+            figure_height = _PLOT_FIGURE_HEIGHT,
+            panel_width = _PLOT_PANEL_WIDTH,
+            legend_width = _PLOT_LEGEND_WIDTH,
+            legend_mode = _PLOT_LEGEND_MODE
         log: os.path.join(LOGROOT, "plot_pan_cancer_cell_line_two_panel.log")
         conda: CONDA_ENV_R
         shell:
@@ -4358,72 +6549,159 @@ if _PAN_CELL_LINE_PLOT_CFG:
               --communities "{input.comms}" \
               --layout      "{input.layout}" \
               --out-dir     "{params.outdir}" \
+              --width       {params.figure_width} \
+              --height      {params.figure_height} \
+              --panel-width {params.panel_width} \
+              --legend-width {params.legend_width} \
+              --legend-mode "{params.legend_mode}" \
               > "{log}" 2>&1
+            [ "{output.pdf}" = "{output.louvain_pdf}" ] || cp "{output.pdf}" "{output.louvain_pdf}"
             test -s "{output.pdf}" || (echo "ERROR: missing {output.pdf}" >&2; exit 1)
             test -s "{output.png}" || (echo "ERROR: missing {output.png}" >&2; exit 1)
+            test -s "{output.louvain_pdf}" || (echo "ERROR: missing {output.louvain_pdf}" >&2; exit 1)
             '''
 
+# =============================================================================
+# FINAL PIPELINE_TARGET ASSEMBLY
+# =============================================================================
+# Stage role: assembles the default target list after all optional section variables are defined.
 
-# Final pipeline terminal target list.
-PIPELINE_TARGET = [
-    os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
-    P_CONS_THESIS_RESOLUTION_PREFIX + ".pdf",
-    P_CONS_THESIS_RESOLUTION_PREFIX + ".png",
-    P_CONS_THESIS_CONSENSUS_PREFIX + ".pdf",
-    P_CONS_THESIS_CONSENSUS_PREFIX + ".png",
-    *PAN_CANCER_GRAPH_INSPECTION_TARGETS,
-    *COMMUNITY_STABILITY_TARGETS,
-    os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
-    os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
-    os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
-    os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
-    os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv"),
-    os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
-    os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
-    os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
-    os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
-]
-if DESEQ2_ENABLED:
-    PIPELINE_TARGET.append(NODE_STATS_TSV)
-    PIPELINE_TARGET.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
+# Method helper: assembles the default target list after optional analysis sections have declared their variables.
+def build_pipeline_targets():
+    targets = [
+        os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
+        P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".pdf",
+        P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".png",
+        P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".svg",
+        P_CONS_RESOLVED_EDGES_TSV,
+        P_CONS_RESOLVED_NODE_STATS_TSV,
+        P_CONS_ANCHOR_AUDIT_TSV,
+        P_CONS_RESOLVED_NODE_LABELS_TSV,
+        P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".pdf",
+        P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".png",
+        P_CONS_MULTI_REP_MAJORITY_PREFIX + ".pdf",
+        P_CONS_MULTI_REP_MAJORITY_PREFIX + ".png",
+        P_CONS_MULTI_REP_MAJORITY_PREFIX + ".svg",
+        P_CONS_MULTI_REP_MAJORITY_EDGES_TSV,
+        P_CONS_MULTI_REP_MAJORITY_NODE_STATS_TSV,
+        P_CONS_MULTI_REP_MAJORITY_COMPONENTS_TSV,
+        P_CONS_MULTI_REP_EDGE_SUPPORT_TSV,
+        POST_RESOLUTION_COMBINED_STRATIFICATION_TSV,
+        P_CONS_MULTI_REP_UNION_PREFIX + ".pdf",
+        P_CONS_MULTI_REP_UNION_PREFIX + ".png",
+        P_CONS_MULTI_REP_UNION_PREFIX + ".svg",
+        P_CONS_MULTI_REP_UNION_EDGES_TSV,
+        P_CONS_MULTI_REP_UNION_NODE_STATS_TSV,
+        P_CONS_MULTI_REP_UNION_COMPONENTS_TSV,
+        P_CONS_MULTI_REP_UNION_FULL_NODE_LABELS_TSV,
+        *PAN_CANCER_GRAPH_INSPECTION_TARGETS,
+        *COMMUNITY_STABILITY_TARGETS,
+        os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
+        os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
+        os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
+        os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
+        os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv"),
+        os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
+        os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
+        os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
+        os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
+    ]
+    if DESEQ2_ENABLED:
+        targets.append(NODE_STATS_TSV)
+        targets.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
 
-if ENRICH_ENABLED:
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "corpus_manifest.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "iea_sensitivity_summary.tsv"))
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "gprofiler_version.tsv"))
+    if ENRICH_ENABLED:
+        targets.append(os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"))
+        targets.append(os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"))
+        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "corpus_manifest.tsv"))
+        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"))
+        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "iea_sensitivity_summary.tsv"))
+        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "gprofiler_version.tsv"))
 
-if MARKER_POST_ENABLED:
-    PIPELINE_TARGET.append(PAN_EXPR_RDS)
-    PIPELINE_TARGET.append(mapping_metrics_summary())
+    if MARKER_POST_ENABLED:
+        targets.append(PAN_EXPR_RDS)
+        targets.append(mapping_metrics_summary())
+        targets.extend(
+            PAN_ALIGNMENT_UMAP_PDFS + PAN_ALIGNMENT_UMAP_SVGS + PAN_ALIGNMENT_UMAP_PNGS +
+            PAN_ALIGNMENT_UMAP_SOURCE_PDFS + PAN_ALIGNMENT_UMAP_SOURCE_SVGS + PAN_ALIGNMENT_UMAP_SOURCE_PNGS +
+            PAN_ALIGNMENT_UMAP_SOURCE_CANCER_PDFS + PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SVGS + PAN_ALIGNMENT_UMAP_SOURCE_CANCER_PNGS +
+            PAN_ALIGNMENT_UMAP_COORDS + PAN_ALIGNMENT_UMAP_SOURCE_COMPOSITION + [PAN_ALIGNMENT_UMAP_SUMMARY] +
+            VST_ALLGENE_UMAP_PDFS + VST_ALLGENE_UMAP_SVGS + VST_ALLGENE_UMAP_PNGS +
+            VST_ALLGENE_UMAP_SOURCE_PDFS + VST_ALLGENE_UMAP_SOURCE_SVGS + VST_ALLGENE_UMAP_SOURCE_PNGS +
+            VST_ALLGENE_UMAP_SOURCE_CANCER_PDFS + VST_ALLGENE_UMAP_SOURCE_CANCER_SVGS + VST_ALLGENE_UMAP_SOURCE_CANCER_PNGS +
+            VST_ALLGENE_UMAP_COORDS + VST_ALLGENE_UMAP_SOURCE_COMPOSITION + [VST_ALLGENE_UMAP_SUMMARY] +
+            RAW_ALLGENE_UMAP_TARGETS
+        )
+        if _PAN_CELL_LINE_PLOT_CFG:
+            targets.extend([_PLOT_PDF, _PLOT_PNG, _PLOT_LOUVAIN_ALIAS_PDF])
 
-if ENRICH_ENABLED:
-    PIPELINE_TARGET.append(os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap.pdf"))
-if MARKER_POST_ENABLED:
-    PIPELINE_TARGET.extend([
-        os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph.pdf"),
-        os.path.join(PAN_FIG_DIR, "ecdf_plots", "ecdf_model_prioritisation_combined.pdf"),
-        # Verified four-panel Precision@k bootstrap figure (cellline_precision_at_k rule).
-        # Legacy bar-chart outputs in cellline_centred/ are retained by plot_cellline_centred_figures
-        # rule but removed from PIPELINE_TARGET; they are not the verified computation.
-        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
-                     "Fig_cellline_centred_tumour_class_similarity.pdf"),
-        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
-                     "cellline_topk_metrics.tsv"),
-        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
-                     "cellline_centred_rank_summary.tsv"),
-        os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
-                     "cellline_similarity_precision_provenance.tsv"),
-    ])
+    if ENRICH_ENABLED:
+        targets.append(os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap.pdf"))
+    if MARKER_POST_ENABLED:
+            targets.extend([
+                os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph.pdf"),
+                os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.pdf"),
+                os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.png"),
+                os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_top10_fraction.pdf"),
+                os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_top10_fraction.png"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_top1_lineage_agreement.pdf"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_top1_lineage_agreement.png"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_precision_at_k.pdf"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_precision_at_k.png"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_same_lineage_rank_percentile.pdf"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_same_lineage_rank_percentile.png"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_top50_lineage_composition.pdf"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_top50_lineage_composition.png"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_top50_component_composition.pdf"),
+                os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                             "Fig_cellline_to_tumour_top50_component_composition.png"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                         "cellline_topk_metrics.tsv"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                         "cellline_centred_rank_summary.tsv"),
+            os.path.join(MAPPING_OUTDIR, "cellline_similarity_precision_bootstrap",
+                         "cellline_similarity_precision_provenance.tsv"),
+            os.path.join(PAN_RANKING_DIAGNOSTICS_DIR,
+                         "ranking_diagnostic_metric_crosscheck.tsv"),
+            PAN_T2C_MRR_AT10_BY_TUMOUR,
+            PAN_T2C_MRR_AT10_BY_COHORT,
+            PAN_T2C_MRR_AT10_PDF,
+            PAN_T2C_MRR_AT10_PNG,
+            PAN_C2T_COMPONENT_SAME_TABLE,
+            PAN_C2T_COMPONENT_ALL_TABLE,
+            PAN_C2T_COMPONENT_SUMMARY_TABLE,
+            PAN_C2T_COMPONENT_SAME_PDF,
+            PAN_C2T_COMPONENT_SAME_PNG,
+            PAN_C2T_COMPONENT_ALL_PDF,
+            PAN_C2T_COMPONENT_ALL_PNG,
+        ])
 
-if IS_MULTICOHORT_PROFILE:
-    PIPELINE_TARGET.extend([
-        P_CONS_LEIDEN_COMMUNITIES_TSV,
-        P_CONS_LEIDEN_SUMMARY_TSV,
-        P_CONS_LEIDEN_MODULARITY_TSV,
-        P_CONS_LEIDEN_LAYOUT_TSV,
-        P_CONS_LEIDEN_FIG_PREFIX + ".pdf",
-        P_CONS_LEIDEN_FIG_PREFIX + ".png",
-    ])
+    if IS_MULTICOHORT_PROFILE:
+        targets.extend([
+            P_CONS_LEIDEN_COMMUNITIES_TSV,
+            P_CONS_LEIDEN_SUMMARY_TSV,
+            P_CONS_LEIDEN_MODULARITY_TSV,
+            P_CONS_LEIDEN_LAYOUT_TSV,
+            P_CONS_LEIDEN_FIG_PREFIX + ".pdf",
+            P_CONS_LEIDEN_FIG_PREFIX + ".png",
+        ])
+    return targets
+
+
+PIPELINE_TARGET = build_pipeline_targets()
+
+# =============================================================================
+# INCLUDE FILES
+# =============================================================================
+# Stage role: loads external rule files after their required variables and target paths are defined.
+# Explicit current pan-cancer enrichment marker-framework targets.
+include: "rules/pan_cancer_enrichment_marker_framework.smk"

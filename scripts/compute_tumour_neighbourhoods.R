@@ -207,6 +207,15 @@ resolve_feature_from_direction <- function(direction) {
 }
 
 resolve_feature_gene_list_path <- function(feature, cfg, unsup_root) {
+  pan_feature_name <- cfg$features$pan_cancer_feature_set_name %||% "PanCancerFeatureSet"
+  pan_feature_file <- cfg$features$pan_cancer_feature_set_gene_list %||% NULL
+  if (identical(feature, pan_feature_name)) {
+    if (is.null(pan_feature_file) || !nzchar(pan_feature_file)) {
+      stop("Feature '", feature, "' requires cfg$features$pan_cancer_feature_set_gene_list.")
+    }
+    return(abs_from_root(pan_feature_file))
+  }
+
   topn_map <- cfg$feature_selection$method_topn %||% list()
   topn <- topn_map[[feature]]
   if (is.null(topn)) {
@@ -272,22 +281,40 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
     read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
   }
   if (!sample_id_col %in% colnames(meta)) {
-    stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
-         paste(colnames(meta), collapse = ", "))
+    if ("sample_id" %in% colnames(meta)) {
+      cat("[WARN] sample_id_col '", sample_id_col,
+          "' not found; using metadata column 'sample_id'.\n", sep = "")
+      sample_id_col <- "sample_id"
+    } else {
+      stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
+           paste(colnames(meta), collapse = ", "))
+    }
   }
 
-  if (!cell_col %in% colnames(meta)) {
-    stop("raw_cell_line_col '", cell_col, "' not found in metadata columns: ",
-         paste(colnames(meta), collapse = ", "))
+  derive_cell_line_from_sample_id <- function(x) {
+    y <- gsub("^NG[-_][0-9]+_", "", x)
+    y <- gsub("_lib[0-9]+_[0-9]+_[0-9]+$", "", y)
+    y <- gsub("_lib[0-9_]+$", "", y)
+    y
   }
-  mapping_raw <- setNames(as.character(meta[[cell_col]]), as.character(meta[[sample_id_col]]))
-  invalid_mapping <- is.na(mapping_raw) | !nzchar(trimws(mapping_raw))
-  if (any(invalid_mapping)) {
-    stop("raw_cell_line_col '", cell_col, "' has missing/blank values for sample_name(s): ",
-         paste(head(names(mapping_raw)[invalid_mapping], 10), collapse = ", "))
+
+  if (cell_col %in% colnames(meta)) {
+    mapping_raw <- setNames(as.character(meta[[cell_col]]), as.character(meta[[sample_id_col]]))
+  } else {
+    cat("[WARN] raw_cell_line_col '", cell_col,
+        "' not found; deriving DSMZ cell-line labels from sample_id.\n", sep = "")
+    mapping_raw <- setNames(
+      derive_cell_line_from_sample_id(as.character(meta[[sample_id_col]])),
+      as.character(meta[[sample_id_col]])
+    )
   }
 
   mapping <- mapping_raw[names(mapping_raw) %in% dsmz_sample_ids]
+  invalid_mapping <- is.na(mapping) | !nzchar(trimws(mapping))
+  if (any(invalid_mapping)) {
+    stop("Cell-line mapping has missing/blank values for DSMZ sample(s): ",
+         paste(head(names(mapping)[invalid_mapping], 10), collapse = ", "))
+  }
   missing_in_meta <- setdiff(dsmz_sample_ids, names(mapping))
   if (length(missing_in_meta) > 0L) {
     cat("[WARN] ", length(missing_in_meta),

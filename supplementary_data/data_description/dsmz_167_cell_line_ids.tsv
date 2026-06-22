@@ -1,0 +1,168 @@
+sample_name	Cell_Line	DSMZ_Cell_line_norm	Disease	Project_id	organ	PATH_CELL_LINE	PATH_alt_id
+NG-A2798_CCLF_PEDS_0051_T_libLAI2540	CCLF_PEDS_0051_T	CCLF_PEDS_0051_T	Neuroblastoma	NG-A2798	Adrenal/SNS	CCLF_PEDS_0051_T	NONE
+NG-A0611_CHP126_libLAB6088	CHP-126	CHP_126	Neuroblastoma	NG-A0611	Adrenal/SNS	CHP126	CHP_126
+NG-A0611_CHP134_libLAB6074	CHP-134	CHP_134	Neuroblastoma	NG-A0611	Adrenal/SNS	CHP134	CHP_134
+NG-A0611_GIMEN_libLAB6073	GI-ME-N	GI_ME_N	Neuroblastoma	NG-A0611	Adrenal/SNS	GIMEN	GI_ME_N
+NG-A0611_IMR32_libLAB6079	IMR-32	IMR_32	Neuroblastoma	NG-A0611	Adrenal/SNS	IMR32	IMR_32
+NG-A0611_KELLY_libLAB6075	KELLY	KELLY	Neuroblastoma	NG-A0611	Adrenal/SNS	KELLY	NONE
+NG-A0611_LAN1_libLAB6085	LAN-1	LAN1	Neuroblastoma	NG-A0611	Adrenal/SNS	LAN1	NONE
+NG-A0611_LAN2_libLAB6083	LAN-2	LAN2	Neuroblastoma	NG-A0611	Adrenal/SNS	LAN2	NONE
+NG-A0611_LAN5_libLAB6087	LAN-5	LAN5	Neuroblastoma	NG-A0611	Adrenal/SNS	LAN5	NONE
+NG-A0611_LAN6_libLAB6089	LAN-6	LAN6	Neuroblastoma	NG-A0611	Adrenal/SNS	LAN6	NONE
+NG-A0611_LS_libLAB6078	LS	LS	Neuroblastoma	NG-A0611	Adrenal/SNS	LS	NONE
+NG-A0611_MHHNB11_libLAB6084	MHH-NB-11	MHH_NB_11	Neuroblastoma	NG-A0611	Adrenal/SNS	MHHNB11	MHH_NB_11
+NG-A0611_NBLS_libLAB6077	NBL-S	NBL_S	Neuroblastoma	NG-A0611	Adrenal/SNS	NBLS	NBL_S
+NG-A0611_NGP_libLAB6082	NGP	NGP	Neuroblastoma	NG-A0611	Adrenal/SNS	NGP	NONE
+NG-A0611_NMB_libLAB6080	NMB	NMB	Neuroblastoma	NG-A0611	Adrenal/SNS	NMB	NONE
+NG-A0611_SHSY5Y_libLAB6081	SH-SY5Y	SH_SY5Y	Neuroblastoma	NG-A0611	Adrenal/SNS	SHSY5Y	SH_SY5Y
+NG-A0611_SIMA_libLAB6086	SIMA	SIMA	Neuroblastoma	NG-A0611	Adrenal/SNS	SIMA	NONE
+NG-A0611_SKNBE2_libLAB6076	SK-N-BE-2	SK_N_BE_2	Neuroblastoma	NG-A0611	Adrenal/SNS	SKNBE2	SK_N_BE_2
+NG-29643_CAL_120_lib581301_8005_3	CAL-120	CAL_120	Breast cancer	NG-29643	Breast	CAL_120	NONE
+NG-29643_CAL_148_lib581302_7997_4	CAL-148	CAL_148	Breast cancer	NG-29643	Breast	CAL_148	NONE
+NG-29643_CAL_51_lib581295_7997_4	CAL-51	CAL_51	Breast cancer	NG-29643	Breast	CAL_51	NONE
+NG-29643_CAL_85_1_lib581300_7997_4	CAL-85-1	CAL_85_1	Breast cancer	NG-29643	Breast	CAL_85_1	NONE
+NG-29643_COLO_824_lib581290_7997_4	COLO-824	COLO_824	Breast cancer	NG-29643	Breast	COLO_824	NONE
+NG-29643_DU_4475_lib581298_7997_4	DU-4475	DU_4475	Breast cancer	NG-29643	Breast	DU_4475	NONE
+NG-29643_EFM_19_lib581291_7997_4	EFM-19	EFM_19	Breast cancer	NG-29643	Breast	EFM_19	NONE
+NG-29643_EFM_192A_lib581292_7997_4	EFM-192A	EFM_192A	Breast cancer	NG-29643	Breast	EFM_192A	NONE
+NG-29643_EFM_192B_lib581293_7997_4	EFM-192B	EFM_192B	Breast cancer	NG-29643	Breast	EFM_192B	NONE
+NG-29643_EFM_192C_lib581294_7997_4	EFM-192C	EFM_192C	Breast cancer	NG-29643	Breast	EFM_192C	NONE
+NG-29643_ETCC_006_lib581311_8005_3	ETCC-006	ETCC_006	Breast cancer	NG-29643	Breast	ETCC_006	NONE
+NG-29643_ETCC_007_lib581312_7997_4	ETCC-007	ETCC_007	Breast cancer	NG-29643	Breast	ETCC_007	NONE
+NG-29643_EVSA_T_lib581299_7997_4	EVSA-T	EVSA_T	Breast cancer	NG-29643	Breast	EVSA_T	NONE
+NG-29643_HCC_1143_lib581306_7997_4	HCC-1143	HCC_1143	Breast cancer	NG-29643	Breast	HCC_1143	NONE
+NG-29643_HCC_1599_lib581304_7997_4	HCC-1599	HCC_1599	Breast cancer	NG-29643	Breast	HCC_1599	NONE
+NG-29643_HCC_1937_lib581305_7997_4	HCC-1937	HCC_1937	Breast cancer	NG-29643	Breast	HCC_1937	NONE
+NG-29643_HDQ_P1_lib581303_8005_3	HDQ-P1	HDQ_P1	Breast cancer	NG-29643	Breast	HDQ_P1	NONE
+NG-30919_HS_578T_B_lib628473_10098_2	HS-578T	HS_578T	Breast cancer	NG-29643	Breast	HS_578T_B	HS_578T
+NG-29643_IPH_926_lib581313_7997_4	IPH-926	IPH_926	Breast cancer	NG-29643	Breast	IPH_926	NONE
+NG-29643_JIMT_1_B_lib581287_7997_4	JIMT-1	JIMT_1	Breast cancer	NG-29643	Breast	JIMT_1	NONE
+NG-29643_KPL_1_lib581296_7997_4	KPL-1	KPL_1	Breast cancer	NG-29643	Breast	KPL_1	NONE
+NG-29643_MCF_7_lib581315_7997_4	MCF-7	MCF_7	Breast cancer	NG-29643	Breast	MCF_7	NONE
+NG-29643_MDA_MB_231_lib581314_8005_3	MDA-MB-231	MDA_MB_231	Breast cancer	NG-29643	Breast	MDA_MB_231	NONE
+NG-29643_MDA_MB_453_lib581289_7997_4	MDA-MB-453	MDA_MB_453	Breast cancer	NG-29643	Breast	MDA_MB_453	NONE
+NG-30919_MDA_MB_468_B_lib628474_10098_2	MDA-MB-468	MDA_MB_468	Breast cancer	NG-29643	Breast	MDA_MB_468_B	MDA_MB_468
+NG-29643_MFM_223_lib581297_7997_4	MFM-223	MFM_223	Breast cancer	NG-29643	Breast	MFM_223	NONE
+NG-29643_SK_BR_3_lib581307_7997_4	SK-BR-3	SK_BR_3	Breast cancer	NG-29643	Breast	SK_BR_3	NONE
+NG-29643_T_47D_lib581309_8005_3	T-47D	T_47D	Breast cancer	NG-29643	Breast	T_47D	NONE
+NG-29643_BT_474_lib581288_7997_4	BT-474	BT_474	Breast Cancer	NG-29643	Breast	BT_474	NONE
+NG-13640_BC3_lib236396_5774_5	BC-3	BC_3	Primary effusion lymphoma	NG-13640	Hematologic-Lymphoid	BC_3	BC3
+NG-13640_BCBL_1_lib241208_5808_6	BCBL-1	BCBL_1	Primary effusion lymphoma	NG-13640	Hematologic-Lymphoid	BCBL_1	NONE
+NG-13640_BJAB_lib227474_5697_7	BJAB	BJAB	Burkitt lymphoma / B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	BJAB	NONE
+NG-13640_DAUDI_lib227475_5697_7	DAUDI	DAUDI	Burkitt lymphoma / B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	DAUDI	NONE
+NG-13640_DERL7_lib236383_5767_8	DERL-7	DERL_7	Mature T-malignancy 	NG-13640	Hematologic-Lymphoid	DERL7	DERL_7
+NG-13640_HG_3_lib227479_5697_4	HG-3	HG_3	Chronic lymphocytic leukemia / prolymphocytic leukemia 	NG-13640	Hematologic-Lymphoid	HG_3	NONE
+NG-13640_HH_lib241222_5808_1	HH	HH	Mature T-malignancy 	NG-13640	Hematologic-Lymphoid	HH	NONE
+NG-13640_HT_1080_lib259823_5972_8	HT-1080	HT_1080	NONE	NG-13640	Hematologic-Lymphoid	HT_1080_5972_8	HT_1080
+NG-13640_HT_1080_lib259823_5988_1	HT-1080	HT_1080	NONE	NG-13640	Hematologic-Lymphoid	HT_1080_5988_1	HT_1080
+NG-13640_JVM_13_lib227481_5697_4	JVM-13	JVM_13	Chronic lymphocytic leukemia / prolymphocytic leukemia 	NG-13640	Hematologic-Lymphoid	JVM_13	NONE
+NG-13640_JVM_3_lib227480_5697_4	JVM-3	JVM_3	Chronic lymphocytic leukemia / prolymphocytic leukemia 	NG-13640	Hematologic-Lymphoid	JVM_3	NONE
+NG-13640_MEC_1_lib227482_5697_4	MEC-1	MEC_1	Chronic lymphocytic leukemia / prolymphocytic leukemia 	NG-13640	Hematologic-Lymphoid	MEC_1	NONE
+NG-13640_MOTN_1_lib250968_5908_5	MOTN-1	MOTN_1	Mature T-malignancy 	NG-13640	Hematologic-Lymphoid	MOTN_1	NONE
+NG-13640_NC_NC_lib259822_5972_8	NC-NC	NC_NC	DLBCL-Cell_Control	NG-13640	Hematologic-Lymphoid	NC_NC	NONE
+NG-13640_PGA_1_lib227483_5697_4	PGA-1	PGA_1	Chronic lymphocytic leukemia / prolymphocytic leukemia 	NG-13640	Hematologic-Lymphoid	PGA_1	NONE
+NG-13640_RAJI_lib227476_5684_6	RAJI	RAJI	Burkitt lymphoma / B-acute lymphoblastic leukemia 	NG-13640	Hematologic-Lymphoid	RAJI	NONE
+NG-13640_RAMOS_lib227477_5697_7	RAMOS	RAMOS	Burkitt lymphoma / B-acute lymphoblastic leukemia 	NG-13640	Hematologic-Lymphoid	RAMOS	NONE
+NG-13640_VAL_lib227478_5697_4	VAL	VAL	Burkitt lymphoma / B-acute lymphoblastic leukemia 	NG-13640	Hematologic-Lymphoid	VAL	NONE
+NG-13640_BONNA12_lib236392_5774_5	BONNA-12	BONNA_12	Hairy cell leukemia	NG-13640	Hematologic-Lymphoid	BONNA12	BONNA_12
+NG-13640_CCRF_CEM_lib241217_5826_6	CCRF-CEM	CCRF_CEM	T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma	NG-13640	Hematologic-Lymphoid	CCRF_CEM	NONE
+NG-13640_CRO_AP2_lib241209_5808_6	CRO-AP2	CRO_AP2	Primary effusion lymphoma	NG-13640	Hematologic-Lymphoid	CRO_AP2	NONE
+NG-13640_CRO_AP5_lib227485_5684_6	CRO-AP5	CRO_AP5	Primary effusion lymphoma	NG-13640	Hematologic-Lymphoid	CRO_AP5	NONE
+NG-13640_DND_41_lib241218_5808_7	DND-41	DND_41	T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma	NG-13640	Hematologic-Lymphoid	DND_41	NONE
+NG-13640_DOHH2_lib236386_5774_8	DOHH-2	DOHH_2	Diffuse large B-cell lymphoma, germinal center B-cell	NG-13640	Hematologic-Lymphoid	DOHH2	DOHH_2
+NG-13640_GRANTA_519_lib241206_5808_6	GRANTA-519	GRANTA_519	Mantle cell lymphoma	NG-13640	Hematologic-Lymphoid	GRANTA_519	NONE
+NG-13640_HAIRM_lib236393_5774_5	HAIR-M	HAIR_M	Hairy cell leukemia	NG-13640	Hematologic-Lymphoid	HAIRM	HAIR_M
+NG-13640_HC1_lib236394_5774_5	HC-1	HC_1	Hairy cell leukemia	NG-13640	Hematologic-Lymphoid	HC1	HC_1
+NG-13640_HDLM_2_lib227487_5697_4	HDLM-2	HDLM_2	Hodgkin lymphoma	NG-13640	Hematologic-Lymphoid	HDLM_2	NONE
+NG-13640_HPB_ALL_lib241219_5808_7	HPB-ALL	HPB_ALL	T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma	NG-13640	Hematologic-Lymphoid	HPB_ALL	NONE
+NG-13640_JEKO1_lib236395_5774_5	JEKO-1	JEKO_1	Mantle cell lymphoma	NG-13640	Hematologic-Lymphoid	JEKO1	JEKO_1
+NG-13640_JURKAT_lib236382_5794_6	JURKAT	JURKAT	T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma	NG-13640	Hematologic-Lymphoid	JURKAT	NONE
+NG-13640_JVM2_lib236381_5767_8	JVM-2	JVM_2	Mantle cell lymphoma	NG-13640	Hematologic-Lymphoid	JVM2	JVM_2
+NG-13640_KHYG_1_lib248382_5885_5	KHYG-1	KHYG_1	Natural killer malignancy	NG-13640	Hematologic-Lymphoid	KHYG_1	NONE
+NG-13640_KM_H2_lib248380_5885_5	KM-H2	KM_H2	Hodgkin lymphoma	NG-13640	Hematologic-Lymphoid	KM_H2_5885_5	KM_H2
+NG-13640_KM_H2_lib248380_5904_3	KM-H2	KM_H2	Hodgkin lymphoma	NG-13640	Hematologic-Lymphoid	KM_H2_5904_3	KM_H2
+NG-13640_KMS_12_BM_lib248379_5885_5	KMS-12-BM	KMS_12_BM	Multiple myeloma, plasma cell leukemia	NG-13640	Hematologic-Lymphoid	KMS_12_BM	KMS_12
+NG-13640_KOPN_8_lib227470_5697_7	KOPN-8	KOPN_8	B-cell precursor / pre-B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	KOPN_8	NONE
+NG-13640_L_1236_lib241215_5808_7	L-1236	L_1236	Hodgkin lymphoma	NG-13640	Hematologic-Lymphoid	L_1236	NONE
+NG-13640_L_363_lib241210_5808_6	L-363	L_363	Multiple myeloma, plasma cell leukemia	NG-13640	Hematologic-Lymphoid	L_363	NONE
+NG-13640_L_428_lib241214_5808_7	L-428	L_428	Hodgkin lymphoma	NG-13640	Hematologic-Lymphoid	L_428	NONE
+NG-13640_LP_1_lib241211_5808_7	LP-1	LP_1	Multiple myeloma, plasma cell leukemia	NG-13640	Hematologic-Lymphoid	LP_1	NONE
+NG-13640_MINO_lib248384_5885_5	MINO	MINO	Mantle cell lymphoma	NG-13640	Hematologic-Lymphoid	MINO	NONE
+NG-13640_MOLT_4_lib241220_5808_2	MOLT-4	MOLT_4	T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma	NG-13640	Hematologic-Lymphoid	MOLT_4	NONE
+NALM_6	NALM-6	NALM_6	B-cell precursor / pre-B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	NALM_6	NONE
+NG-13640_NALM_6_lib227471_5697_7	NALM-6	NALM_6	B-cell precursor / pre-B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	NALM_6	NONE
+NG-13640_NALM_6_lib227471_5706_1	NALM-6	NALM_6	B-cell precursor / pre-B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	NALM_6	NONE
+NG-13640_NK_92_lib227486_5684_6	NK-92	NK_92	Natural killer malignancy	NG-13640	Hematologic-Lymphoid	NK_92	NONE
+NG-13640_NU_DHL_1_lib227484_5697_4	NU-DHL-1	NU_DHL_1	Diffuse large B-cell lymphoma, activated B-cell	NG-13640	Hematologic-Lymphoid	NU_DHL_1	NONE
+NG-13640_OCILY19_lib236388_5774_8	OCI-LY19	OCI_LY19	Diffuse large B-cell lymphoma, germinal center B-cell	NG-13640	Hematologic-Lymphoid	OCILY19	OCI_LY19
+NG-13640_OCI_LY_3_lib241204_5808_6	OCI-LY3	OCI_LY3	Diffuse large B-cell lymphoma, activated B-cell	NG-13640	Hematologic-Lymphoid	OCI_LY_3	OCI_LY3
+NG-13640_OCILY7_lib236387_5774_8	OCI-LY7	OCI_LY7	Diffuse large B-cell lymphoma, germinal center B-cell	NG-13640	Hematologic-Lymphoid	OCILY7	OCI_LY7
+NG-13640_OPM2_lib236378_5767_8	OPM-2	OPM_2	Multiple myeloma, plasma cell leukemia	NG-13640	Hematologic-Lymphoid	OPM2	OPM_2
+NG-13640_REC_1_lib241207_5808_6	REC-1	REC_1	Mantle cell lymphoma	NG-13640	Hematologic-Lymphoid	REC_1	NONE
+NG-13640_REH_lib227472_5697_7	REH	REH	B-cell precursor / pre-B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	REH	NONE
+NG-13640_Ri_1_lib241203_5808_6	RI-1	RI_1	Diffuse large B-cell lymphoma, activated B-cell	NG-13640	Hematologic-Lymphoid	Ri_1	RI_1
+NG-13640_RPMI_8226_lib241212_5808_7	RPMI-8226	RPMI_8226	Multiple myeloma, plasma cell leukemia	NG-13640	Hematologic-Lymphoid	RPMI_8226	NONE
+NG-13640_RPMI_8402_lib241221_5808_2	RPMI-8402	RPMI_8402	T-acute lymphoblastic leukemia / T-lymphoblastic lymphoma	NG-13640	Hematologic-Lymphoid	RPMI_8402	NONE
+NG-13640_SEM_lib227473_5697_7	SEM	SEM	B-cell precursor / pre-B-acute lymphoblastic leukemia	NG-13640	Hematologic-Lymphoid	SEM	NONE
+NG-13640_SUDHL4_lib236389_5774_5	SU-DHL-4	SU_DHL_4	Diffuse large B-cell lymphoma, germinal center B-cell	NG-13640	Hematologic-Lymphoid	SUDHL4	SU_DHL_4
+NG-13640_SUDHL6_lib236390_5774_5	SU-DHL-6	SU_DHL_6	Diffuse large B-cell lymphoma, germinal center B-cell	NG-13640	Hematologic-Lymphoid	SUDHL6	SU_DHL_6
+NG-13640_SUP_HD_1_lib241216_5808_7	SUP-HD1	SUP_HD1	Hodgkin lymphoma	NG-13640	Hematologic-Lymphoid	SUP_HD1	SUP_HD_1
+NG-13640_U_266_lib241213_5808_7	U-266	U_266	Multiple myeloma, plasma cell leukemia	NG-13640	Hematologic-Lymphoid	U_266	NONE
+NG-13640_U_2932_lib241205_5808_6	U-2932	U_2932	Diffuse large B-cell lymphoma, activated B-cell	NG-13640	Hematologic-Lymphoid	U_2932	NONE
+NG-13640_U_2940_lib248378_5885_5	U-2940	U_2940	Primary mediastinal B-cell lymphoma	NG-13640	Hematologic-Lymphoid	U_2940	NONE
+NG-13640_U2946_lib236385_5767_8	U-2946	U_2946	Diffuse large B-cell lymphoma, activated B-cell	NG-13640	Hematologic-Lymphoid	U_2946	U2946
+NG-13640_WSUDLCL2_lib236391_5774_5	WSU-DLCL2	WSU_DLCL2	Diffuse large B-cell lymphoma, germinal center B-cell	NG-13640	Hematologic-Lymphoid	WSUDLCL2	WSU_DLCL2
+NG-13640_YT_lib248385_5885_5	YT	YT	Natural killer malignancy	NG-13640	Hematologic-Lymphoid	YT	NONE
+NG-13640_DEL_lib250969_5908_5	DEL	DEL	Anaplastic large cell lymphoma	NG-13640	Hematologic-Lymphoid	DEL	NONE
+NG-13640_SR_786_lib248387_5885_5	SR-786	SR_786	Anaplastic large cell lymphoma	NG-13640	Hematologic-Lymphoid	SR_786	NONE
+NG-13640_SU_DHL_1_lib248388_5885_6	SU-DHL-1	SU_DHL_1	Anaplastic large cell lymphoma	NG-13640	Hematologic-Lymphoid	SU_DHL_1	NONE
+NG-13640_SUP_M2_lib248389_5885_6	SUP-M2	SUP_M2	Anaplastic large cell lymphoma	NG-13640	Hematologic-Lymphoid	SUP_M2_5885_6	SUP_M2
+NG-13640_SUP_M2_lib248389_5904_3	SUP-M2	SUP_M2	Anaplastic large cell lymphoma	NG-13640	Hematologic-Lymphoid	SUP_M2_5904_3	SUP_M2
+NG-13640_SET_2_lib259821_5981_7	SET-2	SET_2	Myeloproliferative neoplasm	NG-13640	Hematologic-Myeloid	SET_2	NONE
+NG-13640_BV_173_lib227468_5681_8	BV-173	BV_173	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	BV_173	NONE
+NG-13640_CMK_lib259808_5981_3	CMK	CMK	Acute myeloid leukemia, megakaryocytic	NG-13640	Hematologic-Myeloid	CMK	NONE
+NG-13640_CML_T1_lib259818_5981_7	CML-T1	CML_T1	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	CML_T1	NONE
+NG-13640_ELF_153_lib259809_5981_3	ELF-153	ELF_153	Acute myeloid leukemia, megakaryocytic	NG-13640	Hematologic-Myeloid	ELF_153	NONE
+NG-13640_EM_2_lib259814_5981_7	EM-2	EM_2	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	EM_2	NONE
+NG-13640_EOL_1_lib248390_5885_6	EOL-1	EOL_1	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	EOL_1	NONE
+NG-13640_F_36P_lib248396_5885_1	F-36P	F_36P	Acute myeloid leukemia, erythroid	NG-13640	Hematologic-Myeloid	F_36P	NONE
+NG-13640_HEL_lib248397_5885_1	HEL	HEL	Acute myeloid leukemia, erythroid	NG-13640	Hematologic-Myeloid	HEL	NONE
+NG-13640_HL60_lib236384_5767_8	HL-60	HL_60	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	HL60	HL_60
+NG-13640_K_562_RNA_lib206692_5568_1	K-562	K_562	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	K_562	NONE
+NG-13640_KASUMI_1_RNA_lib206691_5568_1	KASUMI-1	KASUMI_1	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	KASUMI_1_RNA	NONE
+NG-13640_KCL_22_lib259815_5981_7	KCL-22	KCL_22	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	KCL_22	NONE
+NG-13640_KG_1_lib248391_5885_6	KG-1	KG_1	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	KG_1	NONE
+NG-13640_KU812_lib236377_5767_8	KU-812	KU_812	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	KU812	KU_812
+NG-13640_LAMA_84_lib259816_5981_7	LAMA-84	LAMA_84	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	LAMA_84	NONE
+NG-13640_M_07e_lib259810_5981_3	M-07e	M_07E	Acute myeloid leukemia, megakaryocytic	NG-13640	Hematologic-Myeloid	M_07e	NONE
+NG-13640_ME_1_lib248393_5885_6	ME-1	ME_1	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	ME_1	NONE
+NG-13640_MEGAL_lib259811_5981_3	MEGAL	MEGAL	Acute myeloid leukemia, megakaryocytic	NG-13640	Hematologic-Myeloid	MEGAL	NONE
+NG-13640_MKPL_1_lib259812_5981_3	MKPL-1	MKPL_1	Acute myeloid leukemia, megakaryocytic	NG-13640	Hematologic-Myeloid	MKPL_1	NONE
+NG-13640_MOLM13_lib236379_5767_8	MOLM-13	MOLM_13	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	MOLM13	MOLM_13
+NG-13640_MOLM_20_lib259817_5981_7	MOLM-20	MOLM_20	Chronic myeloid leukemia, myeloid blast crisis	NG-13640	Hematologic-Myeloid	MOLM_20	NONE
+NG-13640_MONO_MAC_6_lib248394_5885_6	MONO-MAC-6	MONO_MAC_6	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	MONO_MAC_6	MONO_MAC_5885_6
+NG-13640_MONO_MAC_6_lib248394_5904_3	MONO-MAC-6	MONO_MAC_6	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	MONO_MAC_6	MONO_MAC_5904_3
+NG-13640_MUTZ_3_lib259806_5981_3	MUTZ-3	MUTZ_3	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	MUTZ_3_5981_3	MUTZ_3
+NG-13640_MUTZ_3_lib259806_5991_5	MUTZ-3	MUTZ_3	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	MUTZ_3_5991_5	MUTZ_3
+NG-13640_NALM_1_lib265127_5989_8	NALM-1	NALM_1	Chronic myeloid leukemia, lymphoid blast crisis	NG-13640	Hematologic-Myeloid	NALM_1	NONE
+NG-13640_NB4_lib236380_5767_8	NB-4	NB_4	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	NB4	NB_4
+NG-13640_OCI_AML_3_lib248392_5885_6	OCI-AML3	OCI_AML3	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	OCI_AML_3	OCI_AML3
+NG-13640_OCI_M2_lib259807_5981_3	OCI-M2	OCI_M2	Acute myeloid leukemia, erythroid	NG-13640	Hematologic-Myeloid	OCI_M2	NONE
+NG-13640_SKNO_1_lib259805_5981_3	SKNO-1	SKNO_1	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	SKNO_1_5981_3	SKNO_1
+NG-13640_SKNO_1_lib259805_5991_5	SKNO-1	SKNO_1	Acute myeloid leukemia, myelocytic	NG-13640	Hematologic-Myeloid	SKNO_1_5991_5	SKNO_1
+NG-13640_TF_1_lib259824_5972_8	TF-1	TF_1	Acute myeloid leukemia, erythroid	NG-13640	Hematologic-Myeloid	TF_1	NONE
+NG-13640_THP_1_lib248383_5885_5	THP-1	THP_1	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	THP_1	NONE
+NG-13640_TK_6_lib259820_5981_7	TK-6	TK_6	Chronic myeloid leukemia, lymphoid blast crisis	NG-13640	Hematologic-Myeloid	TK_6	NONE
+NG-13640_U_937_lib248395_5885_6	U-937	U_937	Acute myeloid leukemia, monocytic	NG-13640	Hematologic-Myeloid	U_937	NONE
+NG-13640_UT_7_lib259813_5981_7	UT-7	UT_7	Acute myeloid leukemia, megakaryocytic	NG-13640	Hematologic-Myeloid	UT_7	NONE
+NG-30919_RBL_13_lib628469_10098_1	RBL-13	RBL_13	Retinoblastoma	NG-30919	Retina	RBL_13	NONE
+NG-30919_RBL_14_lib628470_10098_1	RBL-14	RBL_14	Retinoblastoma	NG-30919	Retina	RBL_14	NONE
+NG-30919_RBL_15_lib626622_10098_2	RBL-15	RBL_15	Retinoblastoma	NG-30919	Retina	RBL_15_10098_2	RBL_15
+NG-30919_RBL_15_lib626622_10102_4	RBL-15	RBL_15	Retinoblastoma	NG-30919	Retina	RBL_15_10102_4	RBL_15
+NG-30919_RBL_18_lib626623_10098_1	RBL-18	RBL_18	Retinoblastoma	NG-30919	Retina	RBL_18	NONE
+NG-30919_RBL_20_lib626624_10098_1	RBL-20	RBL_20	Retinoblastoma	NG-30919	Retina	RBL_20_10098_1	RBL_20
+NG-30919_RBL_20_lib626624_10102_3	RBL-20	RBL_20	Retinoblastoma	NG-30919	Retina	RBL_20_10102_3	RBL_20
+NG-30919_RBL_30_lib628471_10098_1	RBL-30	RBL_30	Retinoblastoma	NG-30919	Retina	RBL_30	NONE
+NG-30919_RBL_7_lib628468_10098_1	RBL-7	RBL_7	Retinoblastoma	NG-30919	Retina	RBL_7	NONE
+NG-30919_WERI_RB1_lib628472_10098_1	WERI-RB1	WERI_RB1	Retinoblastoma	NG-30919	Retina	WERI_RB1	NONE
+NG-30919_Y_79_lib626626_10098_1	Y-79	Y_79	Retinoblastoma	NG-30919	Retina	Y_79	NONE

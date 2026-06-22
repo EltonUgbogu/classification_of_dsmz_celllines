@@ -3,8 +3,12 @@
 plot_publication_cell_line_similarity_and_resolved_networks.py
 
 Produces the two main thesis figures for DSMZ cell line networks across the
-BRCA, NBL, and RBL cohorts. Replaces the previous community-stability script
-and discards every co-assignment / per-direction-stability output.
+BRCA, NBL, and RBL cohorts.
+
+The separate final_consensus_all/community_stability/ outputs are retained as
+supplementary graph stability validation only. They are not inputs to these
+main figures and must not be interpreted as final consensus Leiden/Louvain
+communities.
 
 Main Figure 1 — clinical patient sample referenced cell line similarity
     Fig_cell_line_similarity_networks_clinical_patient_referenced_combined.{pdf,svg,png}
@@ -33,8 +37,9 @@ Main Figure 2 — graph based consensus resolved DSMZ neighbourhoods
         nodes = DSMZ cell lines
         edges = final stable neighbour relationships
         node colour = final connected component
-        component central node = highest betweenness centrality node within
-            each non-isolate component (highlighted with a thick red border)
+        component central node = highest unnormalised betweenness centrality
+            node within each non-isolate component (highlighted with a thick
+            red border). Normalised betweenness is also reported for audit.
 
 Supporting TSVs:
     cell_line_similarity_network_edges.tsv
@@ -44,6 +49,7 @@ Supporting TSVs:
     resolved_DSMZ_component_annotations.tsv
     supp_resolved_DSMZ_component_annotations.tsv
     resolved_component_central_nodes.tsv
+    anchor_centrality_audit.tsv
     cell_line_network_layout_coordinates.tsv
     network_results_summary.txt
     network_input_validation.tsv
@@ -388,9 +394,14 @@ def discover_resolved_files(tn_dir):
     resolved = first_existing(
         base / fn for fn in
         ("resolved_dsmz_neighbours.tsv", "resolved_dsmz_neighbors.tsv"))
-    node_stats = first_existing([base / "dsmz_cellline_graph_node_stats.tsv"])
+    node_stats = first_existing([
+        base / "patient_referenced_aggregated_cell_line_similarity_graph_node_stats.tsv",
+        base / "dsmz_cellline_graph_node_stats.tsv",  # legacy fallback (pre-rename)
+    ])
     edges = first_existing([
-        base / "plots" / "dsmz_cellline_graph_edges.tsv",
+        base / "plots" / "patient_referenced_resolved_cell_line_neighbourhood_graph_edges.tsv",
+        base / "plots" / "resolved_cell_line_neighbourhood_graph_edges.tsv",  # legacy fallback (pre-prefix)
+        base / "plots" / "dsmz_cellline_graph_edges.tsv",                     # legacy fallback (pre-rename)
         base / "dsmz_cellline_graph_edges.tsv",
     ])
     anchors = first_existing([base / "anchor_components.tsv"])
@@ -617,20 +628,49 @@ def assign_component_colours(G, node_to_comp, isolates):
 
 
 def central_node_per_component(G, node_to_comp, isolate_set):
-    """Return {comp_id: (central_node_id, betweenness_value)} for non-isolate
-    multi-node components. Isolates and singletons map to None."""
-    btw = nx.betweenness_centrality(G) if G.number_of_nodes() > 0 else {}
+    """Return component descriptors for degree and betweenness centrality.
+
+    For each non-isolate connected component, the highest-degree node is
+    reported as the most connected cell line and the highest unnormalised
+    betweenness node is reported as the bridge/anchor-like cell line.
+    Normalised betweenness is computed in parallel for audit/provenance only.
+    """
     comp_members = defaultdict(list)
     for n, c in node_to_comp.items():
         comp_members[c].append(n)
     central = {}
+    btw_unnorm = {n: 0.0 for n in G.nodes()}
+    btw_norm = {n: 0.0 for n in G.nodes()}
+    selected_by_unnorm = {}
+    selected_by_norm = {}
+    selected_by_degree = {}
     for cid, members in comp_members.items():
         if len(members) <= 1 or all(m in isolate_set for m in members):
             central[cid] = (None, None)
+            selected_by_unnorm[cid] = None
+            selected_by_norm[cid] = None
+            selected_by_degree[cid] = None
             continue
-        best = max(members, key=lambda m: (btw.get(m, 0.0), m))
-        central[cid] = (best, round(float(btw.get(best, 0.0)), 6))
-    return central, btw
+        sub = G.subgraph(members)
+        sub_unnorm = nx.betweenness_centrality(
+            sub, normalized=False, weight=None)
+        sub_norm = nx.betweenness_centrality(
+            sub, normalized=True, weight=None)
+        for node in members:
+            btw_unnorm[node] = float(sub_unnorm.get(node, 0.0))
+            btw_norm[node] = float(sub_norm.get(node, 0.0))
+        best_unnorm = max(members, key=lambda m: (btw_unnorm.get(m, 0.0), m))
+        best_norm = max(members, key=lambda m: (btw_norm.get(m, 0.0), m))
+        best_degree = max(members, key=lambda m: (G.degree(m), m))
+        selected_by_unnorm[cid] = best_unnorm
+        selected_by_norm[cid] = best_norm
+        selected_by_degree[cid] = best_degree
+        central[cid] = (
+            best_unnorm,
+            round(float(btw_unnorm.get(best_unnorm, 0.0)), 6),
+        )
+    return (central, btw_unnorm, btw_norm, selected_by_unnorm,
+            selected_by_norm, selected_by_degree)
 
 
 def draw_resolved_panel(ax, cohort, G, pos, node_to_comp, isolates,
@@ -721,7 +761,7 @@ def draw_resolved_panel(ax, cohort, G, pos, node_to_comp, isolates,
         mpatches.Patch(facecolor="#AAAAAA", edgecolor=CENTRAL_BORDER_COLOUR,
                        linewidth=4.5,
                        label="Component central node "
-                             "(highest betweenness)"),
+                             "(highest unnormalised betweenness)"),
         mlines.Line2D([], [], marker="D", color="none",
                       markerfacecolor=ISOLATE_COLOUR,
                       markeredgecolor="#333333", markersize=7,
@@ -834,8 +874,9 @@ def draw_resolved_summary_panel(ax, summary_rows):
         title="Panel D — Resolved component summary",
         citation=(
             "Per cohort: graph-based consensus resolved DSMZ cell line "
-            "neighbourhoods. Central node = highest betweenness centrality "
-            "node within each non-isolate component. "
+            "neighbourhoods. Central node = highest unnormalised "
+            "betweenness centrality node within each non-isolate component; "
+            "normalised betweenness is reported only for audit/provenance. "
             + CITATION_FIG2
         ),
     )
@@ -1042,7 +1083,11 @@ def write_resolved_node_summary(cohort_data, outdir):
         es_map = _edge_support_map(d.get("resolved_edges_df"))
         central_pairs = d.get("central_nodes", {})
         central_set = {v for (v, _) in central_pairs.values() if v}
-        btw = d.get("resolved_betweenness", {})
+        btw_unnorm = d.get("resolved_betweenness_unnormalised", {})
+        btw_norm = d.get("resolved_betweenness_normalised", {})
+        selected_unnorm = d.get("selected_by_unnormalised", {})
+        selected_norm = d.get("selected_by_normalised", {})
+        selected_degree = d.get("selected_by_degree", {})
 
         comp_sizes = defaultdict(int)
         comp_members = defaultdict(list)
@@ -1087,7 +1132,27 @@ def write_resolved_node_summary(cohort_data, outdir):
                 "connected_component_size": comp_sizes[cid],
                 "resolved_component_label": comp_labels[cid],
                 "is_central_node": str(node in central_set).upper(),
-                "betweenness_centrality": round(float(btw.get(node, 0.0)), 6),
+                "betweenness_centrality":
+                    round(float(btw_unnorm.get(node, 0.0)), 6),
+                "betweenness_unnormalised":
+                    round(float(btw_unnorm.get(node, 0.0)), 6),
+                "betweenness_normalised":
+                    round(float(btw_norm.get(node, 0.0)), 6),
+                "selected_by_unnormalised":
+                    str(selected_unnorm.get(cid) == node).upper(),
+                "selected_by_normalised":
+                    str(selected_norm.get(cid) == node).upper(),
+                "selected_by_degree":
+                    str(selected_degree.get(cid) == node).upper(),
+                "canonical_selected": str(node in central_set).upper(),
+                "canonical_bridge_selected": str(node in central_set).upper(),
+                "most_connected_selected":
+                    str(selected_degree.get(cid) == node).upper(),
+                "centrality_metric": "degree_and_betweenness",
+                "centrality_normalised": "FALSE",
+                "centrality_weighted": "FALSE",
+                "centrality_scope": "within_component",
+                "centrality_tie_break": "highest_value_then_node_id",
                 "degree": G.degree(node),
                 "is_isolate": str(node in isolates).upper(),
                 "is_anchor": is_anchor_val,
@@ -1112,7 +1177,11 @@ def write_resolved_component_annotations(cohort_data, outdir):
         isolates = set(d["resolved_isolates"])
         anchor_set = set(d.get("anchor_nodes", set()))
         es_map = _edge_support_map(d.get("resolved_edges_df"))
-        btw = d.get("resolved_betweenness", {})
+        btw_unnorm = d.get("resolved_betweenness_unnormalised", {})
+        btw_norm = d.get("resolved_betweenness_normalised", {})
+        selected_unnorm = d.get("selected_by_unnormalised", {})
+        selected_norm = d.get("selected_by_normalised", {})
+        selected_degree = d.get("selected_by_degree", {})
         central_pairs = d.get("central_nodes", {})
 
         comp_members = defaultdict(list)
@@ -1137,8 +1206,18 @@ def write_resolved_component_annotations(cohort_data, outdir):
                 if tuple(sorted((m, nb))) in es_map
             ]
             degrees = [G.degree(m) for m in members]
-            btw_vals = [btw.get(m, 0) for m in members]
+            btw_unnorm_vals = [btw_unnorm.get(m, 0) for m in members]
+            btw_norm_vals = [btw_norm.get(m, 0) for m in members]
             cn, cn_btw = central_pairs.get(cid, (None, None))
+            cn_norm = btw_norm.get(cn, "") if cn else ""
+            most_connected = selected_degree.get(cid)
+            most_connected_degree = (
+                G.degree(most_connected) if most_connected else ""
+            )
+            changed_metric = (
+                selected_unnorm.get(cid) != selected_norm.get(cid)
+                if selected_unnorm.get(cid) is not None else False
+            )
 
             rows.append({
                 "cohort": cohort,
@@ -1147,10 +1226,33 @@ def write_resolved_component_annotations(cohort_data, outdir):
                 "n_cell_lines": n,
                 "member_cell_lines": ";".join(sorted(members)),
                 "central_node": cn or "",
+                "bridge_node": cn or "",
+                "most_connected_node": most_connected or "",
+                "most_connected_degree": most_connected_degree,
                 "central_node_betweenness":
                     (cn_btw if cn_btw is not None else ""),
+                "central_node_betweenness_unnormalised":
+                    (cn_btw if cn_btw is not None else ""),
+                "central_node_betweenness_normalised":
+                    (round(float(cn_norm), 6) if cn_norm != "" else ""),
                 "central_node_selection_metric":
-                    "highest_betweenness" if cn else "single_member_or_isolate",
+                    ("highest_unnormalised_betweenness"
+                     if cn else "single_member_or_isolate"),
+                "most_connected_selection_metric":
+                    ("highest_degree" if most_connected
+                     else "single_member_or_isolate"),
+                "centrality_metric": "degree_and_betweenness",
+                "centrality_normalised": "FALSE",
+                "centrality_weighted": "FALSE",
+                "centrality_scope": "within_component",
+                "centrality_tie_break": "highest_value_then_node_id",
+                "selected_by_normalised": selected_norm.get(cid) or "",
+                "selected_by_unnormalised": selected_unnorm.get(cid) or "",
+                "selected_by_degree": selected_degree.get(cid) or "",
+                "degree_vs_betweenness_node_differs":
+                    str(most_connected != cn).upper(),
+                "normalised_vs_unnormalised_anchor_differs":
+                    str(changed_metric).upper(),
                 "anchor_cell_lines":
                     ";".join(sorted(set(members) & anchor_set)) or "",
                 "isolate_members":
@@ -1159,8 +1261,17 @@ def write_resolved_component_annotations(cohort_data, outdir):
                 "density": round(nx.density(sub), 4),
                 "median_degree": round(float(np.median(degrees)), 2),
                 "max_degree": int(max(degrees)),
-                "median_betweenness": round(float(np.median(btw_vals)), 6),
-                "max_betweenness": round(float(max(btw_vals)), 6),
+                "median_betweenness":
+                    round(float(np.median(btw_unnorm_vals)), 6),
+                "max_betweenness": round(float(max(btw_unnorm_vals)), 6),
+                "median_betweenness_unnormalised":
+                    round(float(np.median(btw_unnorm_vals)), 6),
+                "max_betweenness_unnormalised":
+                    round(float(max(btw_unnorm_vals)), 6),
+                "median_betweenness_normalised":
+                    round(float(np.median(btw_norm_vals)), 6),
+                "max_betweenness_normalised":
+                    round(float(max(btw_norm_vals)), 6),
                 "median_edge_support_directions":
                     (round(float(np.median(inc_sds)), 2) if inc_sds else ""),
             })
@@ -1173,7 +1284,12 @@ def write_resolved_component_annotations(cohort_data, outdir):
     supp_cols = [
         "cohort", "resolved_component_id", "component_label",
         "n_cell_lines", "member_cell_lines", "central_node",
+        "bridge_node", "most_connected_node", "most_connected_degree",
         "central_node_betweenness", "central_node_selection_metric",
+        "most_connected_selection_metric",
+        "centrality_normalised", "centrality_weighted",
+        "centrality_scope", "normalised_vs_unnormalised_anchor_differs",
+        "degree_vs_betweenness_node_differs",
         "anchor_cell_lines", "n_edges", "median_degree",
         "median_edge_support_directions",
     ]
@@ -1190,18 +1306,108 @@ def write_central_nodes(cohort_data, outdir):
         d = cohort_data.get(cohort, {})
         if not d.get("resolved_available"):
             continue
+        G = d["resolved_graph"]
+        btw_norm = d.get("resolved_betweenness_normalised", {})
+        selected_norm = d.get("selected_by_normalised", {})
+        selected_unnorm = d.get("selected_by_unnormalised", {})
+        selected_degree = d.get("selected_by_degree", {})
         for cid, (cn, btw) in sorted(d.get("central_nodes", {}).items()):
             if cn is None:
                 continue
+            degree_node = selected_degree.get(cid)
             rows.append({
                 "cohort": cohort,
                 "resolved_component_id": cid,
                 "central_node": cn,
+                "bridge_node": cn,
+                "most_connected_node": degree_node or "",
+                "most_connected_degree":
+                    (G.degree(degree_node) if degree_node else ""),
                 "central_node_display": make_display_label(cn),
                 "betweenness_centrality": btw,
-                "selection_metric": "highest_betweenness",
+                "betweenness_unnormalised": btw,
+                "betweenness_normalised":
+                    round(float(btw_norm.get(cn, 0.0)), 6),
+                "selection_metric": "highest_unnormalised_betweenness",
+                "centrality_metric": "betweenness",
+                "centrality_normalised": "FALSE",
+                "centrality_weighted": "FALSE",
+                "centrality_scope": "within_component",
+                "centrality_tie_break": "highest_value_then_node_id",
+                "selected_by_normalised": selected_norm.get(cid) or "",
+                "selected_by_unnormalised": selected_unnorm.get(cid) or "",
+                "selected_by_degree": degree_node or "",
+                "degree_vs_betweenness_node_differs":
+                    str(degree_node != cn).upper(),
+                "normalised_vs_unnormalised_anchor_differs":
+                    str(selected_norm.get(cid) != selected_unnorm.get(cid)).upper(),
             })
     path = Path(outdir) / "resolved_component_central_nodes.tsv"
+    pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
+    log.info("Wrote: %s", path)
+    return path
+
+
+def write_anchor_centrality_audit(cohort_data, outdir):
+    rows = []
+    for cohort in COHORTS:
+        d = cohort_data.get(cohort, {})
+        if not d.get("resolved_available"):
+            continue
+        G = d["resolved_graph"]
+        node_to_comp = d["node_to_comp"]
+        btw_norm = d.get("resolved_betweenness_normalised", {})
+        btw_unnorm = d.get("resolved_betweenness_unnormalised", {})
+        selected_norm = d.get("selected_by_normalised", {})
+        selected_unnorm = d.get("selected_by_unnormalised", {})
+        selected_degree = d.get("selected_by_degree", {})
+        for node in sorted(G.nodes()):
+            cid = node_to_comp[node]
+            sel_norm = selected_norm.get(cid)
+            sel_unnorm = selected_unnorm.get(cid)
+            sel_degree = selected_degree.get(cid)
+            rows.append({
+                "cohort": cohort,
+                "component_id": cid,
+                "node_id": node,
+                "display_label": make_display_label(node),
+                "degree": G.degree(node),
+                "betweenness_normalised":
+                    round(float(btw_norm.get(node, 0.0)), 6),
+                "betweenness_unnormalised":
+                    round(float(btw_unnorm.get(node, 0.0)), 6),
+                "selected_by_normalised": str(sel_norm == node).upper(),
+                "selected_by_unnormalised": str(sel_unnorm == node).upper(),
+                "selected_by_degree": str(sel_degree == node).upper(),
+                "canonical_selected": str(sel_unnorm == node).upper(),
+                "canonical_bridge_selected": str(sel_unnorm == node).upper(),
+                "most_connected_selected": str(sel_degree == node).upper(),
+                # Metric-explicit alias columns (schema clarity patch)
+                "degree_anchor_selected": str(sel_degree == node).upper(),
+                "bridge_betweenness_selected": str(sel_unnorm == node).upper(),
+                "anchor_selected": str(
+                    (sel_degree == node) or (sel_unnorm == node)
+                ).upper(),
+                "anchor_selection_reason": (
+                    "degree;betweenness_unnormalised"
+                    if ((sel_degree == node) and (sel_unnorm == node))
+                    else "degree"
+                    if (sel_degree == node)
+                    else "betweenness_unnormalised"
+                    if (sel_unnorm == node)
+                    else ""
+                ),
+                "changed_relative_to_legacy":
+                    str(sel_norm != sel_unnorm).upper(),
+                "degree_vs_betweenness_node_differs":
+                    str(sel_degree != sel_unnorm).upper(),
+                "canonical_metric": "degree_and_unnormalised_betweenness",
+                "alternative_metric": "normalised_betweenness",
+                "centrality_scope": "within_component",
+                "centrality_weighted": "FALSE",
+                "centrality_tie_break": "highest_value_then_node_id",
+            })
+    path = Path(outdir) / "anchor_centrality_audit.tsv"
     pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
     log.info("Wrote: %s", path)
     return path
@@ -1297,7 +1503,10 @@ def write_results_summary(cohort_data, sim_summary, res_summary, outdir):
         "They are reported as a comparison of Leiden vs Louvain counts only and "
         "must not be compared as raw IDs across cohorts. The final resolved "
         "components in Main Figure 2 are the cohort-level neighbourhood "
-        "consensus, independent of any single direction.",
+        "consensus, independent of any single direction. The separate "
+        "final_consensus_all/community_stability/ directory is supplementary "
+        "graph stability validation: cross-direction Leiden/Louvain "
+        "co-assignment compared with the final resolved components.",
     ]
 
     path = Path(outdir) / "network_results_summary.txt"
@@ -1328,8 +1537,9 @@ def write_provenance(args, cohort_data, fig_paths, git_commit, outdir):
         "(Wong_CB_safe_palette; isolates=#AAAAAA); "
         "node_shape=is_isolate(circle/diamond); "
         "node_size=400+120*degree; "
-        "central_node_border=highest_betweenness_within_component"
+        "central_node_border=highest_unnormalised_betweenness_within_component"
         "(thick red border, 4.5_pt); "
+        "most_connected_node=highest_degree_within_component_reported_in_tsv; "
         "edge_style=support_type(solid_sd>=2/dashed_sd==1); "
         "edge_width=min(6.0,1.5+0.5*(support_directions-1))"
     )
@@ -1345,7 +1555,21 @@ def write_provenance(args, cohort_data, fig_paths, git_commit, outdir):
         "fig2_visual_encodings": enc_fig2,
         "fig1_node_colour_column": "leiden_community_id",
         "fig2_node_colour_column": "connected_component_id",
-        "fig2_central_node_metric": "highest_betweenness_in_component",
+        "fig2_central_node_metric":
+            "highest_unnormalised_betweenness_in_component",
+        "fig2_most_connected_node_metric": "highest_degree_in_component",
+        "centrality_metric": "degree_and_betweenness",
+        "centrality_normalised": "FALSE",
+        "centrality_normalised_reported": "TRUE",
+        "centrality_unnormalised_reported": "TRUE",
+        "centrality_weighted": "FALSE",
+        "centrality_scope": "within_component",
+        "centrality_tie_break": "highest_value_then_node_id",
+        "anchor_selection_script": str(Path(__file__).resolve()),
+        "anchor_selection_table": "resolved_component_central_nodes.tsv",
+        "anchor_audit_table": "anchor_centrality_audit.tsv",
+        "canonical_anchor_metric": "degree_and_unnormalised_betweenness",
+        "alternative_anchor_metric": "normalised_betweenness",
         "colour_palette": "Wong_CB_safe_8colour",
         "fig1_panel_d_source":
             "similarity_network_construction_summary.tsv;"
@@ -1354,7 +1578,8 @@ def write_provenance(args, cohort_data, fig_paths, git_commit, outdir):
         "fig2_panel_d_source":
             "resolved_DSMZ_component_annotations.tsv;"
             "resolved_DSMZ_neighbourhood_node_summary.tsv;"
-            "resolved_component_central_nodes.tsv",
+            "resolved_component_central_nodes.tsv;"
+            "anchor_centrality_audit.tsv",
     }
     for cohort in COHORTS:
         d = cohort_data.get(cohort, {})
@@ -1390,7 +1615,8 @@ def parse_args():
             "D); Fig 2 = graph based consensus resolved DSMZ cell line "
             "neighbourhoods (panels A, B, C with a resolved component "
             "summary in panel D). Community stability and co-assignment "
-            "outputs are not produced."
+            "outputs are handled separately as supplementary graph stability "
+            "validation and are not used as main figure inputs."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
@@ -1573,7 +1799,8 @@ def main():
                               seed=args.layout_seed)
             comp_colours = assign_component_colours(
                 G_res, node_to_comp, isolates_res)
-            central_nodes, btw = central_node_per_component(
+            (central_nodes, btw_unnorm, btw_norm, selected_unnorm,
+             selected_norm, selected_degree) = central_node_per_component(
                 G_res, node_to_comp, set(isolates_res))
             d.update({
                 "resolved_available": True,
@@ -1588,7 +1815,12 @@ def main():
                 "anchor_path_provided": anchor_provided,
                 "anchor_path": anchor_source,
                 "central_nodes": central_nodes,
-                "resolved_betweenness": btw,
+                "resolved_betweenness": btw_unnorm,
+                "resolved_betweenness_unnormalised": btw_unnorm,
+                "resolved_betweenness_normalised": btw_norm,
+                "selected_by_unnormalised": selected_unnorm,
+                "selected_by_normalised": selected_norm,
+                "selected_by_degree": selected_degree,
             })
             log.info(
                 "%s resolved: %d nodes, %d edges, "
@@ -1771,6 +2003,7 @@ def main():
     write_resolved_node_summary(cohort_data, out_dir)
     write_resolved_component_annotations(cohort_data, out_dir)
     write_central_nodes(cohort_data, out_dir)
+    write_anchor_centrality_audit(cohort_data, out_dir)
     write_layout_coordinates(cohort_data, out_dir, args.layout_seed)
     write_results_summary(cohort_data, sim_summary_rows, res_summary_rows,
                           out_dir)
@@ -1899,7 +2132,7 @@ def main():
     print(f"Log             : {log_path}")
     print(f"Git commit      : {git_commit}")
     print()
-    print("Note: this script does not produce community-stability outputs.")
+    print("Note: community_stability/ outputs are supplementary graph stability validation, not main figure inputs.")
     print()
 
 

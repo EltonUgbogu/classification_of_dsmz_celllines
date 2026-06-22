@@ -1,0 +1,12 @@
+validation_check	status	details
+active_method	PASS	ranked_marker_source_pan_cancer_panel
+selected_empirical_rule	PASS	relaxed_iqr_median_baseMean
+final_clean_gene_count	PASS	379
+no_duplicate_clean_ensembl_ids	PASS	duplicates=0
+clean_gene_list_matches_feature_table	PASS	clean_list=379;unique_table=379
+current_evidence_classes	PASS	anchor_source_recurrent;isolate_source_recurrent;anchor_singleton_ranked;ranked_nonrecurrent_marker
+recurrent_rows_meet_threshold	PASS	recurrence_threshold=2
+ranked_rows_pass_selected_rule	PASS	relaxed_iqr_median_baseMean
+direction_counts	PASS	DOWN=304;UP=73;MIXED=2
+cohort_owner_counts	PASS	BRCA=221;NBL=99;RBL=59
+marker_source_class_membership_semantics	PASS	anchor=277;isolate=109;non-exclusive memberships

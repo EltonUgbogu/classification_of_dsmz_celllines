@@ -13,21 +13,25 @@
 #
 # Usage:
 #   Rscript list_rbl_sample_ids_by_gse.R \
-#       /work/ugbogu/pipeline/data/rbl/preprocessing_results/tumour_vst_rbl_batch_corrected.rds \
-#       /work/ugbogu/pipeline/data/rbl/preprocessing_results/sample_ids_cohorts
+#       data/rbl/preprocessing_results/tumour_vst_rbl_batch_corrected.rds \
+#       data/rbl/preprocessing_results/sample_ids_cohorts
 
 args <- commandArgs(trailingOnly = TRUE)
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
+rbl_data_root <- Sys.getenv("RBL_DATA_ROOT", unset = file.path(repo_root, "data", "rbl"))
 
 input_rds <- if (length(args) >= 1) {
   args[1]
 } else {
-  "/work/ugbogu/pipeline/data/rbl/preprocessing_results/tumour_vst_rbl_batch_corrected.rds"
+  file.path(rbl_data_root, "preprocessing_results", "tumour_vst_rbl_batch_corrected.rds")
 }
 
 outdir <- if (length(args) >= 2) {
   args[2]
 } else {
-  "/work/ugbogu/pipeline/data/rbl/preprocessing_results/sample_ids_cohorts"
+  file.path(rbl_data_root, "preprocessing_results", "sample_ids_cohorts")
 }
 
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)

@@ -710,8 +710,12 @@ if (opt$max_samples > 0) {
   meta    <- ds$meta
 }
 
-# Save joint inputs (so everything downstream is truly "joint throughout")
-saveRDS(X_joint, file.path(outdir, "inputs", "joint_expr_matrix.rds"))
+# Save joint inputs in the pipeline-wide genes x samples convention.
+X_joint_out <- t(X_joint)
+stopifnot(all(colnames(X_joint_out) == meta$sample_id))
+cat("[INFO] Saving joint matrix:", nrow(X_joint_out), "genes x",
+    ncol(X_joint_out), "samples\n")
+saveRDS(X_joint_out, file.path(outdir, "inputs", "joint_expr_matrix.rds"))
 write_tsv(meta, file.path(outdir, "inputs", "joint_metadata.tsv"))
 cat("[SAVED] inputs/joint_expr_matrix.rds\n")
 cat("[SAVED] inputs/joint_metadata.tsv\n")

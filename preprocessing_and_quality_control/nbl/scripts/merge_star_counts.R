@@ -7,7 +7,7 @@ suppressPackageStartupMessages(library(data.table))
 # Merge STAR count files into one combined genes x samples count matrix
 #
 # Sources:
-#   1. GEO cohorts (GSE100148, GSE189367, SRP409177)
+#   1. GEO cohorts (configured by COHORTS; currently GSE189367, SRP409177)
 #      {ROOT_DIR}/{cohort}/results/star/valid_count/{sample}.tab
 #      4-column STAR ReadsPerGene format; sample ID = SRR accession
 #
@@ -22,8 +22,16 @@ suppressPackageStartupMessages(library(data.table))
 # ------------------------------
 # Config
 # ------------------------------
-ROOT_DIR   <- Sys.getenv("ROOT_DIR", "/work/ugbogu/pipeline/data/nbl")
-COHORTS    <- c("GSE100148", "GSE189367", "SRP409177")
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
+ROOT_DIR <- Sys.getenv("ROOT_DIR", file.path(repo_root, "data", "nbl"))
+COHORTS_ENV <- Sys.getenv("COHORTS", "GSE189367,SRP409177")
+COHORTS <- trimws(strsplit(COHORTS_ENV, ",", fixed = TRUE)[[1]])
+COHORTS <- COHORTS[nzchar(COHORTS)]
+if (length(COHORTS) == 0) {
+  stop("No GEO cohorts configured. Set COHORTS to a comma-separated project list.")
+}
 TARGET_RDS <- file.path(ROOT_DIR, "target_nbl", "merged", "target_nbl_count.rds")
 TARGET_META_FILE <- file.path(ROOT_DIR, "target_nbl", "merged", "target_nbl_sample_metadata.csv")
 

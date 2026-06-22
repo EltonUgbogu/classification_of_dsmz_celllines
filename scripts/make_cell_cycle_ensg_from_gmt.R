@@ -8,10 +8,16 @@
 
 # Parse command-line arguments
 args <- commandArgs(trailingOnly = TRUE)
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), ".."), mustWork = FALSE)
 
 # Input: GMT file containing GO:BP gene sets with Ensembl IDs
 # Default path points to a g:Profiler GMT file for human GO Biological Process terms
-gmt_file <- if (length(args) >= 1) args[1] else "/work/ugbogu/pipeline/results/unsupervised/nbl/gsea_ova/gprofiler_hsapiens/hsapiens.GO:BP.ENSG.gmt"
+gmt_file <- if (length(args) >= 1) args[1] else file.path(
+  repo_root, "results", "unsupervised", "nbl", "gsea_ova",
+  "gprofiler_hsapiens", "hsapiens.GO:BP.ENSG.gmt"
+)
 
 # Output: plain text file with one Ensembl gene ID per line
 out_file <- if (length(args) >= 2) args[2] else "cell_cycle_ensg.txt"

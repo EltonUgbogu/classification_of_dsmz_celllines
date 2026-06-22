@@ -18,7 +18,10 @@ suppressPackageStartupMessages(library(data.table))
 # ------------------------------
 # Config
 # ------------------------------
-ROOT_DIR <- Sys.getenv("ROOT_DIR", "/work/ugbogu/pipeline/data/rbl")
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
+ROOT_DIR <- Sys.getenv("ROOT_DIR", file.path(repo_root, "data", "rbl"))
 
 default_cohorts <- c(
   "GSE111168_primary_tumours",

@@ -33,6 +33,11 @@ suppressPackageStartupMessages({
   library(SummarizedExperiment)   # standard container for expression matrices + metadata
 })
 
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
+nbl_data_root <- Sys.getenv("NBL_DATA_ROOT", unset = file.path(repo_root, "data", "nbl"))
+
 # --------------------------------------------------------------
 # 1. Map Ensembl → HGNC
 # --------------------------------------------------------------
@@ -214,13 +219,13 @@ extract_project <- function(samples, sample_to_cohort) {
 #   - generates diagnostics to justify the filtering choice
 run_tidyestimate_with_barplot <- function(
   se_path          = Sys.getenv("SE_PATH",
-                       "/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_count.rds"),
+                       file.path(nbl_data_root, "count_data", "nbl_tumour_count.rds")),
   output_dir       = Sys.getenv("OUTPUT_DIR",
-                       "/work/ugbogu/pipeline/results/tumour_purity_analysis/nbl"),
+                       file.path(repo_root, "results", "tumour_purity_analysis", "nbl")),
   map_tsv          = Sys.getenv("MAP_TSV",
-                       "/work/ugbogu/pipeline/data/nbl/count_data/nbl_ensembl_to_hgnc.tsv"),
+                       file.path(nbl_data_root, "count_data", "nbl_ensembl_to_hgnc.tsv")),
   meta_csv         = Sys.getenv("META_CSV",
-                       "/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_sample_metadata.csv"),
+                       file.path(nbl_data_root, "count_data", "nbl_tumour_sample_metadata.csv")),
   purity_threshold = as.numeric(Sys.getenv("PURITY_THRESHOLD", "0.7"))
 ) {
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -247,15 +252,25 @@ run_tidyestimate_with_barplot <- function(
 
     # Load SummarizedExperiment and extract the expression assay.
     # The assay is treated as a genes-by-samples matrix for scoring and filtering.
-    message("[INFO] Loading SummarizedExperiment...")
+    message("[INFO] Loading count object...")
     se <- readRDS(se_path)
-    counts <- SummarizedExperiment::assay(se)
+
+    if (inherits(se, "SummarizedExperiment")) {
+      counts <- SummarizedExperiment::assay(se)
+    } else if (is.matrix(se)) {
+      counts <- se
+    } else if (is.data.frame(se)) {
+      counts <- as.matrix(se)
+    } else {
+      stop("[ERROR] Unsupported count object class: ", paste(class(se), collapse = ", "))
+    }
+
+    storage.mode(counts) <- "numeric"
     stopifnot(!is.null(rownames(counts)), !is.null(colnames(counts)))
-    message("[INFO] Loaded: ", nrow(se), " genes × ", ncol(se), " samples")
+    message("[INFO] Loaded: ", nrow(counts), " genes × ", ncol(counts), " samples")
 
     # Project assignment before filtering supports an explicit retention summary.
-    colData(se)$project <- extract_project(colnames(se), sample_to_cohort)
-    project_before <- table(colData(se)$project)
+    project_before <- table(extract_project(colnames(counts), sample_to_cohort))
     message("[INFO] Project counts BEFORE filtering:")
     print(project_before)
 
@@ -296,13 +311,13 @@ run_tidyestimate_with_barplot <- function(
     message(sprintf("[INFO] Scores: %d samples × %d metrics", nrow(scores), ncol(scores)))
 
     # Save scores for reproducibility and later reporting.
-    scores_csv <- file.path(output_dir, "estimate_scores.csv")
+    scores_csv <- file.path(output_dir, "nbl_estimate_scores.csv")
     write.csv(scores, scores_csv, row.names = TRUE)
     message("[INFO] Scores saved to: ", scores_csv)
 
     # Filter by tumour purity and save the filtered expression matrix in HGNC space.
     counts_filtered <- filter_samples_by_purity(counts_hgnc, scores, purity_threshold)
-    filtered_rds <- file.path(output_dir, sprintf("filtered_hgnc_counts_purity%.1f.rds", purity_threshold))
+    filtered_rds <- file.path(output_dir, sprintf("nbl_filtered_hgnc_counts_purity%.1f.rds", purity_threshold))
     saveRDS(counts_filtered, filtered_rds)
     message("[INFO] Filtered counts (HGNC) saved to: ", filtered_rds)
 
@@ -385,7 +400,7 @@ run_tidyestimate_with_barplot <- function(
         panel.border       = element_rect(color = "gray80", fill = NA, size = 0.5)
       )
 
-    bar_pdf <- file.path(output_dir, "sample_retention_by_project_same_axis.pdf")
+    bar_pdf <- file.path(output_dir, "nbl_sample_retention_by_cohort.pdf")
     ggsave(bar_pdf, p_bar, width = 10, height = 7, dpi = 300, device = cairo_pdf)
     message("[SUCCESS] Bar plot saved: ", bar_pdf)
 
@@ -476,7 +491,7 @@ run_tidyestimate_with_barplot <- function(
       font.label = list(size = 14, face = "bold")
     )
 
-    diag_pdf <- file.path(output_dir, "purity_diagnostics.pdf")
+    diag_pdf <- file.path(output_dir, "nbl_purity_diagnostics.pdf")
     ggsave(diag_pdf, combined, width = 14, height = 10, dpi = 300, device = cairo_pdf)
     message("[SUCCESS] Diagnostics saved: ", diag_pdf)
 
@@ -518,9 +533,10 @@ run_tidyestimate_with_barplot <- function(
 #   this script shows the full distribution and can guide threshold selection.
 #
 # Standard invocation:
-#   SE_PATH=/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_count.rds \
-#   META_CSV=/work/ugbogu/pipeline/data/nbl/count_data/nbl_tumour_sample_metadata.csv \
-#   MAP_TSV=/work/ugbogu/pipeline/data/nbl/count_data/nbl_ensembl_to_hgnc.tsv \
-#   OUTPUT_DIR=/work/ugbogu/pipeline/results/tumour_purity_analysis/nbl \
+#   REPO_ROOT=/path/to/clone \
+#   SE_PATH="${REPO_ROOT}/data/nbl/count_data/nbl_tumour_count.rds" \
+#   META_CSV="${REPO_ROOT}/data/nbl/count_data/nbl_tumour_sample_metadata.csv" \
+#   MAP_TSV="${REPO_ROOT}/data/nbl/count_data/nbl_ensembl_to_hgnc.tsv" \
+#   OUTPUT_DIR="${REPO_ROOT}/results/tumour_purity_analysis/nbl" \
 #   Rscript nbl_tumour_purity_analysis.R
 run_tidyestimate_with_barplot()

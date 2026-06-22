@@ -2,10 +2,7 @@
 """
 Compare TARGET-NBL sample/aliquot ID sets and write a report.
 
-Defaults:
-- sample list:  /work/ugbogu/pipeline/data/nbl/preprocessing_results/sample_id_exports/TARGET_sample_ids.tsv
-- aliquot list: /work/ugbogu/pipeline/data/nbl/target_nbl/metadata/target_nbl_aliquot_ids_unique.txt
-- output dir:   /work/ugbogu/pipeline/data/nbl
+Defaults are resolved below `NBL_DATA_ROOT` (or `data/nbl` in the repository).
 
 Outputs:
 - target_nbl_ids_in_both.txt
@@ -17,17 +14,16 @@ Outputs:
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 
-DEFAULT_SAMPLE_LIST = Path(
-    "/work/ugbogu/pipeline/data/nbl/preprocessing_results/sample_id_exports/TARGET_sample_ids.tsv"
-)
-DEFAULT_ALIQUOT_LIST = Path(
-    "/work/ugbogu/pipeline/data/nbl/target_nbl/metadata/target_nbl_aliquot_ids_unique.txt"
-)
-DEFAULT_OUTPUT_DIR = Path("/work/ugbogu/pipeline/data/nbl")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl")).expanduser()
+DEFAULT_SAMPLE_LIST = NBL_DATA_ROOT / "preprocessing_results/sample_id_exports/TARGET_sample_ids.tsv"
+DEFAULT_ALIQUOT_LIST = NBL_DATA_ROOT / "target_nbl/metadata/target_nbl_aliquot_ids_unique.txt"
+DEFAULT_OUTPUT_DIR = NBL_DATA_ROOT
 
 
 def load_target_ids(path: Path) -> set[str]:

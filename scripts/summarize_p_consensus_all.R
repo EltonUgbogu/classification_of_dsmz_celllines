@@ -102,8 +102,11 @@ if (is.null(directions) || length(directions) == 0) {
 }
 directions <- as.character(directions)
 
-# Filter out PAM50 directions if use_pam50 is false (e.g., for RBL/NBL profiles)
-use_pam50 <- cfg$tumour_neighbourhoods$use_pam50 %||% FALSE
+# Filter out PAM50 directions if use_pam50 is false (e.g., for RBL/NBL profiles).
+# BRCA declares PAM50 at analysis level and lists pam50 directions explicitly.
+use_pam50 <- cfg$tumour_neighbourhoods$use_pam50 %||%
+  cfg$analysis$use_pam50 %||%
+  any(grepl("^pam50_", directions))
 if (!use_pam50) {
   directions <- directions[!grepl("^pam50_", directions)]
   if (length(directions) == 0) {

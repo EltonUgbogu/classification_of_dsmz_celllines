@@ -308,6 +308,43 @@ if (length(missing_cols) > 0) {
        paste(missing_cols, collapse = ", "))
 }
 
+canonical_cell_line_id <- function(x) {
+  y <- trimws(as.character(x))
+  y[is.na(y)] <- ""
+
+  has_lib <- grepl("^NG[-_][^_]+_.+_lib", y)
+  y[has_lib] <- sub("^NG[-_][^_]+_(.+?)_lib.*$", "\\1", y[has_lib])
+
+  # Retinoblastoma profiles must remain biological group-level graph nodes.
+  y <- sub("^(RBL_[0-9]+)_[0-9]+$", "\\1", y)
+  y
+}
+
+split_direction_values <- function(x) {
+  vals <- unlist(strsplit(as.character(x), ";", fixed = TRUE), use.names = FALSE)
+  vals <- trimws(vals)
+  vals[nzchar(vals) & !is.na(vals)]
+}
+
+collapse_direction_values <- function(x) {
+  vals <- unique(unlist(lapply(x, split_direction_values), use.names = FALSE))
+  paste(sort(vals), collapse = ";")
+}
+
+if (profile == "multicohort_cancer") {
+  before_winner_nodes <- length(unique(winners$cell_line))
+  winners <- winners %>%
+    mutate(cell_line = canonical_cell_line_id(cell_line)) %>%
+    filter(nzchar(cell_line)) %>%
+    group_by(cell_line) %>%
+    summarise(
+      best_dir_frac_ge_thr = collapse_direction_values(best_dir_frac_ge_thr),
+      .groups = "drop"
+    )
+  cat("Canonicalised multicohort winner nodes:",
+      before_winner_nodes, "->", length(unique(winners$cell_line)), "\n")
+}
+
 winners_map <- setNames(winners$best_dir_frac_ge_thr, winners$cell_line)
 
 # -----------------------------------------------------------------------------
@@ -349,6 +386,48 @@ get_neighbors <- function(edges_df, node) {
   unique(neighbors[!is.na(neighbors)])
 }
 
+canonicalise_edge_df <- function(edges_df, direction = "") {
+  if (is.null(edges_df) || nrow(edges_df) == 0) return(edges_df)
+
+  if (all(c("cell_line1", "cell_line2") %in% colnames(edges_df))) {
+    c1 <- "cell_line1"
+    c2 <- "cell_line2"
+  } else if (all(c("from", "to") %in% colnames(edges_df))) {
+    c1 <- "from"
+    c2 <- "to"
+  } else {
+    return(edges_df)
+  }
+
+  before_n <- nrow(edges_df)
+  out <- edges_df %>%
+    mutate(
+      .node1 = canonical_cell_line_id(.data[[c1]]),
+      .node2 = canonical_cell_line_id(.data[[c2]]),
+      .a = pmin(.node1, .node2),
+      .b = pmax(.node1, .node2)
+    ) %>%
+    filter(nzchar(.a), nzchar(.b), .a != .b)
+
+  if ("similarity" %in% colnames(out)) {
+    out <- out %>%
+      group_by(.a, .b) %>%
+      summarise(similarity = mean(suppressWarnings(as.numeric(similarity)), na.rm = TRUE),
+                .groups = "drop")
+  } else {
+    out <- out %>% distinct(.a, .b)
+  }
+
+  out[[c1]] <- out$.a
+  out[[c2]] <- out$.b
+  out <- out %>% select(-.a, -.b)
+
+  if (nrow(out) != before_n) {
+    cat("Canonicalised", direction, "edges:", before_n, "->", nrow(out), "\n")
+  }
+  out
+}
+
 # -----------------------------------------------------------------------------
 # Edge File Loading
 # -----------------------------------------------------------------------------
@@ -362,28 +441,30 @@ get_neighbors <- function(edges_df, node) {
 # Missing edge files generate warnings but do not halt execution, allowing
 # partial results when some directions are unavailable.
 
+edge_file_for_direction <- function(root, direction) {
+  candidates <- c(
+    file.path(root, direction, "final_consensus",
+              paste0("cell_line_similarity_graph_edges_", direction, ".tsv")),
+    file.path(root, direction,
+              paste0("cell_line_similarity_graph_edges_", direction, ".tsv"))
+  )
+  hit <- candidates[file.exists(candidates)][1]
+  if (length(hit) == 0 || is.na(hit)) {
+    candidates[1]
+  } else {
+    hit
+  }
+}
+
 # Discover available directions from actual edge files (more robust than config)
 # This ensures we use all available directions, not just those in config
 discovered_directions <- character()
 if (dir.exists(tumour_nh_root)) {
-  if (profile == "multicohort_cancer") {
-    # Pan-cancer: look for {direction}/cell_line_similarity_graph_edges_{direction}.tsv
-    subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
-    for (subdir in subdirs) {
-      edge_file <- file.path(tumour_nh_root, subdir, paste0("cell_line_similarity_graph_edges_", subdir, ".tsv"))
-      if (file.exists(edge_file)) {
-        discovered_directions <- c(discovered_directions, subdir)
-      }
-    }
-  } else {
-    # Single-cohort: look for {direction}/final_consensus/cell_line_similarity_graph_edges_{direction}.tsv
-    subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
-    for (subdir in subdirs) {
-      edge_file <- file.path(tumour_nh_root, subdir, "final_consensus",
-                            paste0("cell_line_similarity_graph_edges_", subdir, ".tsv"))
-      if (file.exists(edge_file)) {
-        discovered_directions <- c(discovered_directions, subdir)
-      }
+  subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
+  for (subdir in subdirs) {
+    edge_file <- edge_file_for_direction(tumour_nh_root, subdir)
+    if (file.exists(edge_file)) {
+      discovered_directions <- c(discovered_directions, subdir)
     }
   }
 }
@@ -398,12 +479,7 @@ if (length(discovered_directions) > 0) {
 
 edges_list <- list()
 for (d in directions) {
-  edge_file <- if (profile == "multicohort_cancer") {
-    file.path(tumour_nh_root, d, paste0("cell_line_similarity_graph_edges_", d, ".tsv"))
-  } else {
-    file.path(tumour_nh_root, d, "final_consensus",
-              paste0("cell_line_similarity_graph_edges_", d, ".tsv"))
-  }
+  edge_file <- edge_file_for_direction(tumour_nh_root, d)
 
   if (file.exists(edge_file)) {
     edges_list[[d]] <- read_tsv(edge_file, show_col_types = FALSE)
@@ -414,6 +490,10 @@ for (d in directions) {
 
 if (length(edges_list) == 0) {
   stop("No graph edge files found under: ", tumour_nh_root)
+}
+
+if (profile == "multicohort_cancer") {
+  edges_list <- imap(edges_list, canonicalise_edge_df)
 }
 
 # -----------------------------------------------------------------------------
@@ -600,7 +680,14 @@ get_nodes_from_edges <- function(edges_df) {
 all_nodes_edges <- unique(unlist(map(edges_list, get_nodes_from_edges)))
 all_nodes_edges <- unique(all_nodes_edges[!is.na(all_nodes_edges)])
 
-all_cell_lines <- sort(unique(c(winners$cell_line, all_nodes_edges)))
+all_cell_lines <- sort(unique(c(winners$cell_line, canonical_cell_line_id(all_nodes_edges))))
+if (profile == "multicohort_cancer") {
+  profile_level_nodes <- grep("^NG[-_]", all_cell_lines, value = TRUE)
+  if (length(profile_level_nodes) > 0) {
+    stop("Profile-level nodes remain after multicohort canonicalisation: ",
+         paste(head(profile_level_nodes, 20), collapse = ", "))
+  }
+}
 cat("Total cell lines (winners ∪ edges):", length(all_cell_lines), "\n")
 
 # -----------------------------------------------------------------------------

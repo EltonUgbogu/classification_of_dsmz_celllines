@@ -20,6 +20,7 @@ dependencies:
   
   # Plotting and visualization
   - r-ggplot2
+  - r-ggpubr
   - r-ggrepel
   - r-viridis
   - r-rcolorbrewer
@@ -55,6 +56,7 @@ dependencies:
   
   # Utilities
   - r-purrr
+  - r-remotes
   - r-yaml
   - r-devtools
   - r-biocmanager

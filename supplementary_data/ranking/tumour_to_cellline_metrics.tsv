@@ -1,0 +1,10 @@
+metric	value
+top1_accuracy	0.986702127659574
+top10_accuracy	0.995567375886525
+mrr	0.98982528749816
+mean_best_score	0.467003910372093
+median_best_score	0.446501698397269
+mean_delta_s1_sk	0.128791102892901
+median_delta_s1_sk	0.104791111463796
+mean_frac_same_lineage_top10	0.969237588652482
+median_frac_same_lineage_top10	1
