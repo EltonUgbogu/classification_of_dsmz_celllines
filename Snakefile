@@ -4728,36 +4728,36 @@ if MARKER_POST_ENABLED:
 
     PAN_FEATURES_OUTDIR = PAN_CANCER_MP_CFG.get("outdir", "results/unsupervised/pan_cancer/feature_space")
     PAN_FEATURES_OUTDIR_ABS = abspath(PAN_FEATURES_OUTDIR)
-    PAN_FEATURES_TSV = abspath(PAN_CANCER_MP_CFG.get("final_features_tsv", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.tsv")))
-    PAN_FEATURES_CLEAN = abspath(PAN_CANCER_MP_CFG.get("final_features_clean", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features_clean.txt")))
-    PAN_FEATURES_UP = abspath(PAN_CANCER_MP_CFG.get("final_features_up", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.UP.txt")))
-    PAN_FEATURES_DOWN = abspath(PAN_CANCER_MP_CFG.get("final_features_down", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.DOWN.txt")))
-    PAN_FEATURES_SUMMARY = abspath(PAN_CANCER_MP_CFG.get("build_summary_tsv", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_summary.tsv")))
-    PAN_FEATURES_REPORT = abspath(PAN_CANCER_MP_CFG.get("build_report_md", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_report.md")))
-    PAN_FEATURES_GENE_EVIDENCE = abspath(os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_gene_evidence.tsv"))
+    PAN_FEATURES_TSV = PAN_CANCER_MP_CFG.get("final_features_tsv", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.tsv"))
+    PAN_FEATURES_CLEAN = PAN_CANCER_MP_CFG.get("final_features_clean", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features_clean.txt"))
+    PAN_FEATURES_UP = PAN_CANCER_MP_CFG.get("final_features_up", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.UP.txt"))
+    PAN_FEATURES_DOWN = PAN_CANCER_MP_CFG.get("final_features_down", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.DOWN.txt"))
+    PAN_FEATURES_SUMMARY = PAN_CANCER_MP_CFG.get("build_summary_tsv", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_summary.tsv"))
+    PAN_FEATURES_REPORT = PAN_CANCER_MP_CFG.get("build_report_md", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_report.md"))
+    PAN_FEATURES_GENE_EVIDENCE = os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_gene_evidence.tsv")
     PAN_FEATURES_METHOD = PAN_CANCER_MP_CFG.get("method", "ranked_marker_source_pan_cancer_panel")
     PAN_FEATURES_PREFIX = PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("output_prefix", "ranked_marker_source_panel")
-    PAN_FEATURES_RANKED_BY_COHORT = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_cohort.tsv"))
-    PAN_FEATURES_RANKED_BY_MARKER_SOURCE_CLASS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_marker_source_class.tsv"))
-    PAN_FEATURES_RANKED_BY_EVIDENCE_CLASS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_evidence_class.tsv"))
-    PAN_FEATURES_RANKING_COMPONENTS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_ranking_components.tsv"))
-    PAN_FEATURES_QUANTILE_THRESHOLDS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_quantile_thresholds.tsv"))
-    PAN_FEATURES_SENSITIVITY = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_sensitivity_summary.tsv"))
-    PAN_FEATURES_SELECTED_ROWS = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_selected_marker_source_class_rows.tsv"))
-    PAN_FEATURES_VALIDATION = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_validation.tsv"))
-    PAN_FEATURES_REMOVED_VS_PREVIOUS177 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous177.tsv"))
-    PAN_FEATURES_ADDED_VS_PREVIOUS177 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous177.tsv"))
-    PAN_FEATURES_OVERLAP_VS_PREVIOUS177 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous177.tsv"))
-    PAN_FEATURES_REMOVED_VS_PREVIOUS125 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous125.tsv"))
-    PAN_FEATURES_ADDED_VS_PREVIOUS125 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous125.tsv"))
-    PAN_FEATURES_OVERLAP_VS_PREVIOUS125 = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous125.tsv"))
-    PAN_FEATURES_RANKED_REPORT = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_report.md"))
-    PAN_FEATURES_RANKED_MANIFEST = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_manifest.tsv"))
-    PAN_FEATURES_ACTIVE_MANIFEST = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_active_directory_manifest.tsv"))
-    PAN_FEATURES_DOWNSTREAM_PLAN = abspath(os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_plan_from_ranked_marker_source_panel.md"))
-    PAN_FEATURES_DOWNSTREAM_TARGETS = abspath(os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_targets.tsv"))
-    PAN_FEATURES_DOWNSTREAM_DRYRUN = abspath(os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_dryrun.log"))
-    PAN_FEATURES_THESIS_NOTES = abspath(os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_thesis_update_notes.md"))
+    PAN_FEATURES_RANKED_BY_COHORT = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_cohort.tsv")
+    PAN_FEATURES_RANKED_BY_MARKER_SOURCE_CLASS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_marker_source_class.tsv")
+    PAN_FEATURES_RANKED_BY_EVIDENCE_CLASS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_evidence_class.tsv")
+    PAN_FEATURES_RANKING_COMPONENTS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_ranking_components.tsv")
+    PAN_FEATURES_QUANTILE_THRESHOLDS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_quantile_thresholds.tsv")
+    PAN_FEATURES_SENSITIVITY = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_sensitivity_summary.tsv")
+    PAN_FEATURES_SELECTED_ROWS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_selected_marker_source_class_rows.tsv")
+    PAN_FEATURES_VALIDATION = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_validation.tsv")
+    PAN_FEATURES_REMOVED_VS_PREVIOUS177 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous177.tsv")
+    PAN_FEATURES_ADDED_VS_PREVIOUS177 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous177.tsv")
+    PAN_FEATURES_OVERLAP_VS_PREVIOUS177 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous177.tsv")
+    PAN_FEATURES_REMOVED_VS_PREVIOUS125 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous125.tsv")
+    PAN_FEATURES_ADDED_VS_PREVIOUS125 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous125.tsv")
+    PAN_FEATURES_OVERLAP_VS_PREVIOUS125 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous125.tsv")
+    PAN_FEATURES_RANKED_REPORT = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_report.md")
+    PAN_FEATURES_RANKED_MANIFEST = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_manifest.tsv")
+    PAN_FEATURES_ACTIVE_MANIFEST = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_active_directory_manifest.tsv")
+    PAN_FEATURES_DOWNSTREAM_PLAN = os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_plan_from_ranked_marker_source_panel.md")
+    PAN_FEATURES_DOWNSTREAM_TARGETS = os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_targets.tsv")
+    PAN_FEATURES_DOWNSTREAM_DRYRUN = os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_dryrun.log")
+    PAN_FEATURES_THESIS_NOTES = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_thesis_update_notes.md")
     PAN_FEATURES_PREVIOUS177 = abspath(PAN_CANCER_MP_CFG.get("previous177_features_tsv", "results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016/pan_cancer_features.tsv"))
     PAN_FEATURES_PREVIOUS125_CFG = PAN_CANCER_MP_CFG.get("previous125_features_tsv", "")
 
@@ -4829,7 +4829,7 @@ if MARKER_POST_ENABLED:
             downstream_dryrun_log = PAN_FEATURES_DOWNSTREAM_DRYRUN,
             thesis_update_notes_md = PAN_FEATURES_THESIS_NOTES,
             report_md   = PAN_FEATURES_REPORT,
-            done_file   = os.path.join(PAN_FEATURES_OUTDIR_ABS, "pan_cancer_features_done.txt")
+            done_file   = os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features_done.txt")
         params:
             script=os.path.join(SCRIPTS_DIR, "build_pan_cancer_features.py"),
             outdir=PAN_FEATURES_OUTDIR_ABS,
@@ -4889,16 +4889,16 @@ if MARKER_POST_ENABLED:
             test -s "{output.features_tsv}" || (echo "ERROR: missing {output.features_tsv}" >&2; exit 1)
             '''
 
-    PAN_EXPR_RDS = abspath(PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds"))
-    PAN_EXPR_META = abspath(PAN_EXPR_CFG.get("output_meta_tsv", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv"))
-    PAN_EXPR_CELL_LINES_RDS = abspath(PAN_EXPR_CFG.get(
+    PAN_EXPR_RDS = PAN_EXPR_CFG.get("output_rds", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds")
+    PAN_EXPR_META = PAN_EXPR_CFG.get("output_meta_tsv", "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv")
+    PAN_EXPR_CELL_LINES_RDS = PAN_EXPR_CFG.get(
         "output_cell_lines_rds",
         "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only.rds"
-    ))
-    PAN_EXPR_CELL_LINES_META = abspath(PAN_EXPR_CFG.get(
+    )
+    PAN_EXPR_CELL_LINES_META = PAN_EXPR_CFG.get(
         "output_cell_lines_meta_tsv",
         "results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only_metadata.tsv"
-    ))
+    )
 
     # Precompute optional CLI fragments for the expression matrix rule.
     # Snakemake shell blocks only support simple {name} placeholders, NOT
@@ -5003,14 +5003,14 @@ if MARKER_POST_ENABLED:
             '''
 
     PAN_ALIGNMENT_UMAP_CFG = MARKER_POST_CFG.get("tumour_cell_line_alignment_umap", {})
-    PAN_ALIGNMENT_UMAP_OUTDIR = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+    PAN_ALIGNMENT_UMAP_OUTDIR = PAN_ALIGNMENT_UMAP_CFG.get(
         "output_dir",
         "results/unsupervised/pan_cancer/tumour_cell_line_alignment_umap"
-    ))
-    PAN_ALIGNMENT_UMAP_META = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+    )
+    PAN_ALIGNMENT_UMAP_META = PAN_ALIGNMENT_UMAP_CFG.get(
         "metadata_tsv",
         PAN_EXPR_META
-    ))
+    )
     _PAN_ALIGNMENT_UMAP_METRICS_RAW = PAN_ALIGNMENT_UMAP_CFG.get("metrics", ["cosine", "euclidean"])
     if isinstance(_PAN_ALIGNMENT_UMAP_METRICS_RAW, str):
         PAN_ALIGNMENT_UMAP_METRICS = [
@@ -5019,10 +5019,10 @@ if MARKER_POST_ENABLED:
     else:
         PAN_ALIGNMENT_UMAP_METRICS = [str(m).strip() for m in _PAN_ALIGNMENT_UMAP_METRICS_RAW if str(m).strip()]
 
-    PAN_ALIGNMENT_UMAP_SOURCE_META = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+    PAN_ALIGNMENT_UMAP_SOURCE_META = PAN_ALIGNMENT_UMAP_CFG.get(
         "source_metadata_tsv",
         "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"
-    ))
+    )
     PAN_ALIGNMENT_UMAP_FIGURE_WIDTH = float(PAN_ALIGNMENT_UMAP_CFG.get("figure_width", 9.0))
     PAN_ALIGNMENT_UMAP_FIGURE_HEIGHT = float(PAN_ALIGNMENT_UMAP_CFG.get("figure_height", 7.0))
     PAN_ALIGNMENT_UMAP_SLIDE_WIDTH = float(PAN_ALIGNMENT_UMAP_CFG.get("slide_width", 13.33))
@@ -5181,10 +5181,10 @@ if MARKER_POST_ENABLED:
     )
     RAW_ALLGENE_UMAP_TARGETS = []
     if RAW_ALLGENE_UMAP_EXPR_CFG:
-        RAW_ALLGENE_UMAP_OUTDIR = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
+        RAW_ALLGENE_UMAP_OUTDIR = PAN_ALIGNMENT_UMAP_CFG.get(
             "raw_output_dir",
             "results/unsupervised/pan_cancer/raw_all_gene_tumour_cell_line_umap"
-        ))
+        )
         RAW_ALLGENE_UMAP_EXPR_RDS = abspath(RAW_ALLGENE_UMAP_EXPR_CFG)
         RAW_ALLGENE_UMAP_META_TSV = abspath(PAN_ALIGNMENT_UMAP_CFG.get(
             "raw_metadata_tsv",
@@ -5320,9 +5320,7 @@ if MARKER_POST_ENABLED:
     # used during fitting and no pan-cancer feature subsetting. Filenames use
     # the VST_ALL_GENE label to keep this run's outputs cleanly separable from
     # the DEG-set alignment outputs above.
-    VST_ALLGENE_UMAP_OUTDIR = abspath(
-        "results/unsupervised/pan_cancer/vst_all_gene_tumour_cell_line_umap"
-    )
+    VST_ALLGENE_UMAP_OUTDIR = "results/unsupervised/pan_cancer/vst_all_gene_tumour_cell_line_umap"
     VST_ALLGENE_UMAP_EXPR_RDS = os.path.join(
         VST_ALLGENE_UMAP_OUTDIR,
         "vst_all_gene_brca_nbl_rbl_expr.rds"
@@ -5511,7 +5509,7 @@ if MARKER_POST_ENABLED:
             done
             '''
 
-    MAPPING_OUTDIR = abspath(MAPPING_CFG.get("output_dir", "results/unsupervised/pan_cancer/tumour_mapping"))
+    MAPPING_OUTDIR = MAPPING_CFG.get("output_dir", "results/unsupervised/pan_cancer/tumour_mapping")
 
     def mapping_metrics_summary():
         return os.path.join(MAPPING_OUTDIR, "metrics_summary_group_level.tsv")
@@ -5571,7 +5569,7 @@ if MARKER_POST_ENABLED:
             '''
 
 
-    PAN_CANCER_DIR = abspath("results/unsupervised/pan_cancer")
+    PAN_CANCER_DIR = "results/unsupervised/pan_cancer"
     PAN_GRAPH_DIR = os.path.join(PAN_CANCER_DIR, "graph")
     PAN_FIG_DIR = os.path.join(PAN_CANCER_DIR, "figures")
     PAN_COR_RDS = os.path.join(PAN_CANCER_DIR, "pan_cancer_cor.rds")
@@ -6631,6 +6629,10 @@ def build_pipeline_targets():
     if IS_PAN_CANCER_PROFILE and MARKER_POST_ENABLED:
         targets.append(PAN_EXPR_RDS)
         targets.append(mapping_metrics_summary())
+        targets.append(os.path.join(
+            "results", "unsupervised", "pan_cancer", "enrichment",
+            "query_sets", "marker_framework", "query_manifest.tsv"
+        ))
         targets.extend(
             PAN_ALIGNMENT_UMAP_PDFS + PAN_ALIGNMENT_UMAP_SVGS + PAN_ALIGNMENT_UMAP_PNGS +
             PAN_ALIGNMENT_UMAP_SOURCE_PDFS + PAN_ALIGNMENT_UMAP_SOURCE_SVGS + PAN_ALIGNMENT_UMAP_SOURCE_PNGS +
