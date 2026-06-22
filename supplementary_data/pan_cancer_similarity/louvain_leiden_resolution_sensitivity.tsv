@@ -1,20 +1,20 @@
 algorithm	feature_source	resolution	n_nodes	n_edges	n_communities	n_singletons	singleton_fraction	weighted_modularity	cancer_type_assortativity	n_mixed_NBL_RBL_communities	NBL_RBL_same_community_any	NBL_RBL_same_non_singleton_community_any	NBL_profiles_total	RBL_profiles_total	NBL_profiles_in_singletons	RBL_profiles_in_singletons	largest_NBL_majority_community_size	largest_NBL_majority_community_composition	largest_RBL_majority_community_size	largest_RBL_majority_community_composition	NBL_RBL_separation_status
-Louvain	marker_derived_pan_cancer_feature_space	0.001	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.005	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.01	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.025	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.05	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.075	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.1	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.2	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0		0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.25	167	2134	4	0	0	0.607206675372656	0.813859760754796	1	TRUE	TRUE	18	11	0	0	28	NBL=17;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.3	167	2134	4	0	0	0.607206675372656	0.813859760754796	1	TRUE	TRUE	18	11	0	0	28	NBL=17;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.35	167	2134	4	0	0	0.607206675372656	0.813859760754796	1	TRUE	TRUE	18	11	0	0	28	NBL=17;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.4	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.45	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.5	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	0.75	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0		mixed
-Louvain	marker_derived_pan_cancer_feature_space	1	167	2134	5	0	0	0.624749203874845	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0		mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.001	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.005	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.01	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.025	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.05	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.075	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.1	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.2	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	NA	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.25	167	2134	4	0	0	0.607206675372656	0.813859760754796	1	TRUE	TRUE	18	11	0	0	28	NBL=17;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.3	167	2134	4	0	0	0.607206675372656	0.813859760754796	1	TRUE	TRUE	18	11	0	0	28	NBL=17;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.35	167	2134	4	0	0	0.607206675372656	0.813859760754796	1	TRUE	TRUE	18	11	0	0	28	NBL=17;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.4	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.45	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.5	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	0.75	167	2134	4	0	0	0.606667576927126	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0	NA	mixed
+Louvain	marker_derived_pan_cancer_feature_space	1	167	2134	5	0	0	0.624749203874845	0.813859760754796	1	TRUE	TRUE	18	11	0	0	27	NBL=16;RBL=11	0	NA	mixed
 Leiden	marker_derived_pan_cancer_feature_space	0.001	167	2134	1	0	0	0	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	0	0	0	mixed
 Leiden	marker_derived_pan_cancer_feature_space	0.005	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	0	0	0	mixed
 Leiden	marker_derived_pan_cancer_feature_space	0.01	167	2134	2	0	0	0.410165802650302	0.813859760754796	1	TRUE	TRUE	18	11	0	0	0	0	0	0	mixed

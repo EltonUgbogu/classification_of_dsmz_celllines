@@ -118,7 +118,7 @@ def deep_merge(base, override):
     return merged
 
 
-# Method helper: resolves the active profile and returns the merged configuration used by all downstream rules.
+# Method helper: resolves the active profile and returns the merged configuration used by all dependent rules.
 def get_profile_cfg(profile):
     """Returns the merged configuration for a named profile, used for cross-profile pan-cancer access."""
     default_cfg = config.get("defaults", {})
@@ -412,7 +412,7 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
     # Rule: build_multicohort_joint_inputs
     # Method role: data-preparation rule that merges cohort-level VST matrices into the multicohort expression space.
     # Flow: configured profile VST matrices -> joint expression matrix and sample metadata.
-    # Downstream use: supplies the multicohort_cancer input matrix for feature selection and pan-cancer aggregation.
+    # Provides the multicohort_cancer input matrix for feature selection and pan-cancer aggregation.
     rule build_multicohort_joint_inputs:
         """Merge cohort-level VST matrices into the joint expression matrix and metadata."""
         input:
@@ -447,7 +447,7 @@ if IS_MULTICOHORT_PROFILE and MC_PROFILES:
 # =============================================================================
 # Stage role: harmonises configured cohort expression matrices and metadata before feature selection.
 # Multicohort joint-input construction and per-profile cell/tumour splits live
-# here so all downstream sections consume materialised expression matrices.
+# here so later workflow sections consume materialised expression matrices.
 
 # Resolves cell line and tumour VST expression matrices (absolute; external inputs).
 # Falls back to vst_joint_rds for profiles (e.g. brca, nbl) that do not define
@@ -460,7 +460,7 @@ if profile_name in ("brca", "nbl", "rbl"):
     # Rule: split_profile_joint_vst
     # Method role: data-preparation rule that separates a profile joint VST object by sample type.
     # Flow: joint profile VST matrix -> cell-line and tumour VST matrices.
-    # Downstream use: supplies agnostic clustering and tumour-neighbourhood input construction.
+    # Provides input for agnostic clustering and tumour-neighbourhood input construction.
     rule split_profile_joint_vst:
         input:
             joint = VST_JOINT
@@ -508,19 +508,19 @@ TUMOUR_NH_INPUT_ROOT      = os.path.join(UNSUP,     "tumour_neighbourhoods_input
 # =============================================================================
 # FEATURE SELECTION
 # =============================================================================
-# Stage role: derives unsupervised gene sets that define downstream feature-distance representations.
+# Stage role: derives unsupervised gene sets that define feature-distance representations for later stages.
 
 # Rule: feature_selection_unsupervised
 # Method role: analysis rule that derives unsupervised gene sets for each configured feature method.
 # Flow: profile VST expression matrix -> method-specific ranked gene lists.
-# Downstream use: defines the feature component of every feature-distance representation.
+# Analysis role: defines the feature component of every feature-distance representation.
 rule feature_selection_unsupervised:
     """
     Selects the top N genes from the joint VST expression matrix using multiple
     statistical methods (Variance, MAD, Entropy, PCA loadings, MX, HVG, etc.).
     Each method produces an independent ranked gene list that defines one
-    feature direction propagated through all downstream clustering rules.
-    The MX gene list is declared explicitly as mx_list so downstream rules
+    feature direction propagated through all clustering rules that consume feature directions.
+    The MX gene list is declared explicitly as mx_list so later rules
     can reference it as the canonical MX top-500 set without duplicating the path.
     """
     input:
@@ -529,7 +529,7 @@ rule feature_selection_unsupervised:
     output:
         # Relative paths for portable DAG tracking; R script writes via absolute --outdir.
         feature_lists = FEATURELIST_FILES,
-        # Canonical MX gene list (MX method, top-500) — named output for downstream rules.
+        # Canonical MX gene list (MX method, top-500) — named output for rules that consume this output.
         mx_list = os.path.join(FEATURESETS_DIR_REL, f"genes_top{method_topn('MX')}_MX.txt")
     params:
         outdir         = lambda wc: os.path.join(UNSUP, "feature_selection_unsupervised"),
@@ -703,7 +703,7 @@ def dir_to_gene_list(direction):
         )
 
 
-# Method helper: maps a representation to the script-level gene-set argument used by downstream rules.
+# Method helper: maps a representation to the script-level gene-set argument used by dependent rules.
 def dir_to_geneset(direction):
     """Returns a human-readable gene set label for annotation and reporting purposes."""
     feature = dir_to_feature(direction)
@@ -837,7 +837,7 @@ rule agnostic_cluster_pca_hc_cell:
     Applies PCA dimensionality reduction followed by hierarchical clustering
     to the cell line expression matrix. Optimal k is selected by silhouette
     or gap statistic within [2, max_k]. Produces a cluster assignment RDS
-    consumed by downstream tumour neighbourhood and consensus rules.
+    consumed by tumour-neighbourhood and consensus rules.
     """
     input:
         cell = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds")
@@ -1363,7 +1363,7 @@ rule agnostic_cluster_kmeans_joint:
 # Rule: agnostic_cluster_all
 # Method role: collector target that requires all agnostic clustering outputs for configured directions.
 # Flow: expected clustering output paths -> Snakemake dependency aggregation only.
-# Downstream use: provides a stage-level target without performing a new analysis.
+# Stage output: provides a target marker without running a new analysis.
 rule agnostic_cluster_all:
     """
     Convenience aggregation rule that collects all HC and k-means cluster outputs
@@ -1465,7 +1465,7 @@ rule consensus_cluster_ccp:
 # Rule: consensus_cluster_all
 # Method role: collector target that requires all consensus clustering outputs for configured directions.
 # Flow: expected consensus output paths -> Snakemake dependency aggregation only.
-# Downstream use: provides a stage-level target without performing a new analysis.
+# Stage output: provides a target marker without running a new analysis.
 rule consensus_cluster_all:
     """
     Convenience aggregation rule that collects all consensus cluster outputs
@@ -1582,7 +1582,7 @@ if HAS_PAM50_DIRECTIONS and _TCGA_PAM50_PATH and _DSMZ_PAM50_PATH:
     # Rule: tumour_nh_build_inputs_pam50
     # Method role: input-staging rule for PAM50 tumour-neighbourhood representations.
     # Flow: configured PAM50 expression and mapping inputs -> staged neighbourhood expression and mapping RDS files.
-    # Downstream use: lets PAM50 directions enter the same tumour-neighbourhood rules as feature-derived directions.
+    # Provides input so PAM50 directions enter the same tumour-neighbourhood rules as feature-derived directions.
     rule tumour_nh_build_inputs_pam50:
         """
         Constructs the joint PAM50 expression matrix and cell-line-to-sample mapping
@@ -1616,7 +1616,7 @@ if HAS_PAM50_DIRECTIONS and _TCGA_PAM50_PATH and _DSMZ_PAM50_PATH:
 # Rule: tumour_nh_hc
 # Method role: analysis rule that runs tumour-neighbourhood scoring from hierarchical-clustering evidence.
 # Flow: representation-specific consensus inputs -> neighbourhood QC, UMAP, and probability tables.
-# Downstream use: feeds within-representation p-consensus and patient-referenced graph construction.
+# Feeds within-representation p-consensus and patient-referenced graph construction.
 rule tumour_nh_hc:
     """
     Computes per-cell-line tumour neighbourhoods for all directions using
@@ -1660,7 +1660,7 @@ rule tumour_nh_hc:
 # Rule: tumour_nh_km
 # Method role: analysis rule that runs tumour-neighbourhood scoring from k-means clustering evidence.
 # Flow: Euclidean representation inputs -> neighbourhood QC, UMAP, and probability tables.
-# Downstream use: complements hierarchical-clustering evidence for p-consensus aggregation.
+# Analysis role: complements hierarchical-clustering evidence for p-consensus aggregation.
 rule tumour_nh_km:
     """
     k-means neighbourhood pass for all Euclidean directions. PAM50 directions
@@ -1708,7 +1708,7 @@ rule tumour_nh_km:
 # Rule: tumour_nh_consensus
 # Method role: analysis rule that combines tumour-neighbourhood runs within a representation.
 # Flow: HC/KM neighbourhood outputs -> final p-consensus RDS for the direction.
-# Downstream use: supplies cross-representation p-consensus aggregation.
+# Provides input for cross-representation p-consensus aggregation.
 rule tumour_nh_consensus:
     """
     Probabilistic neighbourhood consensus for every configured direction.
@@ -1748,7 +1748,7 @@ rule tumour_nh_consensus:
 # Rule: cell_line_similarity_graph
 # Method role: analysis rule that converts p-consensus neighbourhood evidence into a cell-line graph per representation.
 # Flow: representation p-consensus output -> graph edges and node annotations.
-# Downstream use: feeds resolved-neighbour and multi-representation support-network stages.
+# Feeds resolved-neighbour and multi-representation support-network stages.
 rule cell_line_similarity_graph:
     input:
         consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction)
@@ -2241,7 +2241,7 @@ VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 # Rule: summarize_p_consensus_all
 # Method role: aggregates p-consensus outputs across configured feature-distance representations.
 # Flow: per-direction p-consensus RDS files -> ranking, winner, weight, and cross-direction metric tables.
-# Downstream use: selects best-supported representations for resolved-neighbour graph construction and validation.
+# Analysis role: selects best-supported representations for resolved-neighbour graph construction and validation.
 rule summarize_p_consensus_all:
     input:
         consensus_rds = [nh_final_consensus_rds(d) for d in AGN_DIRECTIONS],
@@ -2281,7 +2281,7 @@ rule summarize_p_consensus_all:
 # Rule: plot_per_cellline_feature_distance_cleveland
 # Method role: final plotting rule for per-cell-line representation support.
 # Flow: p-consensus support tables -> Cleveland-style PDF/PNG diagnostic plot.
-# Downstream use: reporting visualisation only; it does not alter analysis targets.
+# Purpose: reporting visualisation only; it does not alter analysis targets.
 rule plot_per_cellline_feature_distance_cleveland:
     input:
         cell_dir_summary = os.path.join(P_CONS_ALL_DIR, "p_consensus_cellline_direction_summary.tsv"),
@@ -2315,7 +2315,7 @@ rule plot_per_cellline_feature_distance_cleveland:
 # Rule: plot_p_consensus_direction_comparison_dumbbell
 # Method role: supplementary plotting rule visualising p-consensus direction metrics across cohorts.
 # Flow: cohort direction-metric tables -> dumbbell figure and caption text.
-# Downstream use: cross-cohort reporting visualisation, not a modelling step.
+# Purpose: cross-cohort reporting visualisation, not a modelling step.
 rule plot_p_consensus_direction_comparison_dumbbell:
     input:
         brca = p_consensus_direction_summary_for_profile("brca"),
@@ -2353,7 +2353,7 @@ rule plot_p_consensus_direction_comparison_dumbbell:
 # Rule: resolve_dsmz_graph_neighbours
 # Method role: graph-resolution rule that resolves stable cell-line neighbours using patient-referenced support.
 # Flow: p-consensus support tables and per-direction graph edges -> resolved-neighbour table and audit sidecars.
-# Downstream use: anchors final graph plotting, validation, DESeq2 grouping, and support-network construction.
+# Required by final graph plotting, validation, DESeq2 grouping, and support-network construction.
 rule resolve_dsmz_graph_neighbours:
     """
     Resolves per-cell-line DSMZ neighbours by intersecting the global best-direction
@@ -2403,7 +2403,7 @@ rule resolve_dsmz_graph_neighbours:
 # Rule: build_multi_representation_majority_threshold_consensus_network
 # Method role: analysis rule that retains edges supported by the configured majority threshold across representations.
 # Flow: per-representation graph edges -> majority-threshold support network and edge-support table.
-# Downstream use: supplies support-network plots and post-resolution support stratification.
+# Provides support-network plots and post-resolution support stratification.
 rule build_multi_representation_majority_threshold_consensus_network:
     """
     Computes the shared feature--distance representation edge-support table and
@@ -2449,7 +2449,7 @@ rule build_multi_representation_majority_threshold_consensus_network:
 # Rule: build_multi_representation_union_supported_edges_network
 # Method role: analysis rule that retains every edge observed in at least one feature-distance representation.
 # Flow: per-representation graph edges -> union support network and component sidecars.
-# Downstream use: provides a sensitivity view of support-network topology.
+# Provides a sensitivity view of support-network topology.
 rule build_multi_representation_union_supported_edges_network:
     """
     Computes the same feature--distance representation support calculation and
@@ -2491,7 +2491,7 @@ rule build_multi_representation_union_supported_edges_network:
 # Rule: build_patient_referenced_support_threshold_consensus_cell_line_similarity_network
 # Method role: analysis rule that builds the patient-referenced support-threshold network from representation edges.
 # Flow: per-direction similarity edges -> consensus edge table, node statistics, and display-name sidecars.
-# Downstream use: supplies the support-threshold final graph and multicohort inspection plots.
+# Provides the support-threshold final graph and multicohort inspection plots.
 rule build_patient_referenced_support_threshold_consensus_cell_line_similarity_network:
     """
     Aggregates per-direction DSMZ similarity graph edge files into a single
@@ -2540,7 +2540,7 @@ rule build_patient_referenced_support_threshold_consensus_cell_line_similarity_n
 # Rule: plot_patient_referenced_resolved_cell_line_neighbourhood_graph
 # Method role: final plotting rule for the resolved-neighbour patient-referenced graph.
 # Flow: resolved graph edges, node statistics, and display names -> PDF/PNG/SVG graph outputs.
-# Downstream use: reporting visualisation only; topology is fixed by the resolution rule.
+# Purpose: reporting visualisation only; topology is fixed by the resolution rule.
 rule plot_patient_referenced_resolved_cell_line_neighbourhood_graph:
     """
     Patient-referenced resolved-neighbourhood graph figure for the DSMZ
@@ -2727,7 +2727,7 @@ rule plot_patient_referenced_resolved_cell_line_neighbourhood_graph:
 # Rule: plot_multi_representation_majority_threshold_consensus_network
 # Method role: final plotting rule for the majority-threshold support network.
 # Flow: support-network edges and node sidecars -> PDF/PNG/SVG graph outputs.
-# Downstream use: visualises representation support without changing support thresholds.
+# Purpose: visualises representation support without changing support thresholds.
 rule plot_multi_representation_majority_threshold_consensus_network:
     """
     Plots the majority-threshold consensus network and writes node/component
@@ -2858,7 +2858,7 @@ rule plot_multi_representation_majority_threshold_consensus_network:
 # Rule: plot_multi_representation_union_supported_edges_network
 # Method role: supplementary plotting rule for the union support network sensitivity view.
 # Flow: union network edges and node sidecars -> PDF/PNG/SVG graph outputs.
-# Downstream use: visualises union-supported support-network structure alongside majority-threshold outputs.
+# Purpose: visualises union-supported support-network structure alongside majority-threshold outputs.
 rule plot_multi_representation_union_supported_edges_network:
     """
     Plots all supported edges. Edges supported by one feature--distance
@@ -3002,7 +3002,7 @@ rule plot_multi_representation_union_supported_edges_network:
 # Rule: plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network
 # Method role: final plotting rule for the patient-referenced support-threshold consensus network.
 # Flow: consensus edge table, display names, and metadata -> graph figure and legend outputs.
-# Downstream use: reporting visualisation only; network membership is defined upstream.
+# Purpose: reporting visualisation only; network membership is defined by earlier rules.
 rule plot_patient_referenced_support_threshold_consensus_cell_line_similarity_network:
     """
     Support-threshold consensus network figure for the DSMZ similarity network
@@ -3205,7 +3205,7 @@ if IS_MULTICOHORT_PROFILE:
     # Rule: plot_pan_cancer_resolved_graph_inspection
     # Method role: supplementary plotting rule for dense multicohort resolved-graph inspection.
     # Flow: resolved graph sidecars -> component panels, interactive HTML, and node-label tables.
-    # Downstream use: audit and visual inspection; it does not alter resolved neighbours.
+    # Used by: audit and visual inspection; it does not alter resolved neighbours.
     rule plot_pan_cancer_resolved_graph_inspection:
         """
         Component-panel and interactive inspection outputs for the dense
@@ -3258,7 +3258,7 @@ if IS_MULTICOHORT_PROFILE:
     # Rule: plot_pan_cancer_support_threshold_graph_inspection
     # Method role: supplementary plotting rule for dense multicohort support-threshold graph inspection.
     # Flow: support-threshold graph sidecars -> component panels, interactive HTML, and node-label tables.
-    # Downstream use: audit and visual inspection; it does not alter support-network edges.
+    # Used by: audit and visual inspection; it does not alter support-network edges.
     rule plot_pan_cancer_support_threshold_graph_inspection:
         """
         Component-panel and interactive inspection outputs for the dense
@@ -3314,7 +3314,7 @@ if IS_MULTICOHORT_PROFILE:
 # Rule: materialize_study_design
 # Method role: metadata rule that exports the configured study design for reporting and validation.
 # Flow: project config and study-design YAML -> cohort, label, inference, and endpoint manifests.
-# Downstream use: documents the design assumptions used by downstream analyses.
+# Documents the design assumptions used by dependent analyses.
 rule materialize_study_design:
     input:
         cfg = CFGFILE_ABS,
@@ -3345,7 +3345,7 @@ rule materialize_study_design:
 # Rule: model_selection_summary
 # Method role: validation rule evaluating selected representations and model-selection evidence.
 # Flow: p-consensus support tables and graph annotations -> model-selection table, plot, and notes.
-# Downstream use: diagnostic reporting; it does not choose new workflow targets.
+# Used by: diagnostic reporting; it does not choose new workflow targets.
 rule model_selection_summary:
     input:
         cfg = CFGFILE_ABS,
@@ -3376,7 +3376,7 @@ rule model_selection_summary:
 # Rule: neighbourhood_permutation_validation
 # Method role: validation rule evaluating observed neighbourhood metrics against permutation expectations.
 # Flow: p-consensus ranking tables -> permutation metrics, diagnostic plot, and notes.
-# Downstream use: sensitivity evidence for neighbourhood signal, not a replacement analysis.
+# Used by: sensitivity evidence for neighbourhood signal, not a replacement analysis.
 rule neighbourhood_permutation_validation:
     input:
         cfg = CFGFILE_ABS,
@@ -3401,7 +3401,7 @@ rule neighbourhood_permutation_validation:
 # Rule: random_baseline_comparison
 # Method role: validation rule evaluating resolved rankings against a random-baseline distribution.
 # Flow: ranked p-consensus cell-line table -> baseline metrics, plot, and notes.
-# Downstream use: contextualises ranking behaviour without changing graph outputs.
+# Purpose: contextualises ranking behaviour without changing graph outputs.
 rule random_baseline_comparison:
     input:
         cfg = CFGFILE_ABS,
@@ -3425,7 +3425,7 @@ rule random_baseline_comparison:
 # Rule: silhouette_report
 # Method role: validation rule reporting separation diagnostics for configured representations.
 # Flow: profile config -> silhouette/separation report and notes.
-# Downstream use: diagnostic reporting only.
+# Purpose: diagnostic reporting only.
 rule silhouette_report:
     input:
         cfg = CFGFILE_ABS
@@ -3448,7 +3448,7 @@ rule silhouette_report:
 # Rule: community_stability_analysis
 # Method role: sensitivity analysis evaluating community assignments across feature-distance representations.
 # Flow: resolved graph, display names, and direction-specific annotations -> stability tables and diagnostic figures.
-# Downstream use: supplementary evidence on community robustness, not final community selection.
+# Used by: supplementary evidence on community robustness, not final community selection.
 rule community_stability_analysis:
     """
     Cross-direction cell-line graph community stability diagnostic.
@@ -3506,10 +3506,10 @@ rule community_stability_analysis:
 # Rule: post_resolution_edge_support_stratification
 # Method role: supplementary analysis stratifying resolved graph edges by representation support.
 # Flow: resolved/support network sidecars for one cohort -> edge-support stratification table and plots.
-# Downstream use: cohort-level audit of post-resolution support.
+# Used by: cohort-level audit of post-resolution support.
 rule post_resolution_edge_support_stratification:
     """
-    Downstream audit of edge support after resolved-neighbour graph construction.
+    Audit of edge support after resolved-neighbour graph construction.
 
     This rule does not modify the union-supported, support-threshold consensus,
     or resolved-neighbour graphs. It reads their existing edge/node sidecars and
@@ -3552,7 +3552,7 @@ rule post_resolution_edge_support_stratification:
 # Rule: combine_post_resolution_edge_support_stratification
 # Method role: collector target combining post-resolution support stratifications across cohorts.
 # Flow: cohort stratification tables -> combined support-stratification table.
-# Downstream use: cross-cohort supplementary table for reporting.
+# Used by: cross-cohort supplementary table for reporting.
 rule combine_post_resolution_edge_support_stratification:
     input:
         tables = POST_RESOLUTION_STRATIFICATION_TABLES
@@ -3583,7 +3583,7 @@ rule combine_post_resolution_edge_support_stratification:
 # Rule: compute_multicohort_cancer_communities
 # Method role: supplementary graph analysis assigning communities in the multicohort resolved graph.
 # Flow: resolved graph sidecars -> community assignments, modularity, layout, and figure outputs.
-# Downstream use: audit/supplementary community report for the multicohort graph.
+# Used by: audit/supplementary community report for the multicohort graph.
 rule compute_multicohort_cancer_communities:
     """
     Unweighted Leiden community detection on the final resolved MULTICOHORT_CANCER
@@ -3746,7 +3746,7 @@ if DESEQ2_ENABLED:
     # Rule: aggregate_graph_node_stats
     # Method role: DESeq2 staging rule that selects graph-derived node annotations for marker contrasts.
     # Flow: p-consensus support tables and graph node sidecars -> aggregated node-statistics table.
-    # Downstream use: supplies component/isolate labels for DESeq2 input preparation.
+    # Provides component/isolate labels for DESeq2 input preparation.
     rule aggregate_graph_node_stats:
         input:
             dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
@@ -3806,7 +3806,7 @@ if DESEQ2_ENABLED:
     # Rule: validate_deseq2_staged_inputs
     # Method role: validation rule checking externally staged DESeq2 input tables before marker analysis.
     # Flow: staged count, metadata, isolate, and component files -> validation manifest.
-    # Downstream use: guards DESeq2 marker rules against malformed staged inputs.
+    # Used by: guards DESeq2 marker rules against malformed staged inputs.
     rule validate_deseq2_staged_inputs:
         """
         Checks configured staged count, metadata, isolate, anchor, and component
@@ -3856,12 +3856,12 @@ if DESEQ2_ENABLED:
     # Rule: prepare_deseq2_inputs
     # Method role: data-preparation rule that builds DESeq2 count and metadata tables from resolved graph labels.
     # Flow: DSMZ counts/metadata and graph node annotations -> staged DESeq2 input tables.
-    # Downstream use: supplies isolate, component, and anchor marker contrasts.
+    # Provides input for isolate, component, and anchor marker contrasts.
     rule prepare_deseq2_inputs:
         """
         Extracts disease-specific raw counts and metadata from DSMZ archives,
         subsetting to the cell lines present in the aggregated graph node stats.
-        Produces counts.tsv and metadata.tsv consumed by all downstream DESeq2 rules.
+        Produces counts.tsv and metadata.tsv consumed by all DESeq2 rules that consume staged inputs.
         """
         input:
             dsmz_counts = DSMZ_COUNTS_RDS,
@@ -3898,7 +3898,7 @@ if DESEQ2_ENABLED:
     # Rule: add_component_to_metadata
     # Method role: DESeq2 staging rule that joins resolved component/isolate labels onto sample metadata.
     # Flow: staged metadata plus graph node statistics -> component-annotated metadata table.
-    # Downstream use: provides grouping labels for DESeq2 contrast generation.
+    # Provides grouping labels for DESeq2 contrast generation.
     rule add_component_to_metadata:
         """
         Joins graph-derived component and is_isolate columns onto the staged
@@ -3929,7 +3929,7 @@ if DESEQ2_ENABLED:
     # Rule: derive_isolate_list
     # Method role: DESeq2 staging rule that extracts resolved isolate cell-lines.
     # Flow: component-annotated metadata -> isolate list CSV.
-    # Downstream use: defines isolate-vs-reference marker contrasts.
+    # Analysis role: defines isolate-vs-reference marker contrasts.
     rule derive_isolate_list:
         """
         Extracts the comma-separated list of isolate cell lines (is_isolate == TRUE)
@@ -3968,7 +3968,7 @@ if DESEQ2_ENABLED:
     # Rule: derive_components_list
     # Method role: DESeq2 staging rule that extracts resolved graph components.
     # Flow: component-annotated metadata -> component list file.
-    # Downstream use: defines component-vs-rest marker contrasts.
+    # Analysis role: defines component-vs-rest marker contrasts.
     rule derive_components_list:
         """
         Extracts unique non-singleton component IDs from metadata_with_components.tsv.
@@ -4019,7 +4019,7 @@ if DESEQ2_ENABLED:
     # Rule: derive_anchor_list
     # Method role: DESeq2 staging rule that identifies anchor cell-lines and their components.
     # Flow: graph node statistics and component metadata -> anchor list and component mapping.
-    # Downstream use: supports anchor-aware directional marker tables.
+    # Supports anchor-aware directional marker tables.
     rule derive_anchor_list:
         """
         Extracts canonical anchor cell lines from
@@ -4087,7 +4087,7 @@ if DESEQ2_ENABLED:
     # Rule: deseq2_isolate_degs
     # Method role: marker-analysis rule for isolate-centred DESeq2 contrasts.
     # Flow: staged counts/metadata and isolate labels -> isolate marker tables and QC files.
-    # Downstream use: contributes directional marker tables and enrichment query sets.
+    # Provides directional marker tables and enrichment query sets.
     rule deseq2_isolate_degs:
         """
         Runs DESeq2 contrasts for each graph-derived group identified in the
@@ -4183,11 +4183,11 @@ if DESEQ2_ENABLED:
     # Rule: write_deseq2_directional_marker_tables
     # Method role: marker reporting rule converting DESeq2 isolate outputs into direction-specific tables.
     # Flow: isolate marker outputs plus anchor/component labels -> directional marker tables.
-    # Downstream use: supplies marker post-processing and enrichment inputs.
+    # Provides marker post-processing and enrichment inputs.
     rule write_deseq2_directional_marker_tables:
         """
         Organise retained DESeq2 marker genes into directional marker tables
-        based on the sign of log2FoldChange. This is a downstream-only step:
+        based on the sign of log2FoldChange. This is a post-DESeq2 marker step:
         it consumes the completed marker manifest, marker gene lists, and full
         DESeq2 tables without rerunning DESeq2.
         """
@@ -4224,7 +4224,7 @@ if DESEQ2_ENABLED:
     # Rule: write_all_deseq2_directional_marker_tables
     # Method role: collector target requiring all direction-specific marker tables.
     # Flow: expected marker-table outputs -> Snakemake dependency aggregation only.
-    # Downstream use: provides a stage-level marker target without performing a new analysis.
+    # Stage output: provides a marker target without running a new analysis.
     rule write_all_deseq2_directional_marker_tables:
         """
         Aggregate target for the active profile's directional marker files.
@@ -4235,7 +4235,7 @@ if DESEQ2_ENABLED:
     # Rule: deseq2_component_vs_rest_all
     # Method role: marker-analysis collector that completes component-vs-rest DESeq2 contrasts.
     # Flow: component marker outputs -> completion sentinel.
-    # Downstream use: signals marker-analysis completion for PIPELINE_TARGET assembly.
+    # Provides marker-analysis completion signal for PIPELINE_TARGET assembly.
     rule deseq2_component_vs_rest_all:
         """
         Runs deseq2_component_vs_rest.R once per component in components_list.txt.
@@ -4338,7 +4338,7 @@ GPROFILER_RETAINED_SOURCE_CONTRASTS = (
 # Rule: build_gprofiler_by_cohort_query_sets
 # Method role: enrichment preparation rule for current pan-cancer marker-framework query sets.
 # Flow: marker-derived pan-cancer feature table -> cohort-specific g:Profiler query/background files.
-# Downstream use: prepares local enrichment inputs without running g:Profiler.
+# Provides local enrichment inputs without running g:Profiler.
 rule build_gprofiler_by_cohort_query_sets:
     """
     Build validated cohort-specific g:Profiler query lists from the current
@@ -4390,7 +4390,7 @@ if ENRICH_ENABLED:
     # Rule: build_enrichment_query_sets
     # Method role: enrichment preparation rule that builds query genes and custom backgrounds from marker outputs.
     # Flow: DESeq2 isolate/component marker tables -> enrichment query manifest and skipped-query audit.
-    # Downstream use: supplies reproducible inputs for g:Profiler execution.
+    # Provides reproducible inputs for g:Profiler execution.
     rule build_enrichment_query_sets:
         """
         Build enrichment query gene sets and matched custom backgrounds from
@@ -4466,7 +4466,7 @@ if ENRICH_ENABLED:
     # Rule: run_gprofiler_enrichment
     # Method role: enrichment analysis rule that runs g:Profiler from the prepared query manifest.
     # Flow: query/background manifest -> g:Profiler result corpus and provenance tables.
-    # Downstream use: feeds top-term selection and enrichment heatmap plotting.
+    # Feeds top-term selection and enrichment heatmap plotting.
     rule run_gprofiler_enrichment:
         """
         Run g:Profiler enrichment for all non-skipped query sets listed in the
@@ -4528,7 +4528,7 @@ if ENRICH_ENABLED:
     # Rule: build_enrichment_summary_top_terms
     # Method role: enrichment reporting rule selecting top terms from g:Profiler results.
     # Flow: g:Profiler corpus -> compact top-term table.
-    # Downstream use: supplies the enrichment heatmap and reporting tables.
+    # Provides the enrichment heatmap and reporting tables.
     rule build_enrichment_summary_top_terms:
         input:
             top_terms = os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"),
@@ -4546,7 +4546,7 @@ if ENRICH_ENABLED:
     # Rule: plot_enrichment_top_terms_heatmap
     # Method role: plotting rule for top enrichment terms across marker-derived query sets.
     # Flow: top-term table -> enrichment heatmap figure.
-    # Downstream use: reporting visualisation only.
+    # Purpose: reporting visualisation only.
     rule plot_enrichment_top_terms_heatmap:
         input:
             summary = os.path.join(ENRICH_DIR_REL, "enrichment_summary_top_terms.tsv")
@@ -4574,7 +4574,7 @@ if ENRICH_ENABLED:
 MARKER_POST_CFG = config.get("defaults", {}).get("marker_postprocessing", {})
 # Boundary note: results/unsupervised/pan_cancer/ is an output namespace.
 # The multicohort_cancer profile is currently the workflow entrypoint that
-# resolves these downstream cross-cohort/pan-cancer targets because they depend
+# resolves these cross-cohort/pan-cancer targets because they depend
 # on BRCA/NBL/RBL marker and expression artefacts. Treat the names as related
 # routing layers, not interchangeable analysis labels.
 MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False)) and profile_name == "multicohort_cancer"
@@ -4622,7 +4622,7 @@ if MARKER_POST_ENABLED:
     # Rule: ensure_profile_deseq2_markers
     # Method role: marker post-processing rule that verifies required per-profile DESeq2 marker artefacts exist.
     # Flow: expected profile marker files -> readiness sentinel.
-    # Downstream use: prevents pan-cancer feature construction from using incomplete marker inputs.
+    # Guardrail: prevents pan-cancer feature construction from using incomplete marker inputs.
     rule ensure_profile_deseq2_markers:
         """
         Build graph-derived isolate-vs-rest DESeq2 marker outputs for a disease
@@ -4667,7 +4667,7 @@ if MARKER_POST_ENABLED:
     # Rule: build_component_consensus_markers
     # Method role: marker post-processing rule that builds component-level consensus marker outputs.
     # Flow: per-profile directional marker tables -> consensus marker exports.
-    # Downstream use: supplies the marker-derived pan-cancer feature panel.
+    # Provides the marker-derived pan-cancer feature panel.
     rule build_component_consensus_markers:
         """Build per-profile consensus markers and summary exports."""
         input:
@@ -4786,7 +4786,7 @@ if MARKER_POST_ENABLED:
     # Rule: build_pan_cancer_features
     # Method role: feature-construction rule combining cohort marker tables into a marker-derived feature panel.
     # Flow: per-profile marker tables and previous feature baselines -> pan-cancer feature table and audits.
-    # Downstream use: defines the curated pan-cancer feature space.
+    # Analysis role: defines the curated pan-cancer feature space.
     rule build_pan_cancer_features:
         """Merge per-profile summaries into a pan-cancer feature panel."""
         input:
@@ -4923,7 +4923,7 @@ if MARKER_POST_ENABLED:
     # Rule: build_pan_cancer_feature_expression_matrix
     # Method role: expression-construction rule that restricts tumour/cell-line matrices to the marker-derived feature panel.
     # Flow: cohort VST inputs plus feature table -> pan-cancer feature-space expression matrix.
-    # Downstream use: supplies UMAP, mapping, ranking, and pan-cancer graph analyses.
+    # Provides input for UMAP, mapping, ranking, and pan-cancer graph analyses.
     rule build_pan_cancer_feature_expression_matrix:
         """Combine per-profile VST inputs into the feature-restricted pan-cancer matrix."""
         input:
@@ -4960,7 +4960,7 @@ if MARKER_POST_ENABLED:
     # Rule: build_pan_cancer_feature_expression_matrix_cell_lines_only
     # Method role: expression-construction rule for cell-line-only pan-cancer feature-space analyses.
     # Flow: configured cell-line VST inputs plus feature table -> cell-line-only feature matrix.
-    # Downstream use: supplies cell-line-only similarity network and community sensitivity analyses.
+    # Provides input for cell-line-only similarity network and community sensitivity analyses.
     rule build_pan_cancer_feature_expression_matrix_cell_lines_only:
         """Build a feature-restricted pan-cancer matrix containing cell lines only."""
         input:
@@ -5103,7 +5103,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_pan_cancer_tumour_cell_line_alignment_umap
     # Method role: diagnostic plotting rule for tumour/cell-line alignment in the pan-cancer feature space.
     # Flow: feature-space expression matrix and metadata -> UMAP coordinates, composition tables, and figures.
-    # Downstream use: visualises alignment; it does not define mapping or ranking outputs.
+    # Purpose: visualises alignment; it does not define mapping or ranking outputs.
     rule plot_pan_cancer_tumour_cell_line_alignment_umap:
         """Generate pan-cancer tumour/cell-line alignment UMAPs."""
         input:
@@ -5249,7 +5249,7 @@ if MARKER_POST_ENABLED:
         # Rule: plot_raw_all_gene_tumour_cell_line_alignment_umap
         # Method role: optional diagnostic plotting rule for raw all-gene tumour/cell-line alignment.
         # Flow: configured raw all-gene matrix -> UMAP diagnostics and source-composition tables.
-        # Downstream use: context visualisation only; it is gated by configured raw inputs.
+        # Used by: context visualisation only; it is gated by configured raw inputs.
         rule plot_raw_all_gene_tumour_cell_line_alignment_umap:
             """Optional raw-expression all-gene tumour/cell-line alignment UMAPs."""
             input:
@@ -5399,7 +5399,7 @@ if MARKER_POST_ENABLED:
     # Rule: merge_vst_all_genes_brca_nbl_rbl
     # Method role: diagnostic data-preparation rule that merges cohort VST matrices without feature subsetting.
     # Flow: BRCA/NBL/RBL VST matrices and multicohort metadata -> all-gene VST expression matrix.
-    # Downstream use: supplies the VST all-gene UMAP diagnostic.
+    # Provides the VST all-gene UMAP diagnostic.
     rule merge_vst_all_genes_brca_nbl_rbl:
         """
         Merge BRCA + NBL + RBL joint VST tumour/cell-line matrices on the
@@ -5440,7 +5440,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_vst_all_gene_tumour_cell_line_alignment_umap
     # Method role: diagnostic plotting rule for all-gene VST tumour/cell-line alignment.
     # Flow: merged all-gene VST matrix -> UMAP diagnostics and source-composition tables.
-    # Downstream use: context visualisation against the marker-derived feature space.
+    # Used by: context visualisation against the marker-derived feature space.
     rule plot_vst_all_gene_tumour_cell_line_alignment_umap:
         """
         Unsupervised diagnostic UMAP on the BRCA+NBL+RBL VST all-gene merged
@@ -5517,7 +5517,7 @@ if MARKER_POST_ENABLED:
     # Rule: score_tumour_cellline_mapping
     # Method role: mapping/ranking rule that scores tumour-to-cell-line similarity in the pan-cancer feature space.
     # Flow: feature-space expression matrix and metadata -> mapping metrics and ranking tables.
-    # Downstream use: supplies pan-cancer ranking diagnostics and ECDF plots.
+    # Provides input for pan-cancer ranking diagnostics and ECDF plots.
     rule score_tumour_cellline_mapping:
         """Score tumour-to-cell-line mappings using the combined expression object."""
         input:
@@ -5573,7 +5573,7 @@ if MARKER_POST_ENABLED:
     # Rule: compute_pan_cancer_correlation
     # Method role: similarity analysis rule computing cell-line/tumour correlations in the pan-cancer feature space.
     # Flow: feature-space expression matrix -> correlation matrix.
-    # Downstream use: feeds graph construction and tumour-cell-line mapping tables.
+    # Feeds graph construction and tumour-cell-line mapping tables.
     rule compute_pan_cancer_correlation:
         input: expr = PAN_EXPR_RDS
         output: cor = PAN_COR_RDS
@@ -5585,7 +5585,7 @@ if MARKER_POST_ENABLED:
     # Rule: build_pan_cancer_graph
     # Method role: graph-construction rule that constructs transcriptomic similarity in the pan-cancer feature space.
     # Flow: pan-cancer correlation matrix -> graph edge and node sidecars.
-    # Downstream use: supplies community analysis, inspection, and graph plotting.
+    # Provides input for community analysis, inspection, and graph plotting.
     rule build_pan_cancer_graph:
         input: cor = PAN_COR_RDS
         output:
@@ -5599,7 +5599,7 @@ if MARKER_POST_ENABLED:
     # Rule: compute_pan_cancer_communities
     # Method role: graph analysis rule assigning communities on the pan-cancer similarity graph.
     # Flow: graph edges and metadata -> community assignments and metrics.
-    # Downstream use: annotates graph plots and ranking diagnostics.
+    # Provides annotations for graph plots and ranking diagnostics.
     rule compute_pan_cancer_communities:
         input:
             edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
@@ -5615,7 +5615,7 @@ if MARKER_POST_ENABLED:
     # Rule: inspect_pan_cancer_graph
     # Method role: diagnostic rule auditing pan-cancer graph structure and metadata coverage.
     # Flow: graph sidecars and community assignments -> inspection tables.
-    # Downstream use: supports graph QA before final plotting.
+    # Supports graph QA before final plotting.
     rule inspect_pan_cancer_graph:
         input:
             edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
@@ -5632,7 +5632,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_pan_cancer_graph
     # Method role: plotting rule for the pan-cancer feature-space similarity graph.
     # Flow: graph sidecars, communities, and layout inputs -> final pan-cancer graph figure.
-    # Downstream use: reporting visualisation only.
+    # Purpose: reporting visualisation only.
     rule plot_pan_cancer_graph:
         input:
             edges = os.path.join(PAN_GRAPH_DIR, "pan_cancer_graph_edges.tsv"),
@@ -5651,7 +5651,7 @@ if MARKER_POST_ENABLED:
     # Rule: cellline_precision_at_k
     # Method role: ranking diagnostic computing cell-line-centred tumour retrieval metrics.
     # Flow: mapping/ranking tables -> precision-at-k, rank-metric, and provenance outputs.
-    # Downstream use: supports cautious ranking-based agreement assessment.
+    # Supports cautious ranking-based agreement assessment.
     rule cellline_precision_at_k:
         """
         Cell-line-centred tumour ranking analysis with standalone retained plots.
@@ -5776,7 +5776,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_tumour_to_cellline_rank_ecdf_top10_fraction
     # Method role: diagnostic plotting rule for tumour-to-cell-line rank distributions and top-10 fraction.
     # Flow: tumour-to-cell-line ranking outputs -> ECDF and top-10 fraction figures.
-    # Downstream use: visualises ranking behaviour without asserting biological equivalence.
+    # Purpose: visualises ranking behaviour without asserting biological equivalence.
     rule plot_tumour_to_cellline_rank_ecdf_top10_fraction:
         input:
             metrics_summary = mapping_metrics_summary(),
@@ -5845,7 +5845,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_tumour_to_cellline_mrr_at10_distribution
     # Method role: diagnostic plotting rule for tumour-to-cell-line MRR@10 metrics.
     # Flow: ranking metrics -> cohort-level MRR@10 tables and figures.
-    # Downstream use: supplements ranking-based agreement assessment.
+    # Used by: supplements ranking-based agreement assessment.
     rule plot_tumour_to_cellline_mrr_at10_distribution:
         """Build tumour-level RR@10 tables and a thesis-readable MRR@10 distribution plot."""
         input:
@@ -5885,7 +5885,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_cellline_to_tumour_same_cancer_component_composition
     # Method role: diagnostic plotting rule for same-cancer component composition in cell-line-to-tumour rankings.
     # Flow: cell-line-centred ranking tables -> same-cancer composition table and figure.
-    # Downstream use: reports ranking composition in the configured feature space.
+    # Reports ranking composition in the configured feature space.
     rule plot_cellline_to_tumour_same_cancer_component_composition:
         """Build same-cancer-type top-50 component composition for cell-line-to-tumour ranks."""
         input:
@@ -5921,7 +5921,7 @@ if MARKER_POST_ENABLED:
     # Rule: plot_cellline_to_tumour_all_top50_component_composition
     # Method role: diagnostic plotting rule for all top-50 component composition in cell-line-to-tumour rankings.
     # Flow: cell-line-centred ranking tables -> all-lineage top-50 composition table and figure.
-    # Downstream use: complements same-cancer composition diagnostics.
+    # Analysis role: complements same-cancer composition diagnostics.
     rule plot_cellline_to_tumour_all_top50_component_composition:
         """Build all-top-50 component composition for cell-line-to-tumour ranks."""
         input:
@@ -5962,7 +5962,7 @@ if MARKER_POST_ENABLED:
     # Rule: pan_cancer_ranking_plot_outputs
     # Method role: collector target for pan-cancer ranking diagnostic plots and tables.
     # Flow: expected diagnostic output paths -> Snakemake dependency aggregation only.
-    # Downstream use: provides a stage-level plotting target without performing a new analysis.
+    # Stage output: provides a plotting target without running a new analysis.
     rule pan_cancer_ranking_plot_outputs:
         """Requested retained ranking plot outputs for correlation-based transcriptomic similarity analyses."""
         input:
@@ -5993,9 +5993,9 @@ if MARKER_POST_ENABLED:
     # Rule: build_pan_cancer_bidirectional_ranking_diagnostics
     # Method role: ranking diagnostic rule checking bidirectional tumour-cell-line ranking tables.
     # Flow: tumour-to-cell-line and cell-line-to-tumour outputs -> crosscheck table and diagnostic tables.
-    # Downstream use: QA for pan-cancer ranking reports.
+    # Used by: QA for pan-cancer ranking reports.
     rule build_pan_cancer_bidirectional_ranking_diagnostics:
-        """Build downstream ECDF and top-1 cancer-type agreement diagnostics for bidirectional ranking."""
+        """Build ECDF and top-1 cancer-type agreement diagnostics for bidirectional ranking."""
         input:
             script = os.path.join(SCRIPTS_DIR, "build_bidirectional_ranking_diagnostics.R"),
             tumour_scores = os.path.join(MAPPING_OUTDIR, "tumour_to_cellline_similarity", "tumour_cellline_group_scores.rds"),
@@ -6169,7 +6169,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: build_pan_cancer_cell_line_similarity_graph
     # Method role: graph-construction rule for cell-line-only similarity in the marker-derived feature space.
     # Flow: cell-line-only feature matrix -> cell-line graph edges and metadata.
-    # Downstream use: supplies cell-line community analysis and resolution sweeps.
+    # Provides input for cell-line community analysis and resolution sweeps.
     rule build_pan_cancer_cell_line_similarity_graph:
         input:
             expr_rds = _CL_SIM_EXPR
@@ -6203,7 +6203,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: compute_pan_cancer_cell_line_communities
     # Method role: graph analysis rule assigning cell-line communities in the marker-derived feature space.
     # Flow: cell-line graph edges and metadata -> community assignments, metrics, and discordance tables.
-    # Downstream use: annotates cell-line-only network validation and plotting.
+    # Provides annotations for cell-line-only network validation and plotting.
     rule compute_pan_cancer_cell_line_communities:
         input:
             edges    = _CL_SIM_EDGES,
@@ -6240,7 +6240,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: compute_pan_cancer_cell_line_leiden_resolution_sweep
     # Method role: sensitivity analysis over Leiden resolutions for the cell-line-only graph.
     # Flow: cell-line graph/community outputs -> resolution-sweep assignments, metrics, and diagnostic plot.
-    # Downstream use: assesses community sensitivity without replacing configured community outputs.
+    # Analysis role: assesses community sensitivity without replacing configured community outputs.
     rule compute_pan_cancer_cell_line_leiden_resolution_sweep:
         input:
             edges    = _CL_SIM_EDGES,
@@ -6284,7 +6284,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: compute_pan_cancer_cell_line_louvain_resolution_sweep
     # Method role: sensitivity analysis over Louvain resolutions for the cell-line-only graph.
     # Flow: cell-line graph edges and metadata -> resolution-sweep assignments, metrics, and diagnostic plot.
-    # Downstream use: compares community-resolution behaviour across algorithms.
+    # Analysis role: compares community-resolution behaviour across algorithms.
     rule compute_pan_cancer_cell_line_louvain_resolution_sweep:
         input:
             edges    = _CL_SIM_EDGES,
@@ -6320,7 +6320,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: build_dsmz_joint_expression_cell_line_object
     # Method role: data-preparation rule building a full DSMZ cell-line expression object for sensitivity analysis.
     # Flow: DSMZ and HEME VST inputs plus metadata -> joint cell-line expression object and metadata table.
-    # Downstream use: supplies full-expression cell-line similarity sensitivity analysis.
+    # Provides full-expression cell-line similarity sensitivity analysis.
     rule build_dsmz_joint_expression_cell_line_object:
         input:
             dsmz_vst = _CL_SIM_FULL_DSMZ_VST,
@@ -6351,7 +6351,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: build_dsmz_joint_expression_cell_line_similarity_graph
     # Method role: graph-construction rule for full-expression DSMZ cell-line similarity sensitivity analysis.
     # Flow: full DSMZ joint expression object -> similarity graph edges and metadata.
-    # Downstream use: supplies full-expression Louvain resolution sweep.
+    # Provides full-expression Louvain resolution sweep.
     rule build_dsmz_joint_expression_cell_line_similarity_graph:
         input:
             expr_rds = _CL_SIM_FULL_EXPR
@@ -6384,7 +6384,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: compute_dsmz_joint_expression_cell_line_louvain_resolution_sweep
     # Method role: sensitivity analysis over Louvain resolutions for the full-expression DSMZ graph.
     # Flow: full-expression graph sidecars -> resolution-sweep assignments, metrics, and diagnostic plot.
-    # Downstream use: compares feature-space and full-expression community behaviour.
+    # Analysis role: compares feature-space and full-expression community behaviour.
     rule compute_dsmz_joint_expression_cell_line_louvain_resolution_sweep:
         input:
             edges    = _CL_SIM_FULL_EDGES,
@@ -6420,7 +6420,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: compute_pan_cancer_cell_line_validation
     # Method role: validation rule computing modularity and assortativity for cell-line communities.
     # Flow: cell-line graph, communities, and metadata -> validation tables.
-    # Downstream use: reports graph/community diagnostics without changing community assignments.
+    # Reports graph/community diagnostics without changing community assignments.
     rule compute_pan_cancer_cell_line_validation:
         input:
             edges       = _CL_SIM_EDGES,
@@ -6452,7 +6452,7 @@ if _PAN_CELL_LINE_SIM_CFG:
     # Rule: compute_pan_cancer_cell_line_layout
     # Method role: layout rule computing fixed coordinates for the cell-line-only graph.
     # Flow: cell-line graph edges -> layout table.
-    # Downstream use: supplies manual two-panel cell-line network plotting.
+    # Provides input for manual two-panel cell-line network plotting.
     rule compute_pan_cancer_cell_line_layout:
         input:
             edges = _CL_SIM_EDGES
@@ -6515,7 +6515,7 @@ if _PAN_CELL_LINE_PLOT_CFG:
     # Rule: plot_pan_cancer_cell_line_two_panel
     # Method role: plotting rule for a two-panel cell-line-only similarity network figure.
     # Flow: edge list, communities, layout, and config-driven dimensions -> lineage/community PDF and PNG.
-    # Downstream use: reporting figure and stable Louvain/community PDF alias.
+    # Purpose: reporting figure and stable Louvain/community PDF alias.
     rule plot_pan_cancer_cell_line_two_panel:
         """Two-panel figure: pan-cancer cell line transcriptomic similarity
         network (cell-line-to-cell-line, not cell-line-to-tumour).

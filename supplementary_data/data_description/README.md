@@ -1,6 +1,6 @@
-# Data used for the reported analysis
+# Data description
 
-This folder documents the data used for the reported analysis.
+This folder documents processed analysis inputs, retained sample identifiers, exclusions, and processing notes for the active pan-cancer analysis.
 
 At the time this documentation was prepared, the raw/pre-filter patient tumour data used upstream of tumour-purity estimation were not available in the working project directory. Therefore, the patient tumour component of the reported analysis is documented from the available post-threshold analysis set.
 
@@ -43,4 +43,4 @@ Ongoing raw-data reconstruction workflows for RBL and NBL are tracked separately
 - `dsmz_rbl_cell_line_subset.tsv`: retinoblastoma-relevant DSMZ rows.
 - `excluded_or_not_available_sources.tsv`: unavailable or not-used sources and reasons.
 - `processing_summary.md`: concise processing and availability summary.
-- `reproducibility_checksums.tsv`: SHA256 checksums for analysis inputs and generated documentation files.
+- `reproducibility_checksums.tsv`: SHA256 checksums for curated data-description files in this directory.
