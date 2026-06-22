@@ -182,3 +182,6 @@ run_all_neighbourhoods.sh
 run_pipeline.sh
 unsupervised_pipeline.sh
 supplementary/
+
+# Private/local workflow audit notes
+docs/SCRIPT_TO_OUTPUT_MAPPING.md

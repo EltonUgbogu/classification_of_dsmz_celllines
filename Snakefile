@@ -124,7 +124,7 @@ def get_profile_cfg(profile):
     default_cfg = config.get("defaults", {})
     profiles = config.get("profiles", {})
     if profile not in profiles:
-        raise ValueError(f"pan_cancer profile '{profile}' not found in config.profiles")
+        raise ValueError(f"Profile '{profile}' not found in config.profiles")
     return deep_merge(default_cfg, profiles[profile])
 
 
@@ -227,6 +227,13 @@ USE_PAM50 = analysis_cfg.get("use_pam50", False)
 # profiles to ensure comparability when merging cross-cancer datasets.
 MULTICOHORT_CFG = config.get("multicohort_cancer", {})
 IS_MULTICOHORT_PROFILE = profile_name == "multicohort_cancer"
+IS_PAN_CANCER_PROFILE = profile_name == "pan_cancer"
+ALLOW_LEGACY_MULTICOHORT_PAN_CANCER_ROUTING = bool(
+    config.get("compatibility", {}).get("allow_legacy_multicohort_pan_cancer_targets", True)
+)
+DECLARE_PAN_CANCER_RULES = IS_PAN_CANCER_PROFILE or (
+    IS_MULTICOHORT_PROFILE and ALLOW_LEGACY_MULTICOHORT_PAN_CANCER_ROUTING
+)
 MULTICOHORT_OUTDIR = os.path.normpath(
     MULTICOHORT_CFG.get(
         "outdir",
@@ -4572,12 +4579,11 @@ if ENRICH_ENABLED:
 # Stage role: converts cohort marker tables into marker-derived feature panels and pan-cancer outputs.
 
 MARKER_POST_CFG = config.get("defaults", {}).get("marker_postprocessing", {})
-# Boundary note: results/unsupervised/pan_cancer/ is an output namespace.
-# The multicohort_cancer profile is currently the workflow entrypoint that
-# resolves these cross-cohort/pan-cancer targets because they depend
-# on BRCA/NBL/RBL marker and expression artefacts. Treat the names as related
-# routing layers, not interchangeable analysis labels.
-MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False)) and profile_name == "multicohort_cancer"
+# Boundary note: pan_cancer is the first-class profile for marker-derived
+# pan-cancer outputs. The multicohort_cancer profile may still declare these
+# rules for explicit-target backward compatibility, but those targets are no
+# longer part of the multicohort default target list.
+MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False)) and DECLARE_PAN_CANCER_RULES
 
 if MARKER_POST_ENABLED:
     CONSENSUS_CFG = MARKER_POST_CFG.get("consensus", {})
@@ -6568,57 +6574,61 @@ if _PAN_CELL_LINE_PLOT_CFG:
 
 # Method helper: assembles the default target list after optional analysis sections have declared their variables.
 def build_pipeline_targets():
-    targets = [
-        os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
-        P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".pdf",
-        P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".png",
-        P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".svg",
-        P_CONS_RESOLVED_EDGES_TSV,
-        P_CONS_RESOLVED_NODE_STATS_TSV,
-        P_CONS_ANCHOR_AUDIT_TSV,
-        P_CONS_RESOLVED_NODE_LABELS_TSV,
-        P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".pdf",
-        P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".png",
-        P_CONS_MULTI_REP_MAJORITY_PREFIX + ".pdf",
-        P_CONS_MULTI_REP_MAJORITY_PREFIX + ".png",
-        P_CONS_MULTI_REP_MAJORITY_PREFIX + ".svg",
-        P_CONS_MULTI_REP_MAJORITY_EDGES_TSV,
-        P_CONS_MULTI_REP_MAJORITY_NODE_STATS_TSV,
-        P_CONS_MULTI_REP_MAJORITY_COMPONENTS_TSV,
-        P_CONS_MULTI_REP_EDGE_SUPPORT_TSV,
-        POST_RESOLUTION_COMBINED_STRATIFICATION_TSV,
-        P_CONS_MULTI_REP_UNION_PREFIX + ".pdf",
-        P_CONS_MULTI_REP_UNION_PREFIX + ".png",
-        P_CONS_MULTI_REP_UNION_PREFIX + ".svg",
-        P_CONS_MULTI_REP_UNION_EDGES_TSV,
-        P_CONS_MULTI_REP_UNION_NODE_STATS_TSV,
-        P_CONS_MULTI_REP_UNION_COMPONENTS_TSV,
-        P_CONS_MULTI_REP_UNION_FULL_NODE_LABELS_TSV,
-        *PAN_CANCER_GRAPH_INSPECTION_TARGETS,
-        *COMMUNITY_STABILITY_TARGETS,
-        os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
-        os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
-        os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
-        os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
-        os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv"),
-        os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
-        os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
-        os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
-        os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
-    ]
-    if DESEQ2_ENABLED:
-        targets.append(NODE_STATS_TSV)
-        targets.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
+    targets = []
 
-    if ENRICH_ENABLED:
-        targets.append(os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"))
-        targets.append(os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"))
-        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "corpus_manifest.tsv"))
-        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"))
-        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "iea_sensitivity_summary.tsv"))
-        targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "gprofiler_version.tsv"))
+    if not IS_PAN_CANCER_PROFILE:
+        targets.extend([
+            os.path.join(UNSUP_REL, "tumour_neighbourhoods", "final_consensus_all", "resolved_dsmz_neighbours.tsv"),
+            P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".pdf",
+            P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".png",
+            P_CONS_RESOLVED_NEIGHBOURHOOD_GRAPH_PREFIX + ".svg",
+            P_CONS_RESOLVED_EDGES_TSV,
+            P_CONS_RESOLVED_NODE_STATS_TSV,
+            P_CONS_ANCHOR_AUDIT_TSV,
+            P_CONS_RESOLVED_NODE_LABELS_TSV,
+            P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".pdf",
+            P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".png",
+            P_CONS_MULTI_REP_MAJORITY_PREFIX + ".pdf",
+            P_CONS_MULTI_REP_MAJORITY_PREFIX + ".png",
+            P_CONS_MULTI_REP_MAJORITY_PREFIX + ".svg",
+            P_CONS_MULTI_REP_MAJORITY_EDGES_TSV,
+            P_CONS_MULTI_REP_MAJORITY_NODE_STATS_TSV,
+            P_CONS_MULTI_REP_MAJORITY_COMPONENTS_TSV,
+            P_CONS_MULTI_REP_EDGE_SUPPORT_TSV,
+            POST_RESOLUTION_COMBINED_STRATIFICATION_TSV,
+            P_CONS_MULTI_REP_UNION_PREFIX + ".pdf",
+            P_CONS_MULTI_REP_UNION_PREFIX + ".png",
+            P_CONS_MULTI_REP_UNION_PREFIX + ".svg",
+            P_CONS_MULTI_REP_UNION_EDGES_TSV,
+            P_CONS_MULTI_REP_UNION_NODE_STATS_TSV,
+            P_CONS_MULTI_REP_UNION_COMPONENTS_TSV,
+            P_CONS_MULTI_REP_UNION_FULL_NODE_LABELS_TSV,
+            *PAN_CANCER_GRAPH_INSPECTION_TARGETS,
+            *COMMUNITY_STABILITY_TARGETS,
+            os.path.join(STUDY_OUTPUT_DIR_REL, "study_question.txt"),
+            os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_manifest.tsv"),
+            os.path.join(STUDY_OUTPUT_DIR_REL, "cohort_labels.tsv"),
+            os.path.join(STUDY_OUTPUT_DIR_REL, "candidate_inference.tsv"),
+            os.path.join(STUDY_OUTPUT_DIR_REL, "endpoint_manifest.tsv"),
+            os.path.join(VALIDATION_OUTPUT_DIR_REL, "model_selection_summary.tsv"),
+            os.path.join(VALIDATION_OUTPUT_DIR_REL, "neighbourhood_permutation_summary.tsv"),
+            os.path.join(VALIDATION_OUTPUT_DIR_REL, "random_baseline_summary.tsv"),
+            os.path.join(VALIDATION_OUTPUT_DIR_REL, "silhouette_report.tsv"),
+        ])
 
-    if MARKER_POST_ENABLED:
+        if DESEQ2_ENABLED:
+            targets.append(NODE_STATS_TSV)
+            targets.append(os.path.join(DESEQ2_COMP_DIR, ".done"))
+
+        if ENRICH_ENABLED:
+            targets.append(os.path.join(ENRICH_DIR_REL, "query_sets", "query_manifest.tsv"))
+            targets.append(os.path.join(ENRICH_DIR_REL, "query_sets", "skipped_queries.tsv"))
+            targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "corpus_manifest.tsv"))
+            targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "top_terms.tsv"))
+            targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "iea_sensitivity_summary.tsv"))
+            targets.append(os.path.join(ENRICH_DIR_REL, "gprofiler", "gprofiler_version.tsv"))
+
+    if IS_PAN_CANCER_PROFILE and MARKER_POST_ENABLED:
         targets.append(PAN_EXPR_RDS)
         targets.append(mapping_metrics_summary())
         targets.extend(
@@ -6635,9 +6645,9 @@ def build_pipeline_targets():
         if _PAN_CELL_LINE_PLOT_CFG:
             targets.extend([_PLOT_PDF, _PLOT_PNG, _PLOT_LOUVAIN_ALIAS_PDF])
 
-    if ENRICH_ENABLED:
+    if not IS_PAN_CANCER_PROFILE and ENRICH_ENABLED:
         targets.append(os.path.join(ENRICH_DIR_REL, "figures", "Fig_enrichment_top_terms_heatmap.pdf"))
-    if MARKER_POST_ENABLED:
+    if IS_PAN_CANCER_PROFILE and MARKER_POST_ENABLED:
             targets.extend([
                 os.path.join(PAN_FIG_DIR, "Fig_pan_cancer_graph.pdf"),
                 os.path.join(PAN_FIG_DIR, "ecdf_plots", "Fig_tumour_to_cellline_rank_ecdf.pdf"),

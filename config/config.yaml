@@ -8,6 +8,11 @@ study_design:
 external_inputs:
   retained_source_contrasts: ""
 
+# Backward-compatibility switches for older explicit target commands. These do
+# not define the conceptual analysis identity of any profile.
+compatibility:
+  allow_legacy_multicohort_pan_cancer_targets: true
+
 # Configures validation parameters for permutation, random-baseline, and shortlist checks.
 validation:
   shortlist_n: 10
@@ -647,11 +652,11 @@ graph_plot_layout:
       adaptive_component_max_expand: 2.2
       min_component_isolate_gap: 3.5
 
-  # Configures patient-referenced support graph geometry, isolate panels, adaptive layout, labels, and legends.
+  # Configures patient-referenced consensus graph geometry, isolate panels, adaptive layout, labels, and legends.
   support_threshold_consensus_graph:
-    # Defines profile-independent layout defaults for patient-referenced support graph figures.
+    # Defines profile-independent layout defaults for patient-referenced consensus graph figures.
     default:
-      graph_title: "Support-threshold consensus cell-line similarity network"
+      graph_title: "Patient-referenced consensus cell-line similarity network"
       fig_w: 30
       fig_h: 22
       dpi: 600
@@ -728,13 +733,13 @@ graph_plot_layout:
       c1_y_expand_factor: 3.00
       c2_x_expand_factor: 1.35
       c2_y_expand_factor: 1.05
-    # Overrides support-threshold consensus graph layout parameters for the BRCA profile.
+    # Overrides patient-referenced consensus graph layout parameters for the BRCA profile.
     brca:
       position_fill_x: 0.90
       position_fill_y: 0.86
       axis_margin_frac: 0.04
       compact_isolate_panel: false
-    # Overrides support-threshold consensus graph layout parameters for the NBL profile.
+    # Overrides patient-referenced consensus graph layout parameters for the NBL profile.
     nbl:
       node_size: 5800
       font_size: 21
@@ -761,7 +766,7 @@ graph_plot_layout:
       max_label_overlap_iterations: 3200
       min_label_separation: 0.80
       min_component_isolate_gap: 7.0
-    # Overrides support-threshold consensus graph layout parameters for the RBL profile.
+    # Overrides patient-referenced consensus graph layout parameters for the RBL profile.
     rbl:
       fig_w: 18.5
       fig_h: 7.2
@@ -839,6 +844,44 @@ profiles:
       mx_final_gene_list: results/unsupervised/multicohort_cancer/feature_selection_unsupervised/mx_final_gene_list.txt
       pan_cancer_feature_set_name: PanCancerFeatureSet
       pan_cancer_feature_set_gene_list: results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt
+
+  # ---------------------------------------------------------------------------
+  # pan_cancer is the marker-derived pan-cancer analysis/output profile.
+  # It is not a raw cohort; default targets route to results/unsupervised/pan_cancer.
+  # ---------------------------------------------------------------------------
+  pan_cancer:
+    analysis:
+      cancer_type: Pan Cancer
+      use_pam50: false
+    feature_sets:
+      distances:
+        - euc
+        - corr
+      methods:
+        - Variance
+        - MAD
+        - MeanAbsDev
+        - Entropy
+        - PCA
+        - Spearman
+        - MX
+        - kTotal
+        - HVG
+    paths:
+      unsup_root: results/unsupervised/pan_cancer
+      vst_joint_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds
+      cell_vst_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only.rds
+      tumour_vst_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr.rds
+      dsmz_meta_csv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
+      meta_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
+    tumour_neighbourhoods:
+      # Parse-time fallback for generic rules; pan_cancer default targets do not
+      # build patient-referenced tumour-neighbourhood graphs.
+      similarity_consensus_min_support: 9
+    deseq2:
+      enabled: false
+    enrichment:
+      enabled: false
 
   # ---------------------------------------------------------------------------
   # brca uses the full unsupervised feature-selection grid plus PAM50 directions.
