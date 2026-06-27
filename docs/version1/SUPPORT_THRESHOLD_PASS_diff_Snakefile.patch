@@ -1,0 +1,63 @@
+--- Snakefile.bak_support_threshold_20260531	2026-05-31 08:58:17.000000000 +0200
++++ Snakefile	2026-05-31 09:03:32.000000000 +0200
+@@ -496,6 +496,44 @@
+ CONS_EUC_DIRECTIONS    = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
+ CONS_EUC_PATTERN       = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
+ 
++
++def _resolve_majority_support_threshold():
++    """
++    Resolves the majority-style support threshold m = max(2, ceil(|R| / 2))
++    for the support-threshold consensus cell-line similarity network, where
++    |R| is the number of representation-specific graphs for this cohort.
++
++    The value MUST be set explicitly per cohort under
++        profiles.<cohort>.tumour_neighbourhoods.similarity_consensus_min_support
++    in config/config.yaml. There is no silent fallback — running with the
++    threshold missing fails at Snakefile load time with a clear message.
++    """
++    nh_cfg = cfg.get("tumour_neighbourhoods", {})
++    if "similarity_consensus_min_support" not in nh_cfg:
++        recommended = max(2, (len(CONS_DIRECTIONS) + 1) // 2)
++        raise ValueError(
++            "\n[Snakefile] Missing required config key for profile "
++            f"'{profile_name}': "
++            f"profiles.{profile_name}.tumour_neighbourhoods.similarity_consensus_min_support.\n"
++            "This is the majority-style support threshold "
++            "(m = max(2, ceil(|R| / 2))). "
++            f"For this cohort |R| = {len(CONS_DIRECTIONS)}, so the recommended "
++            f"value is {recommended}. Add the key explicitly under the cohort's "
++            "tumour_neighbourhoods block in config/config.yaml; no silent "
++            "fallback is permitted.\n"
++        )
++    m = nh_cfg["similarity_consensus_min_support"]
++    if not isinstance(m, int) or m < 2:
++        raise ValueError(
++            "\n[Snakefile] Invalid value for "
++            f"profiles.{profile_name}.tumour_neighbourhoods.similarity_consensus_min_support: "
++            f"{m!r}. The majority-style support threshold must be an integer >= 2.\n"
++        )
++    return m
++
++
++SIMILARITY_CONSENSUS_MIN_SUPPORT = _resolve_majority_support_threshold()
++
+ # Defines the six HC and six k-means clustering kind identifiers.
+ # PCA-prefixed kinds are optionally removed for pan-cancer runs where
+ # cross-cancer PCA spaces are not comparable.
+@@ -1943,9 +1981,12 @@
+     params:
+         script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
+         tumour_nh_dir = TUMOUR_NH_ROOT_ABS,
+-        min_support = cfg.get(
+-            "tumour_neighbourhoods", {}
+-        ).get("similarity_consensus_min_support", max(2, (len(CONS_DIRECTIONS) + 1) // 2))
++        # Majority-style support threshold m = max(2, ceil(|R| / 2)); resolved
++        # at Snakefile load time from the explicit per-cohort config key
++        # tumour_neighbourhoods.similarity_consensus_min_support (no fallback —
++        # missing values fail with a clear error; see
++        # _resolve_majority_support_threshold above).
++        min_support = SIMILARITY_CONSENSUS_MIN_SUPPORT
+     log: os.path.join(LOGROOT, "build_patient_referenced_support_threshold_consensus_cell_line_similarity_network.log")
+     conda: CONDA_ENV_PY
+     shell:

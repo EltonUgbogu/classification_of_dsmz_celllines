@@ -1,0 +1,52 @@
+--- config/config.bak_support_threshold_20260531.yaml	2026-05-31 08:58:17.000000000 +0200
++++ config/config.yaml	2026-05-31 09:03:31.000000000 +0200
+@@ -190,6 +190,9 @@
+         - kTotal_corr
+         - HVG_euc
+         - HVG_corr
++      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
++      # Must be explicit per cohort (no silent fallback).
++      similarity_consensus_min_support: 9
+     features:
+       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
+       mx_joint_scores_tsv: results/unsupervised/multicohort_cancer/unsupervised/feature_selection/mx_joint_scores.tsv
+@@ -247,6 +250,9 @@
+         - HVG_corr
+         - pam50_euc
+         - pam50_corr
++      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=20
++      # (includes pam50_{euc,corr}). Must be explicit per cohort (no silent fallback).
++      similarity_consensus_min_support: 10
+     features:
+       pam50_ensembl_gene_list: resources/pam50_ensembl_ids.txt
+       mx_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/mx_joint_scores.tsv
+@@ -301,6 +307,9 @@
+         - kTotal_corr
+         - HVG_euc
+         - HVG_corr
++      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
++      # Must be explicit per cohort (no silent fallback).
++      similarity_consensus_min_support: 9
+     features:
+       mx_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/mx_joint_scores.tsv
+       mx_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/mx_final_gene_list.txt
+@@ -354,6 +363,9 @@
+         - kTotal_corr
+         - HVG_euc
+         - HVG_corr
++      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
++      # Must be explicit per cohort (no silent fallback).
++      similarity_consensus_min_support: 9
+     features:
+       mx_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/mx_joint_scores.tsv
+       mx_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/mx_final_gene_list.txt
+@@ -406,6 +418,9 @@
+         - kTotal_corr
+         - HVG_euc
+         - HVG_corr
++      # Majority-style support threshold m = max(2, ceil(|R| / 2)) for |R|=18.
++      # Must be explicit per cohort (no silent fallback).
++      similarity_consensus_min_support: 9
+     features:
+       mx_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/mx_joint_scores.tsv
+       mx_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/mx_final_gene_list.txt

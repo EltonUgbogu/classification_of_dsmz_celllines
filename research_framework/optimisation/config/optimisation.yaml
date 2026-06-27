@@ -1,0 +1,77 @@
+project:
+  framework_name: optimisation_framework
+  framework_role: research_layer_above_thesis_framework
+  thesis_framework_locked: true
+
+inputs:
+  thesis_results_root: results
+  thesis_plots_root: thesis_plots
+  optimisation_root: research_framework/optimisation
+  allow_missing_optional_inputs: true
+  cohort_roots:
+    - results/unsupervised/brca
+    - results/unsupervised/nbl
+    - results/unsupervised/rbl
+    - results/unsupervised/multicohort_cancer
+  pan_cancer_root: results/unsupervised/pan_cancer
+
+outputs:
+  optimisation_results_root: research_framework/optimisation/results
+  optimisation_docs_root: research_framework/optimisation/docs
+
+representation_diagnostics:
+  compute_distance_matrix_correlation: true
+  compute_nearest_neighbour_overlap: true
+  compute_cluster_agreement: true
+  compute_batch_association: true
+  compute_cancer_type_preservation: true
+  strong_neighbourhood_threshold: 0.7
+
+representation_stability:
+  use_existing_bootstrap_outputs: true
+  enable_lightweight_bootstrap: false
+  bootstrap_iterations: 100
+  threshold_sensitivity_window: 0.05
+
+representation_weights:
+  use_stability_score: true
+  use_non_redundancy_score: true
+  use_batch_independence_score: true
+  use_cancer_type_preservation_score: true
+  normalise_weights: true
+  minimum_weight: 0.01
+
+probabilistic_neighbourhoods:
+  prior_alpha: 1
+  prior_beta: 1
+  evidence_support_threshold: 0.7
+  posterior_thresholds:
+    - 0.5
+    - 0.7
+    - 0.8
+  credible_interval: 0.95
+
+probabilistic_graph:
+  null_model: within_cancer_tumour_permutation
+  null_iterations: 1000
+  random_seed: 20260627
+  edge_probability_threshold_grid:
+    - 0.50
+    - 0.60
+    - 0.70
+    - 0.80
+    - 0.90
+    - 0.95
+  max_expected_false_edge_rate: 0.05
+  allow_no_valid_threshold: true
+
+ranking_uncertainty:
+  compute_rank_margin: true
+  compute_graph_ranking_agreement: true
+  compute_neighbourhood_ranking_agreement: true
+
+reporting:
+  write_markdown_reports: true
+  write_tsv_outputs: true
+  write_figures: true
+

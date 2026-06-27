@@ -1,0 +1,155 @@
+CONFIG_FILE = "research_framework/optimisation/config/optimisation.yaml"
+
+configfile: CONFIG_FILE
+
+OPT_ROOT = "research_framework/optimisation"
+SCRIPT_DIR = f"{OPT_ROOT}/scripts"
+RESULT_DIR = config["outputs"]["optimisation_results_root"]
+DOC_DIR = config["outputs"]["optimisation_docs_root"]
+LOG_DIR = f"{RESULT_DIR}/logs"
+
+rule all:
+    input:
+        f"{RESULT_DIR}/input_audit/optimisation_input_audit.tsv",
+        f"{DOC_DIR}/01_input_audit_report.md",
+        f"{RESULT_DIR}/representation_diagnostics/representation_redundancy.tsv",
+        f"{RESULT_DIR}/representation_diagnostics/representation_distance_matrix_correlations.tsv",
+        f"{RESULT_DIR}/representation_diagnostics/nearest_neighbour_overlap.tsv",
+        f"{RESULT_DIR}/representation_diagnostics/representation_stability.tsv",
+        f"{RESULT_DIR}/representation_weights/representation_weights.tsv",
+        f"{RESULT_DIR}/probabilistic_neighbourhoods/posterior_neighbourhood_probabilities.tsv.gz",
+        f"{RESULT_DIR}/probabilistic_neighbourhoods/neighbourhood_probability_summary.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_cellline_edges.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_edge_null_summary.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_resolved_edges.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_components.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_isolates.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_bridge_anchors.tsv",
+        f"{RESULT_DIR}/probabilistic_graphs/probabilistic_threshold_sweep.tsv",
+        f"{DOC_DIR}/03_threshold_validation_report.md",
+        f"{RESULT_DIR}/ranking_uncertainty/ranking_uncertainty_summary.tsv",
+        f"{RESULT_DIR}/ranking_uncertainty/cellline_rank_confidence.tsv",
+        f"{RESULT_DIR}/input_audit/public_portability_audit.tsv",
+        f"{DOC_DIR}/07_scientific_interpretation_notes.md"
+
+rule audit_optimisation_inputs:
+    output:
+        audit=f"{RESULT_DIR}/input_audit/optimisation_input_audit.tsv",
+        report=f"{DOC_DIR}/01_input_audit_report.md"
+    log:
+        f"{LOG_DIR}/01_input_audit.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/01_input_audit.R --config {CONFIG_FILE} > {log} 2>&1"
+
+rule score_representation_redundancy:
+    input:
+        audit=f"{RESULT_DIR}/input_audit/optimisation_input_audit.tsv"
+    output:
+        redundancy=f"{RESULT_DIR}/representation_diagnostics/representation_redundancy.tsv",
+        matrix_correlations=f"{RESULT_DIR}/representation_diagnostics/representation_distance_matrix_correlations.tsv",
+        nearest_overlap=f"{RESULT_DIR}/representation_diagnostics/nearest_neighbour_overlap.tsv",
+        report=f"{DOC_DIR}/02_representation_diagnostics_report.md"
+    log:
+        f"{LOG_DIR}/01_score_representation_redundancy.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/01_score_representation_redundancy.R --config {CONFIG_FILE} > {log} 2>&1"
+
+rule score_representation_stability:
+    input:
+        audit=f"{RESULT_DIR}/input_audit/optimisation_input_audit.tsv",
+        redundancy=f"{RESULT_DIR}/representation_diagnostics/representation_redundancy.tsv",
+        report=f"{DOC_DIR}/02_representation_diagnostics_report.md"
+    output:
+        stability=f"{RESULT_DIR}/representation_diagnostics/representation_stability.tsv",
+        done=f"{LOG_DIR}/02_score_representation_stability.done"
+    log:
+        f"{LOG_DIR}/02_score_representation_stability.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/02_score_representation_stability.R --config {CONFIG_FILE} > {log} 2>&1 && touch {output.done}"
+
+rule estimate_representation_weights:
+    input:
+        redundancy=f"{RESULT_DIR}/representation_diagnostics/representation_redundancy.tsv",
+        stability=f"{RESULT_DIR}/representation_diagnostics/representation_stability.tsv"
+    output:
+        weights=f"{RESULT_DIR}/representation_weights/representation_weights.tsv",
+        done=f"{LOG_DIR}/03_estimate_representation_weights.done"
+    log:
+        f"{LOG_DIR}/03_estimate_representation_weights.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/03_estimate_representation_weights.R --config {CONFIG_FILE} > {log} 2>&1 && touch {output.done}"
+
+rule calibrate_neighbourhood_probabilities:
+    input:
+        weights=f"{RESULT_DIR}/representation_weights/representation_weights.tsv"
+    output:
+        posterior=f"{RESULT_DIR}/probabilistic_neighbourhoods/posterior_neighbourhood_probabilities.tsv.gz",
+        summary=f"{RESULT_DIR}/probabilistic_neighbourhoods/neighbourhood_probability_summary.tsv",
+        report=f"{DOC_DIR}/04_probabilistic_neighbourhood_report.md"
+    log:
+        f"{LOG_DIR}/04_calibrate_neighbourhood_probabilities.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/04_calibrate_neighbourhood_probabilities.R --config {CONFIG_FILE} > {log} 2>&1"
+
+rule infer_probabilistic_graph_edges:
+    input:
+        posterior=f"{RESULT_DIR}/probabilistic_neighbourhoods/posterior_neighbourhood_probabilities.tsv.gz",
+        weights=f"{RESULT_DIR}/representation_weights/representation_weights.tsv"
+    output:
+        edges=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_cellline_edges.tsv",
+        null_summary=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_edge_null_summary.tsv",
+        report=f"{DOC_DIR}/05_probabilistic_graph_report.md"
+    log:
+        f"{LOG_DIR}/05_infer_probabilistic_graph_edges.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/05_infer_probabilistic_graph_edges.R --config {CONFIG_FILE} > {log} 2>&1"
+
+rule resolve_probabilistic_graph:
+    input:
+        edges=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_cellline_edges.tsv",
+        report=f"{DOC_DIR}/05_probabilistic_graph_report.md"
+    output:
+        resolved_edges=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_resolved_edges.tsv",
+        components=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_components.tsv",
+        isolates=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_isolates.tsv",
+        bridge_anchors=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_bridge_anchors.tsv",
+        threshold_sweep=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_threshold_sweep.tsv",
+        threshold_report=f"{DOC_DIR}/03_threshold_validation_report.md"
+    log:
+        f"{LOG_DIR}/06_resolve_probabilistic_graph.log"
+    shell:
+        "mkdir -p {LOG_DIR} && python3 {SCRIPT_DIR}/06_resolve_probabilistic_graph.py --config {CONFIG_FILE} > {log} 2>&1"
+
+rule estimate_ranking_uncertainty:
+    input:
+        posterior=f"{RESULT_DIR}/probabilistic_neighbourhoods/posterior_neighbourhood_probabilities.tsv.gz",
+        components=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_components.tsv"
+    output:
+        summary=f"{RESULT_DIR}/ranking_uncertainty/ranking_uncertainty_summary.tsv",
+        confidence=f"{RESULT_DIR}/ranking_uncertainty/cellline_rank_confidence.tsv",
+        report=f"{DOC_DIR}/06_ranking_uncertainty_report.md"
+    log:
+        f"{LOG_DIR}/07_rank_uncertainty.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/07_rank_uncertainty.R --config {CONFIG_FILE} > {log} 2>&1"
+
+rule write_optimisation_summary:
+    input:
+        audit=f"{RESULT_DIR}/input_audit/optimisation_input_audit.tsv",
+        redundancy=f"{RESULT_DIR}/representation_diagnostics/representation_redundancy.tsv",
+        stability=f"{RESULT_DIR}/representation_diagnostics/representation_stability.tsv",
+        weights=f"{RESULT_DIR}/representation_weights/representation_weights.tsv",
+        neighbourhood_summary=f"{RESULT_DIR}/probabilistic_neighbourhoods/neighbourhood_probability_summary.tsv",
+        edges=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_cellline_edges.tsv",
+        resolved_edges=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_resolved_edges.tsv",
+        components=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_components.tsv",
+        isolates=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_isolates.tsv",
+        bridge_anchors=f"{RESULT_DIR}/probabilistic_graphs/probabilistic_bridge_anchors.tsv",
+        ranking_summary=f"{RESULT_DIR}/ranking_uncertainty/ranking_uncertainty_summary.tsv"
+    output:
+        portability=f"{RESULT_DIR}/input_audit/public_portability_audit.tsv",
+        report=f"{DOC_DIR}/07_scientific_interpretation_notes.md"
+    log:
+        f"{LOG_DIR}/08_write_optimisation_summary.log"
+    shell:
+        "mkdir -p {LOG_DIR} && Rscript {SCRIPT_DIR}/08_write_optimisation_summary.R --config {CONFIG_FILE} > {log} 2>&1"

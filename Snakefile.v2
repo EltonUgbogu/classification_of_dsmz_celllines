@@ -1,0 +1,464 @@
+#!/usr/bin/env snakemake
+
+# Version 2 development controller.
+#
+# The protected Version 1 thesis controller remains Snakefile. This workflow
+# reads Version 1 outputs as immutable inputs and writes only to results/version2/
+# and docs/version2/.
+
+import os
+from pathlib import Path
+
+REPO_ROOT = Path(workflow.basedir).resolve()
+
+def repo_path(*parts):
+    """Return an absolute path inside the repository."""
+    return str(REPO_ROOT.joinpath(*parts))
+
+def resolve_path(value):
+    """Resolve a configured path relative to the repository root."""
+    candidate_path = Path(str(value)).expanduser()
+    return str(candidate_path if candidate_path.is_absolute() else REPO_ROOT / candidate_path)
+
+configfile: repo_path("config", "config_v2.yaml")
+
+PROFILE_NAME = config.get("pipeline_profile", "pan_cancer")
+if PROFILE_NAME != "pan_cancer":
+    raise ValueError(
+        "Snakefile.v2 currently supports pipeline_profile=pan_cancer only. "
+        f"Received pipeline_profile={PROFILE_NAME!r}."
+    )
+
+V2_CFG = config.get("version2", {})
+V2_RESULTS_DIR = V2_CFG.get("results_dir", "results/version2")
+V2_DOCS_DIR = V2_CFG.get("docs_dir", "docs/version2")
+V2_LOG_DIR = V2_CFG.get("log_dir", "logs/version2")
+CONDA_ENV_R = repo_path(V2_CFG.get("conda_env_r", "envs/tcga-r-env.yaml"))
+
+SCRIPTS_DIR = repo_path("scripts")
+
+def v2_result(filename):
+    """Return a Version 2 result path in the neutral results namespace."""
+    return os.path.join(V2_RESULTS_DIR, filename)
+
+def v2_doc(filename):
+    """Return a Version 2 documentation path in the neutral docs namespace."""
+    return os.path.join(V2_DOCS_DIR, filename)
+
+def v2_log(filename):
+    """Return a Version 2 log path."""
+    return os.path.join(V2_LOG_DIR, filename)
+
+def config_number(section, key, default):
+    """Read a numeric Version 2 config value with a deterministic fallback."""
+    return V2_CFG.get(section, {}).get(key, default)
+
+V1_INPUT_CFG = V2_CFG.get("v1_inputs", {})
+REQUIRED_V1_INPUTS = [
+    "cell_line_graph_edges",
+    "cell_line_node_metadata",
+    "louvain_communities",
+    "leiden_communities",
+    "tumour_to_cellline_rankings",
+    "cellline_to_tumour_rankings",
+    "cellline_rank_summary",
+]
+
+def v1_input_path(input_key):
+    """Return a protected Version 1 input path and fail clearly if absent."""
+    if input_key not in V1_INPUT_CFG:
+        raise ValueError(f"Missing config entry version2.v1_inputs.{input_key}.path")
+    configured_path = V1_INPUT_CFG[input_key].get("path", "")
+    if not configured_path:
+        raise ValueError(f"Missing path for version2.v1_inputs.{input_key}")
+    return resolve_path(configured_path)
+
+missing_v1_inputs = []
+for required_input_key in REQUIRED_V1_INPUTS:
+    required_input_path = v1_input_path(required_input_key)
+    if not os.path.exists(required_input_path):
+        producer = V1_INPUT_CFG[required_input_key].get(
+            "producing_version1_target",
+            V1_INPUT_CFG[required_input_key].get("path", required_input_path),
+        )
+        missing_v1_inputs.append((required_input_key, required_input_path, producer))
+
+if missing_v1_inputs:
+    formatted_missing = "\n".join(
+        f"- {input_key}: missing {input_path}; run protected Version 1 target first: {producer}"
+        for input_key, input_path, producer in missing_v1_inputs
+    )
+    raise ValueError(
+        "Snakefile.v2 reads protected Version 1 outputs but does not regenerate them.\n"
+        "The following Version 1 inputs are missing:\n"
+        f"{formatted_missing}"
+    )
+
+V1_GRAPH_EDGES = v1_input_path("cell_line_graph_edges")
+V1_NODE_METADATA = v1_input_path("cell_line_node_metadata")
+V1_LOUVAIN_COMMUNITIES = v1_input_path("louvain_communities")
+V1_LEIDEN_COMMUNITIES = v1_input_path("leiden_communities")
+V1_TUMOUR_TO_CELLLINE_RANKINGS = v1_input_path("tumour_to_cellline_rankings")
+V1_CELLLINE_TO_TUMOUR_RANKINGS = v1_input_path("cellline_to_tumour_rankings")
+V1_CELLLINE_RANK_SUMMARY = v1_input_path("cellline_rank_summary")
+
+REPRESENTATION_DIAGNOSTICS = v2_result("representation_diagnostics.tsv")
+REPRESENTATION_WEIGHTS = v2_result("representation_weights.tsv")
+WEIGHTED_EDGES_PREBOOTSTRAP = v2_result("weighted_consensus_edges_prebootstrap.tsv")
+WEIGHTED_CONSENSUS_EDGES = v2_result("weighted_consensus_edges.tsv")
+BOUNDARY_CASE_SUMMARY = v2_result("boundary_case_summary.tsv")
+BOUNDARY_EDGES = v2_result("boundary_edges.tsv")
+BOUNDARY_RANKINGS = v2_result("boundary_rankings.tsv")
+BRIDGE_LIKE_NODES = v2_result("bridge_like_nodes.tsv")
+PDG_EDGES = v2_result("probability_dependence_edges.tsv")
+PDG_NODES = v2_result("probability_dependence_nodes.tsv")
+PDG_GRAPHML = v2_result("probability_dependence_graph.graphml")
+PDG_SUMMARY = v2_result("probability_dependence_graph_summary.tsv")
+V1_V2_EDGE_COMPARISON = v2_result("v1_v2_edge_comparison.tsv")
+V1_V2_RANKING_COMPARISON = v2_result("v1_v2_ranking_comparison.tsv")
+V1_V2_NODE_STATUS_COMPARISON = v2_result("v1_v2_node_status_comparison.tsv")
+VERSION2_COMPLETE_FLAG = v2_result("version2_complete.flag")
+
+DOC_METHODOLOGY = v2_doc("version2_methodological_summary.md")
+DOC_WEIGHTING = v2_doc("representation_weighting_report.md")
+DOC_BOUNDARY = v2_doc("boundary_case_report.md")
+DOC_PDG = v2_doc("probability_dependence_graph_report.md")
+DOC_COMPARISON = v2_doc("v1_v2_comparison_report.md")
+DOC_CHECKLIST = v2_doc("user_inspection_checklist.md")
+DOC_STATUS = v2_doc("version2_implementation_status.md")
+DOC_V1_INPUTS = v2_doc("version1_inputs_used_by_version2.md")
+DOC_REORG = v2_doc("documentation_reorganisation_report.md")
+
+rule all:
+    input:
+        VERSION2_COMPLETE_FLAG
+
+rule version2:
+    input:
+        VERSION2_COMPLETE_FLAG
+
+rule version2_convex_representation_weights:
+    input:
+        REPRESENTATION_DIAGNOSTICS,
+        REPRESENTATION_WEIGHTS,
+        WEIGHTED_CONSENSUS_EDGES
+
+rule version2_boundary_cases:
+    input:
+        BOUNDARY_CASE_SUMMARY,
+        BOUNDARY_EDGES,
+        BOUNDARY_RANKINGS,
+        BRIDGE_LIKE_NODES,
+        DOC_BOUNDARY
+
+rule version2_probability_graph:
+    input:
+        PDG_EDGES,
+        PDG_NODES,
+        PDG_GRAPHML,
+        PDG_SUMMARY,
+        DOC_PDG
+
+rule version2_v1_v2_comparison:
+    input:
+        V1_V2_EDGE_COMPARISON,
+        V1_V2_RANKING_COMPARISON,
+        V1_V2_NODE_STATUS_COMPARISON,
+        DOC_COMPARISON
+
+rule compute_v2_representation_redundancy:
+    input:
+        v1_edges=V1_GRAPH_EDGES,
+        v1_node_metadata=V1_NODE_METADATA,
+        v1_louvain=V1_LOUVAIN_COMMUNITIES,
+        v1_leiden=V1_LEIDEN_COMMUNITIES,
+        v1_tumour_rankings=V1_TUMOUR_TO_CELLLINE_RANKINGS,
+        v1_cellline_rankings=V1_CELLLINE_TO_TUMOUR_RANKINGS,
+        v1_rank_summary=V1_CELLLINE_RANK_SUMMARY,
+        script=os.path.join(SCRIPTS_DIR, "compute_representation_redundancy.R")
+    output:
+        diagnostics=REPRESENTATION_DIAGNOSTICS
+    log:
+        v2_log("compute_v2_representation_redundancy.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --v1-edges "{input.v1_edges}" \
+          --v1-node-metadata "{input.v1_node_metadata}" \
+          --v1-louvain "{input.v1_louvain}" \
+          --v1-leiden "{input.v1_leiden}" \
+          --v1-tumour-rankings "{input.v1_tumour_rankings}" \
+          --v1-cellline-rankings "{input.v1_cellline_rankings}" \
+          --v1-rank-summary "{input.v1_rank_summary}" \
+          --output "{output.diagnostics}" \
+          > "{log}" 2>&1
+        test -s "{output.diagnostics}"
+        '''
+
+rule estimate_v2_convex_representation_weights:
+    input:
+        diagnostics=REPRESENTATION_DIAGNOSTICS,
+        script=os.path.join(SCRIPTS_DIR, "estimate_convex_representation_weights.R")
+    output:
+        weights=REPRESENTATION_WEIGHTS
+    params:
+        stability_reward=config_number("objective", "stability_reward", 0.40),
+        agreement_reward=config_number("objective", "cancer_type_agreement_reward", 0.35),
+        redundancy_penalty=config_number("objective", "redundancy_penalty", 0.15),
+        batch_penalty=config_number("objective", "batch_penalty", 0.05),
+        instability_penalty=config_number("objective", "instability_penalty", 0.05)
+    log:
+        v2_log("estimate_v2_convex_representation_weights.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --diagnostics "{input.diagnostics}" \
+          --output "{output.weights}" \
+          --stability-reward {params.stability_reward} \
+          --agreement-reward {params.agreement_reward} \
+          --redundancy-penalty {params.redundancy_penalty} \
+          --batch-penalty {params.batch_penalty} \
+          --instability-penalty {params.instability_penalty} \
+          > "{log}" 2>&1
+        test -s "{output.weights}"
+        '''
+
+rule build_v2_weighted_consensus_edges:
+    input:
+        v1_edges=V1_GRAPH_EDGES,
+        v1_louvain=V1_LOUVAIN_COMMUNITIES,
+        v1_leiden=V1_LEIDEN_COMMUNITIES,
+        v1_tumour_rankings=V1_TUMOUR_TO_CELLLINE_RANKINGS,
+        v1_cellline_rankings=V1_CELLLINE_TO_TUMOUR_RANKINGS,
+        v1_rank_summary=V1_CELLLINE_RANK_SUMMARY,
+        weights=REPRESENTATION_WEIGHTS,
+        script=os.path.join(SCRIPTS_DIR, "build_weighted_consensus_edges.R")
+    output:
+        edges=WEIGHTED_EDGES_PREBOOTSTRAP
+    params:
+        top_rank_count=config_number("thresholds", "top_rank_count_for_pair_support", 10)
+    log:
+        v2_log("build_v2_weighted_consensus_edges.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --v1-edges "{input.v1_edges}" \
+          --v1-louvain "{input.v1_louvain}" \
+          --v1-leiden "{input.v1_leiden}" \
+          --v1-tumour-rankings "{input.v1_tumour_rankings}" \
+          --v1-cellline-rankings "{input.v1_cellline_rankings}" \
+          --v1-rank-summary "{input.v1_rank_summary}" \
+          --weights "{input.weights}" \
+          --top-rank-count {params.top_rank_count} \
+          --output "{output.edges}" \
+          > "{log}" 2>&1
+        test -s "{output.edges}"
+        '''
+
+rule bootstrap_v2_weighted_consensus_support:
+    input:
+        edges=WEIGHTED_EDGES_PREBOOTSTRAP,
+        script=os.path.join(SCRIPTS_DIR, "bootstrap_weighted_consensus_support.R")
+    output:
+        edges=WEIGHTED_CONSENSUS_EDGES
+    params:
+        retained_min=config_number("thresholds", "retained_edge_min_score", 0.70),
+        rejected_max=config_number("thresholds", "rejected_edge_max_score", 0.40),
+        interval_half_width=config_number("thresholds", "bootstrap_interval_half_width", 0.08),
+        boundary_margin_band=config_number("thresholds", "boundary_margin_band", 0.05),
+        weak_weighted_consensus=config_number("thresholds", "weak_weighted_consensus", 0.55)
+    log:
+        v2_log("bootstrap_v2_weighted_consensus_support.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --weighted-edges "{input.edges}" \
+          --output "{output.edges}" \
+          --retained-min {params.retained_min} \
+          --rejected-max {params.rejected_max} \
+          --interval-half-width {params.interval_half_width} \
+          --boundary-margin-band {params.boundary_margin_band} \
+          --weak-weighted-consensus {params.weak_weighted_consensus} \
+          > "{log}" 2>&1
+        test -s "{output.edges}"
+        '''
+
+rule classify_v2_boundary_cases:
+    input:
+        weighted_edges=WEIGHTED_CONSENSUS_EDGES,
+        v1_louvain=V1_LOUVAIN_COMMUNITIES,
+        v1_leiden=V1_LEIDEN_COMMUNITIES,
+        v1_rank_summary=V1_CELLLINE_RANK_SUMMARY,
+        script=os.path.join(SCRIPTS_DIR, "classify_boundary_cases.R")
+    output:
+        summary=BOUNDARY_CASE_SUMMARY,
+        boundary_edges=BOUNDARY_EDGES,
+        boundary_rankings=BOUNDARY_RANKINGS,
+        bridge_nodes=BRIDGE_LIKE_NODES,
+        report=DOC_BOUNDARY
+    params:
+        ranking_margin=config_number("thresholds", "ranking_boundary_margin", 0.02),
+        bridge_fraction=config_number("thresholds", "bridge_like_boundary_fraction", 0.35)
+    log:
+        v2_log("classify_v2_boundary_cases.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_DOCS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --weighted-edges "{input.weighted_edges}" \
+          --v1-louvain "{input.v1_louvain}" \
+          --v1-leiden "{input.v1_leiden}" \
+          --v1-rank-summary "{input.v1_rank_summary}" \
+          --summary-out "{output.summary}" \
+          --boundary-edges-out "{output.boundary_edges}" \
+          --boundary-rankings-out "{output.boundary_rankings}" \
+          --bridge-nodes-out "{output.bridge_nodes}" \
+          --report-out "{output.report}" \
+          --ranking-margin {params.ranking_margin} \
+          --bridge-fraction {params.bridge_fraction} \
+          > "{log}" 2>&1
+        test -s "{output.summary}"
+        test -s "{output.boundary_edges}"
+        test -s "{output.boundary_rankings}"
+        test -s "{output.bridge_nodes}"
+        test -s "{output.report}"
+        '''
+
+rule build_v2_probability_dependence_graph:
+    input:
+        v1_edges=V1_GRAPH_EDGES,
+        weighted_edges=WEIGHTED_CONSENSUS_EDGES,
+        boundary_edges=BOUNDARY_EDGES,
+        bridge_nodes=BRIDGE_LIKE_NODES,
+        script=os.path.join(SCRIPTS_DIR, "build_probability_dependence_graph.R")
+    output:
+        edges=PDG_EDGES,
+        nodes=PDG_NODES,
+        graphml=PDG_GRAPHML,
+        summary=PDG_SUMMARY,
+        report=DOC_PDG
+    log:
+        v2_log("build_v2_probability_dependence_graph.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_DOCS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --v1-edges "{input.v1_edges}" \
+          --weighted-edges "{input.weighted_edges}" \
+          --boundary-edges "{input.boundary_edges}" \
+          --bridge-nodes "{input.bridge_nodes}" \
+          --edges-out "{output.edges}" \
+          --nodes-out "{output.nodes}" \
+          --graphml-out "{output.graphml}" \
+          --summary-out "{output.summary}" \
+          --report-out "{output.report}" \
+          > "{log}" 2>&1
+        test -s "{output.edges}"
+        test -s "{output.nodes}"
+        test -s "{output.graphml}"
+        test -s "{output.summary}"
+        test -s "{output.report}"
+        '''
+
+rule compare_v1_v2_outputs:
+    input:
+        v1_edges=V1_GRAPH_EDGES,
+        v1_rank_summary=V1_CELLLINE_RANK_SUMMARY,
+        weighted_edges=WEIGHTED_CONSENSUS_EDGES,
+        boundary_rankings=BOUNDARY_RANKINGS,
+        pdg_nodes=PDG_NODES,
+        script=os.path.join(SCRIPTS_DIR, "compare_v1_v2_outputs.R")
+    output:
+        edge_comparison=V1_V2_EDGE_COMPARISON,
+        ranking_comparison=V1_V2_RANKING_COMPARISON,
+        node_status_comparison=V1_V2_NODE_STATUS_COMPARISON,
+        report=DOC_COMPARISON
+    log:
+        v2_log("compare_v1_v2_outputs.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_DOCS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --v1-edges "{input.v1_edges}" \
+          --v1-rank-summary "{input.v1_rank_summary}" \
+          --weighted-edges "{input.weighted_edges}" \
+          --boundary-rankings "{input.boundary_rankings}" \
+          --pdg-nodes "{input.pdg_nodes}" \
+          --edge-comparison-out "{output.edge_comparison}" \
+          --ranking-comparison-out "{output.ranking_comparison}" \
+          --node-status-comparison-out "{output.node_status_comparison}" \
+          --report-out "{output.report}" \
+          > "{log}" 2>&1
+        test -s "{output.edge_comparison}"
+        test -s "{output.ranking_comparison}"
+        test -s "{output.node_status_comparison}"
+        test -s "{output.report}"
+        '''
+
+rule write_v2_method_reports:
+    input:
+        diagnostics=REPRESENTATION_DIAGNOSTICS,
+        weights=REPRESENTATION_WEIGHTS,
+        weighted_edges=WEIGHTED_CONSENSUS_EDGES,
+        boundary_summary=BOUNDARY_CASE_SUMMARY,
+        graph_summary=PDG_SUMMARY,
+        edge_comparison=V1_V2_EDGE_COMPARISON,
+        ranking_comparison=V1_V2_RANKING_COMPARISON,
+        node_status_comparison=V1_V2_NODE_STATUS_COMPARISON,
+        version1_inputs=DOC_V1_INPUTS,
+        documentation_reorganisation=DOC_REORG,
+        script=os.path.join(SCRIPTS_DIR, "write_version2_reports.R")
+    output:
+        methodology=DOC_METHODOLOGY,
+        weighting=DOC_WEIGHTING,
+        checklist=DOC_CHECKLIST,
+        status=DOC_STATUS,
+        complete_flag=VERSION2_COMPLETE_FLAG
+    log:
+        v2_log("write_v2_method_reports.log")
+    conda:
+        CONDA_ENV_R
+    shell:
+        r'''
+        mkdir -p "{V2_RESULTS_DIR}" "{V2_DOCS_DIR}" "{V2_LOG_DIR}"
+        Rscript "{input.script}" \
+          --diagnostics "{input.diagnostics}" \
+          --weights "{input.weights}" \
+          --weighted-edges "{input.weighted_edges}" \
+          --boundary-summary "{input.boundary_summary}" \
+          --graph-summary "{input.graph_summary}" \
+          --edge-comparison "{input.edge_comparison}" \
+          --ranking-comparison "{input.ranking_comparison}" \
+          --node-status-comparison "{input.node_status_comparison}" \
+          --version1-inputs "{input.version1_inputs}" \
+          --documentation-reorganisation "{input.documentation_reorganisation}" \
+          --methodology-out "{output.methodology}" \
+          --weighting-report-out "{output.weighting}" \
+          --checklist-out "{output.checklist}" \
+          --status-out "{output.status}" \
+          --complete-flag "{output.complete_flag}" \
+          > "{log}" 2>&1
+        test -s "{output.methodology}"
+        test -s "{output.weighting}"
+        test -s "{output.checklist}"
+        test -s "{output.status}"
+        test -s "{output.complete_flag}"
+        '''
