@@ -21,7 +21,7 @@ PIPELINE_DIR="$(cd "$PROJECT_DIR/../.." && pwd)"
 SNAKEFILE="${SNAKEFILE:-$PROJECT_DIR/Snakefile}"
 CONFIGFILE="${CONFIGFILE:-}"
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/logs}"
-DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/rbl}"
+DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/rbl/new_data}"
 export DATA_ROOT
 
 if [ -z "$CONFIGFILE" ]; then

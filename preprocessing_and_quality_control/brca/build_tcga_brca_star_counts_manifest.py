@@ -8,7 +8,7 @@ from pathlib import Path
 
 PROJECT = "TCGA-BRCA"
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BRCA_DATA_ROOT = Path(os.environ.get("BRCA_DATA_ROOT", REPO_ROOT / "data" / "brca")).expanduser()
+BRCA_DATA_ROOT = Path(os.environ.get("BRCA_DATA_ROOT", REPO_ROOT / "data" / "brca" / "new_data")).expanduser()
 OUTDIR = BRCA_DATA_ROOT / "TCGA_BRCA"
 MANIFEST = OUTDIR / "manifests" / "gdc_manifest_tcga_brca_star_counts_primary_tumour.txt"
 META = OUTDIR / "metadata" / "tcga_brca_star_counts_primary_tumour_files.tsv"

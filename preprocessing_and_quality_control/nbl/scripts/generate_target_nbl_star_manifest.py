@@ -29,7 +29,7 @@ from pathlib import Path
 GDC_FILES_ENDPOINT = "https://api.gdc.cancer.gov/files"
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl")).expanduser()
+NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl" / "new_data")).expanduser()
 DEFAULT_MANIFEST_PATH = NBL_DATA_ROOT / "target_nbl" / "manifest.tsv"
 
 

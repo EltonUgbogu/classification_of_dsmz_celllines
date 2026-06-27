@@ -47,7 +47,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-ROOT="${RBL_DATA_ROOT:-$REPO_ROOT/data/rbl}"
+ROOT="${RBL_DATA_ROOT:-$REPO_ROOT/data/rbl/new_data}"
 ARG="${1:-GSE268136_primary_tumours}"
 
 need() {

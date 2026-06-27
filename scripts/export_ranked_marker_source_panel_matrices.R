@@ -46,7 +46,7 @@ write_wide <- function(x, path) {
 cl_obj <- readRDS(opts[["cell-line-rds"]])
 if (!all(c("expr","meta") %in% names(cl_obj))) stop("cell-line RDS lacks expr/meta")
 cl_expr <- subset_matrix(cl_obj$expr)
-if (nrow(cl_expr) != 379L) stop("Cell-line matrix does not contain 379 genes")
+if (nrow(cl_expr) != 379L) stop("Cell-line matrix does not contain the expected current feature-panel genes")
 write_wide(cl_expr, file.path(opts[["dsmz-outdir"]], "ranked_marker_source_panel_dsmz_expression_matrix.tsv"))
 fwrite(coverage_table(rownames(cl_obj$expr), "pan_cancer_feature_expr_cell_lines_only"),
        file.path(opts[["dsmz-outdir"]], "ranked_marker_source_panel_dsmz_expression_feature_coverage.tsv"), sep="\t")

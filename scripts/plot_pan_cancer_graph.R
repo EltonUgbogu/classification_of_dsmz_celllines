@@ -6,7 +6,7 @@
 # Pan-cancer (pan-disease) cell line → cell line consensus graph plots
 #
 # HARD CONSTRAINTS (project-specific):
-#   1) Working on the final 171-gene pan-cancer feature set by default
+#   1) Working on the current marker-derived pan-cancer feature set by default
 #      (override with --expected-gene-count if regenerating legacy figures)
 #   2) Only concerned with cell lines
 #   3) In the .rds, cell line IDs must start with "NG-"

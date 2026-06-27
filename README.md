@@ -146,7 +146,7 @@ Source abbreviations used by the project include TCGA (The Cancer Genome Atlas),
 | Selected final figures | tracked when curated | reporting outputs |
 | `.snakemake/`, `logs/`, `benchmarks/`, Conda payloads | excluded | runtime state and local execution artifacts |
 
-The 171-gene analysis is retained only as archived provenance material under [`supplementary_data/archive/stale_171_gene_panel/`](supplementary_data/archive/stale_171_gene_panel/) and is not part of the current active feature space.
+The archived legacy feature-panel analysis is retained only as provenance material under [`supplementary_data/archive/stale_171_gene_panel/`](supplementary_data/archive/stale_171_gene_panel/) and is not part of the current active feature space.
 
 ## Configuration
 
@@ -169,9 +169,10 @@ Repository-relative defaults preserve the existing layout when data are stored u
 | `nbl` | neuroblastoma | full unsupervised grid without PAM50 |
 | `rbl` | retinoblastoma | full unsupervised grid without PAM50 |
 | `heme` | haematological malignancy profiles | configured for cell-line network analyses; not part of the BRCA/NBL/RBL active pan-cancer feature panel |
-| `multicohort_cancer` | combined BRCA, NBL, and RBL | adds PanCancerFeatureSet directions and shared multicohort outputs |
+| `multicohort_cancer` | combined BRCA, NBL, and RBL | patient-referenced multicohort context for tumour-neighbourhood and graph outputs |
+| `pan_cancer` | marker-derived pan-cancer analysis layer | builds pan-cancer feature-space, expression-matrix, tumour/cell-line mapping, ranking, enrichment-query, graph, and community outputs under `results/unsupervised/pan_cancer/` |
 
-`pan_cancer` is an output namespace, not a selectable Snakemake profile.
+`pan_cancer` is both a selectable Snakemake profile and the output namespace for the marker-derived pan-cancer analysis layer. `multicohort_cancer` and `pan_cancer` are not interchangeable; explicit legacy pan-cancer targets may still resolve through `multicohort_cancer` for compatibility, but new pan-cancer commands should use `pipeline_profile=pan_cancer`.
 
 ## Running the workflow
 
@@ -182,6 +183,7 @@ snakemake -n --use-conda --config pipeline_profile=brca
 snakemake -n --use-conda --config pipeline_profile=nbl
 snakemake -n --use-conda --config pipeline_profile=rbl
 snakemake -n --use-conda --config pipeline_profile=multicohort_cancer
+snakemake -n --use-conda --config pipeline_profile=pan_cancer
 snakemake -n --use-conda --config pipeline_profile=heme
 ```
 
@@ -192,29 +194,30 @@ snakemake --use-conda --cores 8 --config pipeline_profile=brca
 snakemake --use-conda --cores 8 --config pipeline_profile=nbl
 snakemake --use-conda --cores 8 --config pipeline_profile=rbl
 snakemake --use-conda --cores 8 --config pipeline_profile=multicohort_cancer
+snakemake --use-conda --cores 8 --config pipeline_profile=pan_cancer
 snakemake --use-conda --cores 8 --config pipeline_profile=heme
 ```
 
 Specific rules or exact file targets can be dry-run or executed without requesting the default target. A verified rule-level example for the pan-cancer two-panel figure is:
 
 ```bash
-snakemake -n --use-conda plot_pan_cancer_cell_line_two_panel --config pipeline_profile=multicohort_cancer
-snakemake --use-conda --cores 4 plot_pan_cancer_cell_line_two_panel --config pipeline_profile=multicohort_cancer
+snakemake -n --use-conda plot_pan_cancer_cell_line_two_panel --config pipeline_profile=pan_cancer
+snakemake --use-conda --cores 4 plot_pan_cancer_cell_line_two_panel --config pipeline_profile=pan_cancer
 ```
 
 A verified file target for the same rule is:
 
 ```bash
 TARGET_FILE=figures/Fig_pan_cancer_cell_line_similarity_network_lineage_community.pdf
-snakemake -n --use-conda "$TARGET_FILE" --config pipeline_profile=multicohort_cancer
-snakemake --use-conda --cores 4 "$TARGET_FILE" --config pipeline_profile=multicohort_cancer
+snakemake -n --use-conda "$TARGET_FILE" --config pipeline_profile=pan_cancer
+snakemake --use-conda --cores 4 "$TARGET_FILE" --config pipeline_profile=pan_cancer
 ```
 
 ## Outputs
 
 ### Current pan-cancer feature panel
 
-The current pan-cancer feature panel is the 379-gene ranked marker-source panel:
+The current pan-cancer feature panel is the ranked marker-source panel:
 
 - method: `ranked_marker_source_pan_cancer_panel`
 - selected empirical rule: `relaxed_iqr_median_baseMean`

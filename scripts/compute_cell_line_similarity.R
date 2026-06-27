@@ -290,8 +290,8 @@ if (!is.null(opt$meta_tsv) && nzchar(opt$meta_tsv)) {
 #   - Values = p_consensus(c, t)
 #
 # This matrix representation allows each cell line to be treated as a vector
-# in "tumour space", where the coordinates are the consensus probabilities
-# with each tumour.
+# in "tumour space", where the coordinates are the p-consensus values
+# for each tumour.
 
 # Apply mode restriction and disease filtering
 cp <- consensus_pairs

@@ -1622,7 +1622,7 @@ if HAS_PAM50_DIRECTIONS and _TCGA_PAM50_PATH and _DSMZ_PAM50_PATH:
 
 # Rule: tumour_nh_hc
 # Method role: analysis rule that runs tumour-neighbourhood scoring from hierarchical-clustering evidence.
-# Flow: representation-specific consensus inputs -> neighbourhood QC, UMAP, and probability tables.
+# Flow: representation-specific consensus inputs -> neighbourhood QC, UMAP, and p-consensus tables.
 # Feeds within-representation p-consensus and patient-referenced graph construction.
 rule tumour_nh_hc:
     """
@@ -1666,7 +1666,7 @@ rule tumour_nh_hc:
 
 # Rule: tumour_nh_km
 # Method role: analysis rule that runs tumour-neighbourhood scoring from k-means clustering evidence.
-# Flow: Euclidean representation inputs -> neighbourhood QC, UMAP, and probability tables.
+# Flow: Euclidean representation inputs -> neighbourhood QC, UMAP, and p-consensus tables.
 # Analysis role: complements hierarchical-clustering evidence for p-consensus aggregation.
 rule tumour_nh_km:
     """
@@ -1710,7 +1710,7 @@ rule tumour_nh_km:
 # =============================================================================
 # WITHIN-REPRESENTATION P-CONSENSUS
 # =============================================================================
-# Stage role: computes tumour-neighbourhood probabilities within each representation.
+# Stage role: computes tumour-neighbourhood p-consensus values within each representation.
 
 # Rule: tumour_nh_consensus
 # Method role: analysis rule that combines tumour-neighbourhood runs within a representation.
@@ -1718,7 +1718,7 @@ rule tumour_nh_km:
 # Provides input for cross-representation p-consensus aggregation.
 rule tumour_nh_consensus:
     """
-    Probabilistic neighbourhood consensus for every configured direction.
+    Within-representation p-consensus aggregation for every configured direction.
     Euclidean directions depend on the KM sentinel so HC and KM neighbourhood
     files are present; correlation directions depend on HC only.
     """

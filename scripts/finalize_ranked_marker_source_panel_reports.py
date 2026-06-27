@@ -98,7 +98,7 @@ write(ENR / 'ranked_marker_source_panel_enrichment_report.md', f'''# Ranked mark
 
 ## Status
 
-Query preparation completed for the 379-gene ranked marker-source pan-cancer panel. g:Profiler was attempted using the available `gprofiler2` environment, but the endpoint timed out without returning term-level results. Consequently, this report provides query and background provenance only; it makes no enrichment claims.
+Query preparation completed for the current ranked marker-source pan-cancer panel. g:Profiler was attempted using the available `gprofiler2` environment, but the endpoint timed out without returning term-level results. Consequently, this report provides query and background provenance only; it makes no enrichment claims.
 
 - Queries prepared: {len(query)}
 - Queries meeting the minimum size: {len(query)-len(skipped)}
@@ -112,7 +112,7 @@ The query categories are the final panel, mutually exclusive cohort-owner sets, 
 
 write(DSMZ / 'ranked_marker_source_panel_dsmz_similarity_graph_report.md', f'''# Ranked marker-source panel DSMZ similarity graph report
 
-The established DSMZ graph workflow was rerun with all 379 clean feature genes.
+The established DSMZ graph workflow was rerun with the current clean feature panel.
 
 - Profiles/nodes: {dsmz['nodes']}
 - Genes used: {dsmz['feature_genes_used']}
@@ -131,7 +131,7 @@ The full configured Louvain and Leiden resolution grids were retained. NBL/RBL m
 overall = next(row for row in retrieval if row['group'] == 'overall')
 write(RANK / 'ranked_marker_source_panel_ranking_report.md', f'''# Ranked marker-source panel ranking and retrieval report
 
-All patient-to-cell-line and reciprocal retrieval analyses were rerun using the 379-gene ranked marker-source pan-cancer panel.
+All patient-to-cell-line and reciprocal retrieval analyses were rerun using the current ranked marker-source pan-cancer panel.
 
 - Tumour profiles: 1,128
 - Patient-to-cell-line top-1 cancer-type agreement: {float(patient['top1_accuracy']):.4f}
@@ -151,14 +151,14 @@ The rankings define prioritised tiers of suitable models, not a mandatory single
 
 write(EMBED / 'ranked_marker_source_panel_embedding_report.md', '''# Ranked marker-source panel embedding report
 
-The existing pan-cancer tumour/cell-line UMAP rule was rerun with the active 379-gene ranked marker-source pan-cancer panel. Coordinates, the cancer-type/data-source figure and the workflow summary are packaged here under current method naming. The embedding is a feature-space visualisation and is not used to define formal molecular subtypes.
+The existing pan-cancer tumour/cell-line UMAP rule was rerun with the active ranked marker-source pan-cancer panel. Coordinates, the cancer-type/data-source figure and the workflow summary are packaged here under current method naming. The embedding is a feature-space visualisation and is not used to define formal molecular subtypes.
 ''')
 
 write(MOUT / 'ranked_marker_source_panel_multicohort_report.md', f'''# Ranked marker-source panel multi-cohort cancer report
 
 ## Status and inputs
 
-The established `multicohort_cancer` workflow was rerun separately from the DSMZ-only graph. It consumed `pan_cancer_features_clean.txt` and used all 379 clean Ensembl genes.
+The established `multicohort_cancer` workflow was rerun separately from the DSMZ-only graph. It consumed `pan_cancer_features_clean.txt` and used the current clean Ensembl feature panel.
 
 - Cohorts/data sources: {multi['cohorts_included']} (DSMZ, GSE, TARGET and TCGA)
 - Samples/profiles: {multi['samples_profiles']}
@@ -206,7 +206,7 @@ final_report = f'''# Ranked marker-source panel downstream rerun report
 
 ## 1. Executive summary
 
-The second controlled remediation passed and all 27 pre-run checks passed from the beginning. Downstream jobs were then permitted to start. The DSMZ graph, patient/cell-line ranking and retrieval, existing UMAP, and `multicohort_cancer` workflows were regenerated with the active 379-gene ranked marker-source pan-cancer panel. Functional query sets and exact eligible backgrounds were regenerated, but g:Profiler did not complete because the endpoint timed out.
+The second controlled remediation passed and all 27 pre-run checks passed from the beginning. Downstream jobs were then permitted to start. The DSMZ graph, patient/cell-line ranking and retrieval, existing UMAP, and `multicohort_cancer` workflows were regenerated with the active ranked marker-source pan-cancer panel. Functional query sets and exact eligible backgrounds were regenerated, but g:Profiler did not complete because the endpoint timed out.
 
 No thesis file was edited, LaTeX was not compiled, and upstream DEG generation was not run.
 
@@ -337,7 +337,7 @@ The directory is not a Git worktree. The before-run baseline and final checksum 
 
 ## 15. Final validation
 
-The active feature panel remains 379 genes. Method-specific outputs and reports identify the ranked marker-source panel, all matrix/graph/ranking/multi-cohort files post-date the active feature panel, explicit backgrounds are documented, and manifests contain size, modification time and SHA-256. Final checks are recorded in `ranked_marker_source_panel_downstream_validation_checks.tsv`.
+The active feature panel remains the current ranked marker-source panel. Method-specific outputs and reports identify the ranked marker-source panel, all matrix/graph/ranking/multi-cohort files post-date the active feature panel, explicit backgrounds are documented, and manifests contain size, modification time and SHA-256. Final checks are recorded in `ranked_marker_source_panel_downstream_validation_checks.tsv`.
 
 ## 16. Remaining manual action and overall status
 
@@ -357,9 +357,9 @@ checks = [
     ('enrichment_categories', 'PASS', 'current owner, marker-source-class, evidence, direction and contrast sets'),
     ('enrichment_backgrounds', 'PASS', 'panel universe and 19 per-contrast backgrounds documented'),
     ('gprofiler_execution', 'MANUAL_ACTION', 'prepared; endpoint timeout'),
-    ('dsmz_graph_rerun', 'PASS', '379 genes; current package'),
+    ('dsmz_graph_rerun', 'PASS', 'current feature panel; current package'),
     ('ranking_retrieval_rerun', 'PASS', 'current package'),
-    ('multicohort_rerun', 'PASS', '379 genes; current package'),
+    ('multicohort_rerun', 'PASS', 'current feature panel; current package'),
     ('optional_embedding_rerun', 'PASS', 'existing UMAP rule'),
     ('outputs_postdate_feature_panel', 'PASS', 'method-specific outputs verified'),
     ('method_specific_naming', 'PASS', 'canonical outputs use ranked_marker_source_panel'),

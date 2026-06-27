@@ -16,7 +16,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 echo "== $(date) :: START =="
 echo "Host: $(hostname)"
 
-ROOT="${NBL_DATA_ROOT:-$REPO_ROOT/data/nbl}"
+ROOT="${NBL_DATA_ROOT:-$REPO_ROOT/data/nbl/new_data}"
 export NBL_DATA_ROOT="$ROOT"
 LOG_DIR="${ROOT}/logs"
 SCRIPT="$SCRIPT_DIR/download_nbl_tumour_sample_srr_ids.py"

@@ -1,190 +1,53 @@
-# Large biological data and generated outputs
-data/
+# Generated workflow outputs
 results/
-derived_results/
-archive/
-.snakemake/
-local_audits/
-
-# HPC / Snakemake logs and temporary files
 logs/
-tmp/
-*.log
-*.out
-*.err
-slurm-*.out
-slurm-*.err
+.snakemake/
+benchmark/
+benchmarks/
+cluster_logs/
+reports/
+figures/
 
-# Nested Snakemake runtime folders
-preprocessing_and_quality_control/*/.snakemake/
-preprocessing_and_quality_control/*/logs/
+# Data and large binary files
+data/
+new_data/
+reference_data/
+resources/
+*.rds
+*.RDS
+*.rda
+*.RData
+*.bam
+*.bai
+*.sam
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.sra
+*.fa
+*.fasta
+*.gtf
+*.gff
+*.gff3
+*.obo
 
-# Python/R/editor caches
+# Conda / environment installations
+**/.conda/
+**/envs/.conda/
+**/conda-meta/
+*.tar.bz2
+*.conda
+
+# Python/R temporary files
 __pycache__/
 *.pyc
 .Rhistory
 .RData
-.ipynb_checkpoints/
+.Rproj.user/
+
+# Temporary/editor files
 .DS_Store
-.vscode/
-.cursor/
-sync_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/*/envs/.conda/
-preprocessing_and_quality_control/*/*/envs/.conda/
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-.conda/
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/**/.conda/
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-.conda/
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/**/.conda/
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-.conda/
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/**/.conda/
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-.conda/
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/**/.conda/
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-.conda/
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/**/.conda/
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Built Conda environments copied from HPC; keep only YAML specs
-.conda/
-**/.conda/
-envs/.conda/
-preprocessing_and_quality_control/**/.conda/
-
-# Accidental home/config/secret-like files
-.Rprofile
-.TinyTeX/
-.bash_history
-.bash_logout
-.bashrc
-.cache/
-.codex/
-.condarc
-.config/
-.gh_env
-.gitconfig
-.ipython/
-.java/
-.jupyter/
-.lesshst
-.ncbi/
-.pki/
-.profile
-.secrets/
-.ssh/
-.vscode-R/
-.wget-hsts
-
-# Local sync logs
-sync_logs/
-syn_logs/
-
-# Local temporary audit/check files
-nbl_21_fastq_fast_check.tsv
-nbl_missing_valid_count_samples.txt
-SRP409177.runinfo.csv
-
-# Generated reports
-reports/
-
-# Private/local reports and audit notes not for GitHub
-reports/
-DGE_WORKFLOW_AUDIT_REPORT.md
-VST_ALL_GENE_UMAP_PASS_REPORT.md
-downstream_rerun_plan_from_source_family_recurrence.md
-downstream_rerun_targets.tsv
-path_portability_plan.md
-path_portability_refactor_report.md
-docs/AGENT_TASK_PIPELINE_ANALYSIS.md
-docs/DGE_WORKFLOW_AUDIT_REPORT.md
-docs/DSMZ_GRAPH_RULE_DEBUG.md
-docs/POST_RESOLUTION_EDGE_SUPPORT_STRATIFICATION.md
-docs/SUPPORT_THRESHOLD_PASS_REPORT.md
-docs/SUPPORT_THRESHOLD_PASS_diff_Snakefile.patch
-docs/SUPPORT_THRESHOLD_PASS_diff_config.patch
-
-# Private/local reports and audit notes not for GitHub
-PAN_CANCER_FEATURE_REGEN_REPORT.md
-DGE_WORKFLOW_AUDIT_REPORT.md
-VST_ALL_GENE_UMAP_PASS_REPORT.md
-downstream_rerun_plan_from_source_family_recurrence.md
-downstream_rerun_targets.tsv
-path_portability_plan.md
-path_portability_refactor_report.md
-reports/
-docs/AGENT_TASK_PIPELINE_ANALYSIS.md
-docs/DGE_WORKFLOW_AUDIT_REPORT.md
-docs/DSMZ_GRAPH_RULE_DEBUG.md
-docs/POST_RESOLUTION_EDGE_SUPPORT_STRATIFICATION.md
-docs/SUPPORT_THRESHOLD_PASS_REPORT.md
-docs/SUPPORT_THRESHOLD_PASS_diff_Snakefile.patch
-docs/SUPPORT_THRESHOLD_PASS_diff_config.patch
-
-# Private/unreviewed validation outputs
-
-# Local workflow output captures
-preprocessing_and_quality_control/rbl/rbl_snakefile_output.txt
-
-# Private/unreviewed validation output files
-validation/*.tsv
-validation/*.txt
-validation/*_jobs.tsv
-
-# Local/unreviewed files not currently part of public release
-.github/
-AGENT.md
-run_all_neighbourhoods.sh
-run_pipeline.sh
-unsupervised_pipeline.sh
-supplementary/
-
-# Private/local workflow audit notes
-docs/SCRIPT_TO_OUTPUT_MAPPING.md
-
-# Local test logs copied from Jarvis
-test_logs/
+*.tmp
+*.bak
+*.swp

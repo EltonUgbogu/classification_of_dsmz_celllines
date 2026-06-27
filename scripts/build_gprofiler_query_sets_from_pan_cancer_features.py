@@ -210,7 +210,7 @@ def main():
         paths_to_check.append(("retained_source_contrasts", retained_path))
     for label, path in paths_to_check:
         if STALE_171_SENTINEL in path:
-            errors.append(f"{label} points at stale 171-gene feature-set path: {path}")
+            errors.append(f"{label} points at a stale archived feature-set path: {path}")
     if STALE_RBL_QUERY_DIR in outdir:
         errors.append(f"outdir points at stale RBL query-set tree: {outdir}")
 

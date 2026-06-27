@@ -4,12 +4,12 @@
 # Tumour purity pipeline (tidyestimate) for RBL cohort
 #
 # INPUT DEFAULTS:
-#   data/rbl/count_data/rbl_tumour_count.rds
-#   data/rbl/count_data/rbl_tumour_sample_metadata.csv
-#   data/rbl/count_data/rbl_ensembl_to_hgnc.tsv
+#   data/rbl/new_data/count_data/rbl_tumour_count.rds
+#   data/rbl/new_data/count_data/rbl_tumour_sample_metadata.csv
+#   data/rbl/new_data/count_data/rbl_ensembl_to_hgnc.tsv
 #
 # OUTPUT DIR:
-#   results/tumour_purity_analysis/rbl
+#   data/rbl/new_data/results/tumour_purity_analysis/rbl
 
 suppressPackageStartupMessages({
   library(tidyestimate)
@@ -40,13 +40,13 @@ SCRIPT_PATH <- get_script_path()
 SCRIPT_DIR <- dirname(SCRIPT_PATH)
 WORKFLOW_DIR <- normalizePath(file.path(SCRIPT_DIR, ".."), mustWork = FALSE)
 PIPELINE_DIR <- normalizePath(file.path(WORKFLOW_DIR, "..", ".."), mustWork = FALSE)
-RBL_DATA_ROOT <- file.path(PIPELINE_DIR, "data", "rbl")
+RBL_DATA_ROOT <- Sys.getenv("RBL_DATA_ROOT", unset = file.path(PIPELINE_DIR, "data", "rbl", "new_data"))
 RBL_COUNT_DIR <- file.path(RBL_DATA_ROOT, "count_data")
 
 default_count_matrix <- file.path(RBL_COUNT_DIR, "rbl_tumour_count.rds")
 default_metadata <- file.path(RBL_COUNT_DIR, "rbl_tumour_sample_metadata.csv")
 default_map <- file.path(RBL_COUNT_DIR, "rbl_ensembl_to_hgnc.tsv")
-default_output_dir <- file.path(PIPELINE_DIR, "results", "tumour_purity_analysis", "rbl")
+default_output_dir <- file.path(RBL_DATA_ROOT, "results", "tumour_purity_analysis", "rbl")
 
 # --------------------------------------------------------------
 # 1. Map Ensembl → HGNC (robust, deduplicates symbols)

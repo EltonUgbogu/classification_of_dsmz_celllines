@@ -9,11 +9,11 @@
 # SCRIPT OVERVIEW
 # ---------------
 # This script aggregates tumour neighbourhood assignments across multiple
-# clustering methods to compute the consensus probability p_consensus(c, t)
-# for each cell line-tumour pair. The p_consensus metric quantifies the
-# robustness of the relationship between a cancer cell line (c) and a
-# primary tumour sample (t) by measuring the proportion of clustering
-# analyses that place them in the same molecular cluster.
+# clustering methods to compute p_consensus(c, t) values for each
+# cell line-tumour pair. The p_consensus metric quantifies the stability
+# of this assignment by measuring the proportion of available clustering
+# outputs that assign tumour sample t to the adaptive neighbourhood of
+# cell line c.
 #
 # BIOLOGICAL CONTEXT
 # ------------------
@@ -540,7 +540,7 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
   # ---------------------------------------------------------------------------
   # P_CONSENSUS COMPUTATION
   # ---------------------------------------------------------------------------
-  # Aggregate across methods to compute the consensus probability.
+  # Aggregate across methods to compute the p-consensus value.
   
   consensus_pairs <- all_long %>%
     filter(in_top) %>%

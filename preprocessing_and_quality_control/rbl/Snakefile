@@ -44,7 +44,7 @@ configfile: "config/config.yaml"
 
 # data_root is controlled by config/config.yaml and resolved relative to this
 # workflow directory to avoid accidental SLURM environment-variable leakage.
-DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/rbl"))
+DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/rbl/new_data"))
 PROJECTS = config.get("projects", [
     "GSE111168_primary_tumours",
     "GSE196420_primary_tumours",
@@ -322,7 +322,7 @@ RBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/rbl_ensembl_to_hgnc.tsv"
 RBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/rbl_count_matrix_verified_{EXPECTED_RBL_SAMPLES}.ok"
 
 RBL_PURITY_DIR = repo_config_path(
-    config.get("purity_output_dir", "results/tumour_purity_analysis/rbl")
+    config.get("purity_output_dir", "data/rbl/new_data/results/tumour_purity_analysis/rbl")
 )
 
 RBL_PURITY_SCRIPT = f"{WORKFLOW_DIR}/tumour_purity_analysis/rbl_tumour_purity_analysis.R"
@@ -346,7 +346,7 @@ BATCH_CONFIG = config.get("batch_correction_normalisation", {})
 CELL_LINE_CONFIG = config.get("cell_line_data", {})
 BATCH_OUTPUT_DIR = repo_config_path(BATCH_CONFIG.get(
     "output_dir",
-    "data/rbl/results/batch_corr_and_normalisation/preprocess"
+    "data/rbl/new_data/results/batch_corr_and_normalisation/preprocess"
 ))
 DSMZ_COUNT_MATRIX = CELL_LINE_CONFIG.get(
     "dsmz_count_matrix",

@@ -49,7 +49,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-ROOT="${NBL_DATA_ROOT:-$REPO_ROOT/data/nbl}"
+ROOT="${NBL_DATA_ROOT:-$REPO_ROOT/data/nbl/new_data}"
 ARG="${1:-GSE100148}"
 
 need() {

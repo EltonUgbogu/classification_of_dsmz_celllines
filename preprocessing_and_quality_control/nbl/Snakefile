@@ -17,6 +17,7 @@
 
 import os
 import glob
+import re
 from pathlib import Path
 
 WORKFLOW_ROOT = Path(workflow.basedir).resolve()
@@ -43,7 +44,7 @@ configfile: "config/config.yaml"
 
 # data_root is controlled by config/config.yaml and resolved relative to this
 # workflow directory to avoid accidental SLURM environment-variable leakage.
-DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/nbl"))
+DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/nbl/new_data"))
 PROJECTS = config.get("projects", ["GSE189367", "SRP409177"])
 ENV_DIR = repo_config_path(config.get("env_dir") or "preprocessing_and_quality_control/envs")
 
@@ -74,77 +75,125 @@ if missing_required:
     )
 
 # ------------------------------------------------------------------------------
-# Sample discovery: paired-end validation by filesystem scanning
+# Sample discovery: paired-end and count-tab registration by filesystem scanning
 # ------------------------------------------------------------------------------
 # This section implements a robust sample registration strategy:
 # - It scans each project's fastq/ directory for read 1 files.
 # - It validates the existence of the matching read 2 file.
 # - It registers only samples that are confirmed as paired-end.
+# - If FASTQ files are absent but STAR valid_count/*.tab files are present, it
+#   registers those samples as count-tab-only inputs for matrix construction.
 #
 # Bioinformatics rationale:
 #   Public repositories and downloads can contain incomplete pairs or naming
 #   inconsistencies. Enforcing paired-end integrity prevents alignment failures
-#   and avoids silent sample dropouts later in analysis.
+#   and avoids silent sample dropouts later in analysis. Count-tab-only
+#   registration supports rerunning matrix assembly from verified STAR count
+#   tables without copying or requiring FASTQ files in repaired data roots.
 SAMPLES = {}
+FASTQ_SAMPLES_BY_PROJECT = {}
+COUNT_TAB_SAMPLES_BY_PROJECT = {}
 ALL_SAMPLES_BY_PROJECT = {}
+
+def register_sample(project_id, sample_id, registry):
+    registry.setdefault(project_id, [])
+    if sample_id not in registry[project_id]:
+        registry[project_id].append(sample_id)
+
+def wildcard_regex(values, none_value="__NO_FASTQ_MATCH__"):
+    values = sorted(set(values))
+    return "|".join(re.escape(value) for value in values) if values else none_value
 
 for project_id in PROJECTS:
     fastq_dir = f"{DATA_ROOT}/{project_id}/fastq"
-    if not os.path.exists(fastq_dir):
-        # Projects without FASTQ data are skipped to avoid hard pipeline failure.
+    if os.path.exists(fastq_dir):
+        # STAR requires correct pairing; this script assumes filenames use _1/_2 suffixing.
+        r1_pattern = f"{fastq_dir}/*_1.fastq.gz"
+        r1_files = sorted(glob.glob(r1_pattern))  # sorted for deterministic sample order
+
+        paired_count = 0
+        for r1_path in r1_files:
+            # A paired-end sample is only accepted if the expected read 2 exists.
+            r2_path = r1_path.replace("_1.fastq.gz", "_2.fastq.gz")
+
+            if os.path.exists(r2_path):
+                # Sample IDs are derived from SRR-style filenames, typical for SRA downloads.
+                basename = os.path.basename(r1_path)
+                srr = basename.replace("_1.fastq.gz", "")
+
+                # A per-sample record stores read paths and project provenance.
+                # Project provenance is important for tracking batch effects across studies.
+                sample_info = {
+                    "sample": srr,
+                    "r1": r1_path,
+                    "r2": r2_path,
+                    "project": project_id
+                }
+                SAMPLES[(project_id, srr)] = sample_info
+                register_sample(project_id, srr, FASTQ_SAMPLES_BY_PROJECT)
+                register_sample(project_id, srr, ALL_SAMPLES_BY_PROJECT)
+                paired_count += 1
+            else:
+                # Incomplete pairs are excluded because they can bias QC summaries and
+                # disrupt consistent further matrices.
+                print(f"[WARN] Missing R2 (skipping): {os.path.basename(r1_path)}")
+
+        print(f"[SUCCESS] {project_id}: Found {paired_count} real paired-end samples")
+    else:
+        # Projects without FASTQ data can still contribute existing STAR count
+        # tables to count-matrix assembly.
         print(f"[SKIP] No fastq directory: {fastq_dir}")
-        continue
 
-    # STAR requires correct pairing; this script assumes filenames use _1/_2 suffixing.
-    r1_pattern = f"{fastq_dir}/*_1.fastq.gz"
-    r1_files = sorted(glob.glob(r1_pattern))  # sorted for deterministic sample order
+    count_dir = f"{DATA_ROOT}/{project_id}/results/star/valid_count"
+    count_tabs = sorted(glob.glob(f"{count_dir}/*.tab"))
+    count_only = 0
+    for tab_path in count_tabs:
+        sample_id = os.path.basename(tab_path).replace(".tab", "")
+        register_sample(project_id, sample_id, ALL_SAMPLES_BY_PROJECT)
+        if (project_id, sample_id) not in SAMPLES:
+            register_sample(project_id, sample_id, COUNT_TAB_SAMPLES_BY_PROJECT)
+            count_only += 1
 
-    paired_count = 0
-    for r1_path in r1_files:
-        # A paired-end sample is only accepted if the expected read 2 exists.
-        r2_path = r1_path.replace("_1.fastq.gz", "_2.fastq.gz")
-
-        if os.path.exists(r2_path):
-            # Sample IDs are derived from SRR-style filenames, typical for SRA downloads.
-            basename = os.path.basename(r1_path)
-            srr = basename.replace("_1.fastq.gz", "")
-
-            # A per-sample record stores read paths and project provenance.
-            # Project provenance is important for tracking batch effects across studies.
-            sample_info = {
-                "sample": srr,
-                "r1": r1_path,
-                "r2": r2_path,
-                "project": project_id
-            }
-            SAMPLES[(project_id, srr)] = sample_info
-            ALL_SAMPLES_BY_PROJECT.setdefault(project_id, []).append(srr)
-            paired_count += 1
-        else:
-            # Incomplete pairs are excluded because they can bias QC summaries and
-            # disrupt consistent further matrices.
-            print(f"[WARN] Missing R2 (skipping): {os.path.basename(r1_path)}")
-
-    print(f"[SUCCESS] {project_id}: Found {paired_count} real paired-end samples")
+    if count_tabs:
+        print(
+            f"[SUCCESS] {project_id}: Found {len(count_tabs)} existing STAR count tabs "
+            f"({count_only} count-tab-only)"
+        )
+    else:
+        print(f"[SKIP] No existing STAR count tabs: {count_dir}")
 
 # ------------------------------------------------------------------------------
 # Global run list construction and validation
 # ------------------------------------------------------------------------------
-# ALL_RUNS is a concrete list of (project, sample) pairs that actually exist.
+# ALL_RUNS is a concrete list of (project, sample) pairs with either paired-end
+# FASTQ inputs or existing STAR count tabs. FASTQ_RUNS is restricted to samples
+# with validated paired-end reads and is the only list used for alignment and
+# read-level QC targets.
 # This avoids accidental sample cross-pairing across projects and ensures
 # targets are created only for valid samples.
+FASTQ_RUNS = [(p, s) for p in PROJECTS for s in FASTQ_SAMPLES_BY_PROJECT.get(p, [])]
+COUNT_TAB_ONLY_RUNS = [(p, s) for p in PROJECTS for s in COUNT_TAB_SAMPLES_BY_PROJECT.get(p, [])]
 ALL_RUNS = [(p, s) for p in PROJECTS for s in ALL_SAMPLES_BY_PROJECT.get(p, [])]
+FASTQ_PROJECT_PATTERN = wildcard_regex(p for p, s in FASTQ_RUNS)
+FASTQ_SAMPLE_PATTERN = wildcard_regex(s for p, s in FASTQ_RUNS)
 
 if not ALL_RUNS:
     # Failing early here prevents misleading further execution with empty targets.
-    raise ValueError("No paired-end samples found in fastq/ directories! Check file names and paths.")
+    raise ValueError(
+        "No paired-end FASTQ samples or existing STAR valid_count/*.tab files found. "
+        "Check file names and paths."
+    )
 else:
     # Reporting sample counts supports auditability and quick verification
     # against expected cohort sizes from GEO/SRA metadata.
-    print(f"\n[FINAL] TOTAL PAIRED-END SAMPLES: {len(ALL_RUNS)}")
+    print(f"\n[FINAL] TOTAL REGISTERED GEO SAMPLES: {len(ALL_RUNS)}")
+    print(f"[FINAL] FASTQ-backed samples: {len(FASTQ_RUNS)}")
+    print(f"[FINAL] Count-tab-only samples: {len(COUNT_TAB_ONLY_RUNS)}")
     for p in PROJECTS:
-        n = len(ALL_SAMPLES_BY_PROJECT.get(p, []))
-        print(f"[SUMMARY] {p}: {n} paired-end samples")
+        n_fastq = len(FASTQ_SAMPLES_BY_PROJECT.get(p, []))
+        n_count_only = len(COUNT_TAB_SAMPLES_BY_PROJECT.get(p, []))
+        n_total = len(ALL_SAMPLES_BY_PROJECT.get(p, []))
+        print(f"[SUMMARY] {p}: {n_total} total ({n_fastq} FASTQ-backed, {n_count_only} count-tab-only)")
     for p, s in ALL_RUNS[:10]:
         print(f"  → {p}/{s}")
     if len(ALL_RUNS) > 10:
@@ -208,11 +257,12 @@ def get_r2(wc):
 # ------------------------------------------------------------------------------
 # Concrete target file lists
 # ------------------------------------------------------------------------------
-# Targets are enumerated explicitly from ALL_RUNS to guarantee that each
+# Targets are enumerated explicitly from registered runs to guarantee that each
 # sample produces only its own outputs and is never cross-associated with
-# another project's samples.
-STAR_BAMS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam"       for p, s in ALL_RUNS]
-STAR_BAIS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam.bai"   for p, s in ALL_RUNS]
+# another project's samples. Alignment and read-level QC targets are restricted
+# to FASTQ-backed samples; matrix assembly can consume existing count tabs.
+STAR_BAMS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam"       for p, s in FASTQ_RUNS]
+STAR_BAIS   = [f"{DATA_ROOT}/{p}/results/star/{s}.Aligned.sortedByCoord.out.bam.bai"   for p, s in FASTQ_RUNS]
 
 # STAR gene count output is separated into a dedicated directory to make it
 # easier to build expression matrices later.
@@ -225,9 +275,9 @@ STAR_COUNTS = [f"{DATA_ROOT}/{p}/results/star/valid_count/{s}.tab"              
 # - CollectInsertSizeMetrics estimates the library insert size distribution, a key
 #   property in paired-end RNA-seq.
 PICARD_TXT  = [f"{DATA_ROOT}/{p}/results/picard/{s}_{m}.txt"
-               for p, s in ALL_RUNS for m in ["validate_samfile", "alignment_summary_metrics",
+               for p, s in FASTQ_RUNS for m in ["validate_samfile", "alignment_summary_metrics",
                                              "quality_yield_metrics", "insert_size_metrics"]]
-PICARD_HIST = [f"{DATA_ROOT}/{p}/results/picard/{s}_insert_size_histogram.pdf"          for p, s in ALL_RUNS]
+PICARD_HIST = [f"{DATA_ROOT}/{p}/results/picard/{s}_insert_size_histogram.pdf"          for p, s in FASTQ_RUNS]
 
 # FastQC HTML summaries are used for per-read QC review and for aggregation.
 FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fastqc.html"
@@ -236,7 +286,7 @@ FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fa
 # MultiQC creates a per-project report integrating FastQC, STAR, and Picard metrics.
 # Only projects that have discovered samples are included — avoids requesting
 # MultiQC reports for projects whose fastq/ directories do not yet exist.
-DISCOVERED_PROJECTS = [p for p in PROJECTS if p in ALL_SAMPLES_BY_PROJECT]
+DISCOVERED_PROJECTS = [p for p in PROJECTS if p in FASTQ_SAMPLES_BY_PROJECT]
 MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in DISCOVERED_PROJECTS]
 
 # Count matrix outputs produced by merge_star_counts.R (GEO cohorts)
@@ -268,7 +318,7 @@ NBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/nbl_ensembl_to_hgnc.tsv"
 NBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/nbl_count_matrix_verified_{EXPECTED_NBL_SAMPLES}.ok"
 
 NBL_PURITY_DIR = repo_config_path(
-    config.get("purity_output_dir", "results/tumour_purity_analysis/nbl")
+    config.get("purity_output_dir", "data/nbl/new_data/results/tumour_purity_analysis/nbl")
 )
 
 NBL_PURITY_SCRIPT = f"{WORKFLOW_DIR}/tumour_purity_analysis/nbl_tumour_purity_analysis.R"
@@ -375,6 +425,9 @@ rule fastqc:
 #   Count-matrix generation should prefer star_counts_only below so STAR gene
 #   count tables are produced without unnecessary BAM/SAM storage.
 rule star_2pass:
+    wildcard_constraints:
+        project = FASTQ_PROJECT_PATTERN,
+        sample = FASTQ_SAMPLE_PATTERN
     input:
         index = REF_INDEX,
         r1 = get_r1,
@@ -446,6 +499,9 @@ rule star_2pass:
 #   and Log.final.out files. BAM, BAI, and SAM files are intentionally not
 #   produced by this rule.
 rule star_counts_only:
+    wildcard_constraints:
+        project = FASTQ_PROJECT_PATTERN,
+        sample = FASTQ_SAMPLE_PATTERN
     input:
         index = REF_INDEX,
         r1 = get_r1,
@@ -594,7 +650,7 @@ rule picard_insert_size_metrics:
 # ------------------------------------------------------------------------------
 # Rule: merge per-sample STAR count tables into a single count matrix
 # ------------------------------------------------------------------------------
-# Reads all valid_count/{sample}.tab files across all FASTQ-backed GEO projects
+# Reads all valid_count/{sample}.tab files across all registered GEO projects
 # (GSE189367 and SRP409177), then loads the pre-built TARGET-NBL matrix and
 # combines both into one genes x samples count matrix via merge_star_counts.R.
 # STAR count tables are produced by star_counts_only for this target; BAM/SAM
@@ -764,7 +820,7 @@ rule nbl_tumour_purity_analysis:
 # Bioinformatics intent:
 #   MultiQC consolidates FastQC, STAR, and Picard outputs into a single report.
 def multiqc_inputs_for_project(project):
-    samples = ALL_SAMPLES_BY_PROJECT.get(project, [])
+    samples = FASTQ_SAMPLES_BY_PROJECT.get(project, [])
 
     # FastQC zip archives contain the raw statistics MultiQC parses.
     fq = [f"{DATA_ROOT}/{project}/results/fastqc/{r['sample_read']}_fastqc.zip"

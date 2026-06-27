@@ -1492,12 +1492,12 @@ def write_run_report(
     lines.append("")
     lines.append("The current panel is a ranked marker-source pan-cancer panel built from marker-source recurrent markers, empirically ranked singleton-source markers, and ranked non-recurrent marker candidates selected from the existing threshold-passing marker lists.")
     lines.append("")
-    lines.append("Historically, the 177-gene result was isolate-rescue dominated, while the 125-gene result reduced that issue but became RBL singleton-anchor dominated. The current method keeps the original per-contrast anchor and isolate marker-selection rules unchanged and revises only the final feature-construction layer.")
+    lines.append("Historically, the earlier feature-panel result was isolate-rescue dominated, while a later backup result reduced that issue but became RBL singleton-anchor dominated. The current method keeps the original per-contrast anchor and isolate marker-selection rules unchanged and revises only the final feature-construction layer.")
     lines.append("")
     lines.append("## Backup Details")
     lines.append("")
-    lines.append(f"- Current active 125-gene backup directory: `{args.backup_dir or 'not provided'}`")
-    lines.append(f"- Preserved earlier 171/177 backup directory: `{args.previous177_backup_dir or 'not provided'}`")
+    lines.append(f"- Current active backup directory: `{args.backup_dir or 'not provided'}`")
+    lines.append(f"- Preserved earlier backup directory: `{args.previous177_backup_dir or 'not provided'}`")
     lines.append("- Backup checksums were verified before the active feature-space directory was cleaned for this run.")
     lines.append("")
     lines.append("## Upstream Marker Rules")
@@ -1756,7 +1756,7 @@ def write_thesis_notes(outdir: Path, selected_rule_key: str, final_size: int) ->
         "",
         "## Discussion",
         "",
-        "- Explain why final construction logic was revised after the historical 177-gene and 125-gene results.",
+        "- Explain why final construction logic was revised after the historical feature-panel results.",
         "- Explain that the panel balances marker-source recurrence evidence and empirically ranked marker evidence.",
         "- Avoid claiming that all features are recurrent.",
         "- Discuss caveats of singleton-source markers and ranked nonrecurrent marker candidates.",
@@ -1817,7 +1817,7 @@ def write_run_manifest(
     for label, path in previous_feature_paths.items():
         rows.append(file_manifest_row(path, "input", f"{label} previous feature table for comparison"))
     if args.backup_dir:
-        rows.append(file_manifest_row(Path(args.backup_dir) / "BACKUP_MANIFEST.tsv", "backup", "active 125-gene backup manifest"))
+        rows.append(file_manifest_row(Path(args.backup_dir) / "BACKUP_MANIFEST.tsv", "backup", "active backup manifest"))
     for name, (category, description) in output_descriptions.items():
         path = outdir / name
         if path.exists():

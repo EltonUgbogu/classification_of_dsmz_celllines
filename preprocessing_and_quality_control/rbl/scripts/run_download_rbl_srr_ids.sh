@@ -16,7 +16,7 @@ echo "== $(date) :: START =="
 echo "Host: $(hostname)"
 
 SCRIPT="$SCRIPT_DIR/download_rbl_tumour_sample_srr_ids.py"
-export RBL_DATA_ROOT="${RBL_DATA_ROOT:-$REPO_ROOT/data/rbl}"
+export RBL_DATA_ROOT="${RBL_DATA_ROOT:-$REPO_ROOT/data/rbl/new_data}"
 
 CONDA_SH_PATH="${CONDA_SH_PATH:-${HOME}/miniforge3/etc/profile.d/conda.sh}"
 if [[ ! -f "$CONDA_SH_PATH" ]] && command -v conda >/dev/null 2>&1; then

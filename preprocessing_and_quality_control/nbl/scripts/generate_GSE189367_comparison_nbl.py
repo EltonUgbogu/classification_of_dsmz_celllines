@@ -2,7 +2,7 @@
 """
 Compare GSE189367 sample-export SRR IDs against SRRs present in FASTQ files.
 
-Defaults are resolved below `NBL_DATA_ROOT` (or `data/nbl` in the repository).
+Defaults are resolved below `NBL_DATA_ROOT` (or `data/nbl/new_data` in the repository).
 
 Outputs:
 - gse189367_ids_in_sample_and_fastq.txt
@@ -20,7 +20,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl")).expanduser()
+NBL_DATA_ROOT = Path(os.environ.get("NBL_DATA_ROOT", REPO_ROOT / "data" / "nbl" / "new_data")).expanduser()
 DEFAULT_SAMPLE_LIST = NBL_DATA_ROOT / "preprocessing_results/sample_id_exports/GSE189367_sample_ids.tsv"
 DEFAULT_FASTQ_DIR = NBL_DATA_ROOT / "GSE189367/fastq"
 DEFAULT_OUTPUT_DIR = NBL_DATA_ROOT / "GSE189367"

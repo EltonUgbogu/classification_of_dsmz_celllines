@@ -35,7 +35,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-RBL_DATA_ROOT = Path(os.environ.get("RBL_DATA_ROOT", REPO_ROOT / "data" / "rbl")).expanduser()
+RBL_DATA_ROOT = Path(os.environ.get("RBL_DATA_ROOT", REPO_ROOT / "data" / "rbl" / "new_data")).expanduser()
 
 
 @dataclass(frozen=True)

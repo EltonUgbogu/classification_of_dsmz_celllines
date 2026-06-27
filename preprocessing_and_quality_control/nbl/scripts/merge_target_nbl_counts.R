@@ -27,7 +27,7 @@ suppressPackageStartupMessages({
 script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
 script_path <- sub("^--file=", "", script_arg)
 repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
-BASE <- Sys.getenv("TARGET_NBL_DIR", file.path(repo_root, "data", "nbl", "target_nbl"))
+BASE <- Sys.getenv("TARGET_NBL_DIR", file.path(repo_root, "data", "nbl", "new_data", "target_nbl"))
 COUNT_DIR <- file.path(BASE, "count_data")
 META_FILE <- file.path(BASE, "metadata", "target_nbl_file_to_aliquot.tsv")
 OUT_DIR   <- file.path(BASE, "merged")

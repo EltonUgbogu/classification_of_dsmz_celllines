@@ -18,7 +18,7 @@ echo "== $(date) :: START =="
 echo "Host: $(hostname)"
 echo "Job ID: ${SLURM_JOB_ID:-NA}"
 
-BASE="${TARGET_NBL_DIR:-$REPO_ROOT/data/nbl/target_nbl}"
+BASE="${TARGET_NBL_DIR:-$REPO_ROOT/data/nbl/new_data/target_nbl}"
 export TARGET_NBL_DIR="$BASE"
 COUNT_DIR="${BASE}/count_data"
 META_DIR="${BASE}/metadata"

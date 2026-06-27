@@ -155,7 +155,7 @@
 #
 # 3. Pan-cancer feature genes (--genes):
 #      - Text file with one gene identifier per line (Ensembl IDs)
-#      - Derived from the final 171-gene pan-cancer feature set
+#      - Derived from the current marker-derived pan-cancer feature set
 #      - Version suffixes (e.g., .16) are stripped for compatibility
 #
 #

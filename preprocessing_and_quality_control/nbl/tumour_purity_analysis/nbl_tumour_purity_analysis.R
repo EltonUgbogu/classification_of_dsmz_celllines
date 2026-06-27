@@ -36,7 +36,7 @@ suppressPackageStartupMessages({
 script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
 script_path <- sub("^--file=", "", script_arg)
 repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
-nbl_data_root <- Sys.getenv("NBL_DATA_ROOT", unset = file.path(repo_root, "data", "nbl"))
+nbl_data_root <- Sys.getenv("NBL_DATA_ROOT", unset = file.path(repo_root, "data", "nbl", "new_data"))
 
 # --------------------------------------------------------------
 # 1. Map Ensembl → HGNC
@@ -534,9 +534,9 @@ run_tidyestimate_with_barplot <- function(
 #
 # Standard invocation:
 #   REPO_ROOT=/path/to/clone \
-#   SE_PATH="${REPO_ROOT}/data/nbl/count_data/nbl_tumour_count.rds" \
-#   META_CSV="${REPO_ROOT}/data/nbl/count_data/nbl_tumour_sample_metadata.csv" \
-#   MAP_TSV="${REPO_ROOT}/data/nbl/count_data/nbl_ensembl_to_hgnc.tsv" \
-#   OUTPUT_DIR="${REPO_ROOT}/results/tumour_purity_analysis/nbl" \
+#   SE_PATH="${REPO_ROOT}/data/nbl/new_data/count_data/nbl_tumour_count.rds" \
+#   META_CSV="${REPO_ROOT}/data/nbl/new_data/count_data/nbl_tumour_sample_metadata.csv" \
+#   MAP_TSV="${REPO_ROOT}/data/nbl/new_data/count_data/nbl_ensembl_to_hgnc.tsv" \
+#   OUTPUT_DIR="${REPO_ROOT}/data/nbl/new_data/results/tumour_purity_analysis/nbl" \
 #   Rscript nbl_tumour_purity_analysis.R
 run_tidyestimate_with_barplot()

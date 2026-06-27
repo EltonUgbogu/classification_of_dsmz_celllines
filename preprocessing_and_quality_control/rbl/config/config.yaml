@@ -1,6 +1,6 @@
 # Configuration for the RBL preprocessing and quality control workflow
 
-data_root: "../../data/rbl"
+data_root: "../../data/rbl/new_data"
 env_dir: "preprocessing_and_quality_control/envs"
 
 projects:
@@ -15,7 +15,7 @@ expected_samples:
   total: 69
 
 purity_threshold: 0.7
-purity_output_dir: "data/rbl/results/tumour_purity_analysis"
+purity_output_dir: "data/rbl/new_data/results/tumour_purity_analysis"
 
 cell_line_data:
   dsmz_count_matrix: "results/unsupervised/rbl/deseq2_inputs/counts.tsv"
@@ -24,8 +24,8 @@ cell_line_data:
   dsmz_subset_description: "Retinoblastoma DSMZ cell-line count-level DESeq2 input"
 
 batch_correction_normalisation:
-  output_dir: "data/rbl/results/batch_corr_and_normalisation/preprocess"
-  tumour_rds: "data/rbl/count_data/rbl_tumour_count.rds"
+  output_dir: "data/rbl/new_data/results/batch_corr_and_normalisation/preprocess"
+  tumour_rds: "data/rbl/new_data/count_data/rbl_tumour_count.rds"
   min_shared_genes: 5000
   tumour_label: "RBL_TUMOUR"
   dsmz_label: "DSMZ_RBL"

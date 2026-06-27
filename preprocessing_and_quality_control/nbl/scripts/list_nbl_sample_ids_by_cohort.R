@@ -14,14 +14,14 @@
 #
 # Usage:
 #   Rscript list_nbl_sample_ids_by_cohort.R \
-#       data/nbl/preprocessing_results/tumour_vst_nbl_batch_corrected.rds \
-#       data/nbl/preprocessing_results/sample_id_exports
+#       data/nbl/new_data/preprocessing_results/tumour_vst_nbl_batch_corrected.rds \
+#       data/nbl/new_data/preprocessing_results/sample_id_exports
 
 args <- commandArgs(trailingOnly = TRUE)
 script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
 script_path <- sub("^--file=", "", script_arg)
 repo_root <- normalizePath(file.path(dirname(script_path), "../../.."), mustWork = FALSE)
-nbl_data_root <- Sys.getenv("NBL_DATA_ROOT", unset = file.path(repo_root, "data", "nbl"))
+nbl_data_root <- Sys.getenv("NBL_DATA_ROOT", unset = file.path(repo_root, "data", "nbl", "new_data"))
 
 input_rds <- if (length(args) >= 1) {
   args[1]

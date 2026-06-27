@@ -504,8 +504,8 @@ if (profile == "multicohort_cancer") {
 # (in order of priority):
 #
 #   1. frac_ge_thr:       Fraction of solutions meeting quality threshold
-#   2. median_p_consensus: Median consensus probability across solutions
-#   3. mean_p_consensus:   Mean consensus probability (tiebreaker)
+#   2. median_p_consensus: Median p-consensus value across solutions
+#   3. mean_p_consensus:   Mean p-consensus value (tiebreaker)
 #
 # The direction may be:
 #   - Manually specified via --best_overall_dir (highest priority)
