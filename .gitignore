@@ -51,3 +51,22 @@ __pycache__/
 *.tmp
 *.bak
 *.swp
+
+# Local editor / agent state
+.cursor/
+
+# Local sync and test logs
+sync_logs/
+test_logs/
+
+# Local archive folders
+archive/
+
+# Temporary metadata / inspection outputs
+*.runinfo.csv
+*_snakefile_output.txt
+nbl_21_fastq_fast_check.tsv
+nbl_missing_valid_count_samples.txt
+
+# Unreviewed generated supplementary folder
+supplementary/
