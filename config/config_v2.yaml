@@ -1,0 +1,63 @@
+# Version 2 development configuration.
+#
+# This file intentionally keeps Version 2 in a neutral namespace while the
+# method name remains under development.
+
+pipeline_profile: pan_cancer
+
+version2:
+  results_dir: results/version2
+  docs_dir: docs/version2
+  version1_docs_dir: docs/version1
+  log_dir: logs/version2
+  conda_env_r: envs/tcga-r-env.yaml
+  pilot_mode: true
+  run_version1_if_missing: false
+
+  v1_inputs:
+    cell_line_graph_edges:
+      path: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_graph_edges.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_graph_edges.tsv
+      role: Version 1 cell-line graph edge support used as protected input for Version 2 weighted evidence.
+    cell_line_node_metadata:
+      path: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_node_metadata.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_node_metadata.tsv
+      role: Version 1 cell-line lineage/source metadata used as protected input for node annotation.
+    louvain_communities:
+      path: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_communities.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_communities.tsv
+      role: Version 1 Louvain community assignments used as protected input for boundary and bridge-like status.
+    leiden_communities:
+      path: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_leiden_communities.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/cell_line_similarity/pan_cancer_cell_line_leiden_communities.tsv
+      role: Version 1 Leiden assignments used as a protected comparison layer for mixed membership checks.
+    tumour_to_cellline_rankings:
+      path: results/unsupervised/pan_cancer/tumour_mapping/tumour_to_cellline_similarity/tumour_to_cellline_group_rankings.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/tumour_mapping/tumour_to_cellline_similarity/tumour_to_cellline_group_rankings.tsv
+      role: Version 1 patient tumour to cell-line ranking table used as protected input for agreement diagnostics.
+    cellline_to_tumour_rankings:
+      path: results/unsupervised/pan_cancer/tumour_mapping/cellline_to_tumour_similarity/cellline_to_tumour_rankings.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/tumour_mapping/cellline_to_tumour_similarity/cellline_to_tumour_rankings.tsv
+      role: Version 1 cell-line to tumour ranking table used as protected input for agreement diagnostics.
+    cellline_rank_summary:
+      path: results/unsupervised/pan_cancer/tumour_mapping/cellline_similarity_precision_bootstrap/cellline_centred_rank_summary.tsv
+      producing_version1_target: results/unsupervised/pan_cancer/tumour_mapping/cellline_similarity_precision_bootstrap/cellline_centred_rank_summary.tsv
+      role: Version 1 cell-line centred ranking summary used as protected input for boundary-case ranking margins.
+
+  objective:
+    stability_reward: 0.40
+    cancer_type_agreement_reward: 0.35
+    redundancy_penalty: 0.15
+    batch_penalty: 0.05
+    instability_penalty: 0.05
+
+  thresholds:
+    retained_edge_min_score: 0.70
+    rejected_edge_max_score: 0.40
+    boundary_margin_band: 0.05
+    ranking_boundary_margin: 0.02
+    weak_weighted_consensus: 0.55
+    bridge_like_boundary_fraction: 0.35
+    bootstrap_interval_half_width: 0.08
+    top_rank_count_for_pair_support: 10
+
