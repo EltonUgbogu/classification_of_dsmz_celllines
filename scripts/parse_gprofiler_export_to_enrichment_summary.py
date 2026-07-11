@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Convert a manually downloaded g:Profiler export to heatmap-ready summary TSV."""
+"""Convert a manual g:Profiler export into a heatmap-ready ranked marker-source-panel top-term summary.
+
+This fallback parser does not run g:Profiler; it attaches functional-enrichment
+query-manifest metadata to an externally downloaded term-level export.
+"""
 
 from __future__ import annotations
 
@@ -55,7 +59,11 @@ OUTPUT_COLUMNS = (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, help="Manual g:Profiler CSV/TSV export")
-    parser.add_argument("--query-manifest", required=True, help="marker_framework/query_manifest.tsv")
+    parser.add_argument(
+        "--query-manifest",
+        required=True,
+        help="functional-enrichment query manifest, such as ranked_marker_source_panel_enrichment_query_manifest.tsv",
+    )
     parser.add_argument("--output", required=True, help="Heatmap-ready summary TSV")
     return parser.parse_args()
 
@@ -210,6 +218,9 @@ def main() -> int:
         return 1
     write_tsv(output_path, OUTPUT_COLUMNS, summary_rows)
     provenance_path = output_path.with_suffix(output_path.suffix + ".provenance.tsv")
+    # This provenance describes the parser path only. Live g:Profiler run
+    # provenance is recorded by the runner output directory, not by this
+    # manual-export fallback.
     write_tsv(
         provenance_path,
         ("metric", "value"),

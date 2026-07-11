@@ -5,13 +5,13 @@
 # Two-panel publication figure for the 167-node DSMZ cell-line similarity
 # network.
 #
-# Panel A: nodes coloured by cancer lineage.
+# Panel A: nodes coloured by annotated cancer type.
 # Panel B: nodes coloured by Louvain community with convex hulls and centroid
 #          labels C1-C5.
 #
 # Outputs (written to OUT):
-#   Fig_pan_cancer_cell_line_similarity_network_lineage_community.pdf
-#   Fig_pan_cancer_cell_line_similarity_network_lineage_community.png
+#   Fig_pan_cancer_cell_line_similarity_network_cancer_type_community.pdf
+#   Fig_pan_cancer_cell_line_similarity_network_cancer_type_community.png
 # =============================================================================
 
 suppressPackageStartupMessages({
@@ -23,7 +23,7 @@ option_list <- list(
   make_option("--edges",       type="character", default=NULL,
     help="[REQUIRED] Edge list TSV with columns: from, to, weight"),
   make_option("--communities", type="character", default=NULL,
-    help="[REQUIRED] Community/metadata TSV with columns: sample, component, lineage"),
+    help="[REQUIRED] Community/metadata TSV with columns: sample, component, cancer_type"),
   make_option("--layout",      type="character", default=NULL,
     help="[REQUIRED] Layout TSV with columns: sample, x, y"),
   make_option("--out-dir",     type="character", default=NULL,
@@ -64,8 +64,16 @@ edges      <- fread(opt[["edges"]],       quote="")
 comm_tbl   <- fread(opt[["communities"]], quote="")
 layout_tbl <- fread(opt[["layout"]],      quote="")
 
-comm_tbl[, lineage := gsub('^""|""$', '', lineage)]
-comm_tbl[lineage == "" | is.na(lineage), lineage := "UNKNOWN"]
+if (!"cancer_type" %in% names(comm_tbl)) {
+  if ("lineage" %in% names(comm_tbl)) {
+    warning("Using legacy community column 'lineage' to populate 'cancer_type'")
+    comm_tbl[, cancer_type := lineage]
+  } else {
+    stop("Community table must contain cancer_type", call.=FALSE)
+  }
+}
+comm_tbl[, cancer_type := gsub('^""|""$', '', cancer_type)]
+comm_tbl[cancer_type == "" | is.na(cancer_type), cancer_type := "UNKNOWN"]
 setnames(comm_tbl, "component", "community")
 
 # -----------------------------------------------------------------------------
@@ -74,7 +82,7 @@ setnames(comm_tbl, "component", "community")
 g <- graph_from_data_frame(edges[, .(from, to, weight)], directed=FALSE,
                            vertices=comm_tbl[, .(name=sample)])
 V(g)$community <- comm_tbl[match(V(g)$name, comm_tbl$sample), community]
-V(g)$lineage   <- comm_tbl[match(V(g)$name, comm_tbl$sample), lineage]
+V(g)$cancer_type <- comm_tbl[match(V(g)$name, comm_tbl$sample), cancer_type]
 
 # -----------------------------------------------------------------------------
 # 3. Layout: fixed coordinates, pre-normalised to [-1,1] to match igraph
@@ -91,7 +99,7 @@ deg   <- degree(g)
 vsize <- 2.5 + 7*(deg - min(deg)) / (max(deg) - min(deg))
 
 # Colour-blind-friendly qualitative palettes with green excluded.
-lineage_palette <- c(
+cancer_type_palette <- c(
   BRCA = "#0072B2",
   HEME = "#E69F00",
   NBL  = "#D55E00",
@@ -101,18 +109,18 @@ lineage_palette <- c(
 fallback_palette <- c("#0072B2", "#E69F00", "#D55E00", "#CC79A7",
                       "#56B4E9", "#AA4499", "#882255", "#999999",
                       "#000000")
-lineages <- setdiff(sort(unique(V(g)$lineage)), "UNKNOWN")
-lin_col <- lineage_palette[lineages]
-if (any(is.na(lin_col))) {
-  missing_lineages <- lineages[is.na(lin_col)]
-  extra_cols <- setdiff(fallback_palette, unname(lineage_palette))
-  if (length(missing_lineages) > length(extra_cols)) {
-    stop("Not enough no-green fallback colours for lineage levels", call.=FALSE)
+cancer_types <- setdiff(sort(unique(V(g)$cancer_type)), "UNKNOWN")
+cancer_type_col <- cancer_type_palette[cancer_types]
+if (any(is.na(cancer_type_col))) {
+  missing_cancer_types <- cancer_types[is.na(cancer_type_col)]
+  extra_cols <- setdiff(fallback_palette, unname(cancer_type_palette))
+  if (length(missing_cancer_types) > length(extra_cols)) {
+    stop("Not enough no-green fallback colours for cancer-type levels", call.=FALSE)
   }
-  lin_col[is.na(lin_col)] <- extra_cols[seq_along(missing_lineages)]
+  cancer_type_col[is.na(cancer_type_col)] <- extra_cols[seq_along(missing_cancer_types)]
 }
-if (any(V(g)$lineage == "UNKNOWN")) {
-  lin_col <- c(lin_col, UNKNOWN = lineage_palette[["UNKNOWN"]])
+if (any(V(g)$cancer_type == "UNKNOWN")) {
+  cancer_type_col <- c(cancer_type_col, UNKNOWN = cancer_type_palette[["UNKNOWN"]])
 }
 
 # Louvain community palette, also green-free.
@@ -123,7 +131,7 @@ if (n_comm > length(fallback_palette)) {
 }
 comm_col <- setNames(fallback_palette[seq_len(n_comm)], comm_ids)
 
-node_lin  <- lin_col[V(g)$lineage]
+node_cancer_type <- cancer_type_col[V(g)$cancer_type]
 node_comm <- comm_col[as.character(V(g)$community)]
 
 # Degree legend: three quantile-spaced values across the observed range.
@@ -191,7 +199,7 @@ plot_panel <- function(vcol, hull=FALSE) {
   usr <- par("usr")
   text(usr[1] + 0.02*(usr[2]-usr[1]),
        usr[4] - 0.01*(usr[4]-usr[3]),
-       if (hull) "B   Louvain community" else "A   Annotated lineage",
+       if (hull) "B   Louvain community" else "A   Annotated cancer type",
        font=2, cex=0.98, adj=c(0,1))
 }
 
@@ -203,7 +211,7 @@ legend_header <- function(x, y, txt) {
 # -----------------------------------------------------------------------------
 # 6. Render PDF and PNG
 # -----------------------------------------------------------------------------
-fname <- "Fig_pan_cancer_cell_line_similarity_network_lineage_community"
+fname <- "Fig_pan_cancer_cell_line_similarity_network_cancer_type_community"
 
 for (fmt in c("pdf", "png")) {
   if (fmt == "pdf") {
@@ -222,9 +230,9 @@ for (fmt in c("pdf", "png")) {
   # Three-column layout: Panel A | Panel B | Legends
   layout(matrix(c(1, 2, 3), nrow=1), widths=c(PANEL_WIDTH, PANEL_WIDTH, LEGEND_WIDTH))
 
-  # Panel A — lineage
+  # Panel A: annotated cancer type.
   par(mar=c(0.15, 0.15, 1.15, 0.10), bg="white")
-  plot_panel(node_lin, hull=FALSE)
+  plot_panel(node_cancer_type, hull=FALSE)
 
   # Panel B — community with hulls and labels
   par(mar=c(0.15, 0.15, 1.15, 0.10), bg="white")
@@ -235,9 +243,9 @@ for (fmt in c("pdf", "png")) {
   plot.new()
   plot.window(xlim=c(0,1), ylim=c(0,1))
 
-  legend_header(0.04, 1.00, "Lineage")
+  legend_header(0.04, 1.00, "Cancer type")
   legend(0.04, 0.95,
-         legend=names(lin_col), fill=unname(lin_col), border="white",
+         legend=names(cancer_type_col), fill=unname(cancer_type_col), border="white",
          bty="n", cex=0.68, pt.cex=0.95, y.intersp=0.92, x.intersp=0.48)
 
   legend_header(0.04, 0.66, "Louvain community")

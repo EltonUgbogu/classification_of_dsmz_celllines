@@ -8,9 +8,9 @@
 #   - Edge count
 #   - Community count
 #   - Weighted Newman-Girvan modularity for Louvain and Leiden
-#   - Unweighted nominal lineage assortativity
+#   - Unweighted nominal cancer-type assortativity
 #   - Tumour count
-#   - Missing lineage count
+#   - Missing cancer-type count
 #
 # Outputs:
 #   validation_modularity.tsv
@@ -27,9 +27,9 @@ option_list <- list(
   make_option("--edges", type="character", default=NULL,
     help="[REQUIRED] Edge list TSV (from, to, weight)"),
   make_option("--communities", type="character", default=NULL,
-    help="[REQUIRED] Louvain community TSV (sample, component, lineage, ...)"),
+    help="[REQUIRED] Louvain community TSV (sample, component, cancer_type, ...)"),
   make_option("--leiden-communities", type="character", default=NULL,
-    help="[OPTIONAL] Leiden community TSV (sample, component, lineage, ...)"),
+    help="[OPTIONAL] Leiden community TSV (sample, component, cancer_type, ...)"),
   make_option("--out-dir", type="character", default=NULL,
     help="[REQUIRED] Output directory"),
   make_option("--metadata", type="character", default=NULL,
@@ -47,8 +47,16 @@ load_communities <- function(path, algorithm) {
     return(NULL)
   }
   dt <- fread(path)
-  if (!all(c("sample", "component", "lineage") %in% names(dt))) {
-    stop(algorithm, " communities must contain sample, component, and lineage columns")
+  if (!"cancer_type" %in% names(dt)) {
+    if ("lineage" %in% names(dt)) {
+      warning("Using legacy community column 'lineage' to populate 'cancer_type'")
+      dt[, cancer_type := lineage]
+    } else {
+      stop(algorithm, " communities must contain sample, component, and cancer_type columns")
+    }
+  }
+  if (!all(c("sample", "component", "cancer_type") %in% names(dt))) {
+    stop(algorithm, " communities must contain sample, component, and cancer_type columns")
   }
   dt[, algorithm := algorithm]
   dt
@@ -97,9 +105,9 @@ g <- graph_from_data_frame(
 )
 E(g)$weight <- E_und$weight
 
-lineage_map <- setNames(comm_louvain$lineage, comm_louvain$sample)
-V(g)$lineage <- lineage_map[V(g)$name]
-V(g)$lineage[is.na(V(g)$lineage) | V(g)$lineage == ""] <- "UNKNOWN"
+cancer_type_map <- setNames(comm_louvain$cancer_type, comm_louvain$sample)
+V(g)$cancer_type <- cancer_type_map[V(g)$name]
+V(g)$cancer_type[is.na(V(g)$cancer_type) | V(g)$cancer_type == ""] <- "UNKNOWN"
 
 # ---------------------------------------------------------------------------
 # Compute metrics
@@ -116,10 +124,10 @@ if (!is.null(meta_types)) {
   }
 } else {
   tumour_count <- sum(!grepl("^NG-", V(g)$name) &
-                        (is.na(V(g)$lineage) | V(g)$lineage != "HEME"))
+                        (is.na(V(g)$cancer_type) | V(g)$cancer_type != "HEME"))
 }
 
-miss_lin <- sum(is.na(V(g)$lineage) | V(g)$lineage == "UNKNOWN")
+missing_cancer_type <- sum(is.na(V(g)$cancer_type) | V(g)$cancer_type == "UNKNOWN")
 
 modularity_rows <- comm_all[, {
   membership_map <- setNames(component, sample)
@@ -138,12 +146,12 @@ modularity_rows <- comm_all[, {
   )
 }, by=algorithm]
 
-lin_levels <- sort(unique(na.omit(V(g)$lineage[V(g)$lineage != "UNKNOWN"])))
-lin_id <- match(V(g)$lineage, lin_levels)
-keep_v <- which(!is.na(lin_id))
-g_lin <- induced_subgraph(g, vids=keep_v)
-lin_id2 <- match(V(g_lin)$lineage, lin_levels)
-assort_r <- assortativity_nominal(g_lin, types=lin_id2, directed=FALSE)
+cancer_type_levels <- sort(unique(na.omit(V(g)$cancer_type[V(g)$cancer_type != "UNKNOWN"])))
+cancer_type_id <- match(V(g)$cancer_type, cancer_type_levels)
+keep_v <- which(!is.na(cancer_type_id))
+g_cancer_type <- induced_subgraph(g, vids=keep_v)
+cancer_type_id2 <- match(V(g_cancer_type)$cancer_type, cancer_type_levels)
+assort_r <- assortativity_nominal(g_cancer_type, types=cancer_type_id2, directed=FALSE)
 
 # ---------------------------------------------------------------------------
 # Print summary
@@ -159,7 +167,7 @@ for (i in seq_len(nrow(modularity_rows))) {
 }
 cat("Assortativity r:      ", round(assort_r, 4), "\n")
 cat("Tumour samples:       ", tumour_count, "\n")
-cat("Missing lineage:      ", miss_lin, "\n")
+cat("Missing cancer_type:  ", missing_cancer_type, "\n")
 cat("==========================\n\n")
 
 # ---------------------------------------------------------------------------
@@ -171,13 +179,13 @@ cat("Saved:", mod_file, "\n")
 
 assort_file <- file.path(opt[["out-dir"]], "validation_assortativity.tsv")
 fwrite(data.table(
-  metric = "unweighted_nominal_lineage_assortativity",
+  metric = "unweighted_nominal_cancer_type_assortativity",
   value = assort_r,
   n_nodes_used = length(keep_v),
-  n_edges_used = ecount(g_lin),
+  n_edges_used = ecount(g_cancer_type),
   edge_weights_used = FALSE,
   tumour_count = tumour_count,
-  missing_lineage = miss_lin
+  missing_cancer_type = missing_cancer_type
 ), assort_file, sep="\t")
 cat("Saved:", assort_file, "\n")
 

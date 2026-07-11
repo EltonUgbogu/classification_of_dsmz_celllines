@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Filter and select top enrichment terms from g:Profiler results.
+Legacy selector for top enrichment terms from g:Profiler result exports.
 
-This script processes g:Profiler output to select the most significant Gene Ontology (GO)
-terms and pathway enrichments based on statistical significance and intersection size.
+The completed ranked marker-source-panel workflow uses
+run_gprofiler_from_manifest.R for live g:Profiler execution and
+build_enrichment_summary_top_terms.R for the heatmap-ready top-term summary.
+This helper is retained for older manual/export-based term-selection paths.
 """
 
 import argparse
@@ -101,11 +103,11 @@ def pick_terms(
         
         for _, row in pw.iterrows():
             s = row["source"]
-            # Add term if we haven't hit the per-database cap
+            # Add the term if the per-database cap has not been reached.
             if per_db[s] < max_per_db:
                 picked.append(row)
                 per_db[s] += 1
-            # Stop when we've selected enough total pathway terms
+            # Stop after the requested number of pathway terms has been selected.
             if len(picked) >= top_pathways:
                 break
         

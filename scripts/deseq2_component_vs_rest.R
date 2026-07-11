@@ -1,557 +1,278 @@
 #!/usr/bin/env Rscript
 
-# =============================================================================
-# deseq2_component_vs_rest.R
-# =============================================================================
-#
-# DESCRIPTION
-# -----------
-# This script performs differential gene expression analysis using DESeq2 to
-# identify transcriptional signatures that distinguish samples within a
-# specified graph component from all other samples in the dataset. The
-# component-versus-rest design is particularly suited for characterising
-# the molecular programmes underlying cluster membership identified through
-# unsupervised analysis.
-#
-#
-# BIOLOGICAL CONTEXT
-# ------------------
-# In cancer genomics, unsupervised clustering methods (e.g., consensus
-# clustering, community detection on similarity graphs) partition samples
-# into groups based on transcriptomic similarity. However, cluster membership
-# alone does not reveal which genes drive the observed groupings. This script
-# addresses that gap by identifying differentially expressed genes (DEGs)
-# between a component of interest and the remainder of the cohort.
-#
-# The resulting marker genes serve multiple purposes:
-#
-#   (1) Biological Interpretation: Pathway enrichment analysis on DEGs can
-#       reveal the biological processes, molecular functions, or cellular
-#       states that characterise the component.
-#
-#   (2) Subtype Annotation: Comparison of DEGs against known gene signatures
-#       (e.g., PAM50 for breast cancer, immunophenotype signatures) can
-#       link data-driven clusters to established molecular subtypes.
-#
-#   (3) Biomarker Discovery: Genes with large effect sizes and robust
-#       statistical support may serve as candidate biomarkers for
-#       classification or prognostication.
-#
-#   (4) Hypothesis Generation: Unexpected DEGs may suggest novel biology
-#       or previously unrecognised heterogeneity within the cohort.
-#
-#
-# STATISTICAL FRAMEWORK
-# ---------------------
-# The script employs DESeq2's negative binomial generalised linear model
-# framework, which is well-suited for RNA-seq count data exhibiting
-# overdispersion (variance exceeding the Poisson expectation).
-#
-# component membership (1 = component of interest, 0 = rest)
-#
-# Accurate dispersion estimation is critical for reliable inference. DESeq2
-# employs a three-step approach:
-#
-#   (1) Gene-wise maximum likelihood estimation of $\alpha_i$
-#   (2) Fitting a mean-dispersion trend across all genes
-#   (3) Empirical Bayes shrinkage of gene-wise estimates towards the trend
-#
-# This shrinkage improves power for genes with few counts whilst preserving
-# sensitivity for genes with strong evidence of unusual variability.
-#
-# The null hypothesis $H_0: \beta_{i,1} = 0$ (no differential expression)
-# is tested using the Wald statistic:
-#
-# Resulting $p$-values are adjusted for multiple testing using the
-# Benjamini-Hochberg procedure to control the false discovery rate (FDR).
-#
-#
-# CONTRAST DESIGN RATIONALE
-# -------------------------
-# The component-versus-rest design treats all non-component samples as a
-# single reference group. This approach:
-#
-#   - Maximises statistical power by using all available data
-#   - Identifies genes specific to the component relative to the cohort
-#     background, rather than relative to a single comparator
-#   - Is appropriate when the scientific question concerns what makes the
-#     component distinctive, not how it differs from any particular group
-#
-# Alternative designs (e.g., pairwise component comparisons) may be
-# appropriate for different scientific questions but are not implemented
-# in this script.
-#
-#
-# INPUT REQUIREMENTS
-# ------------------
-# 1. Raw count matrix :
-#    - Tab-separated file with genes as rows and samples as columns
-#    - First column contains gene identifiers
-#    - Values must be raw integer counts (not normalised)
-#
-# 2. Sample metadata :
-#    - Tab-separated file with one row per sample
-#    - Must contain a sample identifier column matching count matrix columns
-#    - Must contain a component membership column (integer or factor)
-#
-# 3. Component identifier :
-#    - Integer specifying which component to compare against the rest
-#
-#
-# OUTPUT STRUCTURE
-# ----------------
-# The script produces:
-#
-#   {outdir}/
-#   +-- tables/
-#   |   +-- component_{N}_vs_rest.tsv    # Full DESeq2 results
-#   +-- markers/
-#       +-- component_{N}_vs_rest_UP_top{M}.tsv    # Up-regulated markers
-#       +-- component_{N}_vs_rest_UP_top{M}.txt    # Gene list only
-#       +-- component_{N}_vs_rest_DOWN_top{M}.tsv  # Down-regulated markers
-#       +-- component_{N}_vs_rest_DOWN_top{M}.txt  # Gene list only
-#
-#
-# USAGE EXAMPLE
-# -------------
-#   Rscript deseq2_component_vs_rest.R \
-#     --counts results/unsupervised/brca/deseq2_inputs/counts.tsv \
-#     --meta results/unsupervised/brca/deseq2_inputs/metadata_with_components.tsv \
-#     --component 1 \
-#     --component_col component \
-#     --sample_id_col sample_name \
-#     --outdir results/unsupervised/brca/component_vs_rest \
-#     --fdr 0.05 --lfc 1.0
-#
-#
-# DEPENDENCIES
-# ------------
-# R packages: optparse, DESeq2, dplyr, readr, tibble
-# Bioconductor: DESeq2 (install via BiocManager::install("DESeq2"))
-#
-# -----------------------------------------------------------------------------
-# Package Loading
-# -----------------------------------------------------------------------------
-# The script loads required packages with startup messages suppressed to
-# maintain clean log output in batch processing environments.
-#
-# Package purposes:
-#   - optparse:   Command-line argument parsing
-#   - DESeq2:     Differential expression analysis framework
-#   - dplyr:      Data manipulation and filtering
-#   - readr:      Efficient file I/O with type inference
-#   - tibble:     Modern data frame operations (rownames_to_column)
+# Component-vs-rest DESeq2 marker prioritisation.
+# Unit of analysis: one resolved graph component versus all other prepared
+# same-cancer cell-line samples. Wald p-values/BH-adjusted p-values provide
+# inference; apeglm posterior-mode shrunken LFCs provide effect-size filtering,
+# direction assignment, and deterministic marker ranking.
 
 suppressPackageStartupMessages({
   library(optparse)
   library(DESeq2)
-  library(dplyr)
-  library(readr)
-  library(tibble)
+  library(apeglm)
+  library(data.table)
 })
 
-# -----------------------------------------------------------------------------
-# Command-Line Argument Definitions
-# -----------------------------------------------------------------------------
-# The script accepts arguments organised into three categories:
-#
-# Input Specifications:
-# --counts, --meta, --component
-#
-# Column Mappings:
-# --component_col, --sample_id_col
-#
-# Filtering Thresholds:
-# --fdr, --lfc, --topN
-#
-# The FDR and LFC thresholds control the stringency of marker selection.
-# Typical values for exploratory analysis are FDR $< 0.05$ and
-# $|\mathrm{LFC}| > 1.0$ (2-fold change). More stringent thresholds
-# (e.g., FDR $< 0.01$, $|\mathrm{LFC}| > 1.5$) may be appropriate for
-# generating high-confidence marker lists.
-
-opt_list <- list(
-  make_option("--counts", type = "character",
-              help = "Path to raw counts TSV"),
-  make_option("--meta", type = "character",
-              help = "Path to metadata TSV with component column"),
-  make_option("--component", type = "integer",
-              help = "Component ID to analyse"),
-  make_option("--component_col", type = "character", default = "component",
-              help = "Component column name"),
-  make_option("--sample_id_col", type = "character", default = "sample_name",
-              help = "Sample ID column name"),
-  make_option("--outdir", type = "character",
-              help = "Output directory"),
-  make_option("--fdr", type = "numeric", default = 0.05,
-              help = "FDR threshold"),
-  make_option("--lfc", type = "numeric", default = 1.0,
-              help = "Log2FC threshold"),
-  make_option("--topN", type = "integer", default = 500,
-              help = "Top N markers to extract")
+option_list <- list(
+  make_option("--counts", type = "character"),
+  make_option("--meta", type = "character"),
+  make_option("--component", type = "character"),
+  make_option("--component_col", type = "character", default = "component"),
+  make_option("--sample_id_col", type = "character", default = "sample_id"),
+  make_option("--outdir", type = "character"),
+  make_option("--adjusted_p_value_threshold", type = "double"),
+  make_option("--minimum_absolute_shrunken_log2fc", type = "double"),
+  make_option("--maximum_markers_per_direction", type = "integer"),
+  make_option("--minimum_base_mean", type = "double"),
+  make_option("--minimum_total_gene_count", type = "integer"),
+  make_option("--dispersion_fit_type", type = "character"),
+  make_option("--lfc_shrinkage_method", type = "character")
 )
 
-opt <- parse_args(OptionParser(option_list = opt_list))
+opt <- parse_args(OptionParser(option_list = option_list))
 
-# -----------------------------------------------------------------------------
-# Input Validation
-# -----------------------------------------------------------------------------
-# Early validation of required arguments prevents cryptic errors later in
-# the pipeline and provides informative feedback to the user.
-
-if (is.null(opt$counts) || is.null(opt$meta) ||
-    is.null(opt$component) || is.null(opt$outdir)) {
-  stop("--counts, --meta, --component, and --outdir are required")
+required <- c("counts", "meta", "component", "outdir")
+for (name in required) {
+  value <- opt[[name]]
+  if (is.null(value) || is.na(value) || !nzchar(trimws(value))) {
+    stop(sprintf("[Component DESeq2] --%s is required", name), call. = FALSE)
+  }
 }
 
-# -----------------------------------------------------------------------------
-# Output Directory Initialisation
-# -----------------------------------------------------------------------------
-# The script creates a structured output directory hierarchy:
-#
-#   - tables/   : Full DESeq2 results for comprehensive downstream analysis
-#   - markers/  : Filtered gene lists for pathway enrichment and annotation
-#
-# Using showWarnings = FALSE enables idempotent execution.
+is_scalar_finite_number <- function(value) {
+  length(value) == 1L && !is.na(value) && is.finite(value)
+}
 
-dir.create(opt$outdir, recursive = TRUE, showWarnings = FALSE)
+if (!is_scalar_finite_number(opt$adjusted_p_value_threshold) ||
+    opt$adjusted_p_value_threshold <= 0 || opt$adjusted_p_value_threshold > 1) {
+  stop("--adjusted_p_value_threshold must be in (0, 1]", call. = FALSE)
+}
+if (!is_scalar_finite_number(opt$minimum_absolute_shrunken_log2fc) ||
+    opt$minimum_absolute_shrunken_log2fc < 0) {
+  stop("--minimum_absolute_shrunken_log2fc must be finite and non-negative", call. = FALSE)
+}
+if (!is_scalar_finite_number(opt$minimum_base_mean) || opt$minimum_base_mean < 0) {
+  stop("--minimum_base_mean must be finite and non-negative", call. = FALSE)
+}
+if (!is_scalar_finite_number(opt$maximum_markers_per_direction) ||
+    opt$maximum_markers_per_direction < 1 || opt$maximum_markers_per_direction != floor(opt$maximum_markers_per_direction)) {
+  stop("--maximum_markers_per_direction must be a positive integer", call. = FALSE)
+}
+if (!is_scalar_finite_number(opt$minimum_total_gene_count) || opt$minimum_total_gene_count < 1) {
+  stop("--minimum_total_gene_count must be a positive integer", call. = FALSE)
+}
+if (length(opt$dispersion_fit_type) != 1L || is.na(opt$dispersion_fit_type) ||
+    !opt$dispersion_fit_type %in% c("parametric", "local", "mean")) {
+  stop("--dispersion_fit_type must be one of: parametric, local, mean", call. = FALSE)
+}
+if (length(opt$lfc_shrinkage_method) != 1L || is.na(opt$lfc_shrinkage_method) ||
+    opt$lfc_shrinkage_method != "apeglm") {
+  stop("--lfc_shrinkage_method must be apeglm for the active component method", call. = FALSE)
+}
+
 dir.create(file.path(opt$outdir, "tables"), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path(opt$outdir, "markers"), recursive = TRUE, showWarnings = FALSE)
 
-cat("[INFO] Loading data...\n")
-
-# -----------------------------------------------------------------------------
-# Count Matrix Loading
-# -----------------------------------------------------------------------------
-# The count matrix is loaded and converted to the matrix format required by
-# DESeq2. Gene identifiers from the first column are assigned as row names.
-#
-# IMPORTANT: DESeq2 requires raw integer counts. The script assumes that
-# the input file contains unnormalised counts; providing TPM, FPKM, or
-# other normalised values will produce statistically invalid results.
-
-counts_df <- read_tsv(opt$counts, show_col_types = FALSE)
-
-# Extract gene identifiers from the first column
-gene_ids <- counts_df[[1]]
-
-# Convert remaining columns to numeric matrix
-counts_mat <- as.matrix(counts_df[, -1])
-rownames(counts_mat) <- gene_ids
-# TEMPORARY COMPROMISE: current staged "counts" are VST-like decimals because
-# raw DSMZ counts are unavailable. Coerce to integer only to let DESeq2 run;
-# replace this with true raw integer counts when available.
-if (any(counts_mat != round(counts_mat), na.rm = TRUE)) {
-  warning("Coercing non-integer staged expression values to integer for DESeq2 compatibility; use raw counts for final analysis.")
-}
-storage.mode(counts_mat) <- "integer"
-
-# -----------------------------------------------------------------------------
-# Metadata Loading and Validation
-# -----------------------------------------------------------------------------
-# The metadata file must contain:
-#   (1) A sample identifier column matching the count matrix column names
-#   (2) A component membership column indicating cluster assignment
-#
-# The script validates that the specified component column exists before
-# proceeding to avoid downstream errors.
-
-meta_df <- read_tsv(opt$meta, show_col_types = FALSE)
-
-if (!opt$component_col %in% colnames(meta_df)) {
-  stop(paste0("Component column '", opt$component_col, "' not found in metadata"))
+validate_count_matrix <- function(matrix_values) {
+  dim_names <- dimnames(matrix_values)
+  suppressWarnings(storage.mode(matrix_values) <- "numeric")
+  dimnames(matrix_values) <- dim_names
+  if (any(is.na(matrix_values))) stop("Counts contain NA values", call. = FALSE)
+  if (any(!is.finite(matrix_values))) stop("Counts contain non-finite values", call. = FALSE)
+  if (any(matrix_values < 0)) stop("Counts contain negative values", call. = FALSE)
+  if (any(abs(matrix_values - round(matrix_values)) > 1e-8)) {
+    stop("DESeq2 input must contain raw integer counts", call. = FALSE)
+  }
+  matrix_values <- round(matrix_values)
+  storage.mode(matrix_values) <- "integer"
+  dimnames(matrix_values) <- dim_names
+  matrix_values
 }
 
-# -----------------------------------------------------------------------------
-# Binary Group Variable Construction
-# -----------------------------------------------------------------------------
-# The contrast design requires a binary group variable distinguishing the
-# component of interest from all other samples. This transformation converts
-# the multi-level component variable into a two-level factor suitable for
-# the DESeq2 design formula.
-#
-# The naming convention "Component_N" vs "Rest" produces interpretable
-# contrast names in the output and avoids issues with numeric factor levels.
-
-meta_df$group <- ifelse(
-  meta_df[[opt$component_col]] == opt$component,
-  paste0("Component_", opt$component),
-  "Rest"
-)
-
-# -----------------------------------------------------------------------------
-# Sample Alignment
-# -----------------------------------------------------------------------------
-# DESeq2 requires exact correspondence between metadata rows and count matrix
-# columns. This section ensures proper alignment by:
-#
-#   (1) Filtering metadata to samples present in the count matrix
-#   (2) Subsetting the count matrix to samples with metadata
-#
-# This bidirectional filtering handles cases where the count matrix and
-# metadata have different sample sets (e.g., due to quality control
-# exclusions applied to one but not the other).
-
-meta_df <- meta_df[meta_df[[opt$sample_id_col]] %in% colnames(counts_mat), ]
-counts_mat <- counts_mat[, meta_df[[opt$sample_id_col]], drop = FALSE]
-
-# -----------------------------------------------------------------------------
-# Sample Count Reporting
-# -----------------------------------------------------------------------------
-# The script reports sample counts for each group to facilitate validation
-# and interpretation. Imbalanced group sizes may affect statistical power
-# and should be considered when interpreting results.
-
-cat(sprintf("[INFO] Component %d samples: %d\n",
-            opt$component,
-            sum(meta_df$group == paste0("Component_", opt$component))))
-cat(sprintf("[INFO] Rest samples: %d\n",
-            sum(meta_df$group == "Rest")))
-cat(sprintf("[INFO] Total genes: %d\n", nrow(counts_mat)))
-
-# -----------------------------------------------------------------------------
-# Sample Sufficiency Validation
-# -----------------------------------------------------------------------------
-# DESeq2 requires at least one sample in each group. Whilst the method can
-# technically run with minimal sample sizes, results from severely imbalanced
-# or underpowered comparisons should be interpreted with caution.
-#
-# The script enforces a minimum of one sample per group; users requiring
-# stricter thresholds should implement additional validation.
-
-n_comp <- sum(meta_df$group == paste0("Component_", opt$component))
-n_rest <- sum(meta_df$group == "Rest")
-
-if (n_comp < 1) {
-  stop(sprintf("No samples found for component %d", opt$component))
+counts_table <- fread(opt$counts, sep = "\t", data.table = FALSE, check.names = FALSE)
+if (ncol(counts_table) < 2L || names(counts_table)[1L] != "gene_id") {
+  stop("[Component DESeq2] Count table must have gene_id followed by sample columns", call. = FALSE)
 }
-if (n_rest < 1) {
-  stop("No samples found for rest group")
+gene_ids <- as.character(counts_table$gene_id)
+if (any(is.na(gene_ids)) || any(!nzchar(trimws(gene_ids))) || anyDuplicated(gene_ids)) {
+  stop("[Component DESeq2] Gene identifiers must be present and unique", call. = FALSE)
+}
+count_matrix <- as.matrix(counts_table[, -1L, drop = FALSE])
+rownames(count_matrix) <- gene_ids
+count_matrix <- validate_count_matrix(count_matrix)
+if (anyDuplicated(colnames(count_matrix))) {
+  stop("[Component DESeq2] Count sample identifiers must be unique", call. = FALSE)
 }
 
-# -----------------------------------------------------------------------------
-# DESeqDataSet Construction
-# -----------------------------------------------------------------------------
-# The DESeqDataSet object encapsulates the count matrix, sample metadata,
-# and experimental design in a single container. The design formula
-# ~ group specifies that differential expression
-# will be tested with respect to the binary group variable.
-#
-# DESeq2 automatically sets factor levels alphabetically, placing
-# "Component_N" before "Rest". The explicit contrast specification in
-# the results extraction step ensures correct directionality regardless
-# of factor ordering.
+metadata <- fread(opt$meta, sep = "\t", data.table = FALSE, check.names = FALSE)
+required_metadata <- c(opt$sample_id_col, opt$component_col)
+missing_metadata <- setdiff(required_metadata, names(metadata))
+if (length(missing_metadata) > 0L) {
+  stop("[Component DESeq2] Metadata missing required column(s): ",
+       paste(missing_metadata, collapse = ", "), call. = FALSE)
+}
+metadata[[opt$sample_id_col]] <- trimws(as.character(metadata[[opt$sample_id_col]]))
+if (anyDuplicated(metadata[[opt$sample_id_col]])) {
+  stop("[Component DESeq2] Metadata sample identifiers are duplicated", call. = FALSE)
+}
+metadata <- metadata[match(colnames(count_matrix), metadata[[opt$sample_id_col]]), , drop = FALSE]
+if (any(is.na(metadata[[opt$sample_id_col]]))) {
+  stop("[Component DESeq2] Metadata does not cover every count sample", call. = FALSE)
+}
+rownames(metadata) <- metadata[[opt$sample_id_col]]
+if (!identical(colnames(count_matrix), rownames(metadata))) {
+  stop("[Component DESeq2] Count and metadata sample orders do not agree", call. = FALSE)
+}
 
-cat("[INFO] Creating DESeqDataSet...\n")
-dds <- DESeqDataSetFromMatrix(
-  countData = counts_mat,
-  colData = meta_df,
-  design = ~ group
-)
+component_values <- trimws(as.character(metadata[[opt$component_col]]))
+target_component <- trimws(as.character(opt$component))
+group_values <- ifelse(component_values == target_component, "FOCAL_COMPONENT", "REST")
+metadata$contrast_group <- factor(group_values, levels = c("REST", "FOCAL_COMPONENT"))
+n_focal <- sum(metadata$contrast_group == "FOCAL_COMPONENT")
+n_rest <- sum(metadata$contrast_group == "REST")
+if (n_focal < 1L || n_rest < 1L) {
+  stop("[Component DESeq2] Component contrast has an empty focal or rest group", call. = FALSE)
+}
+if ((n_focal + n_rest) <= 2L) {
+  stop("[Component DESeq2] Component contrast lacks residual degrees of freedom", call. = FALSE)
+}
 
-# -----------------------------------------------------------------------------
-# Low-Count Gene Filtering
-# -----------------------------------------------------------------------------
-# Genes with very low counts across all samples provide little statistical
-# information and can cause numerical instability in dispersion estimation.
-# A threshold of 10 total counts is applied:
-#
-#     keep gene i iff sum_{j=1}^{n} K_{ij} >= 10
-#
-# This threshold is intentionally permissive; DESeq2's independent filtering
-# applies additional, more sophisticated filtering based on mean expression
-# and information content.
-
-keep <- rowSums(counts(dds)) >= 10
-dds <- dds[keep, ]
-
-cat(sprintf("[INFO] After filtering: %d genes\n", nrow(dds)))
-
-# -----------------------------------------------------------------------------
-# DESeq2 Analysis Execution
-# -----------------------------------------------------------------------------
-# The DESeq() function executes the complete analysis pipeline:
-#
-#   (1) Size factor estimation (median-of-ratios method)
-#   (2) Dispersion estimation (gene-wise, trend, and shrinkage)
-#   (3) Negative binomial GLM fitting
-#   (4) Wald test for significance
-#
-# Parameter Choices:
-# fitType = "local" Uses local regression for the
-# mean-dispersion trend, which is more flexible than the default
-# parametric fit and accommodates non-standard dispersion patterns.
-# minReplicatesForReplace = Inf Disables automatic
-# outlier replacement, preserving the original count values. This is appropriate
-# when outliers may represent genuine biological variation rather than technical
-# artefacts.
-
-cat("[INFO] Running DESeq2...\n")
-dds <- DESeq(dds, quiet = TRUE, fitType = "local", minReplicatesForReplace = Inf)
-
-# -----------------------------------------------------------------------------
-# Results Extraction
-# -----------------------------------------------------------------------------
-# The results() function extracts the Wald test results for the
-# specified contrast. The contrast is explicitly defined as:
-#
-#   Component_N vs Rest (positive LFC = higher in component)
-#
-#Output Columns:  
-# baseMean Mean normalised count across all samples
-# log2FoldChange Estimated LFC (component vs rest)
-# lfcSE Standard error of the LFC estimate
-# stat Wald statistic (hat{beta} / SE)
-# pvalue Wald test p-value
-# padj Benjamini-Hochberg adjusted p-value (FDR)
-
-contrast_name <- paste0("Component_", opt$component, "_vs_Rest")
-res <- results(
+dds <- DESeqDataSetFromMatrix(countData = count_matrix, colData = metadata, design = ~ contrast_group)
+keep_gene <- rowSums(counts(dds)) >= opt$minimum_total_gene_count
+dds <- dds[keep_gene, ]
+if (nrow(dds) == 0L) {
+  stop("[Component DESeq2] No genes remain after the configured total-count prefilter", call. = FALSE)
+}
+dds <- DESeq(
   dds,
-  contrast = c("group", paste0("Component_", opt$component), "Rest"),
-  alpha = opt$fdr
+  quiet = TRUE,
+  fitType = opt$dispersion_fit_type,
+  minReplicatesForReplace = Inf
+)
+wald_result <- results(
+  dds,
+  contrast = c("contrast_group", "FOCAL_COMPONENT", "REST"),
+  alpha = opt$adjusted_p_value_threshold
 )
 
-# -----------------------------------------------------------------------------
-# Results Formatting
-# -----------------------------------------------------------------------------
-# The results are converted to a data frame with gene identifiers as a
-# column (rather than row names) for compatibility with downstream tools
-# and file formats. Sorting by adjusted p-value facilitates rapid
-# identification of the most significant genes.
+# apeglm provides a posterior mode for the shrunken LFC and a posterior
+# standard deviation for its uncertainty.
+shrunken_result <- lfcShrink(
+  dds,
+  coef = "contrast_group_FOCAL_COMPONENT_vs_REST",
+  type = opt$lfc_shrinkage_method,
+  quiet = TRUE
+)
 
-res_df <- as.data.frame(res) %>%
-  rownames_to_column("gene_id") %>%
-  arrange(padj, pvalue)
+result_table <- as.data.frame(wald_result)
+result_table$gene_id <- rownames(result_table)
+shrunken_table <- as.data.frame(shrunken_result)
+result_table$baseMean <- result_table$baseMean
+result_table$wald_statistic <- result_table$stat
+result_table$p_value <- result_table$pvalue
+result_table$adjusted_p_value <- result_table$padj
+result_table$log2_fold_change_unshrunk <- result_table$log2FoldChange
+result_table$log2_fold_change_standard_error_unshrunk <- result_table$lfcSE
+result_table$log2_fold_change_shrunken <- shrunken_table[rownames(result_table), "log2FoldChange"]
+result_table$log2_fold_change_posterior_sd <- shrunken_table[rownames(result_table), "lfcSE"]
+result_table$absolute_shrunken_log2_fold_change <- abs(result_table$log2_fold_change_shrunken)
+result_table$effect_direction <- ifelse(
+  result_table$log2_fold_change_shrunken > 0,
+  "upregulated_in_focal_component_vs_rest",
+  ifelse(result_table$log2_fold_change_shrunken < 0,
+         "downregulated_in_focal_component_vs_rest",
+         "zero_shrunken_effect")
+)
+result_table$contrast_id <- paste0("component_", target_component, "_vs_rest")
+result_table$contrast_type <- "component_focal_vs_rest"
+result_table$focal_component_id <- target_component
+result_table$reference_definition <- "all_prepared_same_cancer_profiles_outside_focal_component"
+result_table$lfc_shrinkage_method <- opt$lfc_shrinkage_method
 
-norm_counts <- counts(dds, normalized = TRUE)
-component_sample_ids <- meta_df[[opt$sample_id_col]][
-  meta_df$group == paste0("Component_", opt$component)
-]
-if (length(component_sample_ids) > 0) {
-  component_expr <- rowMeans(
-    norm_counts[, component_sample_ids, drop = FALSE],
-    na.rm = TRUE
+result_columns <- c(
+  "gene_id", "contrast_id", "contrast_type", "focal_component_id",
+  "reference_definition", "baseMean", "wald_statistic", "p_value",
+  "adjusted_p_value", "log2_fold_change_unshrunk",
+  "log2_fold_change_standard_error_unshrunk", "log2_fold_change_shrunken",
+  "log2_fold_change_posterior_sd", "absolute_shrunken_log2_fold_change",
+  "effect_direction", "lfc_shrinkage_method", "stat", "pvalue", "padj",
+  "log2FoldChange", "lfcSE"
+)
+result_table <- result_table[, intersect(result_columns, names(result_table)), drop = FALSE]
+result_table <- result_table[order(result_table$adjusted_p_value, result_table$p_value, result_table$gene_id), , drop = FALSE]
+
+result_path <- file.path(opt$outdir, "tables", paste0("component_", target_component, "_vs_rest.tsv"))
+fwrite(result_table, result_path, sep = "\t")
+
+passes_significance <- !is.na(result_table$adjusted_p_value) &
+  result_table$adjusted_p_value <= opt$adjusted_p_value_threshold
+passes_marker <- passes_significance &
+  !is.na(result_table$baseMean) &
+  result_table$baseMean >= opt$minimum_base_mean &
+  !is.na(result_table$log2_fold_change_shrunken) &
+  result_table$absolute_shrunken_log2_fold_change >= opt$minimum_absolute_shrunken_log2fc
+
+marker_table <- result_table[passes_marker, , drop = FALSE]
+marker_table$contrast_marker_rank <- seq_len(nrow(marker_table))
+marker_columns <- c(
+  "gene_id", "baseMean", "wald_statistic", "p_value", "adjusted_p_value",
+  "log2_fold_change_unshrunk", "log2_fold_change_shrunken",
+  "log2_fold_change_posterior_sd", "absolute_shrunken_log2_fold_change",
+  "effect_direction", "contrast_marker_rank"
+)
+
+write_direction <- function(direction_name, rows, sort_columns) {
+  if (nrow(rows) > 0L) {
+    rows <- rows[do.call(order, sort_columns(rows)), , drop = FALSE]
+    rows <- head(rows, opt$maximum_markers_per_direction)
+    rows$contrast_marker_rank <- seq_len(nrow(rows))
+  }
+  out_tsv <- file.path(
+    opt$outdir,
+    "markers",
+    paste0("component_", target_component, "_vs_rest_", direction_name, "_top", opt$maximum_markers_per_direction, ".tsv")
   )
-  res_df$normalised_count_in_test_sample <- as.numeric(component_expr[res_df$gene_id])
-} else {
-  res_df$normalised_count_in_test_sample <- NA_real_
+  out_txt <- file.path(
+    opt$outdir,
+    "markers",
+    paste0("component_", target_component, "_vs_rest_", direction_name, "_top", opt$maximum_markers_per_direction, ".txt")
+  )
+  fwrite(rows[, intersect(marker_columns, names(rows)), drop = FALSE], out_tsv, sep = "\t")
+  writeLines(as.character(rows$gene_id), out_txt)
 }
 
-# -----------------------------------------------------------------------------
-# Full Results Export
-# -----------------------------------------------------------------------------
-# The complete results table is written for archival and comprehensive
-# downstream analysis. This file contains all tested genes regardless of
-# significance, enabling:
-#
-#   - Custom re-filtering with different thresholds
-#   - Gene set enrichment analysis (GSEA) using ranked gene lists
-#   - Volcano plot generation
-#   - Integration with other datasets
-
-out_file <- file.path(opt$outdir, "tables",
-                      paste0("component_", opt$component, "_vs_rest.tsv"))
-write_tsv(res_df, out_file)
-cat(sprintf("[OK] Full results written to: %s\n", out_file))
-
-# -----------------------------------------------------------------------------
-# Marker Gene Filtering
-# -----------------------------------------------------------------------------
-# Marker genes are identified by applying dual thresholds for statistical
-# significance (FDR) and biological effect size (LFC). This two-criterion
-# approach balances:
-#
-#   - Statistical rigour: FDR control limits false discoveries
-#   - Biological relevance: LFC threshold excludes statistically significant
-#     but biologically trivial changes
-#
-# Markers are separated into up-regulated (positive LFC) and down-regulated
-# (negative LFC) sets to facilitate interpretation. Up-regulated genes are
-# more highly expressed in the component of interest; down-regulated genes
-# are more highly expressed in the rest of the cohort.
-#
-# Filtering Criteria:
-# UP marker iff p_adj < tau_FDR and LFC > tau_LFC
-# DOWN marker iff p_adj < tau_FDR and LFC < -tau_LFC
-
-markers_up <- res_df %>%
-  filter(!is.na(padj), padj < opt$fdr, log2FoldChange > opt$lfc,
-         !is.na(normalised_count_in_test_sample),
-         normalised_count_in_test_sample >= 10) %>%
-  arrange(desc(log2FoldChange))
-
-markers_down <- res_df %>%
-  filter(!is.na(padj), padj < opt$fdr, log2FoldChange < -opt$lfc,
-         !is.na(normalised_count_in_test_sample),
-         normalised_count_in_test_sample >= 10) %>%
-  arrange(log2FoldChange)
-
-cat(sprintf("[INFO] UP markers: %d\n", nrow(markers_up)))
-cat(sprintf("[INFO] DOWN markers: %d\n", nrow(markers_down)))
-
-# -----------------------------------------------------------------------------
-# Marker Gene Export
-# -----------------------------------------------------------------------------
-# Filtered marker genes are exported in two formats:
-#
-#   (1) TSV files containing full statistics (LFC, p-value, FDR) for
-#       detailed analysis and reporting
-#
-#   (2) TXT files containing gene identifiers only, suitable for direct
-#       input to pathway enrichment tools (e.g., Enrichr, g:Profiler, DAVID)
-#
-# The topN parameter limits the number of exported markers to
-# prevent unwieldy gene lists. Genes are ranked by effect size (|LFC|)
-# to prioritise the strongest differential expression signals.
-
-if (nrow(markers_up) > 0) {
-  markers_up_top <- head(markers_up, opt$topN)
-
-  # Write full statistics
-  out_up <- file.path(opt$outdir, "markers",
-                      paste0("component_", opt$component,
-                             "_vs_rest_UP_top", opt$topN, ".tsv"))
-  write_tsv(markers_up_top, out_up)
-  cat(sprintf("[OK] UP markers written to: %s\n", out_up))
-
-  # Write gene list only
-  out_up_genes <- file.path(opt$outdir, "markers",
-                            paste0("component_", opt$component,
-                                   "_vs_rest_UP_top", opt$topN, ".txt"))
-  write_lines(markers_up_top$gene_id, out_up_genes)
+up_rows <- marker_table[marker_table$log2_fold_change_shrunken > 0, , drop = FALSE]
+down_rows <- marker_table[marker_table$log2_fold_change_shrunken < 0, , drop = FALSE]
+zero_rows <- marker_table[marker_table$log2_fold_change_shrunken == 0, , drop = FALSE]
+if (nrow(zero_rows) > 0L) {
+  stop("[Component DESeq2] Retained component marker has zero shrunken LFC despite effect-size filtering", call. = FALSE)
 }
 
-if (nrow(markers_down) > 0) {
-  markers_down_top <- head(markers_down, opt$topN)
+write_direction("UP", up_rows, function(rows) list(-rows$absolute_shrunken_log2_fold_change, rows$adjusted_p_value, rows$gene_id))
+write_direction("DOWN", down_rows, function(rows) list(-rows$absolute_shrunken_log2_fold_change, rows$adjusted_p_value, rows$gene_id))
 
-  # Write full statistics
-  out_down <- file.path(opt$outdir, "markers",
-                        paste0("component_", opt$component,
-                               "_vs_rest_DOWN_top", opt$topN, ".tsv"))
-  write_tsv(markers_down_top, out_down)
-  cat(sprintf("[OK] DOWN markers written to: %s\n", out_down))
-
-  # Write gene list only
-  out_down_genes <- file.path(opt$outdir, "markers",
-                              paste0("component_", opt$component,
-                                     "_vs_rest_DOWN_top", opt$topN, ".txt"))
-  write_lines(markers_down_top$gene_id, out_down_genes)
-}
-
-# -----------------------------------------------------------------------------
-# Execution Summary
-# -----------------------------------------------------------------------------
-# The script outputs a summary of key statistics to facilitate validation
-# and provide a quick overview of results. This summary is particularly
-# useful when the script is executed as part of a larger pipeline where
-# detailed log review may be impractical.
-
-cat("\n[SUMMARY]\n")
-cat(sprintf("  Component %d samples: %d\n", opt$component, n_comp))
-cat(sprintf("  Rest samples: %d\n", n_rest))
-cat(sprintf("  UP markers (FDR<%.2f, LFC>%.2f): %d\n",
-            opt$fdr, opt$lfc, nrow(markers_up)))
-cat(sprintf("  DOWN markers (FDR<%.2f, LFC<%.2f): %d\n",
-            opt$fdr, -opt$lfc, nrow(markers_down)))
-cat("\n[OK] Analysis complete!\n")
+summary_table <- data.frame(
+  component = target_component,
+  n_focal_samples = n_focal,
+  n_rest_samples = n_rest,
+  n_result_genes = nrow(result_table),
+  n_pvalue_nonmissing = sum(!is.na(result_table$p_value)),
+  n_padj_nonmissing = sum(!is.na(result_table$adjusted_p_value)),
+  n_significant_before_effect_filter = sum(passes_significance, na.rm = TRUE),
+  n_markers_before_cap = nrow(marker_table),
+  n_up_markers_after_cap = min(nrow(up_rows), opt$maximum_markers_per_direction),
+  n_down_markers_after_cap = min(nrow(down_rows), opt$maximum_markers_per_direction),
+  adjusted_p_value_threshold = opt$adjusted_p_value_threshold,
+  minimum_base_mean = opt$minimum_base_mean,
+  minimum_absolute_shrunken_log2fc = opt$minimum_absolute_shrunken_log2fc,
+  maximum_markers_per_direction = opt$maximum_markers_per_direction,
+  stringsAsFactors = FALSE
+)
+fwrite(summary_table, file.path(opt$outdir, "tables", paste0("component_", target_component, "_vs_rest_summary.tsv")), sep = "\t")
+message(sprintf(
+  "[Component DESeq2] PASS component=%s n_result_genes=%d up=%d down=%d",
+  target_component,
+  nrow(result_table),
+  min(nrow(up_rows), opt$maximum_markers_per_direction),
+  min(nrow(down_rows), opt$maximum_markers_per_direction)
+))

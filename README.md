@@ -33,19 +33,20 @@ Graph resolution aggregates stable shared tumour-neighbourhood support into a th
 
 The workflow proceeds through the following stages:
 
-1. Computes source-aware RNA-seq expression objects and variance-stabilising transformation (VST) inputs.
+1. Builds source-aware RNA-seq count and metadata objects for patient tumours and DSMZ cell lines.
 2. Applies tumour-purity filtering to patient tumour samples.
-3. Derives unsupervised feature-selection outputs from variance, distributional, principal-component, and network-based criteria.
-4. Constructs feature-distance representations from selected genes, expression spaces, and distance or similarity metrics.
-5. Computes adaptive tumour-neighbourhood evidence for cell lines and patient tumours.
-6. Aggregates p-consensus tumour-neighbourhood support within each feature-distance representation.
-7. Performs patient-referenced graph construction from shared tumour-neighbourhood support.
-8. Resolves cell-line neighbours through global-local representation intersection.
-9. Computes DESeq2 graph-derived marker contrasts for isolates, component anchors, and graph components.
-10. Derives the ranked marker-source pan-cancer feature panel.
-11. Performs reciprocal tumour-cell-line ranking in the configured feature space.
-12. Constructs the pan-cancer cell-line-only k-nearest-neighbour similarity network and evaluates Louvain and Leiden community structure.
-13. Evaluates enrichment interpretation outputs and quality-control visualisation.
+3. Constructs filtered, source-aware corrected expression objects and variance-stabilised transformation (VST) matrices.
+4. Derives unsupervised feature-selection outputs from variance, distributional, principal-component, and network-based criteria.
+5. Constructs feature-distance representations from selected genes, expression spaces, and distance or similarity metrics.
+6. Computes adaptive tumour-neighbourhood evidence for cell lines and patient tumours.
+7. Aggregates p-consensus tumour-neighbourhood values within each feature-distance representation.
+8. Performs patient-referenced graph construction from shared tumour-neighbourhood evidence.
+9. Resolves cell-line neighbours through global-local representation intersection.
+10. Computes DESeq2 graph-derived marker contrasts for isolates, component anchors, and graph components.
+11. Derives the ranked marker-source pan-cancer feature panel.
+12. Performs reciprocal tumour-cell-line similarity ranking in the configured feature space.
+13. Constructs the pan-cancer cell-line-only k-nearest-neighbour similarity network and evaluates Louvain and Leiden community structure.
+14. Evaluates enrichment outputs and quality-control visualisations.
 
 ## Repository structure
 
@@ -217,10 +218,10 @@ snakemake --use-conda --cores 4 "$TARGET_FILE" --config pipeline_profile=pan_can
 
 ### Current pan-cancer feature panel
 
-The current pan-cancer feature panel is the ranked marker-source panel:
+The current pan-cancer feature panel is graph-informed and DESeq2 marker-derived:
 
-- method: `ranked_marker_source_pan_cancer_panel`
-- selected empirical rule: `relaxed_iqr_median_baseMean`
+- method: `graph_derived_pan_cancer_feature_selection_v1_revised`
+- selection route: recurrent direct retention plus all-three acceptance for singleton and non-recurrent candidates
 - feature table: [`supplementary_data/feature_space/pan_cancer_features.tsv`](supplementary_data/feature_space/pan_cancer_features.tsv)
 - clean Ensembl list: [`supplementary_data/feature_space/pan_cancer_features_clean.txt`](supplementary_data/feature_space/pan_cancer_features_clean.txt)
 

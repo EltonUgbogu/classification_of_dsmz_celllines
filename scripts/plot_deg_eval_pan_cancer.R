@@ -51,15 +51,26 @@ infer_role <- function(path) {
 
 read_deseq <- function(path) {
   df <- read_tsv(path, show_col_types = FALSE)
-  if (!("gene" %in% names(df))) {
-    gene_col <- intersect(names(df), c("gene_id","Gene","geneid","ensg","ENSG"))
-    if (length(gene_col) == 0) stop("No gene column found in: ", path)
-    df <- df |> rename(gene = !!gene_col[1])
+  if (!("gene_id" %in% names(df))) {
+    stop("Canonical DEG table is missing gene_id in: ", path)
   }
-  req <- c("gene","log2FoldChange","padj","baseMean")
+  req <- c(
+    "gene_id",
+    "baseMean",
+    "wald_statistic",
+    "p_value",
+    "adjusted_p_value",
+    "log2_fold_change_unshrunk",
+    "log2_fold_change_shrunken",
+    "log2_fold_change_posterior_sd",
+    "absolute_shrunken_log2_fold_change",
+    "effect_direction"
+  )
   miss <- setdiff(req, names(df))
   if (length(miss) > 0) stop("Missing columns in ", path, ": ", paste(miss, collapse=", "))
-  df |> mutate(source_file = basename(path))
+  df |>
+    rename(gene = gene_id) |>
+    mutate(source_file = basename(path))
 }
 
 # robust extraction of expression matrix from pan_cancer_expr.rds
@@ -192,15 +203,15 @@ all_de <- bind_rows(de_brca, de_nbl, de_rbl)
 if (nrow(all_de) == 0) stop("No DE tables loaded. Check *tables dirs and filename prefixes (anchor_/isolate_).")
 
 all_de <- all_de |>
-  filter(!is.na(log2FoldChange), !is.na(padj), padj > 0, !is.na(baseMean)) |>
+  filter(!is.na(log2_fold_change_shrunken), !is.na(adjusted_p_value), adjusted_p_value > 0, !is.na(baseMean)) |>
   mutate(in_retained = gene %in% features_retained,
          class = case_when(
            !in_retained ~ "other",
-           log2FoldChange >= 0 ~ "retained_up",
+           log2_fold_change_shrunken >= 0 ~ "retained_up",
            TRUE ~ "retained_down"
          ),
-         neglog10_padj = -log10(padj),
-         padj_thr = if_else(role == "isolate", opt$padj_isolate, opt$padj_anchor))
+         neglog10_adjusted_p_value = -log10(adjusted_p_value),
+         adjusted_p_value_threshold = if_else(role == "isolate", opt$padj_isolate, opt$padj_anchor))
 
 # ----------------------------
 # Volcano plots
@@ -208,22 +219,22 @@ all_de <- all_de |>
 plot_volcano_disease <- function(disease) {
   df <- all_de |> filter(disease == !!disease)
 
-  thr_df <- df |> distinct(role, padj_thr)
+  thr_df <- df |> distinct(role, adjusted_p_value_threshold)
 
   lab <- df |>
     filter(in_retained) |>
     group_by(role) |>
-    mutate(abs_lfc = abs(log2FoldChange)) |>
-    arrange(desc(abs_lfc)) |>
+    mutate(absolute_shrunken_lfc = abs(log2_fold_change_shrunken)) |>
+    arrange(desc(absolute_shrunken_lfc)) |>
     slice_head(n = opt$label_top) |>
     ungroup()
 
-  p <- ggplot(df, aes(x = log2FoldChange, y = neglog10_padj)) +
+  p <- ggplot(df, aes(x = log2_fold_change_shrunken, y = neglog10_adjusted_p_value)) +
     geom_point(aes(color = class, shape = role), alpha = 0.55, size = 1.1) +
     geom_vline(xintercept = 0, linetype = "dashed") +
     geom_hline(
       data = thr_df,
-      aes(yintercept = -log10(padj_thr)),
+      aes(yintercept = -log10(adjusted_p_value_threshold)),
       linetype = "dashed"
     ) +
     facet_wrap(~role, nrow = 1) +
@@ -241,8 +252,8 @@ plot_volcano_disease <- function(disease) {
     )) +
     labs(
       title = paste0("Volcano — ", disease, " (highlight: pan-cancer retained genes)"),
-      x = "log2 fold change",
-      y = expression(-log[10]("padj"))
+      x = "apeglm-shrunken log2 fold change",
+      y = expression(-log[10]("BH-adjusted p-value"))
     ) +
     theme_classic() +
     theme(legend.position = "none")
@@ -253,14 +264,14 @@ plot_volcano_disease <- function(disease) {
 
 for (d in c("BRCA","NBL","RBL")) plot_volcano_disease(d)
 
-thr_df_comb <- all_de |> distinct(disease, role, padj_thr)
+thr_df_comb <- all_de |> distinct(disease, role, adjusted_p_value_threshold)
 
-p_comb <- ggplot(all_de, aes(x = log2FoldChange, y = neglog10_padj)) +
+p_comb <- ggplot(all_de, aes(x = log2_fold_change_shrunken, y = neglog10_adjusted_p_value)) +
   geom_point(aes(color = class), alpha = 0.5, size = 0.9) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_hline(
     data = thr_df_comb,
-    aes(yintercept = -log10(padj_thr)),
+    aes(yintercept = -log10(adjusted_p_value_threshold)),
     linetype = "dashed"
   ) +
   facet_grid(disease ~ role) +
@@ -271,8 +282,8 @@ p_comb <- ggplot(all_de, aes(x = log2FoldChange, y = neglog10_padj)) +
   )) +
   labs(
     title = "Combined Volcano — by disease × role (highlight: pan-cancer retained genes)",
-    x = "log2 fold change",
-    y = expression(-log[10]("padj"))
+    x = "apeglm-shrunken log2 fold change",
+    y = expression(-log[10]("BH-adjusted p-value"))
   ) +
   theme_classic() +
   theme(legend.position = "none")
@@ -287,23 +298,23 @@ plot_volcano_contrast <- function(disease, role, source_file) {
   df <- all_de |> filter(disease == !!disease, role == !!role, source_file == !!source_file)
   if (nrow(df) == 0) return(invisible(NULL))
 
-  padj_thr <- unique(df$padj_thr)[1]
+  adjusted_p_value_threshold <- unique(df$adjusted_p_value_threshold)[1]
 
   lab <- df |> filter(in_retained) |>
-    mutate(abs_lfc = abs(log2FoldChange)) |>
-    arrange(desc(abs_lfc)) |>
+    mutate(absolute_shrunken_lfc = abs(log2_fold_change_shrunken)) |>
+    arrange(desc(absolute_shrunken_lfc)) |>
     slice_head(n = opt$label_top)
 
-  p <- ggplot(df, aes(log2FoldChange, neglog10_padj)) +
+  p <- ggplot(df, aes(log2_fold_change_shrunken, neglog10_adjusted_p_value)) +
     geom_point(aes(color = class), alpha = 0.55, size = 1.1) +
     geom_vline(xintercept = 0, linetype = "dashed") +
-    geom_hline(yintercept = -log10(padj_thr), linetype = "dashed") +
+    geom_hline(yintercept = -log10(adjusted_p_value_threshold), linetype = "dashed") +
     ggrepel::geom_text_repel(data = lab, aes(label = gene), size = 3, max.overlaps = Inf) +
     scale_color_manual(values = c(other = "grey75", retained_up = "red3", retained_down = "blue3")) +
     labs(
       title = paste0("Volcano — ", disease, " ", role, " (", source_file, ")"),
-      x = "log2 fold change",
-      y = expression(-log[10]("padj"))
+      x = "apeglm-shrunken log2 fold change",
+      y = expression(-log[10]("BH-adjusted p-value"))
     ) +
     theme_classic() +
     theme(legend.position = "none")
@@ -324,18 +335,18 @@ for (i in seq_len(nrow(uniq_contrasts))) {
 # ----------------------------
 plot_ma_grid <- function() {
   df <- all_de |>
-    mutate(ma_sig = in_retained & (padj <= padj_thr))
+    mutate(ma_sig = in_retained & (adjusted_p_value <= adjusted_p_value_threshold))
 
-  p <- ggplot(df, aes(x = baseMean, y = log2FoldChange)) +
+  p <- ggplot(df, aes(x = baseMean, y = log2_fold_change_shrunken)) +
     geom_point(aes(color = ma_sig), alpha = 0.55, size = 0.9) +
     scale_x_log10() +
     geom_hline(yintercept = 0, linetype = "dashed") +
     facet_grid(disease ~ role) +
     scale_color_manual(values = c(`FALSE`="grey80", `TRUE`="red3")) +
     labs(
-      title = "MA plots — by disease × role (red = in retained set AND padj below role threshold)",
+      title = "MA plots — by disease × role (red = retained pan-cancer gene meeting the role-specific adjusted-p-value threshold)",
       x = "baseMean (log scale)",
-      y = "log2 fold change"
+      y = "apeglm-shrunken log2 fold change"
     ) +
     theme_classic() +
     theme(legend.position = "none")
@@ -348,10 +359,10 @@ plot_ma_grid()
 for (d in c("BRCA","NBL","RBL")) {
   for (r in c("anchor","isolate")) {
     df <- all_de |> filter(disease == d, role == r) |>
-      mutate(ma_sig = in_retained & (padj <= padj_thr))
+      mutate(ma_sig = in_retained & (adjusted_p_value <= adjusted_p_value_threshold))
     if (nrow(df) == 0) next
 
-    p <- ggplot(df, aes(x = baseMean, y = log2FoldChange)) +
+    p <- ggplot(df, aes(x = baseMean, y = log2_fold_change_shrunken)) +
       geom_point(aes(color = ma_sig), alpha = 0.55, size = 1.0) +
       scale_x_log10() +
       geom_hline(yintercept = 0, linetype = "dashed") +
@@ -359,7 +370,7 @@ for (d in c("BRCA","NBL","RBL")) {
       labs(
         title = paste0("MA — ", d, " (", r, ")"),
         x = "baseMean (log scale)",
-        y = "log2 fold change"
+        y = "apeglm-shrunken log2 fold change"
       ) +
       theme_classic() +
       theme(legend.position = "none")
@@ -433,8 +444,8 @@ for (d in c("BRCA","NBL","RBL")) {
   rank_tbl <- all_de |>
     filter(disease == d, gene %in% cand) |>
     group_by(gene) |>
-    summarise(max_abs_lfc = max(abs(log2FoldChange), na.rm = TRUE), .groups="drop") |>
-    arrange(desc(max_abs_lfc))
+    summarise(max_absolute_shrunken_lfc = max(abs(log2_fold_change_shrunken), na.rm = TRUE), .groups="drop") |>
+    arrange(desc(max_absolute_shrunken_lfc))
 
   ranked_genes <- rank_tbl |> pull(gene)
   if (length(ranked_genes) < 5) ranked_genes <- cand

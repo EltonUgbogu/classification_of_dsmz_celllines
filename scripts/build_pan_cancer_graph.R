@@ -3,16 +3,12 @@
 # build_pan_cancer_graph.R
 # =============================================================================
 #
-# Build validation kNN graph for pan-cancer data.
+# Build a simplified k-nearest-neighbour graph for pan-cancer data.
 #
-# NOTE: This is a simplified kNN graph for validation purposes (negative
-# control testing). For production analysis, this should be replaced with
-# the strict consensus policy (best_overall_dir ∩ winner_dir) used in
-# disease-specific analysis.
-#
-# This script computes kNN graphs from correlation matrix to test hematologic
-# rejection. The graph structure is used to verify that HEME samples form
-# separate components and do not mix with solid cancers.
+# This script builds a simplified k-nearest-neighbour graph from a sample-sample
+# correlation matrix for pan-cancer feature-space inspection. Depending on the
+# input matrix, it may support auxiliary negative-control inspection, but it is
+# not the primary patient-referenced support-threshold consensus graph.
 #
 # USAGE:
 # Rscript build_pan_cancer_graph.R \
@@ -29,65 +25,64 @@ suppressPackageStartupMessages({
 })
 
 # -----------------------------------------------------------------------------
-# Connected components via depth-first search (DFS)
+# Connected components via depth-first search
 # -----------------------------------------------------------------------------
 # igraph is intentionally avoided here to keep dependencies minimal for this
-# validation script. The function implements a standard DFS-based labelling:
-# each node gets an integer component ID; nodes sharing an ID are reachable
-# from one another through undirected edges.
-find_components <- function(edges) {
-  
-  # Collect all unique node names from both ends of every edge
-  nodes <- unique(c(edges$from, edges$to))
-  
-  # Build a forward adjacency list (from → list of to-nodes)
-  adj_list <- split(edges$to, edges$from)
-  
-  # Extend adjacency list with reverse edges to make the graph undirected
-  # (i.e. if A→B exists, also record B→A)
-  for (to_node in unique(edges$to)) {
-    from_nodes <- edges[to == to_node, from]
-    for (from_node in from_nodes) {
-      if (!from_node %in% names(adj_list)) {
-        adj_list[[from_node]] <- character(0)
-      }
-      if (!to_node %in% adj_list[[from_node]]) {
-        adj_list[[from_node]] <- c(adj_list[[from_node]], to_node)
-      }
+# graph-inspection script. The function labels every supplied node, including
+# isolates, after constructing an undirected adjacency list.
+get_components <- function(edges, nodes) {
+  nodes <- unique(as.character(nodes))
+  adj_list <- setNames(vector("list", length(nodes)), nodes)
+
+  if (!is.null(edges) && nrow(edges) > 0) {
+    edges[, from := as.character(from)]
+    edges[, to := as.character(to)]
+
+    for (i in seq_len(nrow(edges))) {
+      a <- edges$from[i]
+      b <- edges$to[i]
+
+      if (!a %in% names(adj_list)) adj_list[[a]] <- character(0)
+      if (!b %in% names(adj_list)) adj_list[[b]] <- character(0)
+
+      adj_list[[a]] <- unique(c(adj_list[[a]], b))
+      adj_list[[b]] <- unique(c(adj_list[[b]], a))
     }
   }
-  
-  # Initialise visited flags and component assignment vectors, keyed by node name
-  visited    <- setNames(rep(FALSE, length(nodes)), nodes)
-  components <- setNames(rep(0L,    length(nodes)), nodes)
-  comp_id    <- 1L
-  
-  # Recursive DFS: marks all nodes reachable from `node` with `comp` ID.
-  # <<- is used to modify visited/components in the enclosing environment.
-  dfs <- function(node, comp) {
-    if (visited[node]) return          # Skip already-visited nodes
-    visited[node]    <<- TRUE
-    components[node] <<- comp
-    neighbors <- adj_list[[node]]
-    if (length(neighbors) > 0) {
-      for (neighbor in neighbors) {
-        if (!visited[neighbor]) {
-          dfs(neighbor, comp)          # Recurse into unvisited neighbours
+
+  visited <- setNames(rep(FALSE, length(adj_list)), names(adj_list))
+  comp_id <- integer(length(adj_list))
+  names(comp_id) <- names(adj_list)
+
+  current_comp <- 0L
+
+  for (node in names(adj_list)) {
+    if (!visited[[node]]) {
+      current_comp <- current_comp + 1L
+      stack <- node
+
+      while (length(stack) > 0) {
+        current <- stack[[length(stack)]]
+        stack <- stack[-length(stack)]
+
+        if (!visited[[current]]) {
+          visited[[current]] <- TRUE
+          comp_id[[current]] <- current_comp
+
+          neighbours <- adj_list[[current]]
+          neighbours <- neighbours[neighbours %in% names(visited)]
+          unvisited <- neighbours[!visited[neighbours]]
+
+          stack <- c(stack, unvisited)
         }
       }
     }
   }
-  
-  # Iterate over all nodes; start a new DFS (and increment component ID)
-  # whenever an unvisited node is encountered
-  for (node in nodes) {
-    if (!visited[node]) {
-      dfs(node, comp_id)
-      comp_id <- comp_id + 1L
-    }
-  }
-  
-  return(components)  # Named integer vector: node → component ID
+
+  data.table(
+    sample = names(comp_id),
+    component = as.integer(comp_id)
+  )
 }
 
 # -----------------------------------------------------------------------------
@@ -111,6 +106,9 @@ opt <- parse_args(opt_parser)
 if (is.null(opt$`cor-matrix`) || is.null(opt$`output-dir`)) {
   stop("--cor-matrix and --output-dir are required")
 }
+if (is.na(opt$k) || opt$k < 1) {
+  stop("--k must be an integer >= 1")
+}
 
 # Create output directory (including any missing parents) if it doesn't exist
 dir.create(opt$`output-dir`, recursive=TRUE, showWarnings=FALSE)
@@ -120,6 +118,29 @@ dir.create(opt$`output-dir`, recursive=TRUE, showWarnings=FALSE)
 # -----------------------------------------------------------------------------
 cat("Loading correlation matrix...\n")
 cor_mat <- readRDS(opt$`cor-matrix`)
+if (!is.matrix(cor_mat) && !is.data.frame(cor_mat)) {
+  stop("Correlation input must be a matrix-like object")
+}
+
+cor_mat <- as.matrix(cor_mat)
+
+if (nrow(cor_mat) != ncol(cor_mat)) {
+  stop("Correlation matrix must be square")
+}
+
+if (is.null(rownames(cor_mat)) || is.null(colnames(cor_mat))) {
+  stop("Correlation matrix must have rownames and colnames")
+}
+
+if (!setequal(rownames(cor_mat), colnames(cor_mat))) {
+  stop("Correlation matrix rownames and colnames do not match")
+}
+
+cor_mat <- cor_mat[rownames(cor_mat), rownames(cor_mat), drop=FALSE]
+
+if (nrow(cor_mat) < 2) {
+  stop("At least two samples are required to build a graph")
+}
 cat("  Correlation matrix: ", nrow(cor_mat), " x ", ncol(cor_mat), "\n", sep="")
 
 # -----------------------------------------------------------------------------
@@ -133,18 +154,23 @@ edges_list <- list()
 edge_id    <- 1
 
 for (sample in colnames(cor_mat)) {
-  
   # Extract row of correlations and remove the self-correlation entry
   cor_vec <- cor_mat[sample, ]
   cor_vec <- cor_vec[names(cor_vec) != sample]
-  
-  # Drop any neighbours below the minimum correlation threshold
-  cor_vec <- cor_vec[cor_vec >= opt$`min-cor`]
-  
-  # Sort descending and take the top k (or fewer if not enough neighbours pass the filter)
-  nn_sorted <- sort(cor_vec, decreasing=TRUE)
-  nn_ids    <- names(nn_sorted)[1:min(opt$k, length(nn_sorted))]
-  
+
+  # Drop missing and below-threshold neighbours, then use sample ID as the
+  # deterministic tie-breaker for equal correlations.
+  nn_dt <- data.table(
+    id = names(cor_vec),
+    similarity = as.numeric(cor_vec)
+  )
+  nn_dt <- nn_dt[!is.na(similarity) & similarity >= opt$`min-cor`]
+  setorder(nn_dt, -similarity, id)
+
+  n_keep <- min(opt$k, nrow(nn_dt))
+  if (n_keep == 0) next
+  nn_ids <- nn_dt$id[seq_len(n_keep)]
+
   # Record one edge per selected neighbour
   for (neighbor in nn_ids) {
     edges_list[[edge_id]] <- data.table(
@@ -157,13 +183,19 @@ for (sample in colnames(cor_mat)) {
   }
 }
 
-edges <- rbindlist(edges_list)
+if (length(edges_list) > 0) {
+  edges <- rbindlist(edges_list)
+} else {
+  edges <- data.table(from=character(), to=character(), weight=numeric(), direction=character())
+}
 
 # Deduplicate: since the loop adds both A→B and B→A, collapse to a canonical
 # undirected edge by sorting node names and keeping unique pairs
-edges[, key := paste(pmin(from, to), pmax(from, to), sep="|")]
-edges <- unique(edges, by="key")
-edges[, key := NULL]
+if (nrow(edges) > 0) {
+  edges[, key := paste(pmin(from, to), pmax(from, to), sep="|")]
+  edges <- unique(edges, by="key")
+  edges[, key := NULL]
+}
 
 cat("  Created ", nrow(edges), " edges\n", sep="")
 
@@ -171,17 +203,13 @@ cat("  Created ", nrow(edges), " edges\n", sep="")
 # Find connected components
 # -----------------------------------------------------------------------------
 cat("Finding connected components...\n")
-comp_membership <- find_components(edges)
-comp_sizes      <- table(comp_membership)
+comp_df <- get_components(edges, nodes=colnames(cor_mat))
+comp_sizes <- table(comp_df$component)
 
 # Assemble a per-node data.table with component ID and the size of that component
-comp_df <- data.table(
-  sample    = names(comp_membership),
-  component = as.integer(comp_membership),
-  comp_size = as.integer(comp_sizes[as.character(comp_membership)])
-)
+comp_df[, comp_size := as.integer(comp_sizes[as.character(component)])]
 
-cat("  Graph: ", length(unique(c(edges$from, edges$to))), " vertices, ", nrow(edges), " edges\n", sep="")
+cat("  Graph: ", nrow(cor_mat), " vertices, ", nrow(edges), " edges\n", sep="")
 cat("  Number of components: ", length(unique(comp_df$component)), "\n", sep="")
 cat("  Component sizes:\n")
 print(table(comp_df$comp_size))  # Distribution of how many nodes each component contains

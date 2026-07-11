@@ -302,6 +302,17 @@ derive_lineage <- function(dt, default_lineage = "UNKNOWN") {
   toupper(lineage)
 }
 
+read_metadata_input <- function(path) {
+  if (grepl("\\.rds$", path, ignore.case = TRUE)) {
+    obj <- readRDS(path)
+    if (is.list(obj) && "meta" %in% names(obj)) {
+      return(as.data.table(obj$meta))
+    }
+    return(as.data.table(obj))
+  }
+  fread(path)
+}
+
 cat("========================================\n")
 cat("PAN-CANCER COMMUNITY DETECTION\n")
 cat("========================================\n\n")
@@ -396,11 +407,25 @@ graph_gml <- file.path(opt$outdir, "pan_cancer_graph.gml")
 
 saveRDS(g, graph_rds)
 write_graph(g, graph_graphml, format = "graphml")
-write_graph(g, graph_gml, format = "gml")
+g_gml <- g
+if ("id" %in% vertex_attr_names(g_gml)) {
+  vertex_attr(g_gml, "id") <- NULL
+}
+gml_written <- tryCatch({
+  write_graph(g_gml, graph_gml, format = "gml")
+  TRUE
+}, error = function(e) {
+  warning("Skipping optional GML export: ", conditionMessage(e))
+  FALSE
+})
 
 cat("  Saved graph object: ", graph_rds, "\n", sep = "")
 cat("  Saved GraphML:      ", graph_graphml, "\n", sep = "")
-cat("  Saved GML:          ", graph_gml, "\n\n", sep = "")
+if (isTRUE(gml_written)) {
+  cat("  Saved GML:          ", graph_gml, "\n\n", sep = "")
+} else {
+  cat("  Skipped GML:        ", graph_gml, "\n\n", sep = "")
+}
 
 
 # =============================================================================
@@ -427,7 +452,7 @@ cat("  Saved GML:          ", graph_gml, "\n\n", sep = "")
 meta <- NULL
 if (!is.null(opt$meta) && file.exists(opt$meta)) {
   cat("[2] Loading metadata...\n")
-  meta <- fread(opt$meta)
+  meta <- read_metadata_input(opt$meta)
   fallback_meta <- NULL
   if (!is.null(opt$`meta-fallback`) && file.exists(opt$`meta-fallback`)) {
     fallback_meta <- fread(opt$`meta-fallback`)
@@ -809,6 +834,10 @@ comm_summary <- merge(comm_summary, deg_comm, by = "community", all.x = TRUE)
 comm_summary_file <- file.path(opt$outdir, "validation_community_summary.tsv")
 fwrite(comm_summary[order(-n_nodes)], comm_summary_file, sep = "\t")
 cat("  Saved: ", comm_summary_file, "\n", sep = "")
+
+comm_summary_alias <- file.path(opt$outdir, "community_summary.tsv")
+fwrite(comm_summary[order(-n_nodes)], comm_summary_alias, sep = "\t")
+cat("  Saved: ", comm_summary_alias, "\n", sep = "")
 
 
 # =============================================================================

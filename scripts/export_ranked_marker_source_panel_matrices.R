@@ -13,13 +13,15 @@ for (key in required) if (is.null(opts[[key]])) stop("Missing --", key)
 dir.create(opts[["dsmz-outdir"]], recursive=TRUE, showWarnings=FALSE)
 dir.create(opts[["multicohort-outdir"]], recursive=TRUE, showWarnings=FALSE)
 genes <- scan(opts[["clean-features"]], what="character", quiet=TRUE)
-if (length(genes) != 379L || anyDuplicated(genes)) stop("Active clean list must contain 379 unique genes")
+if (length(genes) < 1L || anyDuplicated(genes)) {
+  stop("Active clean list must contain at least one unique gene")
+}
 
 clean_ids <- function(x) sub("\\..*$", "", x)
 coverage_table <- function(ids, label) {
   clean <- clean_ids(ids)
   data.table(
-    method="ranked_marker_source_pan_cancer_panel",
+    method="graph_derived_pan_cancer_feature_selection_v1_revised",
     matrix=label,
     clean_gene_id=genes,
     found=genes %in% clean,
@@ -46,7 +48,9 @@ write_wide <- function(x, path) {
 cl_obj <- readRDS(opts[["cell-line-rds"]])
 if (!all(c("expr","meta") %in% names(cl_obj))) stop("cell-line RDS lacks expr/meta")
 cl_expr <- subset_matrix(cl_obj$expr)
-if (nrow(cl_expr) != 379L) stop("Cell-line matrix does not contain the expected current feature-panel genes")
+if (nrow(cl_expr) != length(genes)) {
+  stop("Cell-line matrix does not contain the expected current feature-panel genes")
+}
 write_wide(cl_expr, file.path(opts[["dsmz-outdir"]], "ranked_marker_source_panel_dsmz_expression_matrix.tsv"))
 fwrite(coverage_table(rownames(cl_obj$expr), "pan_cancer_feature_expr_cell_lines_only"),
        file.path(opts[["dsmz-outdir"]], "ranked_marker_source_panel_dsmz_expression_feature_coverage.tsv"), sep="\t")

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Build cohort-specific g:Profiler query lists from pan-cancer features."""
+"""Build cohort-specific g:Profiler query lists from pan-cancer features.
+
+This helper prepares cohort-level query-list inputs and validation manifests
+without running g:Profiler. Stale 171-gene references are used only as guard
+patterns for archived paths, not as current feature-set descriptions.
+"""
 
 import argparse
 import csv

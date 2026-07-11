@@ -1,4 +1,10 @@
 #!/usr/bin/env Rscript
+# Build a heatmap-ready top-term summary from the runner-produced top_terms.tsv.
+#
+# The script normalises common g:Profiler/export column names, joins functional-
+# enrichment query-manifest metadata, preserves query/background provenance, and
+# writes a provenance sidecar. It does not reselect terms from the full term-level
+# enrichment corpus.
 suppressPackageStartupMessages({library(data.table)})
 script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]
 script_path <- sub("^--file=", "", script_arg)
@@ -44,7 +50,9 @@ if (!is.na(manifest) && file.exists(manifest)) {
     if (!'gene_list_path' %in% names(man) && 'genes_tsv' %in% names(man)) man[, gene_list_path := genes_tsv]
     if (!'background_path' %in% names(man) && 'background_tsv' %in% names(man)) man[, background_path := background_tsv]
     keep <- intersect(c('query_id','category','cohort','contrast','direction',
+                        'marker_source_class','evidence_class',
                         'source_marker_table','gene_list_path','background_path',
+                        'ranked_genes_path','ordered',
                         'profile','disease','group_id','query_family',
                         'gene_count','background_count'), names(man))
     meta <- unique(man[, ..keep], by = 'query_id')
@@ -60,11 +68,13 @@ if (!is.na(manifest) && file.exists(manifest)) {
     }
   }
 }
-for (col in c('category','cohort','contrast','direction','source_marker_table')) {
+for (col in c('category','cohort','contrast','direction','marker_source_class',
+              'evidence_class','source_marker_table','gene_list_path',
+              'background_path','ranked_genes_path')) {
   if (!col %in% names(dt)) dt[, (col) := NA_character_]
 }
 setorder(dt, query_id, adjusted_p_value, p_value, source, term_name)
 fwrite(dt, outfile, sep='\t')
-prov <- data.table(figure_name='Fig_enrichment_top_terms_heatmap.pdf', script='scripts/build_enrichment_summary_top_terms.R', command=paste(c('Rscript','scripts/build_enrichment_summary_top_terms.R','--input',infile,'--output',outfile,'--query-manifest',manifest), collapse=' '), git_commit=Sys.getenv('GIT_COMMIT', unset='unavailable_not_git_worktree'), timestamp=format(Sys.time(), '%Y-%m-%dT%H:%M:%S%z'), input_files=paste(na.omit(c(normalizePath(infile, mustWork=FALSE), if (!is.na(manifest)) normalizePath(manifest, mustWork=FALSE))), collapse=';'), output_files=normalizePath(outfile, mustWork=FALSE), upstream_tables=normalizePath(infile, mustWork=FALSE), key_parameters='deterministic_column_normalisation;query_metadata_preserved', software_versions=paste0('R=', getRversion(), ';data.table=', packageVersion('data.table')), figure_type='enrichment', source_pipeline_root=pipeline_root, copied_to_figure_export_path='', legacy_source_path='', notes='Builds enrichment_summary_top_terms.tsv from gprofiler top_terms.tsv')
+prov <- data.table(figure_name='Fig_enrichment_top_terms_heatmap.pdf', script='scripts/build_enrichment_summary_top_terms.R', command=paste(c('Rscript','scripts/build_enrichment_summary_top_terms.R','--input',infile,'--output',outfile,'--query-manifest',manifest), collapse=' '), git_commit=Sys.getenv('GIT_COMMIT', unset='unavailable_not_git_worktree'), timestamp=format(Sys.time(), '%Y-%m-%dT%H:%M:%S%z'), input_files=paste(na.omit(c(normalizePath(infile, mustWork=FALSE), if (!is.na(manifest)) normalizePath(manifest, mustWork=FALSE))), collapse=';'), output_files=normalizePath(outfile, mustWork=FALSE), upstream_tables=normalizePath(infile, mustWork=FALSE), key_parameters='deterministic_column_normalisation;query_metadata_preserved', software_versions=paste0('R=', getRversion(), ';data.table=', packageVersion('data.table')), figure_type='enrichment', source_pipeline_root=pipeline_root, copied_to_figure_export_path='', legacy_source_path='', notes='Builds a heatmap-ready top-term summary from g:Profiler top_terms.tsv with query-manifest metadata preserved.')
 fwrite(prov, sub('\\.tsv$', '_provenance.tsv', outfile), sep='\t')
 cat('[OK] wrote ', outfile, '\n', sep='')

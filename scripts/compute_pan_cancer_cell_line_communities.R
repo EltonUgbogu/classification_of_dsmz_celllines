@@ -13,7 +13,7 @@
 #   pan_cancer_cell_line_communities.tsv
 #   pan_cancer_cell_line_leiden_communities.tsv
 #   pan_cancer_cell_line_community_metrics.tsv
-#   pan_cancer_cell_line_lineage_discordant_profiles.tsv
+#   pan_cancer_cell_line_cancer_type_discordant_profiles.tsv
 #   pan_cancer_cell_line_leiden_resolution_sweep_assignments.tsv
 #   pan_cancer_cell_line_leiden_resolution_sweep_summary.tsv
 #   pan_cancer_cell_line_leiden_resolution_sweep_diagnostic.pdf
@@ -29,7 +29,7 @@ option_list <- list(
   make_option("--edges", type="character", default=NULL,
     help="[REQUIRED] Edge list TSV (from, to, weight)"),
   make_option("--meta", type="character", default=NULL,
-    help="[REQUIRED] Node metadata TSV (sample_id, lineage, ...)"),
+    help="[REQUIRED] Node metadata TSV (sample_id, cancer_type, ...)"),
   make_option("--out", type="character", default=NULL,
     help="[REQUIRED] Louvain community TSV path"),
   make_option("--leiden-out", type="character", default=NULL,
@@ -37,7 +37,9 @@ option_list <- list(
   make_option("--community-metrics-out", type="character", default=NULL,
     help="[REQUIRED] Community metrics TSV path"),
   make_option("--lineage-discordant-out", type="character", default=NULL,
-    help="[REQUIRED] Lineage-discordant profile TSV path"),
+    help="[REQUIRED] Legacy alias for cancer-type-discordant profile TSV path"),
+  make_option("--cancer-type-discordant-out", type="character", default=NULL,
+    help="[OPTIONAL] Cancer-type-discordant profile TSV path"),
   make_option("--seed", type="integer", default=1,
     help="Random seed for Louvain and Leiden (default: 1)"),
   make_option("--leiden-resolution", type="double", default=1.0,
@@ -56,17 +58,23 @@ option_list <- list(
 opt <- parse_args(OptionParser(option_list=option_list))
 
 required <- c(
-  "edges", "meta", "out", "leiden-out", "community-metrics-out",
-  "lineage-discordant-out"
+  "edges", "meta", "out", "leiden-out", "community-metrics-out"
 )
 if (any(vapply(required, function(k) is.null(opt[[k]]) || !nzchar(opt[[k]]), logical(1)))) {
   stop("Missing required argument(s): ", paste(required, collapse=", "))
+}
+discordant_out <- opt[["cancer-type-discordant-out"]]
+if (is.null(discordant_out) || !nzchar(discordant_out)) {
+  discordant_out <- opt[["lineage-discordant-out"]]
+}
+if (is.null(discordant_out) || !nzchar(discordant_out)) {
+  stop("Missing required argument: --cancer-type-discordant-out")
 }
 if (!file.exists(opt$edges)) stop("edges file not found: ", opt$edges)
 if (!file.exists(opt$meta))  stop("meta file not found: ", opt$meta)
 
 for (path in c(opt$out, opt[["leiden-out"]], opt[["community-metrics-out"]],
-               opt[["lineage-discordant-out"]],
+               discordant_out,
                opt[["leiden-sweep-assignments-out"]],
                opt[["leiden-sweep-summary-out"]],
                opt[["leiden-sweep-plot-out"]])) {
@@ -120,7 +128,18 @@ cat("  Edges (undirected):", nrow(E_und), "\n")
 
 cat("[2] Loading metadata:", opt$meta, "\n")
 meta <- fread(opt$meta)
-required_meta_cols <- c("sample_id", "lineage")
+if (!"sample_id" %in% names(meta)) {
+  stop("metadata must contain sample_id")
+}
+if (!"cancer_type" %in% names(meta)) {
+  if ("lineage" %in% names(meta)) {
+    warning("Using legacy metadata column 'lineage' to populate 'cancer_type'")
+    meta[, cancer_type := lineage]
+  } else {
+    stop("metadata must contain cancer_type")
+  }
+}
+required_meta_cols <- c("sample_id", "cancer_type")
 if (!all(required_meta_cols %in% names(meta))) {
   stop("metadata must contain columns: ", paste(required_meta_cols, collapse=", "))
 }
@@ -135,12 +154,12 @@ g <- graph_from_data_frame(E_und, directed=FALSE, vertices=vertices)
 E(g)$weight <- E_und$weight
 cat("  Nodes:", vcount(g), "  Edges:", ecount(g), "\n")
 
-meta_map <- setNames(meta$lineage, meta$sample_id)
-V(g)$lineage <- meta_map[V(g)$name]
-V(g)$lineage[is.na(V(g)$lineage) | V(g)$lineage == ""] <- "UNKNOWN"
+cancer_type_map <- setNames(meta$cancer_type, meta$sample_id)
+V(g)$cancer_type <- cancer_type_map[V(g)$name]
+V(g)$cancer_type[is.na(V(g)$cancer_type) | V(g)$cancer_type == ""] <- "UNKNOWN"
 
 cancer_type_assortativity <- tryCatch(
-  assortativity_nominal(g, as.integer(factor(V(g)$lineage)), directed=FALSE),
+  assortativity_nominal(g, as.integer(factor(V(g)$cancer_type)), directed=FALSE),
   error=function(e) {
     warning("Could not compute cancer-type assortativity: ", conditionMessage(e))
     NA_real_
@@ -204,14 +223,14 @@ make_node_table <- function(algorithm, membership_vector) {
   dt <- data.table(
     sample = V(g)$name,
     component = mem,
-    lineage = V(g)$lineage,
+    cancer_type = V(g)$cancer_type,
     degree = as.integer(degree(g)[V(g)$name]),
     weighted_degree = as.numeric(strength(g, weights=E(g)$weight)[V(g)$name]),
     algorithm = algorithm
   )
   dt[, community_size := as.integer(.N), by=component]
   setcolorder(dt, c(
-    "sample", "component", "community_size", "lineage", "degree",
+    "sample", "component", "community_size", "cancer_type", "degree",
     "weighted_degree", "algorithm"
   ))
   dt[order(component, sample)]
@@ -235,12 +254,12 @@ make_metrics <- function(node_dt) {
     total_within_community_edge_weight = sum(weight)
   ), by=.(component=component_from)]
 
-  lineage_counts <- node_dt[, .N, by=.(component, lineage)]
-  setorder(lineage_counts, component, -N, lineage)
-  dominant <- lineage_counts[, .SD[1], by=component]
-  setnames(dominant, c("lineage", "N"), c("dominant_lineage", "dominant_lineage_count"))
-  lineage_strings <- lineage_counts[
-    , .(lineage_counts=paste(paste0(lineage, "=", N), collapse=";")),
+  cancer_type_counts <- node_dt[, .N, by=.(component, cancer_type)]
+  setorder(cancer_type_counts, component, -N, cancer_type)
+  dominant <- cancer_type_counts[, .SD[1], by=component]
+  setnames(dominant, c("cancer_type", "N"), c("dominant_cancer_type", "dominant_cancer_type_count"))
+  cancer_type_strings <- cancer_type_counts[
+    , .(cancer_type_counts=paste(paste0(cancer_type, "=", N), collapse=";")),
     by=component
   ]
 
@@ -254,36 +273,36 @@ make_metrics <- function(node_dt) {
   ), by=component]
   metrics <- merge(metrics, edge_metrics, by="component", all.x=TRUE, sort=FALSE)
   metrics <- merge(metrics, dominant, by="component", all.x=TRUE, sort=FALSE)
-  metrics <- merge(metrics, lineage_strings, by="component", all.x=TRUE, sort=FALSE)
+  metrics <- merge(metrics, cancer_type_strings, by="component", all.x=TRUE, sort=FALSE)
   metrics[is.na(within_community_edge_count), within_community_edge_count := 0L]
-  metrics[, community_purity := dominant_lineage_count / community_size]
+  metrics[, community_purity := dominant_cancer_type_count / community_size]
   setcolorder(metrics, c(
     "algorithm", "component", "community_size",
     "within_community_edge_count", "mean_within_community_edge_weight",
     "total_within_community_edge_weight", "mean_degree", "median_degree",
-    "mean_weighted_degree", "median_weighted_degree", "dominant_lineage",
-    "dominant_lineage_count", "community_purity", "lineage_counts"
+    "mean_weighted_degree", "median_weighted_degree", "dominant_cancer_type",
+    "dominant_cancer_type_count", "community_purity", "cancer_type_counts"
   ))
   metrics[order(algorithm, component)]
 }
 
 make_discordant <- function(node_dt, metrics_dt) {
   dom <- metrics_dt[, .(
-    algorithm, component, dominant_lineage, community_purity
+    algorithm, component, dominant_cancer_type, community_purity
   )]
   out <- merge(node_dt, dom, by=c("algorithm", "component"), all.x=TRUE, sort=FALSE)
-  out <- out[lineage != dominant_lineage]
+  out <- out[cancer_type != dominant_cancer_type]
   setcolorder(out, c(
-    "algorithm", "sample", "component", "lineage", "dominant_lineage",
+    "algorithm", "sample", "component", "cancer_type", "dominant_cancer_type",
     "degree", "weighted_degree", "community_size", "community_purity"
   ))
-  out[order(algorithm, component, lineage, sample)]
+  out[order(algorithm, component, cancer_type, sample)]
 }
 
 make_sweep_assignment <- function(resolution, membership_vector) {
   node_dt <- make_node_table("Leiden", membership_vector)
-  setnames(node_dt, c("sample", "component", "lineage"),
-           c("profile_id", "leiden_community", "cancer_type"))
+  setnames(node_dt, c("sample", "component"),
+           c("profile_id", "leiden_community"))
   node_dt[, cell_line := derive_cell_line(profile_id)]
 
   counts <- node_dt[, .N, by=.(leiden_community, cancer_type)]
@@ -557,8 +576,8 @@ write_table_if_missing(leiden_dt, opt[["leiden-out"]], "Leiden communities")
 write_table_if_missing(metrics, opt[["community-metrics-out"]], "Community metrics")
 write_table_if_missing(
   discordant,
-  opt[["lineage-discordant-out"]],
-  "Lineage-discordant profiles"
+  discordant_out,
+  "Cancer-type-discordant profiles"
 )
 
 if (nzchar(opt[["leiden-sweep-assignments-out"]])) {
@@ -580,8 +599,8 @@ if (nzchar(opt[["leiden-sweep-plot-out"]])) {
 }
 
 cat("  Louvain summary:\n")
-print(louvain_dt[, .N, by=.(component, lineage)][order(component, lineage)])
+print(louvain_dt[, .N, by=.(component, cancer_type)][order(component, cancer_type)])
 cat("  Leiden summary:\n")
-print(leiden_dt[, .N, by=.(component, lineage)][order(component, lineage)])
+print(leiden_dt[, .N, by=.(component, cancer_type)][order(component, cancer_type)])
 cat("  Leiden resolution sweep summary:\n")
 print(sweep_summary[order(resolution)])

@@ -11,7 +11,7 @@ option_list <- list(
   make_option("--edges", type="character", default=NULL,
               help="[REQUIRED] Edge list TSV with from, to, weight"),
   make_option("--meta", type="character", default=NULL,
-              help="[REQUIRED] Node metadata TSV with sample_id and lineage/cancer_type"),
+              help="[REQUIRED] Node metadata TSV with sample_id and cancer_type"),
   make_option("--feature-source", type="character", default=NULL,
               help="[REQUIRED] Feature source label"),
   make_option("--resolution-sweep", type="character", default=NULL,
@@ -76,11 +76,12 @@ setorder(edge_dt, from, to)
 
 meta <- fread(opt$meta)
 if (!"sample_id" %in% names(meta)) stop("metadata must contain sample_id")
-if (!"lineage" %in% names(meta)) {
-  if ("cancer_type" %in% names(meta)) {
-    meta[, lineage := cancer_type]
+if (!"cancer_type" %in% names(meta)) {
+  if ("lineage" %in% names(meta)) {
+    warning("Using legacy metadata column 'lineage' to populate 'cancer_type'")
+    meta[, cancer_type := lineage]
   } else {
-    stop("metadata must contain lineage or cancer_type")
+    stop("metadata must contain cancer_type")
   }
 }
 meta <- unique(meta, by="sample_id")
@@ -88,12 +89,12 @@ meta <- unique(meta, by="sample_id")
 vertices <- data.table(name=meta$sample_id)
 g <- graph_from_data_frame(edge_dt, directed=FALSE, vertices=vertices)
 E(g)$weight <- edge_dt$weight
-lineage_map <- setNames(as.character(meta$lineage), meta$sample_id)
-V(g)$lineage <- lineage_map[V(g)$name]
-V(g)$lineage[is.na(V(g)$lineage) | V(g)$lineage == ""] <- "UNKNOWN"
+cancer_type_map <- setNames(as.character(meta$cancer_type), meta$sample_id)
+V(g)$cancer_type <- cancer_type_map[V(g)$name]
+V(g)$cancer_type[is.na(V(g)$cancer_type) | V(g)$cancer_type == ""] <- "UNKNOWN"
 
 cancer_type_assortativity <- tryCatch(
-  assortativity_nominal(g, as.integer(factor(V(g)$lineage)), directed=FALSE),
+  assortativity_nominal(g, as.integer(factor(V(g)$cancer_type)), directed=FALSE),
   error=function(e) {
     warning("Could not compute cancer-type assortativity: ", conditionMessage(e))
     NA_real_
@@ -112,7 +113,7 @@ make_assignment <- function(resolution, membership_vector) {
     resolution = resolution,
     profile_id = V(g)$name,
     cell_line = derive_cell_line(V(g)$name),
-    cancer_type = V(g)$lineage,
+    cancer_type = V(g)$cancer_type,
     louvain_community = mem,
     degree = as.integer(degree(g)[V(g)$name]),
     weighted_degree = as.numeric(strength(g, weights=E(g)$weight)[V(g)$name])

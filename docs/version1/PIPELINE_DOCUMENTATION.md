@@ -96,8 +96,8 @@
 # - Component characterisation
 #
 # Layer 5: Biological Interpretation
-# - Differential expression analysis (DESeq2)
-# - Representativeness scoring
+# - Graph-derived DESeq2 marker contrasts
+# - Marker-source panel construction and enrichment interpretation
 #
 # Layer 6: Pan-Cancer Integration
 # - Cross-disease comparative analysis
@@ -343,18 +343,51 @@
 # -----------------------------------------------------------------------------
 # 8. BIOLOGICAL CHARACTERISATION
 #
-# 8.1 Differential Expression Analysis
+# 8.1 Differential Gene Expression (DGE) Analysis
 #
-# Using DESeq2, the pipeline identifies genes differentially expressed
-# between:
+# DESeq2 marker analysis is run from graph-derived cell-line labels rather
+# than from tumour clustering output. The workflow first validates or prepares
+# raw integer count matrices and metadata sidecars, then joins resolved
+# component, isolate, degree, and anchor annotations from the patient-referenced
+# resolved neighbour graph.
 #
-# 1. Tumour clusters identified by consensus clustering
-# 2. Cell line communities identified by network analysis
+# Active profiles are controlled by deseq2.enabled_profiles in the
+# configuration. The default active profiles are BRCA, NBL, and RBL; HEME and
+# pan_cancer are deferred from marker-DESeq2 execution.
+#
+# The marker stage runs three contrast families:
+#
+# 1. isolate-vs-rest: each degree-zero cell line versus all other cell lines
+# 2. anchor-vs-outside-component: selected component anchors versus cell lines
+#    outside the anchor's resolved component
+# 3. component-vs-rest: each resolved component versus all other cell lines
 #
 # DESeq2 employs a negative binomial generalised linear model:
 #
 #     K_ij ~ NB(mu_ij, alpha_j)
-#     log2(mu_ij) = beta_j0 + beta_j1 * x_i + ...
+#     log(mu_ij) = beta_j0 + beta_j1 * x_i + ...
+#
+# Genes are filtered with contrast-specific FDR, log2 fold-change, top-N, and
+# minimum-baseMean criteria. Default thresholds are FDR <= 0.01,
+# |log2FC| >= 1.5, and top 50 genes for isolate contrasts; FDR <= 0.05,
+# |log2FC| >= 1.0, and top 200 genes for anchor contrasts; FDR <= 0.05,
+# |log2FC| >= 1.0, and top 500 genes for component contrasts; min_baseMean is
+# 10 and recurrence_k is 2. These values are configurable per profile.
+#
+# Main DESeq2 outputs are written under:
+#
+# - results/unsupervised/{profile}/deseq2_markers/
+# - results/unsupervised/{profile}/deseq2/component_vs_rest/
+#
+# These outputs include full coefficient tables, filtered marker lists,
+# marker-set manifests, size-factor QC tables, directional marker tables, and
+# gene-recurrence files across contrasts.
+#
+# Retained anchor- and isolate-derived markers feed the revised Version 1
+# pan-cancer feature-panel builder. The current method name is
+# graph_derived_pan_cancer_feature_selection_v1_revised. The marker_source_class annotation
+# records whether retained marker evidence came from anchor-derived or
+# isolate-derived graph contrasts; membership is non-exclusive.
 #
 # 8.2 Functional Enrichment
 #
@@ -430,9 +463,20 @@
 # - Per-cell-line summary including cluster assignment and p_consensus
 # - Primary reference for cell line selection
 #
-# cluster_DE_markers.rds
-# - Differential expression results for tumour clusters
-# - R data object for downstream analysis
+# results/unsupervised/{profile}/deseq2_markers/tables/
+# - Full DESeq2 tables for isolate-vs-rest and anchor-vs-outside-component
+#   graph-derived marker contrasts
+#
+# results/unsupervised/{profile}/deseq2_markers/markers/marker_sets_manifest.tsv
+# - Manifest of retained marker lists, contrast identifiers, and per-contrast
+#   marker thresholds
+#
+# results/unsupervised/{profile}/deseq2/component_vs_rest/tables/
+# - Full DESeq2 tables for resolved component-vs-rest contrasts
+#
+# results/unsupervised/pan_cancer/feature_space/pan_cancer_features.tsv
+# - Ranked marker-source pan-cancer feature panel derived from retained
+#   graph-derived marker outputs
 #
 # -----------------------------------------------------------------------------
 # 11. CONFIGURATION SYSTEM
@@ -499,6 +543,13 @@
 #
 # HVG (Highly Variable Genes): Genes with high expression variability
 # across samples.
+#
+# DGE (Differential Gene Expression): DESeq2 marker contrasts generated from
+# graph-derived isolate, anchor, and component labels.
+#
+# Marker-source class: Annotation recording whether a retained marker came from
+# anchor-derived or isolate-derived graph contrasts. Membership can be
+# non-exclusive for genes selected by multiple contrast families.
 #
 # p_consensus: Proportion of analyses supporting a specific cell line-
 # tumour relationship.
