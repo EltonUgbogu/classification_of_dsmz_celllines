@@ -188,3 +188,9 @@ docs/SCRIPT_TO_OUTPUT_MAPPING.md
 
 # Local test logs copied from Jarvis
 test_logs/
+
+# Private local handoff/audit material
+/PAN_CANCER_AGGREGATION_AUDIT_HANDOFF.md
+/PAN_CANCER_AGGREGATION_UPDATE_HANDOFF.md
+/docs/version2/version2_implementation_status.md
+/research_framework/optimisation/
