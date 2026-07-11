@@ -26,7 +26,6 @@ option_list <- list(
   make_option("--operative-feature-set-rank-tsv", type = "character", default = ""),
   make_option("--strict-union-primary", type = "logical", default = TRUE),
   make_option("--operative-feature-set-primary", type = "logical", default = TRUE),
-  make_option("--compare-strict-vs-operative", type = "logical", default = TRUE),
   make_option("--ordered-strict-union", type = "logical", default = TRUE),
   make_option("--ordered-operative-feature-set", type = "logical", default = FALSE),
   make_option("--disease-profiles", type = "character", default = "")
@@ -69,8 +68,10 @@ read_table <- function(path) {
   x
 }
 
-# Custom background: genes tested by DESeq2 and sufficiently expressed in the
-# test sample. This avoids comparing markers against an unrelated genome-wide set.
+# Derive a query-specific custom background from genes tested by DESeq2 and
+# sufficiently expressed in the test sample. Per-contrast query sets use this
+# contrast-specific DESeq2-tested background; higher-level query sets combine
+# eligible marker-selection backgrounds across contributing contrasts.
 background_from_table <- function(tbl) {
   if (nrow(tbl) == 0 || !"normalised_count_in_test_sample" %in% names(tbl)) return(character())
   unique(tbl[!is.na(padj) & !is.na(normalised_count_in_test_sample) &
@@ -118,11 +119,7 @@ write_query_files <- function(query_id, genes, background, ranks = NULL) {
 
 rows <- list()
 configured_final_feature_genes <- read_gene_list(opt$`operative-feature-set-gene-file`)
-final_feature_set_label <- if (length(configured_final_feature_genes) > 0) {
-  sprintf("final %d-gene pan-cancer feature set", length(configured_final_feature_genes))
-} else {
-  "final pan-cancer feature set"
-}
+final_feature_set_label <- "final pan-cancer feature set"
 
 query_family_label <- function(family) {
   labels <- c(
@@ -132,7 +129,6 @@ query_family_label <- function(family) {
     recurrence_filtered_marker_union = "pan-cancer recurrence-filtered marker union",
     ordered_recurrence_filtered_marker_union = "ordered recurrence-filtered marker union",
     final_pan_cancer_feature_set = final_feature_set_label,
-    isolate_rescued_subset = "isolate-rescued subset",
     ordered_final_pan_cancer_feature_set = paste("ordered", final_feature_set_label)
   )
   label <- labels[[family]]
@@ -410,11 +406,6 @@ if (length(final_feature_genes) > 0) {
                      opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "",
                      "all", FALSE, "", final_feature_genes, strict_bg)
   }
-  if (isTRUE(opt$`compare-strict-vs-operative`)) {
-    add_manifest_row("isolate_rescued_subset__all", "isolate_rescued_subset",
-                     opt$profile, "pan_cancer", "isolate_rescued_subset", "", "all", FALSE, "",
-                     setdiff(final_feature_genes, strict_union), strict_bg)
-  }
 } else if (isTRUE(opt$`operative-feature-set-primary`)) {
   add_manifest_row("final_pan_cancer_feature_set__all", "final_pan_cancer_feature_set",
                    opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "",
@@ -484,19 +475,20 @@ writeLines(c(
   "Enrichment query-set build report",
   "",
   "Purpose:",
-  "  Converts DESeq2 marker outputs into g:Profiler query sets with matched custom backgrounds.",
+  "  Builds manifest-driven functional-enrichment query sets from DESeq2 marker outputs.",
   "",
   "Key files:",
-  paste0("  query_manifest.tsv: all candidate enrichment queries, including skipped queries."),
-  paste0("  skipped_queries.tsv: queries not submitted and the reason."),
-  paste0("  query_summary.tsv: counts of runnable/skipped queries by family, disease, and direction."),
-  paste0("  gene_sets/<query_id>/: genes.tsv, background.tsv, and ranked_genes.tsv for each query."),
+  paste0("  query_manifest.tsv: functional-enrichment job manifest with runnable and skipped query records."),
+  paste0("  skipped_queries.tsv: skipped query records and reasons."),
+  paste0("  query_summary.tsv: runnable/skipped query counts by family, disease, and direction."),
+  paste0("  gene_sets/<query_id>/: row-level genes.tsv, background.tsv, and ranked_genes.tsv inputs."),
   "",
   "Interpretation notes:",
   "  direction=up means markers with positive log2FC in the tested group.",
   "  direction=down means markers with negative log2FC in the tested group.",
   "  ordered=TRUE means g:Profiler receives genes ranked by rank_stat.",
-  "  Backgrounds are DESeq2-tested genes with sufficient normalized expression in the test sample."
+  "  Per-contrast backgrounds are DESeq2-tested genes with sufficient normalised expression in the test sample.",
+  "  Higher-level query sets use combined eligible marker-selection backgrounds."
 ), readme_path)
 msg("Wrote %d query manifest rows to %s", nrow(manifest), manifest_path)
 msg("Wrote %d skipped query rows to %s", nrow(manifest[skip == TRUE]), skipped_path)
