@@ -4622,6 +4622,12 @@ if MARKER_POST_ENABLED:
             "deseq2_markers", "markers", "marker_sets_manifest.tsv"
         )
 
+    def profile_contrast_marker_manifest_rel(profile):
+        return os.path.join(
+            "results", "unsupervised", profile,
+            "deseq2_markers", "markers", "contrast_level_marker_manifest.tsv"
+        )
+
     def profile_marker_tables_rel(profile):
         return os.path.join("results", "unsupervised", profile, "deseq2_markers", "tables")
 
@@ -4732,34 +4738,33 @@ if MARKER_POST_ENABLED:
     PAN_FEATURES_CLEAN = PAN_CANCER_MP_CFG.get("final_features_clean", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features_clean.txt"))
     PAN_FEATURES_UP = PAN_CANCER_MP_CFG.get("final_features_up", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.UP.txt"))
     PAN_FEATURES_DOWN = PAN_CANCER_MP_CFG.get("final_features_down", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.DOWN.txt"))
+    PAN_FEATURES_MIXED = PAN_CANCER_MP_CFG.get("final_features_mixed", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features.MIXED.txt"))
     PAN_FEATURES_SUMMARY = PAN_CANCER_MP_CFG.get("build_summary_tsv", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_summary.tsv"))
-    PAN_FEATURES_REPORT = PAN_CANCER_MP_CFG.get("build_report_md", os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_build_report.md"))
     PAN_FEATURES_GENE_EVIDENCE = os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_feature_gene_evidence.tsv")
-    PAN_FEATURES_METHOD = PAN_CANCER_MP_CFG.get("method", "ranked_marker_source_pan_cancer_panel")
-    PAN_FEATURES_PREFIX = PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("output_prefix", "ranked_marker_source_panel")
+    PAN_FEATURES_METHOD = PAN_CANCER_MP_CFG.get("method", "graph_derived_pan_cancer_feature_selection_v1_revised")
+    PAN_FEATURES_PREFIX = PAN_CANCER_MP_CFG.get("audit_output_prefix", "ranked_marker_source_panel")
+    PAN_FEATURES_QUANTILE_CFG = PAN_CANCER_MP_CFG.get("empirical_quantile_thresholds", {})
+    _PAN_FEATURES_REQUIRED_QUANTILES = {
+        "adjusted_p_value_quantile",
+        "absolute_shrunken_log2fc_quantile",
+        "expression_quantile",
+    }
+    _PAN_FEATURES_QUANTILE_KEYS = set(PAN_FEATURES_QUANTILE_CFG)
+    if _PAN_FEATURES_QUANTILE_KEYS != _PAN_FEATURES_REQUIRED_QUANTILES:
+        raise ValueError(
+            "marker_postprocessing.pan_cancer.empirical_quantile_thresholds must define exactly: "
+            + ", ".join(sorted(_PAN_FEATURES_REQUIRED_QUANTILES))
+        )
     PAN_FEATURES_RANKED_BY_COHORT = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_cohort.tsv")
     PAN_FEATURES_RANKED_BY_MARKER_SOURCE_CLASS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_marker_source_class.tsv")
-    PAN_FEATURES_RANKED_BY_EVIDENCE_CLASS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_evidence_class.tsv")
-    PAN_FEATURES_RANKING_COMPONENTS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_ranking_components.tsv")
-    PAN_FEATURES_QUANTILE_THRESHOLDS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_quantile_thresholds.tsv")
-    PAN_FEATURES_SENSITIVITY = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_sensitivity_summary.tsv")
-    PAN_FEATURES_SELECTED_ROWS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_selected_marker_source_class_rows.tsv")
+    PAN_FEATURES_RANKED_BY_FEATURE_CLASS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_by_feature_class.tsv")
+    PAN_FEATURES_CANDIDATE_POOL_EVIDENCE = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_candidate_pool_evidence.tsv")
+    PAN_FEATURES_EMPIRICAL_THRESHOLDS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_empirical_quantile_thresholds.tsv")
+    PAN_FEATURES_CANDIDATE_ACCEPTANCE = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_candidate_acceptance.tsv")
+    PAN_FEATURES_SELECTED_EVIDENCE_ROWS = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_selected_evidence_rows.tsv")
     PAN_FEATURES_VALIDATION = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_validation.tsv")
-    PAN_FEATURES_REMOVED_VS_PREVIOUS177 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous177.tsv")
-    PAN_FEATURES_ADDED_VS_PREVIOUS177 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous177.tsv")
-    PAN_FEATURES_OVERLAP_VS_PREVIOUS177 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous177.tsv")
-    PAN_FEATURES_REMOVED_VS_PREVIOUS125 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_removed_vs_previous125.tsv")
-    PAN_FEATURES_ADDED_VS_PREVIOUS125 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_added_vs_previous125.tsv")
-    PAN_FEATURES_OVERLAP_VS_PREVIOUS125 = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_overlap_vs_previous125.tsv")
-    PAN_FEATURES_RANKED_REPORT = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_report.md")
     PAN_FEATURES_RANKED_MANIFEST = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_run_manifest.tsv")
     PAN_FEATURES_ACTIVE_MANIFEST = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_active_directory_manifest.tsv")
-    PAN_FEATURES_DOWNSTREAM_PLAN = os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_plan_from_ranked_marker_source_panel.md")
-    PAN_FEATURES_DOWNSTREAM_TARGETS = os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_targets.tsv")
-    PAN_FEATURES_DOWNSTREAM_DRYRUN = os.path.join(PAN_FEATURES_OUTDIR, "downstream_rerun_dryrun.log")
-    PAN_FEATURES_THESIS_NOTES = os.path.join(PAN_FEATURES_OUTDIR, f"{PAN_FEATURES_PREFIX}_thesis_update_notes.md")
-    PAN_FEATURES_PREVIOUS177 = abspath(PAN_CANCER_MP_CFG.get("previous177_features_tsv", "results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016/pan_cancer_features.tsv"))
-    PAN_FEATURES_PREVIOUS125_CFG = PAN_CANCER_MP_CFG.get("previous125_features_tsv", "")
 
     def _profile_dir_args():
         args = []
@@ -4767,17 +4772,10 @@ if MARKER_POST_ENABLED:
             args.append(f"--profile-dir {prof}={shlex.quote(profile_summary_dir(prof))}")
         return " ".join(args)
 
-    def _profile_marker_dir_args():
-        args = []
-        for prof in PAN_PROFILES:
-            marker_dir = os.path.join(profile_unsup_root_abs(prof), "deseq2_markers", "markers")
-            args.append(f"--profile-marker-dir {prof}={shlex.quote(marker_dir)}")
-        return " ".join(args)
-
-    def profile_marker_manifest_abs(profile):
+    def profile_contrast_marker_manifest_abs(profile):
         return os.path.join(
             profile_unsup_root_abs(profile),
-            "deseq2_markers", "markers", "marker_sets_manifest.tsv"
+            "deseq2_markers", "markers", "contrast_level_marker_manifest.tsv"
         )
 
     def _profile_marker_manifest_args():
@@ -4785,19 +4783,23 @@ if MARKER_POST_ENABLED:
         for prof in PAN_PROFILES:
             args.append(
                 f"--profile-marker-manifest {prof}="
-                f"{shlex.quote(profile_marker_manifest_abs(prof))}"
+                f"{shlex.quote(profile_contrast_marker_manifest_abs(prof))}"
             )
         return " ".join(args)
 
-    # Rule: build_pan_cancer_features
-    # Method role: feature-construction rule combining cohort marker tables into a marker-derived feature panel.
-    # Flow: per-profile marker tables and previous feature baselines -> pan-cancer feature table and audits.
-    # Analysis role: defines the curated pan-cancer feature space.
-    rule build_pan_cancer_features:
-        """Merge per-profile summaries into a pan-cancer feature panel."""
+    # Rule: construct_pan_cancer_feature_panel
+    # Scientific purpose: aggregate canonical retained marker evidence, count
+    # recurrence within cancer type x marker-evidence stratum, classify
+    # recurrent/singleton/non-recurrent rows, evaluate all-three empirical
+    # candidate acceptance, and export F = R union S union N.
+    # Unit of analysis: cancer type x graph-derived marker-evidence stratum x gene.
+    # Transformation: contrast-level marker manifests and retained marker tables
+    # -> selected pan-cancer feature panel plus TSV audit tables.
+    rule construct_pan_cancer_feature_panel:
+        """Build the graph-derived pan-cancer feature panel from retained contrast-level marker evidence."""
         input:
             marker_manifests=[
-                ancient(profile_marker_manifest_rel(p))
+                profile_contrast_marker_manifest_rel(p)
                 for p in PAN_PROFILES
             ]
         output:
@@ -4805,57 +4807,29 @@ if MARKER_POST_ENABLED:
             clean_txt   = PAN_FEATURES_CLEAN,
             up_txt      = PAN_FEATURES_UP,
             down_txt    = PAN_FEATURES_DOWN,
+            mixed_txt   = PAN_FEATURES_MIXED,
             summary_tsv = PAN_FEATURES_SUMMARY,
             gene_evidence_tsv = PAN_FEATURES_GENE_EVIDENCE,
             ranked_by_cohort_tsv = PAN_FEATURES_RANKED_BY_COHORT,
             ranked_by_marker_source_class_tsv = PAN_FEATURES_RANKED_BY_MARKER_SOURCE_CLASS,
-            ranked_by_evidence_class_tsv = PAN_FEATURES_RANKED_BY_EVIDENCE_CLASS,
-            ranking_components_tsv = PAN_FEATURES_RANKING_COMPONENTS,
-            quantile_thresholds_tsv = PAN_FEATURES_QUANTILE_THRESHOLDS,
-            sensitivity_summary_tsv = PAN_FEATURES_SENSITIVITY,
-            selected_marker_source_class_rows_tsv = PAN_FEATURES_SELECTED_ROWS,
+            ranked_by_feature_class_tsv = PAN_FEATURES_RANKED_BY_FEATURE_CLASS,
+            candidate_pool_evidence_tsv = PAN_FEATURES_CANDIDATE_POOL_EVIDENCE,
+            empirical_quantile_thresholds_tsv = PAN_FEATURES_EMPIRICAL_THRESHOLDS,
+            candidate_acceptance_tsv = PAN_FEATURES_CANDIDATE_ACCEPTANCE,
+            selected_evidence_rows_tsv = PAN_FEATURES_SELECTED_EVIDENCE_ROWS,
             validation_tsv = PAN_FEATURES_VALIDATION,
-            removed_vs_previous177_tsv = PAN_FEATURES_REMOVED_VS_PREVIOUS177,
-            added_vs_previous177_tsv = PAN_FEATURES_ADDED_VS_PREVIOUS177,
-            overlap_vs_previous177_tsv = PAN_FEATURES_OVERLAP_VS_PREVIOUS177,
-            removed_vs_previous125_tsv = PAN_FEATURES_REMOVED_VS_PREVIOUS125,
-            added_vs_previous125_tsv = PAN_FEATURES_ADDED_VS_PREVIOUS125,
-            overlap_vs_previous125_tsv = PAN_FEATURES_OVERLAP_VS_PREVIOUS125,
-            ranked_report_md = PAN_FEATURES_RANKED_REPORT,
             ranked_manifest_tsv = PAN_FEATURES_RANKED_MANIFEST,
             active_directory_manifest_tsv = PAN_FEATURES_ACTIVE_MANIFEST,
-            downstream_plan_md = PAN_FEATURES_DOWNSTREAM_PLAN,
-            downstream_targets_tsv = PAN_FEATURES_DOWNSTREAM_TARGETS,
-            downstream_dryrun_log = PAN_FEATURES_DOWNSTREAM_DRYRUN,
-            thesis_update_notes_md = PAN_FEATURES_THESIS_NOTES,
-            report_md   = PAN_FEATURES_REPORT,
             done_file   = os.path.join(PAN_FEATURES_OUTDIR, "pan_cancer_features_done.txt")
         params:
             script=os.path.join(SCRIPTS_DIR, "build_pan_cancer_features.py"),
             outdir=PAN_FEATURES_OUTDIR_ABS,
             method=PAN_FEATURES_METHOD,
-            profile_marker_dirs=_profile_marker_dir_args(),
             profile_marker_manifests=_profile_marker_manifest_args(),
-            recurrence_k=PAN_CANCER_MP_CFG.get("recurrence_k", DESEQ2_CFG.get("recurrence_k", 2)),
-            desired_min_size=PAN_CANCER_MP_CFG.get("desired_min_size", 200),
-            marker_source_recurrence="--marker-source-recurrence" if PAN_CANCER_MP_CFG.get("marker_source_recurrence", True) else "",
-            singleton_source_policy=PAN_CANCER_MP_CFG.get("singleton_source_policy", "ranked_quantile"),
-            disable_old_isolate_rescue="--disable-old-isolate-rescue" if PAN_CANCER_MP_CFG.get("disable_old_isolate_rescue", True) else "",
-            cap_isolate=PAN_CANCER_MP_CFG.get("cap_isolate", 0),
-            primary_rule=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("primary_rule", "auto"),
-            padj_quantile=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("padj_quantile", 0.25),
-            abs_log2fc_quantile=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("abs_log2fc_quantile", 0.75),
-            relaxed_minimum_criteria=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("relaxed_iqr", {}).get("minimum_criteria_met", 2),
-            strict_basemean_threshold=PAN_CANCER_MP_CFG.get("ranked_marker_source_panel", {}).get("empirical_ranking", {}).get("strict_iqr", {}).get("baseMean_threshold", "median"),
-            previous_feature_sets=(
-                "--previous-feature-set previous177=" + shlex.quote(PAN_FEATURES_PREVIOUS177)
-                + (
-                    " --previous-feature-set previous125=" + shlex.quote(abspath(PAN_FEATURES_PREVIOUS125_CFG))
-                    if PAN_FEATURES_PREVIOUS125_CFG else ""
-                )
-            ),
-            previous177_backup_dir=abspath(PAN_CANCER_MP_CFG.get("previous177_backup_dir", "results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016")),
-            backup_dir=abspath(PAN_CANCER_MP_CFG.get("active_backup_dir", "")) if PAN_CANCER_MP_CFG.get("active_backup_dir", "") else "",
+            adjusted_p_value_quantile=PAN_FEATURES_QUANTILE_CFG.get("adjusted_p_value_quantile"),
+            abs_log2fc_quantile=PAN_FEATURES_QUANTILE_CFG.get("absolute_shrunken_log2fc_quantile"),
+            expression_quantile=PAN_FEATURES_QUANTILE_CFG.get("expression_quantile"),
+            audit_output_prefix=PAN_FEATURES_PREFIX,
             remove_ribo_mt="--remove-ribo-mt" if PAN_CANCER_MP_CFG.get("remove_ribo_mt", False) else "",
             gene_annot=("--gene-annotation-tsv " + abspath(PAN_CANCER_MP_CFG["gene_annotation_tsv"]))
                         if PAN_CANCER_MP_CFG.get("gene_annotation_tsv") else ""
@@ -4863,29 +4837,51 @@ if MARKER_POST_ENABLED:
         conda: CONDA_ENV_PY
         shell:
             r'''
-            mkdir -p "{params.outdir}"
+            STAGING="{params.outdir}.staging_current"
+            rm -rf "$STAGING"
+            mkdir -p "$STAGING"
             python "{params.script}" \
-              {params.profile_marker_dirs} \
               {params.profile_marker_manifests} \
-              --output-dir "{params.outdir}" \
+              --output-dir "$STAGING" \
               --method "{params.method}" \
-              --recurrence-k {params.recurrence_k} \
-              --desired-min-size {params.desired_min_size} \
-              {params.marker_source_recurrence} \
-              --singleton-source-policy "{params.singleton_source_policy}" \
-              {params.disable_old_isolate_rescue} \
-              --cap-isolate {params.cap_isolate} \
-              --primary-rule "{params.primary_rule}" \
-              --strict-basemean-threshold "{params.strict_basemean_threshold}" \
-              --padj-quantile {params.padj_quantile} \
-              --abs-log2fc-quantile {params.abs_log2fc_quantile} \
-              --relaxed-minimum-criteria {params.relaxed_minimum_criteria} \
-              {params.previous_feature_sets} \
-              --previous177-backup-dir "{params.previous177_backup_dir}" \
-              --backup-dir "{params.backup_dir}" \
+              --adjusted-p-value-quantile {params.adjusted_p_value_quantile} \
+              --absolute-shrunken-log2fc-quantile {params.abs_log2fc_quantile} \
+              --expression-quantile {params.expression_quantile} \
+              --audit-output-prefix "{params.audit_output_prefix}" \
               {params.remove_ribo_mt} \
               {params.gene_annot} \
               > "{log}" 2>&1
+            test -s "$STAGING/pan_cancer_features.tsv" || (echo "ERROR: missing staged pan_cancer_features.tsv" >&2; exit 1)
+            if [ -d "{params.outdir}" ] && find "{params.outdir}" -type f -print -quit | grep -q .; then
+              ARCHIVE_ROOT="$(dirname "{params.outdir}")/feature_space_archives"
+              ARCHIVE_TS="$(date -u +%Y%m%dT%H%M%SZ)"
+              ARCHIVE_DIR="$ARCHIVE_ROOT/feature_space_before_revised_recurrence_${{ARCHIVE_TS}}"
+              mkdir -p "$ARCHIVE_DIR/files"
+              rsync -a "{params.outdir}"/ "$ARCHIVE_DIR/files"/
+              PANEL_COUNT="0"
+              if [ -s "{params.outdir}/pan_cancer_features_clean.txt" ]; then
+                PANEL_COUNT="$(grep -cve '^[[:space:]]*$' "{params.outdir}/pan_cancer_features_clean.txt" || true)"
+              fi
+              GIT_COMMIT="$(git -C "{BASE}" rev-parse HEAD 2>/dev/null || echo unknown)"
+              {{
+                printf 'field\tvalue\n'
+                printf 'timestamp_utc\t%s\n' "$ARCHIVE_TS"
+                printf 'source_path\t%s\n' "{params.outdir}"
+                printf 'active_panel_count\t%s\n' "$PANEL_COUNT"
+                printf 'git_commit\t%s\n' "$GIT_COMMIT"
+                printf 'method_label\t%s\n' "{params.method}"
+                printf 'reason\t%s\n' "archive active feature-space before revised recurrence-based aggregation replacement"
+              }} > "$ARCHIVE_DIR/archive_metadata.tsv"
+              if command -v sha256sum >/dev/null 2>&1; then
+                (cd "$ARCHIVE_DIR/files" && find . -type f -print | sort | while read f; do sha256sum "$f"; done) > "$ARCHIVE_DIR/sha256_manifest.tsv"
+              else
+                (cd "$ARCHIVE_DIR/files" && find . -type f -print | sort | while read f; do shasum -a 256 "$f"; done) > "$ARCHIVE_DIR/sha256_manifest.tsv"
+              fi
+              test -s "$ARCHIVE_DIR/archive_metadata.tsv"
+              test -s "$ARCHIVE_DIR/sha256_manifest.tsv"
+            fi
+            rsync -a --delete "$STAGING"/ "{params.outdir}"/
+            rm -rf "$STAGING"
             test -s "{output.features_tsv}" || (echo "ERROR: missing {output.features_tsv}" >&2; exit 1)
             '''
 
@@ -5029,6 +5025,7 @@ if MARKER_POST_ENABLED:
     PAN_ALIGNMENT_UMAP_SLIDE_HEIGHT = float(PAN_ALIGNMENT_UMAP_CFG.get("slide_height", 7.5))
     PAN_ALIGNMENT_UMAP_LEGEND_POSITION = PAN_ALIGNMENT_UMAP_CFG.get("legend_position", "bottom")
     PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SLIDE_THRESHOLD = int(PAN_ALIGNMENT_UMAP_CFG.get("source_cancer_slide_threshold", 6))
+    PAN_ALIGNMENT_UMAP_FEATURE_LABEL = PAN_ALIGNMENT_UMAP_CFG.get("feature_label", "PAN_CANCER_MARKER_PANEL")
 
     def alignment_umap_metric_label(metric):
         return re.sub(r"[^A-Za-z0-9]+", "_", metric)
@@ -5052,7 +5049,7 @@ if MARKER_POST_ENABLED:
     def pan_alignment_umap_stem(metric, view=None):
         return alignment_umap_stem(
             "pan_cancer_tumour_cell_line_alignment_umap",
-            "DEG_SET",
+            PAN_ALIGNMENT_UMAP_FEATURE_LABEL,
             metric,
             view
         )
@@ -5134,7 +5131,8 @@ if MARKER_POST_ENABLED:
         params:
             outdir = PAN_ALIGNMENT_UMAP_OUTDIR,
             metrics = ",".join(PAN_ALIGNMENT_UMAP_METRICS),
-            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "deg_set_alignment"),
+            feature_label = PAN_ALIGNMENT_UMAP_FEATURE_LABEL,
+            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "pan_cancer_alignment"),
             figure_width = PAN_ALIGNMENT_UMAP_FIGURE_WIDTH,
             figure_height = PAN_ALIGNMENT_UMAP_FIGURE_HEIGHT,
             slide_width = PAN_ALIGNMENT_UMAP_SLIDE_WIDTH,
@@ -5152,8 +5150,9 @@ if MARKER_POST_ENABLED:
               --expr_rds "{input.expr_rds}" \
               --meta_tsv "{input.meta_tsv}" \
               --source_meta_tsv "{input.source_meta_tsv}" \
-              --deg_set "{input.genes}" \
+              --feature_list "{input.genes}" \
               --outdir "{params.outdir}" \
+              --feature_label "{params.feature_label}" \
               --dist_metrics "{params.metrics}" \
               --page "{params.page}" \
               --width "{params.figure_width}" \

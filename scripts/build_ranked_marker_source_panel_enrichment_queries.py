@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Build enrichment queries for the active ranked marker-source panel."""
+"""Build the pan-cancer marker-panel functional-enrichment query manifest.
+
+The script writes query sets for the current graph-derived pan-cancer feature
+panel, the eligible retained-marker evidence background, contrast-specific
+DESeq2-tested backgrounds, skipped-query records, and preparation metrics. It
+does not run g:Profiler.
+"""
 import argparse
 import csv
 import hashlib
@@ -7,15 +13,14 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-METHOD = "ranked_marker_source_pan_cancer_panel"
+METHOD = "graph_derived_pan_cancer_feature_selection_v1_revised"
 PREFIX = "ranked_marker_source_panel"
 MIN_QUERY = 3
 PROFILES = ("brca", "nbl", "rbl")
 EVIDENCE = (
-    "anchor_source_recurrent",
-    "isolate_source_recurrent",
-    "anchor_singleton_ranked",
-    "ranked_nonrecurrent_marker",
+    "recurrent",
+    "accepted_singleton",
+    "accepted_non_recurrent",
 )
 
 def read_tsv(path):
@@ -89,17 +94,21 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
     feature_path = root / "results/unsupervised/pan_cancer/feature_space/pan_cancer_features.tsv"
     clean_path = root / "results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt"
-    ranking_path = root / "results/unsupervised/pan_cancer/feature_space/ranked_marker_source_panel_ranking_components.tsv"
+    candidate_pool_path = root / "results/unsupervised/pan_cancer/feature_space/ranked_marker_source_panel_candidate_pool_evidence.tsv"
     feature_rows = read_tsv(feature_path)
-    ranking_rows = read_tsv(ranking_path)
+    candidate_pool_rows = read_tsv(candidate_pool_path)
     clean = read_gene_file(clean_path)
-    assert len(feature_rows) == len(clean) == 379
-    assert [clean_id(x["clean_gene_id"]) for x in feature_rows] == clean
+    if len(feature_rows) != len(clean):
+        raise SystemExit(
+            f"feature table rows ({len(feature_rows)}) do not match clean list ({len(clean)})"
+        )
+    if [clean_id(x.get("clean_gene_id") or x.get("gene_id")) for x in feature_rows] != clean:
+        raise SystemExit("feature table order does not match clean feature list")
     assert {x["method"] for x in feature_rows} == {METHOD}
 
-    panel_universe = unique(x["gene_id"] for x in ranking_rows)
+    panel_universe = unique(x["gene_id"] for x in candidate_pool_rows)
     if not panel_universe:
-        raise SystemExit("eligible marker-selection universe is empty")
+        raise SystemExit("eligible retained-marker evidence universe is empty")
     panel_set = set(clean)
     if not panel_set.issubset(set(panel_universe)):
         missing = sorted(panel_set - set(panel_universe))
@@ -117,6 +126,8 @@ def main():
     def write_genes(path, genes):
         write_tsv(path, ["gene_id"], [{"gene_id": x} for x in unique(genes)])
 
+    # The panel-level background is the eligible retained-marker evidence
+    # universe from the active candidate-pool evidence table.
     panel_bg_name = f"{PREFIX}__eligible_marker_selection_universe"
     panel_bg_path = bg_root / f"{panel_bg_name}.tsv"
     write_genes(panel_bg_path, panel_universe)
@@ -126,7 +137,7 @@ def main():
         "background_type": "panel_eligible_marker_selection_universe",
         "cohort": "ALL", "contrast": "", "gene_count": len(panel_universe),
         "background_path": str(panel_bg_path), "sha256": sha(panel_bg_path),
-        "strategy": "unique clean genes in the active ranked-marker-source ranking-component table",
+        "strategy": "unique clean genes in the active retained-marker candidate-pool evidence table",
     })
 
     def add_query(label, category, genes, *, cohort="ALL", family="", evidence="", direction="ALL", contrast="", background=None, background_name=panel_bg_name, background_strategy="active eligible marker-selection universe", source_marker_table="", rank_rows=None):
@@ -171,7 +182,7 @@ def main():
             # assignment, not the non-exclusive retained-cohort membership field.
             if cohort and row["owner_profile"].lower() != cohort.lower(): continue
             if family and family not in split_field(row["marker_source_class"]): continue
-            if evidence and evidence not in split_field(row["evidence_classes"]): continue
+            if evidence and evidence not in split_field(row.get("selection_basis_classes") or row.get("feature_class")): continue
             if direction and row["direction"].upper() != direction.upper(): continue
             out.append(row)
         return out
@@ -198,8 +209,9 @@ def main():
             for cohort in PROFILES:
                 add_query(f"cohort_{cohort}_marker_source_class_{family}_direction_{direction}", "cohort_marker_source_class_direction", ids(panel_rows(cohort=cohort, family=family, direction=direction)), cohort=cohort.upper(), family=family, direction=direction)
 
-    # Per-contrast sets and exact DESeq2-tested backgrounds.
-    rank_by_key = {(x["cohort"], x["marker_source_class"], clean_id(x["gene_id"])) for x in ranking_rows}
+    # Per-contrast marker-source-panel query sets use contrast-specific eligible
+    # DESeq2-tested backgrounds.
+    rank_by_key = {(x["cohort"], x["marker_source_class"], clean_id(x["gene_id"])) for x in candidate_pool_rows}
     per_contrast_validation = []
     for profile in PROFILES:
         base = root / f"results/unsupervised/{profile}/deseq2_markers"
