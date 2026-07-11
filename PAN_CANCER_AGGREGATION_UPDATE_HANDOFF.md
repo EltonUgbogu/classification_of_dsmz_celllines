@@ -1134,6 +1134,133 @@ M	scripts/write_deseq2_directional_marker_tables.R
 A	tests/test_pan_cancer_features.py
 ```
 
+## Clean Branch Commit 5 - Legacy UMAP Retirement
+
+Retired the obsolete DEG-set UMAP script from the active `scripts/` tree and preserved it under `scripts/archive/`:
+
+- Removed active path: `scripts/plot_pan_cancer_umap_deg_set.R`
+- Preserved archived path: `scripts/archive/plot_pan_cancer_umap_deg_set.R.retired_legacy_deg_set`
+
+The legacy script was not referenced by `Snakefile`, `rules/`, `config/`, `README.md`, or tests. Keeping it in `scripts/` would leave active-tree `DEG_SET` / `--deg_set` terminology after the revised V1 UMAP interface had moved to `PAN_CANCER_MARKER_PANEL` and `--feature_list`.
+
+### `git diff --cached --stat`
+
+```text
+ .../plot_pan_cancer_umap_deg_set.R.retired_legacy_deg_set}            | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+### `git diff --cached --name-status`
+
+```text
+R099	scripts/plot_pan_cancer_umap_deg_set.R	scripts/archive/plot_pan_cancer_umap_deg_set.R.retired_legacy_deg_set
+```
+
+### Validation
+
+```text
+Rscript -e "invisible(parse('scripts/archive/plot_pan_cancer_umap_deg_set.R.retired_legacy_deg_set'))"
+PASS
+```
+
+```text
+rg -n --glob '!scripts/archive/**' -- "plot_pan_cancer_umap_deg_set|--deg_set|deg_set_alignment|DEG_SET|deg_set" Snakefile rules scripts config README.md tests
+PASS: no active-tree matches outside scripts/archive
+```
+
+## Final Clean Branch State Before Final Handoff Amend
+
+- Current branch: `feature/revised-v1-pan-cancer-aggregation`
+- HEAD before final handoff amend: `7bace0b58741ed6a554f0a1d630540b0dc861b3e`
+- Base extracted from: `13592660ac3eea3b62d5b31b053fbd9eb3decee8`
+- Safety branch: `safety/wip-pan-cancer-aggregation-dirty-state-20260711`
+- Safety WIP commit: `b528fb8ae642dbbe6c4d53709526f3d75a857859`
+
+### Final Clean Branch Commits
+
+```text
+7bace0b5 Retire obsolete legacy DEG-set UMAP script
+ce2d6360 Document and test revised V1 pan-cancer aggregation
+8e8dd835 Update downstream consumers for revised V1 feature schema
+6b4a5c8b Implement revised V1 pan-cancer marker aggregation
+97b7b170 Configure revised V1 pan-cancer aggregation DAG
+```
+
+### Final Validation
+
+```text
+rg -n --glob '!scripts/archive/**' --glob '!archive/**' --glob '!PAN_CANCER_AGGREGATION_UPDATE_HANDOFF.md' -- "<obsolete aggregation terms>" Snakefile config rules scripts README.md tests
+PASS: no active matches
+```
+
+```text
+rg -n -i --glob '!scripts/archive/**' --glob '!archive/**' --glob '!PAN_CANCER_AGGREGATION_UPDATE_HANDOFF.md' -- "version2|version 2|probability graph|probabilistic aggregation|\bv2\b" Snakefile config rules scripts README.md tests
+VERIFIED: matches are explicit Version 2 development files under config/scripts, plus one schema-version comment in Snakefile; none label the revised V1 aggregation method.
+```
+
+```text
+ruby -e 'require "yaml"; YAML.load_file("config/config.yaml"); puts "YAML OK"'
+YAML OK
+```
+
+```text
+PYTHONPYCACHEPREFIX=/private/tmp/codex_pycache python -m py_compile scripts/build_pan_cancer_features.py scripts/build_pan_cancer_enrichment_marker_framework_query_sets.py scripts/build_ranked_marker_source_panel_enrichment_queries.py scripts/package_ranked_marker_source_panel_outputs.py scripts/finalize_ranked_marker_source_panel_reports.py tests/test_pan_cancer_features.py
+PASS
+```
+
+```text
+PYTHONPYCACHEPREFIX=/private/tmp/codex_pycache python -c "<load tests/test_pan_cancer_features.py and run test_* functions>"
+tests ok
+```
+
+```text
+Rscript -e "invisible(parse('scripts/build_enrichment_query_sets.R')); invisible(parse('scripts/export_ranked_marker_source_panel_matrices.R')); invisible(parse('scripts/plot_enrichment_top_terms_heatmap.R')); invisible(parse('scripts/plot_pan_cancer_tumour_cell_line_alignment_umap.R')); invisible(parse('scripts/archive/plot_pan_cancer_umap_deg_set.R.retired_legacy_deg_set'))"
+PASS
+```
+
+```text
+/Users/eltonugbogu/miniforge3/envs/snakemake/bin/snakemake --runtime-source-cache-path /private/tmp/snakemake_runtime_cache --dry-run --cores 1 construct_pan_cancer_feature_panel --config pipeline_profile=pan_cancer
+PASS: dry-run parsed the DAG and planned ensure_profile_deseq2_markers x3 plus construct_pan_cancer_feature_panel x1.
+The dry-run reported missing canonical contrast manifests as expected in this checkout.
+```
+
+### Remaining Untracked Files
+
+These were left uncommitted and require separate user review; they were present as untracked files on the clean branch before the revised V1 extraction or are unrelated to the approved hunk set:
+
+```text
+.github/
+AGENT.md
+PAN_CANCER_AGGREGATION_AUDIT_HANDOFF.md
+docs/version1/DGE_REPORT.md
+docs/version1/ecdf.md
+docs/version2/version2_implementation_status.md
+scripts/derive_resolved_graph_node_statistics.py
+```
+
+Classification: `unknown_requires_user_review` / `pre_existing_unrelated_change`.
+
+### Final Diff Stat Versus Base
+
+```text
+ PAN_CANCER_AGGREGATION_UPDATE_HANDOFF.md           | 1394 +++++++++
+ README.md                                          |    6 +-
+ Snakefile                                          |  191 +-
+ config/config.yaml                                 |   59 +-
+ ...n_cancer_umap_deg_set.R.retired_legacy_deg_set} |    4 +-
+ scripts/build_enrichment_query_sets.R              |   32 +-
+ ...ancer_enrichment_marker_framework_query_sets.py |  117 +-
+ scripts/build_pan_cancer_features.py               | 3009 +++++++++-----------
+ ...anked_marker_source_panel_enrichment_queries.py |   44 +-
+ .../export_ranked_marker_source_panel_matrices.R   |   10 +-
+ .../finalize_ranked_marker_source_panel_reports.py |  690 ++---
+ .../package_ranked_marker_source_panel_outputs.py  |   60 +-
+ scripts/plot_enrichment_top_terms_heatmap.R        |  144 +-
+ ...ot_pan_cancer_tumour_cell_line_alignment_umap.R |   74 +-
+ tests/test_pan_cancer_features.py                  |  175 ++
+ 15 files changed, 3578 insertions(+), 2431 deletions(-)
+```
+
 This safety WIP commit intentionally preserves broad tracked dirt; it is not the reviewed revised V1 implementation commit set.
 
 ## Clean Implementation Branch Start - 2026-07-11
