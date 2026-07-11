@@ -5025,6 +5025,7 @@ if MARKER_POST_ENABLED:
     PAN_ALIGNMENT_UMAP_SLIDE_HEIGHT = float(PAN_ALIGNMENT_UMAP_CFG.get("slide_height", 7.5))
     PAN_ALIGNMENT_UMAP_LEGEND_POSITION = PAN_ALIGNMENT_UMAP_CFG.get("legend_position", "bottom")
     PAN_ALIGNMENT_UMAP_SOURCE_CANCER_SLIDE_THRESHOLD = int(PAN_ALIGNMENT_UMAP_CFG.get("source_cancer_slide_threshold", 6))
+    PAN_ALIGNMENT_UMAP_FEATURE_LABEL = PAN_ALIGNMENT_UMAP_CFG.get("feature_label", "PAN_CANCER_MARKER_PANEL")
 
     def alignment_umap_metric_label(metric):
         return re.sub(r"[^A-Za-z0-9]+", "_", metric)
@@ -5048,7 +5049,7 @@ if MARKER_POST_ENABLED:
     def pan_alignment_umap_stem(metric, view=None):
         return alignment_umap_stem(
             "pan_cancer_tumour_cell_line_alignment_umap",
-            "DEG_SET",
+            PAN_ALIGNMENT_UMAP_FEATURE_LABEL,
             metric,
             view
         )
@@ -5130,7 +5131,8 @@ if MARKER_POST_ENABLED:
         params:
             outdir = PAN_ALIGNMENT_UMAP_OUTDIR,
             metrics = ",".join(PAN_ALIGNMENT_UMAP_METRICS),
-            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "deg_set_alignment"),
+            feature_label = PAN_ALIGNMENT_UMAP_FEATURE_LABEL,
+            page = PAN_ALIGNMENT_UMAP_CFG.get("page", "pan_cancer_alignment"),
             figure_width = PAN_ALIGNMENT_UMAP_FIGURE_WIDTH,
             figure_height = PAN_ALIGNMENT_UMAP_FIGURE_HEIGHT,
             slide_width = PAN_ALIGNMENT_UMAP_SLIDE_WIDTH,
@@ -5148,8 +5150,9 @@ if MARKER_POST_ENABLED:
               --expr_rds "{input.expr_rds}" \
               --meta_tsv "{input.meta_tsv}" \
               --source_meta_tsv "{input.source_meta_tsv}" \
-              --deg_set "{input.genes}" \
+              --feature_list "{input.genes}" \
               --outdir "{params.outdir}" \
+              --feature_label "{params.feature_label}" \
               --dist_metrics "{params.metrics}" \
               --page "{params.page}" \
               --width "{params.figure_width}" \

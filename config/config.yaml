@@ -222,7 +222,8 @@ defaults:
       metadata_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
       source_metadata_tsv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
       metrics: [cosine, euclidean]
-      page: deg_set_alignment
+      feature_label: PAN_CANCER_MARKER_PANEL
+      page: pan_cancer_alignment
       figure_width: 9.0
       figure_height: 7.0
       slide_width: 13.33
