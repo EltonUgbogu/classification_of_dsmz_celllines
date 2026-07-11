@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # plot_enrichment_top_terms_heatmap.R
-# Build a selected-term heatmap from g:Profiler summary/export parser output.
+# Build an enrichment heatmap from the ranked marker-source-panel top-term summary,
+# writing selected-term, excluded-term, matrix, and figure-provenance sidecars.
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -36,7 +37,8 @@ parse_cli <- function(args) {
     key <- args[[i]]
     if (!key %in% c("--input", "--outdir", "--feature-table")) stop("Unknown argument: ", key)
     if (i == length(args)) stop("Missing value for ", key)
-    defaults[[sub("^--", "", gsub("-", "_", key))]] <- args[[i + 1L]]
+    arg_name <- gsub("-", "_", sub("^--", "", key))
+    defaults[[arg_name]] <- args[[i + 1L]]
     i <- i + 2L
   }
   defaults
@@ -68,33 +70,65 @@ if (length(missing_cols) > 0) {
 cat("Loaded", nrow(dt), "rows from input table.\n")
 cat("Observed current feature count:", observed_feature_count_label, "\n")
 
-map_query <- function(q) {
-  q0 <- trimws(as.character(q))
-  ql <- tolower(q0)
-  if (grepl("^brca__per_contrast__", ql)) return("BRCA per-contrast")
-  if (grepl("^nbl__per_contrast__", ql)) return("NBL per-contrast")
-  if (grepl("^rbl__per_contrast__", ql)) return("RBL per-contrast")
-  if (grepl("^brca_(all|up|down|mixed)$", ql)) return("BRCA cohort-derived")
-  if (grepl("^nbl_(all|up|down|mixed)$", ql)) return("NBL cohort-derived")
-  if (grepl("^rbl_(all|up|down|mixed)$", ql)) return("RBL cohort-derived")
-  if (ql %in% c("recurrent_or_core_down", "recurrence_filtered_marker_union__down", "strict_union__down")) return("Recurrent/core down")
-  if (ql %in% c("recurrent_or_core_up", "recurrence_filtered_marker_union__up", "strict_union__up")) return("Recurrent/core up")
-  if (ql %in% c("recurrent_or_core_all", "recurrence_filtered_marker_union__all", "strict_union__all")) return("Recurrent/core all")
-  if (grepl("^final_pan_cancer_feature_set(_|__)(all|up|down|mixed)$", ql)) return("Final pan-cancer feature set")
-  if (ql %in% c(
-    "isolate_extension_or_rescued_all",
-    "isolate_extension_or_rescued_up",
-    "isolate_extension_or_rescued_down",
-    "isolate_rescued_subset__all",
-    "comparison_strict_vs_operative__operative_minus_strict"
-  )) return("Isolate-extension subset")
+map_query <- function(q, category, cohort, marker_source_class, evidence_class, direction) {
+  ql <- tolower(trimws(as.character(q)))
+  category <- tolower(trimws(as.character(category)))
+  cohort <- toupper(trimws(as.character(cohort)))
+  marker_source_class <- tolower(trimws(as.character(marker_source_class)))
+  evidence_class <- tolower(trimws(as.character(evidence_class)))
+  direction <- toupper(trimws(as.character(direction)))
+  ql[is.na(ql)] <- ""
+  category[is.na(category)] <- ""
+  cohort[is.na(cohort)] <- ""
+  marker_source_class[is.na(marker_source_class)] <- ""
+  evidence_class[is.na(evidence_class)] <- ""
+  direction[is.na(direction)] <- ""
+
+  if (category == "final_panel" || grepl("__final_panel_all$", ql)) {
+    return("Final pan-cancer feature set")
+  }
+  if (category == "cohort_owner" && cohort %in% c("BRCA", "NBL", "RBL")) {
+    return(paste(cohort, "cohort-derived markers"))
+  }
+  if (category == "per_contrast") {
+    return("Per-contrast marker sets")
+  }
+  if (category == "feature_class") {
+    if (grepl("accepted_non_recurrent", ql) || grepl("accepted_non_recurrent", evidence_class)) return("Accepted non-recurrent candidates")
+    if (grepl("accepted_singleton", ql) || grepl("accepted_singleton", evidence_class)) return("Accepted singleton candidates")
+    if (grepl("recurrent", ql) || grepl("recurrent", evidence_class)) return("Recurrent selected genes")
+  }
+  if (category %in% c("evidence_class", "cohort_evidence_class")) {
+    if (grepl("accepted_non_recurrent", evidence_class)) return("Accepted non-recurrent candidates")
+    if (grepl("accepted_singleton", evidence_class)) return("Accepted singleton candidates")
+    if (grepl("recurrent", evidence_class)) return("Recurrent selected genes")
+  }
+  if (category %in% c("marker_source_class", "cohort_marker_source_class",
+                      "marker_source_class_direction", "cohort_marker_source_class_direction")) {
+    if (marker_source_class == "isolate") return("Isolate-source evidence")
+    if (marker_source_class == "anchor") return("Anchor marker-source evidence")
+  }
+  if (category %in% c("direction", "cohort_direction")) {
+    if (direction == "UP") return("UP marker sets")
+    if (direction == "DOWN") return("DOWN marker sets")
+    if (direction == "MIXED") return("Mixed-direction marker sets")
+    return("Direction-stratified marker sets")
+  }
   return(NA_character_)
 }
 
-dt[, group_label := vapply(query_id, map_query, character(1))]
+for (col in c("category", "cohort", "marker_source_class", "evidence_class", "direction")) {
+  if (!col %in% names(dt)) dt[, (col) := NA_character_]
+}
+dt[, group_label := mapply(
+  map_query,
+  dt[["query_id"]], dt[["category"]], dt[["cohort"]],
+  dt[["marker_source_class"]], dt[["evidence_class"]], dt[["direction"]],
+  USE.NAMES = FALSE
+)]
 dt_mapped <- dt[!is.na(group_label)]
 cat("Rows after group mapping:", nrow(dt_mapped), "\n")
-if (nrow(dt_mapped) == 0L) stop("No enrichment rows mapped to current marker-framework heatmap groups")
+if (nrow(dt_mapped) == 0L) stop("No enrichment rows mapped to current marker-source-panel heatmap groups")
 
 generic_terms <- c(
   "biological_process", "cellular_component", "molecular_function", "binding",
@@ -162,29 +196,33 @@ wide_mat <- dcast(plot_data, term_label ~ group_label, value.var = "score", fun.
 
 group_order_display <- c(
   "Final pan-cancer\nfeature set",
-  "Isolate-extension\nsubset",
-  "Recurrent/core\ndown",
-  "Recurrent/core\nup",
-  "Recurrent/core\nall",
-  "BRCA\nper-contrast",
-  "NBL\nper-contrast",
-  "RBL\nper-contrast",
-  "BRCA\ncohort-derived",
-  "NBL\ncohort-derived",
-  "RBL\ncohort-derived"
+  "BRCA cohort-derived\nmarkers",
+  "NBL cohort-derived\nmarkers",
+  "RBL cohort-derived\nmarkers",
+  "Per-contrast\nmarker sets",
+  "Recurrent selected\ngenes",
+  "Accepted singleton\ncandidates",
+  "Accepted non-recurrent\ncandidates",
+  "Isolate-source\nevidence",
+  "Anchor marker-source\nevidence",
+  "UP marker\nsets",
+  "DOWN marker\nsets",
+  "Mixed-direction\nmarker sets"
 )
 internal_to_display <- c(
   "Final pan-cancer feature set" = "Final pan-cancer\nfeature set",
-  "Isolate-extension subset" = "Isolate-extension\nsubset",
-  "Recurrent/core down" = "Recurrent/core\ndown",
-  "Recurrent/core up" = "Recurrent/core\nup",
-  "Recurrent/core all" = "Recurrent/core\nall",
-  "BRCA per-contrast" = "BRCA\nper-contrast",
-  "NBL per-contrast" = "NBL\nper-contrast",
-  "RBL per-contrast" = "RBL\nper-contrast",
-  "BRCA cohort-derived" = "BRCA\ncohort-derived",
-  "NBL cohort-derived" = "NBL\ncohort-derived",
-  "RBL cohort-derived" = "RBL\ncohort-derived"
+  "BRCA cohort-derived markers" = "BRCA cohort-derived\nmarkers",
+  "NBL cohort-derived markers" = "NBL cohort-derived\nmarkers",
+  "RBL cohort-derived markers" = "RBL cohort-derived\nmarkers",
+  "Per-contrast marker sets" = "Per-contrast\nmarker sets",
+  "Recurrent selected genes" = "Recurrent selected\ngenes",
+  "Accepted singleton candidates" = "Accepted singleton\ncandidates",
+  "Accepted non-recurrent candidates" = "Accepted non-recurrent\ncandidates",
+  "Isolate-source evidence" = "Isolate-source\nevidence",
+  "Anchor marker-source evidence" = "Anchor marker-source\nevidence",
+  "UP marker sets" = "UP marker\nsets",
+  "DOWN marker sets" = "DOWN marker\nsets",
+  "Mixed-direction marker sets" = "Mixed-direction\nmarker sets"
 )
 plot_data[, group_display := internal_to_display[group_label]]
 plot_data <- plot_data[!is.na(group_display)]
@@ -195,11 +233,13 @@ term_group_max <- plot_data[, {
 }, by = term_label]
 assign_block <- function(best_group) {
   vapply(best_group, function(g) {
-    if (g %in% c("BRCA per-contrast", "BRCA cohort-derived")) return(1L)
-    if (g %in% c("NBL per-contrast", "NBL cohort-derived")) return(2L)
-    if (g %in% c("RBL per-contrast", "RBL cohort-derived")) return(3L)
-    if (g %in% c("Recurrent/core down", "Recurrent/core up", "Recurrent/core all")) return(4L)
-    if (g %in% c("Final pan-cancer feature set", "Isolate-extension subset")) return(5L)
+    if (g %in% c("Final pan-cancer feature set")) return(1L)
+    if (g %in% c("BRCA cohort-derived markers", "NBL cohort-derived markers", "RBL cohort-derived markers")) return(2L)
+    if (g %in% c("Per-contrast marker sets")) return(3L)
+    if (g %in% c("Recurrent selected genes", "Accepted singleton candidates",
+                 "Accepted non-recurrent candidates", "Isolate-source evidence",
+                 "Anchor marker-source evidence")) return(4L)
+    if (g %in% c("UP marker sets", "DOWN marker sets", "Mixed-direction marker sets")) return(5L)
     6L
   }, integer(1))
 }
@@ -223,7 +263,7 @@ p <- ggplot(plot_full, aes(x = group_display, y = term_label_wrap, fill = score)
   scale_fill_distiller(palette = "YlOrRd", direction = 1, na.value = "#F5F5F5", limits = c(0, 30), name = "-log10(p),\ncapped at 30") +
   scale_x_discrete(position = "bottom") +
   labs(
-    title = "Selected enriched terms across current marker-framework query sets",
+    title = "Selected enriched terms across current marker-source-panel query sets",
     subtitle = paste("Observed current feature count:", observed_feature_count_label),
     x = NULL,
     y = NULL
@@ -254,6 +294,8 @@ fwrite(wide_mat, mat_path, sep = "\t")
 fwrite(plot_data, sel_path, sep = "\t")
 fwrite(excluded_rows, exc_path, sep = "\t")
 
+# Record enrichment-heatmap provenance. Endpoint and g:Profiler run provenance
+# remain in the upstream g:Profiler output directory.
 prov <- data.table(
   figure_name = "Fig_enrichment_top_terms_heatmap.pdf",
   script = "scripts/plot_enrichment_top_terms_heatmap.R",
@@ -264,7 +306,7 @@ prov <- data.table(
   output_files = paste(normalizePath(c(pdf_path, png_path, mat_path, sel_path, exc_path), mustWork = FALSE), collapse = ";"),
   upstream_tables = normalizePath(input_file, mustWork = FALSE),
   observed_feature_count = observed_feature_count_label,
-  key_parameters = "group_mapping=current_marker_framework;generic_terms_removed=TRUE;top_terms_heatmap=TRUE;feature_count_dynamic=TRUE",
+  key_parameters = "group_mapping=current_marker_source_panel;generic_terms_removed=TRUE;top_terms_heatmap=TRUE;feature_count_dynamic=TRUE",
   software_versions = paste0("R=", getRversion(), ";data.table=", as.character(packageVersion("data.table")), ";ggplot2=", as.character(packageVersion("ggplot2"))),
   figure_type = "enrichment",
   source_pipeline_root = pipeline_root,

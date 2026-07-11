@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# plot_pan_cancer_umap_deg_set.R
+# RETIRED LEGACY SCRIPT: plot_pan_cancer_umap_deg_set.R
 # ==============================================================================
 # PAN-CANCER UMAP VISUALISATION USING DIFFERENTIALLY EXPRESSED GENE SET
 # ==============================================================================

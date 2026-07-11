@@ -169,7 +169,7 @@ defaults:
     # Controls display limits and output routing for retained top-term tables.
     top_terms_per_source: 5
     output_dir_name: enrichment
-  # Configures post-DESeq2 marker collation, source-family feature construction, and pan-cancer outputs.
+  # Configures post-DESeq2 marker collation, graph-derived feature construction, and pan-cancer outputs.
   marker_postprocessing:
     enabled: true
     # Configures per-profile consensus marker filtering and recurrence handling.
@@ -185,62 +185,28 @@ defaults:
       fallback_topn: 200
       flip_policy: remove
       recurrence_k: 2
-    # Configures source-family marker selection for the pan-cancer feature panel.
+    # Configures graph-derived marker aggregation and pan-cancer feature selection.
     pan_cancer:
       enabled: true
       # Selects disease profiles contributing graph-derived marker contrasts.
       disease_profiles: [brca, nbl, rbl]
-      method: ranked_marker_source_pan_cancer_panel
-      # Routes final source-family marker panel outputs.
+      method: graph_derived_pan_cancer_feature_selection_v1_revised
+      # Routes final graph-derived marker panel outputs.
       outdir: results/unsupervised/pan_cancer/feature_space
       final_features_tsv: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.tsv
       final_features_clean: results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt
       final_features_up: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.UP.txt
       final_features_down: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.DOWN.txt
+      final_features_mixed: results/unsupervised/pan_cancer/feature_space/pan_cancer_features.MIXED.txt
       build_summary_tsv: results/unsupervised/pan_cancer/feature_space/pan_cancer_feature_build_summary.tsv
-      # Controls recurrence and singleton policies for marker-source retention.
-      recurrence_k: 2
-      desired_min_size: 200
-      force_exact_size: false
-      marker_source_recurrence: true
-      singleton_source_policy: ranked_quantile
-      disable_old_isolate_rescue: true
-      old_isolate_rescue:
-        enabled: false
-      ranked_marker_source_panel:
-        enabled: true
-        output_prefix: ranked_marker_source_panel
-        primary_rule: auto
-        marker_source_recurrence:
-          enabled: true
-          singleton_policy: ranked_quantile
-        # Configures empirical ranking thresholds for retained source-family markers.
-        empirical_ranking:
-          padj_quantile: 0.25
-          abs_log2fc_quantile: 0.75
-          strict_iqr:
-            baseMean_threshold: median
-            require_direction_consistency: false
-          relaxed_iqr:
-            minimum_criteria_met: 2
-            baseMean_threshold: median
-        ranking_order:
-          - source_count_desc
-          - min_padj_asc
-          - median_abs_log2fc_desc
-          - median_baseMean_desc
-          - direction_consistency_desc
-      # Constrains cross-disease support and marker-source class caps.
-      min_cross_disease: 2
-      cap_specific: 300
-      cap_isolate: 0
+      audit_output_prefix: ranked_marker_source_panel
+      empirical_quantile_thresholds:
+        adjusted_p_value_quantile: 0.25
+        absolute_shrunken_log2fc_quantile: 0.75
+        expression_quantile: 0.50
       remove_ribo_mt: false
-      # Records annotation and backup/provenance paths used by feature-panel audits.
+      # Records optional annotation used by feature-panel exports and filtering.
       gene_annotation_tsv: resources/ensembl_to_symbol.tsv
-      previous177_backup_dir: results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016
-      previous177_features_tsv: results/unsupervised/pan_cancer/feature_space_BACKUP_before_source_family_recurrence_20260618_181016/pan_cancer_features.tsv
-      active_backup_dir: results/unsupervised/pan_cancer/feature_space_BACKUP_before_ranked_source_family_panel_20260618_190642
-      previous125_features_tsv: results/unsupervised/pan_cancer/feature_space_BACKUP_before_ranked_source_family_panel_20260618_190642/pan_cancer_features.tsv
     # Constructs pan-cancer expression objects from the marker-derived feature panel.
     expression_matrix:
       include_heme: false
@@ -256,7 +222,8 @@ defaults:
       metadata_tsv: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_metadata.tsv
       source_metadata_tsv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
       metrics: [cosine, euclidean]
-      page: deg_set_alignment
+      feature_label: PAN_CANCER_MARKER_PANEL
+      page: pan_cancer_alignment
       figure_width: 9.0
       figure_height: 7.0
       slide_width: 13.33

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build current pan-cancer marker-framework enrichment query/background files.
+"""Build pan-cancer marker-framework enrichment query/background files.
 
-This script prepares local inputs for manual g:Profiler upload or a separately
-validated parser/plotter. It does not call g:Profiler and does not rerun DESeq2
-or feature construction.
+This helper prepares local inputs for manual g:Profiler upload or parser and
+plotter testing. It uses the current graph-derived pan-cancer feature classes:
+recurrent, accepted_singleton, and accepted_non_recurrent. It does not call
+g:Profiler and does not rerun DESeq2 or feature construction.
 """
 
 from __future__ import annotations
@@ -20,23 +21,11 @@ from pathlib import Path
 
 COHORTS = ("BRCA", "NBL", "RBL")
 DIRECTIONS = ("UP", "DOWN", "MIXED")
-FEATURE_CLASS_RECURRENT = {
-    "RECURRENCE_FILTERED",
-    "RECURRENCE_FILTERED_GENES",
+FEATURE_CLASS_QUERY_ORDER = (
     "RECURRENT",
-    "RECURRENT_CORE",
-    "CORE",
-    "ANCHOR_RECURRENT",
-    "ISOLATE_RECURRENT",
-    "ANCHOR_ISOLATE_OVERLAP",
-    "MULTI_FAMILY_EVIDENCE",
-}
-FEATURE_CLASS_ISOLATE_EXTENSION = {
-    "ISOLATE_EXTENSION",
-    "ISOLATE_EXTENSION_GENES",
-    "ISOLATE_RESCUED",
-    "ISOLATE_RESCUED_SUBSET",
-}
+    "ACCEPTED_SINGLETON",
+    "ACCEPTED_NON_RECURRENT",
+)
 STALE_INPUT_MARKERS = (
     "stale_old_gprofiler_query_sets_20260610_173456/quarantine/gene_sets",
     "results/unsupervised/rbl/enrichment/query_sets/gene_sets",
@@ -77,7 +66,7 @@ MANIFEST_COLUMNS = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate current pan-cancer marker-framework enrichment query sets."
+        description="Generate pan-cancer marker-framework enrichment query sets."
     )
     parser.add_argument("--features", required=True, help="Current pan_cancer_features.tsv")
     parser.add_argument("--clean-features", required=True, help="Current pan_cancer_features_clean.txt")
@@ -91,7 +80,7 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Current Snakefile-managed gprofiler_by_cohort directory",
     )
-    parser.add_argument("--outdir", required=True, help="Output marker_framework directory")
+    parser.add_argument("--outdir", required=True, help="Output marker-framework directory")
     parser.add_argument(
         "--profiles",
         default="brca,nbl,rbl",
@@ -608,28 +597,31 @@ def main() -> int:
                 notes="table_file=" + str(item["table_path"]),
             )
 
-    # C. Current recurrent/core-type sets using active feature_class naming.
-    recurrent_rows_all = rows_for(classes=FEATURE_CLASS_RECURRENT)
-    if recurrent_rows_all:
-        for suffix, selected_rows in (
-            ("all", recurrent_rows_all),
-            ("up", rows_for(direction="UP", classes=FEATURE_CLASS_RECURRENT)),
-            ("down", rows_for(direction="DOWN", classes=FEATURE_CLASS_RECURRENT)),
-        ):
-            add_query(
-                query_name=f"recurrent_or_core_{suffix}",
-                category="recurrent_or_core",
-                owner_profile="pan_cancer",
-                direction=suffix,
-                source_contrast="",
-                genes=feature_genes_from(selected_rows),
-                background=marker_universe,
-                rank_rows=feature_rank_rows(selected_rows),
-                rank_source="max_abs_log2FC_or_inverse_selection_rank",
-                source_table=feature_path,
-                background_strategy="combined union of current cohort marker-selection backgrounds",
-                notes="Mapped from current feature_class values: " + ",".join(sorted(FEATURE_CLASS_RECURRENT.intersection({row["feature_class"] for row in feature_rows}))),
-            )
+    # C. Revised feature-class query sets.
+    for feature_class in FEATURE_CLASS_QUERY_ORDER:
+        class_rows_all = rows_for(classes={feature_class})
+        if class_rows_all:
+            label = feature_class.lower()
+            for suffix, selected_rows in (
+                ("all", class_rows_all),
+                ("up", rows_for(direction="UP", classes={feature_class})),
+                ("down", rows_for(direction="DOWN", classes={feature_class})),
+                ("mixed", rows_for(direction="MIXED", classes={feature_class})),
+            ):
+                add_query(
+                    query_name=f"feature_class_{label}_{suffix}",
+                    category="feature_class",
+                    owner_profile="pan_cancer",
+                    direction=suffix,
+                    source_contrast="",
+                    genes=feature_genes_from(selected_rows),
+                    background=marker_universe,
+                    rank_rows=feature_rank_rows(selected_rows),
+                    rank_source="max_abs_log2FC_or_inverse_selection_rank",
+                    source_table=feature_path,
+                    background_strategy="combined union of current cohort marker-selection backgrounds",
+                    notes=f"Current feature_class subset: {label}",
+                )
 
     # D. Current final pan-cancer feature set.
     for suffix, selected_rows in (
@@ -653,29 +645,6 @@ def main() -> int:
             notes="Current full feature table subset; count inferred dynamically",
         )
 
-    # E. Current isolate-extension/rescued subset, if defined.
-    isolate_rows_all = rows_for(classes=FEATURE_CLASS_ISOLATE_EXTENSION)
-    if isolate_rows_all:
-        for suffix, selected_rows in (
-            ("all", isolate_rows_all),
-            ("up", rows_for(direction="UP", classes=FEATURE_CLASS_ISOLATE_EXTENSION)),
-            ("down", rows_for(direction="DOWN", classes=FEATURE_CLASS_ISOLATE_EXTENSION)),
-        ):
-            add_query(
-                query_name=f"isolate_extension_or_rescued_{suffix}",
-                category="isolate_extension_or_rescued",
-                owner_profile="pan_cancer",
-                direction=suffix,
-                source_contrast="",
-                genes=feature_genes_from(selected_rows),
-                background=marker_universe,
-                rank_rows=feature_rank_rows(selected_rows),
-                rank_source="max_abs_log2FC_or_inverse_selection_rank",
-                source_table=feature_path,
-                background_strategy="combined union of current cohort marker-selection backgrounds",
-                notes="Mapped from current feature_class values: " + ",".join(sorted(FEATURE_CLASS_ISOLATE_EXTENSION.intersection({row["feature_class"] for row in feature_rows}))),
-            )
-
     # Validate final feature query contains the complete current feature set.
     final_rows = [row for row in manifest_rows if row["query_name"] == "final_pan_cancer_feature_set_all"]
     if final_rows:
@@ -695,9 +664,8 @@ def main() -> int:
     categories = {
         "cohort_direction": "Current feature-table owner_profile/direction subsets",
         "per_contrast": "Current marker manifests under results/unsupervised/<profile>/deseq2_markers/markers",
-        "recurrent_or_core": "Current recurrence/core feature_class subset",
+        "feature_class": "Current revised feature_class subsets",
         "final_pan_cancer_feature_set": "Current full feature set",
-        "isolate_extension_or_rescued": "Current isolate-extension/rescued feature_class subset",
     }
     for category, reason in categories.items():
         rows = [row for row in manifest_rows if row["category"] == category]
@@ -705,10 +673,8 @@ def main() -> int:
         details = reason
         if category == "per_contrast" and marker_notes:
             details += "; " + "; ".join(marker_notes)
-        if category == "recurrent_or_core" and not rows:
-            details += "; no current feature_class values matched recurrence/core classes"
-        if category == "isolate_extension_or_rescued" and not rows:
-            details += "; no current feature_class values matched isolate-extension/rescued classes"
+        if category == "feature_class" and not rows:
+            details += "; no current feature_class values matched revised classes"
         category_rows.append({
             "category": category,
             "status": status,
@@ -781,8 +747,9 @@ def main() -> int:
     )
     readme = outdir / "README_marker_framework_queries.md"
     readme.write_text(
-        "# Pan-cancer enrichment marker-framework query sets\n\n"
-        "Generated local query/background inputs for manual g:Profiler use or a separate parser/plotter. "
+        "# Pan-cancer marker-framework enrichment query sets\n\n"
+        "Generated local query/background inputs for manual g:Profiler use or parser/plotter testing. "
+        "Feature-class query sets use the revised classes `recurrent`, `accepted_singleton`, and `accepted_non_recurrent`. "
         "This build does not run g:Profiler, DESeq2, or pan-cancer feature construction.\n\n"
         f"Observed current feature count: {observed_feature_count}\n\n"
         "Each `gene_sets/<query_name>/` directory contains `genes.tsv`, `background.tsv`, "

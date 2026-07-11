@@ -214,10 +214,10 @@ snakemake --use-conda --cores 4 "$TARGET_FILE" --config pipeline_profile=multico
 
 ### Current pan-cancer feature panel
 
-The current pan-cancer feature panel is the 379-gene ranked marker-source panel:
+The current pan-cancer feature panel is graph-informed and DESeq2 marker-derived:
 
-- method: `ranked_marker_source_pan_cancer_panel`
-- selected empirical rule: `relaxed_iqr_median_baseMean`
+- method: `graph_derived_pan_cancer_feature_selection_v1_revised`
+- selection route: recurrent direct retention plus all-three acceptance for singleton and non-recurrent candidates
 - feature table: [`supplementary_data/feature_space/pan_cancer_features.tsv`](supplementary_data/feature_space/pan_cancer_features.tsv)
 - clean Ensembl list: [`supplementary_data/feature_space/pan_cancer_features_clean.txt`](supplementary_data/feature_space/pan_cancer_features_clean.txt)
 

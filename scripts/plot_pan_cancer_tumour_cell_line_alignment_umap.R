@@ -8,9 +8,10 @@
 # SCRIPT OVERVIEW
 # ---------------
 # This script generates UMAP (Uniform Manifold Approximation and Projection)
-# embeddings of pan-cancer transcriptomic data using the current curated
-# DEG-derived feature set. The visualisations assess whether cell-line profiles
-# occupy the broad transcriptomic regions of their annotated tumour lineages.
+# embeddings of pan-cancer transcriptomic data using the current graph-informed
+# DESeq2 marker-derived feature panel. The visualisations assess whether
+# cell-line profiles occupy the broad transcriptomic regions of their annotated
+# tumour lineages.
 #
 # BIOLOGICAL CONTEXT
 # ------------------
@@ -24,19 +25,12 @@
 #   2. Are there cross-cancer molecular similarities suggesting shared biology?
 #   3. Which cell lines may have diverged from their tissue of origin?
 #
-# THE DEG FEATURE SET
-# -------------------
-# Rather than using all expressed genes or generic highly variable genes,
-# this script employs a curated set of differentially expressed genes
-# identified through the pan-cancer validation pipeline. These genes were
-# selected because they:
-#
-#   - Show significant expression differences between cancer types
-#   - Discriminate between tumours and cell lines within cancer types
-#   - Are robustly expressed across the integrated dataset
-#
-# Using this focused, pipeline-defined gene set reduces noise from uninformative
-# genes while preserving biologically meaningful variation.
+# THE FEATURE PANEL
+# -----------------
+# Rather than using all expressed genes or generic highly variable genes, this
+# script uses the graph-informed DESeq2 marker-derived pan-cancer feature panel
+# assembled upstream from recurrent genes, accepted singleton candidates, and
+# accepted non-recurrent candidates.
 #
 # UMAP METHODOLOGY
 # ----------------
@@ -184,33 +178,24 @@ option_list <- list(
               default="results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv",
               help="Metadata TSV used to join cohort/source labels by sample_id when absent from --meta_tsv [default: %default]"),
 
-  # --deg_set: Path to the DEG feature set file containing one Ensembl
-  # gene identifier per line. These genes define the feature space for
-  # UMAP computation. Required when --feature_mode is feature_list;
-  # ignored when --feature_mode is all_genes. Accepted as an alias for
-  # the more generic --feature_list option for backward compatibility
-  # with the existing pan-cancer DEG-set workflow.
-  make_option("--deg_set", type="character",
+  # --feature_list: Path to the marker-panel feature list containing one
+  # Ensembl gene identifier per line. Required when --feature_mode is
+  # feature_list; ignored when --feature_mode is all_genes.
+  make_option("--feature_list", type="character",
               default="results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt",
               help="Feature list file (one ENSG per line); used when --feature_mode=feature_list [default: %default]"),
-
-  # --feature_list: Alias for --deg_set with mode-neutral naming.
-  # If both are passed, --feature_list takes precedence.
-  make_option("--feature_list", type="character", default=NULL,
-              help="Feature list file (alias for --deg_set; mode-neutral naming)"),
 
   # --feature_mode: Whether to subset the expression matrix to a
   # supplied gene list ('feature_list') or use all genes present in the
   # matrix after missing-value and zero-variance filtering ('all_genes').
   make_option("--feature_mode", type="character", default="feature_list",
-              help="feature_list (default; existing pan-cancer DEG-set behaviour) or all_genes (use all genes after NA + zero-var filtering)"),
+              help="feature_list (default; marker-panel feature space) or all_genes (use all genes after NA + zero-var filtering)"),
 
   # --feature_label: Label embedded in output figure / coordinate
   # filenames so a single output directory can hold runs from different
-  # feature sets. Defaults preserve the existing pan-cancer DEG-set
-  # filenames when --feature_mode=feature_list.
+  # feature sets.
   make_option("--feature_label", type="character", default=NULL,
-              help="Feature-set label inserted into output filenames (default: DEG_SET when feature_mode=feature_list, ALL_GENES when feature_mode=all_genes)"),
+              help="Feature-set label inserted into output filenames (default: PAN_CANCER_MARKER_PANEL when feature_mode=feature_list, ALL_GENES when feature_mode=all_genes)"),
 
   # --out_stem: Filename stem (without metric / feature_label / .ext)
   # used to compose figure, coordinate, and summary output names.
@@ -255,8 +240,8 @@ option_list <- list(
 
   # --page: Output size preset for different presentation contexts.
   # Alignment presets use the established full-width figure size.
-  make_option("--page", type="character", default="deg_set_alignment",
-              help="Output size preset: deg_set_alignment, pan_cancer_alignment, all_gene_alignment, slide (16:9), a4, a4_landscape [default: %default]"),
+  make_option("--page", type="character", default="pan_cancer_alignment",
+              help="Output size preset: pan_cancer_alignment, all_gene_alignment, slide (16:9), a4, a4_landscape [default: %default]"),
 
   make_option("--width", type="double", default=9.0,
               help="Width in inches for alignment page presets [default: %default]"),
@@ -279,7 +264,6 @@ if (!legend_position %in% c("bottom", "top", "left", "right", "none")) {
 }
 legend_direction <- if (legend_position %in% c("left", "right")) "vertical" else "horizontal"
 alignment_page_presets <- c(
-  "deg_set_alignment",
   "pan_cancer_alignment",
   "all_gene_alignment",
   "thesis"
@@ -304,15 +288,14 @@ abs_from_root <- function(p) {
   file.path(pipe_root, p)
 }
 
-# Resolve feature_mode and the feature-list path (with --deg_set as an alias).
+# Resolve feature_mode and the feature-list path.
 feature_mode <- tolower(trimws(opt$feature_mode %||% "feature_list"))
 if (!(feature_mode %in% c("feature_list", "all_genes"))) {
   stop("Invalid --feature_mode: ", feature_mode,
        " (must be 'feature_list' or 'all_genes')")
 }
 
-# --feature_list takes precedence over --deg_set when both are supplied.
-feature_list_path <- opt$feature_list %||% opt$deg_set
+feature_list_path <- opt$feature_list
 
 # Resolve all input and output paths.
 expr_rds <- abs_from_root(opt$expr_rds)
@@ -321,7 +304,7 @@ source_meta_tsv <- abs_from_root(opt$source_meta_tsv)
 outdir   <- abs_from_root(opt$outdir)
 if (feature_mode == "feature_list") {
   if (is.null(feature_list_path) || !nzchar(feature_list_path)) {
-    stop("--feature_mode=feature_list requires --feature_list (or --deg_set) to be set.")
+    stop("--feature_mode=feature_list requires --feature_list to be set.")
   }
   feature_list_path <- abs_from_root(feature_list_path)
 } else {
@@ -330,10 +313,9 @@ if (feature_mode == "feature_list") {
 }
 
 # Resolve feature_label, out_stem, summary_basename with sensible defaults
-# that preserve the existing pan-cancer DEG-set behaviour when unset.
 feature_label <- opt$feature_label
 if (is.null(feature_label) || !nzchar(feature_label)) {
-  feature_label <- if (feature_mode == "all_genes") "ALL_GENES" else "DEG_SET"
+  feature_label <- if (feature_mode == "all_genes") "ALL_GENES" else "PAN_CANCER_MARKER_PANEL"
 }
 out_stem <- opt$out_stem %||% "pan_cancer_tumour_cell_line_alignment_umap"
 summary_basename <- opt$summary_basename
@@ -398,7 +380,7 @@ read_feature_list <- function(path) {
   # Returns:
   #   A character vector of cleaned, unique Ensembl gene identifiers
   
-  if (!file.exists(path)) stop("deg_set not found: ", path)
+  if (!file.exists(path)) stop("feature list not found: ", path)
   
   g <- readLines(path, warn = FALSE)
   g <- g[!grepl("^\\s*#", g)]  # Remove comment lines
@@ -407,7 +389,7 @@ read_feature_list <- function(path) {
   g <- clean_ensg(g)            # Remove version suffixes
   g <- unique(g)                # Deduplicate
   
-  if (length(g) == 0) stop("deg_set empty after cleaning: ", path)
+  if (length(g) == 0) stop("feature list empty after cleaning: ", path)
   g
 }
 
@@ -674,13 +656,13 @@ source_diagnostic_plot <- function(df, colour_col, colour_title, subtitle_text,
 # SECTION 8: OUTPUT SAVING FUNCTION
 # ==============================================================================
 
-save_plot <- function(plot, path_base, page = "deg_set_alignment") {
+save_plot <- function(plot, path_base, page = "pan_cancer_alignment") {
   # save_plot(): Saves plot in PDF, SVG, and PNG formats.
   #
   # The function supports multiple size presets optimised for different
   # presentation contexts:
   #
-  #   deg_set_alignment / pan_cancer_alignment / all_gene_alignment:
+  #   pan_cancer_alignment / all_gene_alignment:
   #       full-width alignment figure (9.0" x 7.0")
   #   slide: 16:9 aspect ratio for PowerPoint/Google Slides (13.33" x 7.5")
   #   a4: A4 portrait for print documents (8.27" x 11.69")
@@ -711,7 +693,7 @@ save_plot <- function(plot, path_base, page = "deg_set_alignment") {
   } else {
     stop(
       "Unknown --page: ", page,
-      " (use deg_set_alignment, pan_cancer_alignment, all_gene_alignment, slide, a4, a4_landscape)"
+      " (use pan_cancer_alignment, all_gene_alignment, slide, a4, a4_landscape)"
     )
   }
 
