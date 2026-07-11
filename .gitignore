@@ -194,3 +194,26 @@ test_logs/
 /PAN_CANCER_AGGREGATION_UPDATE_HANDOFF.md
 /docs/version2/version2_implementation_status.md
 /research_framework/optimisation/
+
+# Private local handoff/audit material
+/PAN_CANCER_AGGREGATION_AUDIT_HANDOFF.md
+/PAN_CANCER_AGGREGATION_UPDATE_HANDOFF.md
+/docs/version2/version2_implementation_status.md
+/research_framework/optimisation/
+
+# Generated analysis outputs and local runtime artifacts
+/results/
+/pipeline/data/
+/.TinyTeX/
+*.rds
+*.RData
+*.h5
+*.hdf5
+*.bam
+*.fastq
+*.fq
+*.sam
+*.cram
+*.zip
+*.tar
+*.tar.gz
