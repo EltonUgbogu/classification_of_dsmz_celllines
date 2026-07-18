@@ -1,0 +1,10 @@
+query_family	attributed_cancer_type	marker_evidence_stratum	evidence_class	direction_consistency_class	display_group_id	display_label	display_order	include_in_primary_heatmap
+complete_pan_cancer_feature_panel					complete_pan_cancer_selected_feature_panel	Complete pan-cancer selected feature panel	1	true
+cancer_type_attributed_feature_set	brca				brca_attributed_pan_cancer_features	BRCA-attributed pan-cancer features	2	true
+cancer_type_attributed_feature_set	nbl				nbl_attributed_pan_cancer_features	NBL-attributed pan-cancer features	3	true
+cancer_type_attributed_feature_set	rbl				rbl_attributed_pan_cancer_features	RBL-attributed pan-cancer features	4	true
+marker_evidence_stratum		anchor_associated			anchor_associated_marker_evidence	Anchor-associated marker evidence	5	true
+marker_evidence_stratum		isolate_associated			isolate_associated_marker_evidence	Isolate-associated marker evidence	6	true
+direction_consistency_class				consistently_upregulated	consistently_upregulated_features	Consistently upregulated features	7	true
+direction_consistency_class				consistently_downregulated	consistently_downregulated_features	Consistently downregulated features	8	true
+direction_consistency_class				mixed_direction	mixed_direction_features	Mixed-direction features	9	false

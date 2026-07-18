@@ -1,12 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Run g:Profiler enrichment for query sets listed in a query manifest.
-#
-# Each valid manifest row is submitted with its matched custom background. The
-# manifest is a job table, not a gene list: gene IDs are read from the row-level
-# gene_list_path/genes_path/genes_tsv file and backgrounds from the row-level
-# background_path/background_tsv file.
-
 suppressPackageStartupMessages({
   library(optparse)
   library(data.table)
@@ -14,170 +7,270 @@ suppressPackageStartupMessages({
 })
 
 option_list <- list(
+  make_option("--pipeline-root", type = "character"),
   make_option("--query-manifest", type = "character"),
   make_option("--outdir", type = "character"),
-  make_option("--organism", type = "character", default = "hsapiens"),
-  make_option("--sources", type = "character", default = "GO:BP,GO:MF,GO:CC,KEGG,REAC,WP,TF,HPA,CORUM"),
-  make_option("--alpha", type = "numeric", default = 0.05),
-  make_option("--correction-method", type = "character", default = "g_SCS"),
-  make_option("--archive-url", type = "character", default = ""),
-  make_option("--require-archive", type = "logical", default = TRUE),
-  make_option("--run-iea-sensitivity", type = "logical", default = TRUE),
+  make_option("--organism", type = "character"),
+  make_option("--sources", type = "character"),
+  make_option("--alpha", type = "numeric"),
+  make_option("--correction-method", type = "character"),
+  make_option("--endpoint", type = "character"),
+  make_option("--primary-exclude-iea", type = "logical"),
+  make_option("--run-iea-sensitivity", type = "logical"),
+  make_option("--reuse-matching-query-results", type = "logical"),
+  make_option("--fail-on-query-error", type = "logical"),
   make_option("--as-short-link", type = "logical", default = FALSE),
-  make_option("--top-terms-per-source", type = "integer", default = 5)
+  make_option("--query-delay-seconds", type = "numeric", default = 2),
+  make_option("--retry-count", type = "integer", default = 1),
+  make_option("--retry-delay-seconds", type = "numeric", default = 30),
+  make_option("--batch-start", type = "integer", default = 1),
+  make_option("--batch-end", type = "integer", default = NA)
 )
 opt <- parse_args(OptionParser(option_list = option_list))
 
-if (is.null(opt$`query-manifest`) || is.null(opt$outdir)) {
-  stop("--query-manifest and --outdir are required", call. = FALSE)
+required <- c("pipeline-root", "query-manifest", "outdir", "organism",
+              "sources", "alpha", "correction-method", "endpoint",
+              "primary-exclude-iea", "run-iea-sensitivity",
+              "reuse-matching-query-results", "fail-on-query-error")
+for (nm in required) {
+  if (is.null(opt[[nm]]) || (is.character(opt[[nm]]) && !nzchar(opt[[nm]]))) {
+    stop("--", nm, " is required", call. = FALSE)
+  }
 }
 
-dir.create(opt$outdir, recursive = TRUE, showWarnings = FALSE)
-dir.create(file.path(opt$outdir, "primary"), recursive = TRUE, showWarnings = FALSE)
-dir.create(file.path(opt$outdir, "iea_sensitivity"), recursive = TRUE, showWarnings = FALSE)
+pipeline_root <- normalizePath(opt$`pipeline-root`, mustWork = TRUE)
+query_manifest_path <- normalizePath(opt$`query-manifest`, mustWork = TRUE)
+outdir <- normalizePath(opt$outdir, mustWork = FALSE)
+query_results_root <- file.path(outdir, "query_results")
+batch_root <- file.path(outdir, "batches")
+dir.create(query_results_root, recursive = TRUE, showWarnings = FALSE)
+dir.create(batch_root, recursive = TRUE, showWarnings = FALSE)
 
 sources <- strsplit(opt$sources, ",", fixed = TRUE)[[1]]
 sources <- sources[nzchar(sources)]
+if (!length(sources)) stop("--sources must contain at least one g:Profiler source", call. = FALSE)
 
-# Use the configured g:Profiler archive when reproducibility requires a fixed
-# annotation snapshot.
-if (nzchar(opt$`archive-url`)) {
+if (!identical(opt$endpoint, "https://biit.cs.ut.ee/gprofiler/api") && nzchar(opt$endpoint)) {
   tryCatch(
-    gprofiler2::set_base_url(opt$`archive-url`),
-    error = function(e) {
-      if (isTRUE(opt$`require-archive`)) {
-        stop("Failed to set requested g:Profiler archive URL: ", conditionMessage(e), call. = FALSE)
-      }
-      warning("Failed to set requested g:Profiler archive URL: ", conditionMessage(e))
-    }
+    gprofiler2::set_base_url(opt$endpoint),
+    error = function(e) stop("Failed to set g:Profiler endpoint: ", conditionMessage(e), call. = FALSE)
   )
-} else if (isTRUE(opt$`require-archive`)) {
-  stop("require_archive is TRUE but --archive-url is empty", call. = FALSE)
 }
 
-as_flag <- function(x, default = FALSE) {
-  if (length(x) == 0 || is.na(x)) return(default)
-  value <- tolower(trimws(as.character(x)))
-  if (!nzchar(value)) return(default)
-  value %in% c("true", "t", "1", "yes", "y")
+is_true <- function(x) {
+  if (is.logical(x)) return(isTRUE(x))
+  tolower(trimws(as.character(x))) %in% c("true", "t", "1", "yes", "y")
 }
 
-first_col <- function(dt, candidates, default = "") {
-  for (candidate in candidates) {
-    if (candidate %in% names(dt)) return(dt[[candidate]])
-  }
-  rep(default, nrow(dt))
+rel_to_abs <- function(path) {
+  value <- trimws(as.character(path))
+  if (!nzchar(value)) return("")
+  if (grepl("^/", value)) return(value)
+  file.path(pipeline_root, value)
 }
 
-coalesce_text <- function(...) {
-  values <- list(...)
-  out <- rep("", length(values[[1]]))
-  for (value in values) {
-    value <- as.character(value)
-    value[is.na(value)] <- ""
-    take <- !nzchar(out) & nzchar(value)
-    out[take] <- value[take]
-  }
-  out
+sha256_file <- function(path) {
+  digest::digest(file = path, algo = "sha256")
 }
 
-resolve_path <- function(path, manifest_dir) {
-  path <- trimws(as.character(path))
-  if (!nzchar(path)) return("")
-  if (grepl("^(/|[A-Za-z]:[/\\\\])", path)) return(path)
-  if (file.exists(path)) return(path)
-  file.path(manifest_dir, path)
-}
-
-# Read one-column gene files. The first column is treated as gene_id when needed.
 read_genes <- function(path) {
-  if (!file.exists(path) || file.info(path)$size == 0) return(character())
-  x <- fread(path)
-  if (!"gene_id" %in% names(x)) names(x)[1] <- "gene_id"
-  genes <- trimws(as.character(x$gene_id))
-  unique(genes[nzchar(genes) & !is.na(genes)])
+  if (!file.exists(path)) stop("Missing gene file: ", path, call. = FALSE)
+  values <- readLines(path, warn = FALSE)
+  values <- trimws(sub("\t.*$", "", values))
+  values <- values[nzchar(values) & values != "gene_id"]
+  unique(values)
 }
 
-# Ordered queries use ranked_genes.tsv sorted by decreasing rank_stat.
-read_ranked <- function(path) {
-  if (!file.exists(path) || file.info(path)$size == 0) return(character())
-  x <- fread(path)
+read_ranked_genes <- function(path) {
+  if (!file.exists(path)) stop("Missing ranked gene file: ", path, call. = FALSE)
+  x <- fread(path, sep = "\t", data.table = FALSE)
   if (!"gene_id" %in% names(x)) names(x)[1] <- "gene_id"
-  if ("rank_stat" %in% names(x)) setorder(x, -rank_stat)
-  genes <- trimws(as.character(x$gene_id))
-  unique(genes[nzchar(genes) & !is.na(genes)])
+  if ("rank_stat" %in% names(x)) {
+    x$rank_stat <- suppressWarnings(as.numeric(x$rank_stat))
+    x <- x[order(-x$rank_stat, x$gene_id), , drop = FALSE]
+  }
+  unique(trimws(as.character(x$gene_id)))
 }
 
-normalise_manifest <- function(path) {
-  manifest <- fread(path)
-  manifest_dir <- dirname(normalizePath(path, mustWork = FALSE))
-  n <- nrow(manifest)
-  if (n == 0) stop("query manifest has no rows: ", path, call. = FALSE)
+write_tsv <- function(x, path) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  fwrite(as.data.table(x), path, sep = "\t", na = "NA")
+}
 
-  query_id <- coalesce_text(first_col(manifest, c("query_id", "query_name")), sprintf("query_%04d", seq_len(n)))
-  gene_list_path <- coalesce_text(first_col(manifest, c("gene_list_path", "genes_path", "genes_tsv")))
-  background_path <- coalesce_text(first_col(manifest, c("background_path", "background_tsv")))
-  ranked_genes_path <- coalesce_text(first_col(manifest, c("ranked_genes_path", "ranked_genes_tsv")))
-
-  gene_list_path <- vapply(gene_list_path, resolve_path, character(1), manifest_dir = manifest_dir)
-  background_path <- vapply(background_path, resolve_path, character(1), manifest_dir = manifest_dir)
-  ranked_genes_path <- vapply(ranked_genes_path, resolve_path, character(1), manifest_dir = manifest_dir)
-
-  normalised <- data.table(
-    query_id = query_id,
-    query_name = coalesce_text(first_col(manifest, c("query_name", "query_id")), query_id),
-    category = coalesce_text(first_col(manifest, c("category", "query_family"))),
-    query_family = coalesce_text(first_col(manifest, c("query_family", "category"))),
-    cohort = coalesce_text(first_col(manifest, c("cohort", "owner_profile", "disease", "profile"))),
-    profile = coalesce_text(first_col(manifest, c("profile", "owner_profile", "cohort", "disease"))),
-    disease = coalesce_text(first_col(manifest, c("disease", "owner_profile", "cohort", "profile"))),
-    group_id = coalesce_text(first_col(manifest, c("group_id", "group", "category"))),
-    contrast = coalesce_text(first_col(manifest, c("contrast", "source_contrast", "contrast_id"))),
-    direction = coalesce_text(first_col(manifest, c("direction"))),
-    source_marker_table = coalesce_text(first_col(manifest, c("source_marker_table_path", "source_table", "marker_file"))),
-    gene_list_path = gene_list_path,
-    background_path = background_path,
-    ranked_genes_path = ranked_genes_path,
-    rank_source = coalesce_text(first_col(manifest, c("rank_source"))),
-    gene_count = suppressWarnings(as.integer(first_col(manifest, c("gene_count"), NA_character_))),
-    background_count = suppressWarnings(as.integer(first_col(manifest, c("background_count"), NA_character_))),
-    skip = vapply(first_col(manifest, c("skip"), "FALSE"), as_flag, logical(1), default = FALSE),
-    ordered = vapply(first_col(manifest, c("ordered"), "FALSE"), as_flag, logical(1), default = FALSE),
-    custom_background_available = vapply(first_col(manifest, c("custom_background_available"), "TRUE"), as_flag, logical(1), default = TRUE),
-    background_strategy = coalesce_text(first_col(manifest, c("background_strategy"))),
-    notes = coalesce_text(first_col(manifest, c("notes", "interpretation_hint"))),
-    original_manifest_row = seq_len(n)
+empty_terms <- function() {
+  data.table(
+    query_id = character(),
+    analysis_mode = character(),
+    source = character(),
+    term_id = character(),
+    term_name = character(),
+    adjusted_enrichment_p_value = numeric(),
+    significant = logical(),
+    intersection_size = integer(),
+    query_size = integer(),
+    background_count = integer(),
+    term_size = integer(),
+    effective_domain_size = integer(),
+    precision = numeric(),
+    recall = numeric(),
+    enrichment_ratio = numeric(),
+    intersection_genes = character(),
+    rank_within_query = integer(),
+    rank_within_source = integer()
   )
-  normalised[!nzchar(query_family), query_family := category]
-  normalised[!nzchar(category), category := query_family]
-
-  manifest_abs <- normalizePath(path, mustWork = FALSE)
-  normalised[, skip_reason := ""]
-  normalised[skip == TRUE, skip_reason := "skip_true_in_manifest"]
-  normalised[!nzchar(gene_list_path), skip_reason := "missing_gene_list_path"]
-  normalised[!nzchar(background_path), skip_reason := "missing_background_path"]
-  normalised[nzchar(gene_list_path) & normalizePath(gene_list_path, mustWork = FALSE) == manifest_abs,
-             skip_reason := "gene_list_path_points_to_query_manifest"]
-  normalised[nzchar(background_path) & normalizePath(background_path, mustWork = FALSE) == manifest_abs,
-             skip_reason := "background_path_points_to_query_manifest"]
-  normalised[nzchar(gene_list_path) & !file.exists(gene_list_path), skip_reason := "gene_list_path_missing"]
-  normalised[nzchar(background_path) & !file.exists(background_path), skip_reason := "background_path_missing"]
-  normalised[nzchar(gene_list_path) & file.exists(gene_list_path) & file.info(gene_list_path)$size == 0,
-             skip_reason := "empty_gene_list_file"]
-  normalised[nzchar(background_path) & file.exists(background_path) & file.info(background_path)$size == 0,
-             skip_reason := "empty_background_file"]
-  normalised[is.na(gene_count), gene_count := vapply(gene_list_path, function(x) length(read_genes(x)), integer(1))]
-  normalised[is.na(background_count), background_count := vapply(background_path, function(x) length(read_genes(x)), integer(1))]
-  normalised[gene_count < 1, skip_reason := "zero_query_genes"]
-  normalised[background_count < 1, skip_reason := "zero_background_genes"]
-  normalised[!nzchar(skip_reason), skip := FALSE]
-  normalised[nzchar(skip_reason), skip := TRUE]
-  normalised
 }
 
-# g:Profiler is run with domain_scope='custom' so p-values are calculated
-# against the DESeq2-tested background for that query.
-run_gost <- function(genes, background, ordered = FALSE, exclude_iea = FALSE) {
+normalise_result <- function(obj, row, analysis_mode) {
+  if (is.null(obj) || is.null(obj$result) || nrow(obj$result) == 0L) {
+    return(empty_terms())
+  }
+  x <- as.data.table(obj$result)
+  needed <- c("source", "term_id", "term_name", "p_value", "intersection_size",
+              "query_size", "term_size", "effective_domain_size", "precision",
+              "recall", "intersection")
+  for (nm in needed) {
+    if (!nm %in% names(x)) x[, (nm) := NA]
+  }
+  x[, adjusted_enrichment_p_value := as.numeric(p_value)]
+  x[, significant := !is.na(adjusted_enrichment_p_value) & adjusted_enrichment_p_value <= opt$alpha]
+  x[, background_count := as.integer(row$background_count)]
+  x[, enrichment_ratio := precision / (term_size / effective_domain_size)]
+  x[, intersection_genes := as.character(intersection)]
+  x[, query_id := row$query_id]
+  x[, analysis_mode := analysis_mode]
+  setorder(
+    x,
+    query_id,
+    adjusted_enrichment_p_value,
+    -enrichment_ratio,
+    -intersection_size,
+    term_id
+  )
+  x[, rank_within_query := seq_len(.N), by = .(query_id, analysis_mode)]
+  setorder(
+    x,
+    query_id,
+    analysis_mode,
+    source,
+    adjusted_enrichment_p_value,
+    -enrichment_ratio,
+    -intersection_size,
+    term_id
+  )
+  x[, rank_within_source := seq_len(.N), by = .(query_id, analysis_mode, source)]
+  cols <- names(empty_terms())
+  x[, ..cols]
+}
+
+extract_data_version <- function(obj) {
+  candidates <- character()
+  if (!is.null(obj) && !is.null(obj$meta)) {
+    meta <- obj$meta
+    for (nm in c("data_version", "version", "release", "timestamp", "organism")) {
+      if (!is.null(meta[[nm]]) && length(meta[[nm]]) > 0) {
+        candidates <- c(candidates, paste(nm, paste(as.character(meta[[nm]]), collapse = ","), sep = "="))
+      }
+    }
+  }
+  value <- paste(unique(candidates[nzchar(candidates)]), collapse = ";")
+  if (nzchar(value)) value else "unavailable_from_gprofiler_response"
+}
+
+get_current_gprofiler_data_version <- function() {
+  ns <- asNamespace("gprofiler2")
+  for (fn in c("get_version_info", "get_version")) {
+    if (exists(fn, envir = ns, inherits = FALSE)) {
+      value <- tryCatch(get(fn, envir = ns)(), error = function(e) NULL)
+      if (!is.null(value)) return(paste(capture.output(str(value)), collapse = " "))
+    }
+  }
+  ""
+}
+
+json_string <- function(x) {
+  paste0("{", paste(sprintf('"%s":"%s"', names(x), gsub('"', '\\"', as.character(x))), collapse = ","), "}")
+}
+
+fingerprint_for <- function(row, analysis_mode, exclude_iea, data_version) {
+  ranked_path <- rel_to_abs(row$ranked_genes_path)
+  ranked_sha <- if (nzchar(ranked_path) && file.exists(ranked_path)) sha256_file(ranked_path) else ""
+  c(
+    query_id = row$query_id,
+    analysis_mode = analysis_mode,
+    query_file_sha256 = sha256_file(rel_to_abs(row$gene_list_path)),
+    background_file_sha256 = sha256_file(rel_to_abs(row$background_path)),
+    ranked_file_sha256 = ranked_sha,
+    query_gene_count = as.character(row$gene_count),
+    background_gene_count = as.character(row$background_count),
+    ordered = as.character(is_true(row$ordered)),
+    ranking_used_for_enrichment = as.character(is_true(row$ranking_used_for_enrichment)),
+    organism = opt$organism,
+    sources = paste(sources, collapse = ","),
+    correction_method = opt$`correction-method`,
+    alpha = as.character(opt$alpha),
+    endpoint = opt$endpoint,
+    iea_mode = ifelse(exclude_iea, "iea_excluded", "iea_included"),
+    gprofiler2_package_version = as.character(utils::packageVersion("gprofiler2")),
+    gprofiler_annotation_data_version = data_version
+  )
+}
+
+write_fingerprint <- function(fingerprint, path) {
+  write_tsv(data.table(field = names(fingerprint), value = unname(fingerprint)), path)
+}
+
+read_fingerprint <- function(path) {
+  if (!file.exists(path)) return(NULL)
+  x <- fread(path, sep = "\t")
+  if (!all(c("field", "value") %in% names(x))) return(NULL)
+  stats::setNames(as.character(x$value), as.character(x$field))
+}
+
+fingerprints_equal <- function(a, b) {
+  if (is.null(a) || is.null(b)) return(FALSE)
+  identical(a[names(b)], b)
+}
+
+validate_manifest <- function(manifest) {
+  required <- c("query_id", "query_family", "gene_count", "gene_list_path",
+                "background_count", "background_path", "background_sha256",
+                "ordered", "ranking_used_for_enrichment", "ranked_genes_path",
+                "query_execution_status")
+  missing <- setdiff(required, names(manifest))
+  if (length(missing)) stop("Query manifest missing required columns: ", paste(missing, collapse = ","), call. = FALSE)
+  if (anyDuplicated(manifest$query_id)) {
+    stop("Query manifest contains duplicate query_id values", call. = FALSE)
+  }
+  manifest[, gene_list_abs := vapply(gene_list_path, rel_to_abs, character(1))]
+  manifest[, background_abs := vapply(background_path, rel_to_abs, character(1))]
+  manifest[, ranked_abs := vapply(ranked_genes_path, rel_to_abs, character(1))]
+  for (i in seq_len(nrow(manifest))) {
+    row <- manifest[i]
+    genes <- read_genes(row$gene_list_abs)
+    background <- read_genes(row$background_abs)
+    if (length(genes) != as.integer(row$gene_count)) {
+      stop("Manifest gene_count mismatch for ", row$query_id, call. = FALSE)
+    }
+    if (length(background) != as.integer(row$background_count)) {
+      stop("Manifest background_count mismatch for ", row$query_id, call. = FALSE)
+    }
+    absent <- setdiff(genes, background)
+    if (length(absent)) {
+      stop("Q is not a subset of B for ", row$query_id, ": ", paste(head(absent, 50), collapse = ","), call. = FALSE)
+    }
+    if (sha256_file(row$background_abs) != row$background_sha256) {
+      stop("background SHA256 mismatch for ", row$query_id, call. = FALSE)
+    }
+    if (is_true(row$ordered) || is_true(row$ranking_used_for_enrichment)) {
+      if (!nzchar(row$ranked_abs) || !file.exists(row$ranked_abs)) {
+        stop("Ordered/ranked query lacks ranked_genes_path: ", row$query_id, call. = FALSE)
+      }
+    }
+  }
+  manifest
+}
+
+run_gost <- function(genes, background, ordered, exclude_iea) {
   gprofiler2::gost(
     query = genes,
     organism = opt$organism,
@@ -191,294 +284,141 @@ run_gost <- function(genes, background, ordered = FALSE, exclude_iea = FALSE) {
     domain_scope = "custom",
     custom_bg = background,
     sources = sources,
-    as_short_link = opt$`as-short-link`
+    as_short_link = isTRUE(opt$`as-short-link`)
   )
 }
 
-# Stable empty schema keeps downstream aggregation readable when a query returns
-# no terms.
-empty_result <- function() {
-  data.table(
-    source = character(), term_id = character(), term_name = character(),
-    p_value = numeric(), term_size = integer(), query_size = integer(),
-    intersection_size = integer(), effective_domain_size = integer(),
-    precision = numeric(), recall = numeric(), intersection = character()
-  )
-}
-
-normalise_result <- function(gost_obj) {
-  if (is.null(gost_obj) || is.null(gost_obj$result) || nrow(gost_obj$result) == 0) {
-    return(empty_result())
+write_query_mode <- function(row, analysis_mode, exclude_iea, current_data_version) {
+  qdir <- file.path(query_results_root, analysis_mode, row$query_id)
+  fingerprint_path <- file.path(qdir, "query_mode_fingerprint.tsv")
+  full_path <- file.path(qdir, "gprofiler_full.tsv")
+  sig_path <- file.path(qdir, "gprofiler_significant.tsv")
+  provenance_path <- file.path(qdir, "query_mode_provenance.tsv")
+  expected_fingerprint <- fingerprint_for(row, analysis_mode, exclude_iea, current_data_version)
+  existing_fingerprint <- read_fingerprint(fingerprint_path)
+  can_consider_reuse <- isTRUE(opt$`reuse-matching-query-results`) &&
+    nzchar(current_data_version) &&
+    !identical(current_data_version, "unavailable_from_gprofiler_response")
+  if (can_consider_reuse && file.exists(full_path) && file.exists(sig_path) &&
+      fingerprints_equal(existing_fingerprint, expected_fingerprint)) {
+    result <- fread(full_path, sep = "\t")
+    return(list(status = "reused_matching_fingerprint", result = result, data_version = current_data_version, error = ""))
   }
-  x <- as.data.table(gost_obj$result)
-  needed <- names(empty_result())
-  for (nm in needed) if (!nm %in% names(x)) x[, (nm) := NA]
-  x[, ..needed]
-}
-
-# Execute one manifest row and write both the raw g:Profiler object and tabular
-# outputs for inspection.
-write_one <- function(row, mode, exclude_iea) {
-  query_id <- row$query_id
-  qdir <- file.path(opt$outdir, mode, query_id)
-  dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
-  genes <- if (isTRUE(row$ordered) && nzchar(row$ranked_genes_path)) {
-    read_ranked(row$ranked_genes_path)
+  if (dir.exists(qdir)) unlink(qdir, recursive = TRUE, force = TRUE)
+  tmpdir <- paste0(qdir, ".tmp.", Sys.getpid())
+  if (dir.exists(tmpdir)) unlink(tmpdir, recursive = TRUE, force = TRUE)
+  dir.create(tmpdir, recursive = TRUE, showWarnings = FALSE)
+  genes <- if (is_true(row$ordered) && nzchar(row$ranked_abs)) {
+    read_ranked_genes(row$ranked_abs)
   } else {
-    read_genes(row$gene_list_path)
+    read_genes(row$gene_list_abs)
   }
-  background <- read_genes(row$background_path)
-  obj <- run_gost(genes, background, ordered = isTRUE(row$ordered), exclude_iea = exclude_iea)
-  saveRDS(obj, file.path(qdir, "gprofiler_raw.rds"))
-  res <- normalise_result(obj)
-  res[, `:=`(
-    query_id = query_id,
-    query_name = row$query_name,
-    category = row$category,
-    query_family = row$query_family,
-    cohort = row$cohort,
-    contrast = row$contrast,
-    profile = row$profile,
-    disease = row$disease,
-    group_id = row$group_id,
-    direction = row$direction,
-    source_marker_table = row$source_marker_table,
-    gene_list_path = row$gene_list_path,
-    background_path = row$background_path,
-    ordered = row$ordered,
-    rank_source = row$rank_source,
-    gene_count = row$gene_count,
-    background_count = row$background_count,
-    iea_mode = ifelse(exclude_iea, "iea_excluded", "primary")
-  )]
-  res[, enrichment_ratio := precision / (term_size / effective_domain_size)]
-  res[, leading_intersection_genes := vapply(strsplit(as.character(intersection), ","), function(z) {
-    paste(head(z[nzchar(z)], 20), collapse = ",")
-  }, character(1))]
-  metadata_cols <- c("query_id", "query_name", "category", "query_family",
-                     "cohort", "contrast", "profile", "disease", "group_id",
-                     "direction", "source_marker_table", "gene_list_path",
-                     "background_path", "ordered", "rank_source", "gene_count",
-                     "background_count", "iea_mode")
-  setcolorder(res, c(metadata_cols, setdiff(names(res), metadata_cols)))
-  fwrite(res, file.path(qdir, "gprofiler_full.tsv"), sep = "\t")
-  fwrite(res[p_value <= opt$alpha], file.path(qdir, "gprofiler_sig.tsv"), sep = "\t")
-  res
+  background <- read_genes(row$background_abs)
+  obj <- run_gost(genes, background, is_true(row$ordered), exclude_iea)
+  saveRDS(obj, file.path(tmpdir, "gprofiler_raw.rds"))
+  data_version <- extract_data_version(obj)
+  result <- normalise_result(obj, row, analysis_mode)
+  write_tsv(result, file.path(tmpdir, "gprofiler_full.tsv"))
+  write_tsv(result[significant == TRUE], file.path(tmpdir, "gprofiler_significant.tsv"))
+  fingerprint <- fingerprint_for(row, analysis_mode, exclude_iea, data_version)
+  write_fingerprint(fingerprint, file.path(tmpdir, "query_mode_fingerprint.tsv"))
+  provenance <- data.table(
+    field = c("query_id", "analysis_mode", "endpoint", "gprofiler2_package_version",
+              "gprofiler_annotation_data_version", "organism", "sources",
+              "correction_method", "alpha", "exclude_iea", "custom_background_strategy",
+              "run_timestamp"),
+    value = c(row$query_id, analysis_mode, opt$endpoint,
+              as.character(utils::packageVersion("gprofiler2")), data_version,
+              opt$organism, paste(sources, collapse = ","), opt$`correction-method`,
+              as.character(opt$alpha), as.character(exclude_iea),
+              "query_specific_custom_analytical_background",
+              format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"))
+  )
+  write_tsv(provenance, file.path(tmpdir, "query_mode_provenance.tsv"))
+  file.rename(tmpdir, qdir)
+  list(status = "success", result = result, data_version = data_version, error = "")
 }
 
-manifest <- normalise_manifest(opt$`query-manifest`)
-todo <- manifest[skip == FALSE]
-skipped <- manifest[skip == TRUE]
+manifest <- validate_manifest(fread(query_manifest_path, sep = "\t"))
+runnable <- manifest[query_execution_status == "runnable"]
+runnable[, runnable_index := seq_len(.N)]
+batch_start <- max(1L, as.integer(opt$`batch-start`))
+requested_batch_end <- opt$`batch-end`
+if (is.na(requested_batch_end)) requested_batch_end <- nrow(runnable)
+effective_batch_end <- min(as.integer(requested_batch_end), nrow(runnable))
+todo <- runnable[runnable_index >= batch_start & runnable_index <= effective_batch_end]
+batch_dir <- file.path(batch_root, sprintf("batch_%04d_%04d", batch_start, as.integer(requested_batch_end)))
+dir.create(batch_dir, recursive = TRUE, showWarnings = FALSE)
 
-corpus_rows <- list()
-top_rows <- list()
-sens_rows <- list()
+current_data_version <- get_current_gprofiler_data_version()
+if (!nzchar(current_data_version)) current_data_version <- "unavailable_from_gprofiler_response"
 
-# Submit each runnable query. Failures are recorded in the corpus manifest as
-# zero-result rows so the whole batch can complete and be audited.
+run_rows <- list()
+failed_rows <- list()
+required_modes <- c("primary")
+if (isTRUE(opt$`run-iea-sensitivity`)) required_modes <- c(required_modes, "iea_sensitivity")
+
+write_batch_records <- function() {
+  run_manifest <- if (length(run_rows)) rbindlist(run_rows, fill = TRUE) else data.table()
+  failed <- if (length(failed_rows)) rbindlist(failed_rows, fill = TRUE) else data.table()
+  write_tsv(run_manifest, file.path(batch_dir, "query_mode_run_manifest.tsv"))
+  write_tsv(failed, file.path(batch_dir, "failed_query_modes.tsv"))
+}
+
+write_batch_records()
 for (i in seq_len(nrow(todo))) {
   row <- todo[i]
-  message(sprintf("[%d/%d] %s", i, nrow(todo), row$query_id))
-  primary <- tryCatch(
-    write_one(row, "primary", exclude_iea = FALSE),
-    error = function(e) {
-      warning("g:Profiler failed for ", row$query_id, ": ", conditionMessage(e))
-      data.table()
+  message(sprintf("[g:Profiler execution] %d/%d %s", i, nrow(todo), row$query_id))
+  for (mode in required_modes) {
+    exclude_iea <- if (mode == "primary") isTRUE(opt$`primary-exclude-iea`) else TRUE
+    started <- Sys.time()
+    status <- "failed"
+    result <- data.table()
+    data_version <- ""
+    error_message <- ""
+    attempts <- max(1L, as.integer(opt$`retry-count`) + 1L)
+    for (attempt in seq_len(attempts)) {
+      run <- tryCatch(
+        write_query_mode(row, mode, exclude_iea, current_data_version),
+        error = function(e) list(status = "failed", result = data.table(), data_version = "", error = conditionMessage(e))
+      )
+      status <- run$status
+      result <- run$result
+      data_version <- run$data_version
+      error_message <- run$error
+      if (!identical(status, "failed")) break
+      if (attempt < attempts && opt$`retry-delay-seconds` > 0) Sys.sleep(opt$`retry-delay-seconds`)
     }
-  )
-  corpus_rows[[length(corpus_rows) + 1]] <- data.table(
-    query_id = row$query_id,
-    query_name = row$query_name,
-    category = row$category,
-    query_family = row$query_family,
-    cohort = row$cohort,
-    contrast = row$contrast,
-    profile = row$profile,
-    disease = row$disease,
-    group_id = row$group_id,
-    direction = row$direction,
-    source_marker_table = row$source_marker_table,
-    gene_list_path = row$gene_list_path,
-    background_path = row$background_path,
-    ordered = row$ordered,
-    rank_source = row$rank_source,
-    iea_mode = "primary",
-    n_terms = nrow(primary),
-    n_significant = if (nrow(primary) > 0) sum(primary$p_value <= opt$alpha, na.rm = TRUE) else 0,
-    gene_count = row$gene_count,
-    background_count = row$background_count,
-    full_tsv = file.path(opt$outdir, "primary", row$query_id, "gprofiler_full.tsv"),
-    sig_tsv = file.path(opt$outdir, "primary", row$query_id, "gprofiler_sig.tsv"),
-    raw_rds = file.path(opt$outdir, "primary", row$query_id, "gprofiler_raw.rds")
-  )
-  if (nrow(primary) > 0) {
-    top <- copy(primary[p_value <= opt$alpha])
-    if (nrow(top) > 0) {
-      setorder(top, query_id, source, p_value)
-      top[, rank_within_source := seq_len(.N), by = .(query_id, source, iea_mode)]
-      top <- top[rank_within_source <= opt$`top-terms-per-source`]
-      top[, top_intersection_genes := vapply(strsplit(as.character(intersection), ","), function(z) {
-        paste(head(z[nzchar(z)], 20), collapse = ",")
-      }, character(1))]
-      top[, rank_within_query := frank(p_value, ties.method = "first"), by = .(query_id, iea_mode)]
-      top_rows[[length(top_rows) + 1]] <- top
-    }
-  }
-
-  if (isTRUE(opt$`run-iea-sensitivity`)) {
-    iea <- tryCatch(
-      write_one(row, "iea_sensitivity", exclude_iea = TRUE),
-      error = function(e) {
-        warning("IEA sensitivity failed for ", row$query_id, ": ", conditionMessage(e))
-        data.table()
-      }
-    )
-    corpus_rows[[length(corpus_rows) + 1]] <- data.table(
+    runtime <- round(as.numeric(difftime(Sys.time(), started, units = "secs")), 3)
+    run_rows[[length(run_rows) + 1L]] <- data.table(
       query_id = row$query_id,
-      query_name = row$query_name,
-      category = row$category,
-      query_family = row$query_family,
-      cohort = row$cohort,
-      contrast = row$contrast,
-      profile = row$profile,
-      disease = row$disease,
-      group_id = row$group_id,
-      direction = row$direction,
-      source_marker_table = row$source_marker_table,
-      gene_list_path = row$gene_list_path,
-      background_path = row$background_path,
-      ordered = row$ordered,
-      rank_source = row$rank_source,
-      iea_mode = "iea_excluded",
-      n_terms = nrow(iea),
-      n_significant = if (nrow(iea) > 0) sum(iea$p_value <= opt$alpha, na.rm = TRUE) else 0,
-      gene_count = row$gene_count,
-      background_count = row$background_count,
-      full_tsv = file.path(opt$outdir, "iea_sensitivity", row$query_id, "gprofiler_full.tsv"),
-      sig_tsv = file.path(opt$outdir, "iea_sensitivity", row$query_id, "gprofiler_sig.tsv"),
-      raw_rds = file.path(opt$outdir, "iea_sensitivity", row$query_id, "gprofiler_raw.rds")
+      analysis_mode = mode,
+      status = status,
+      n_terms = nrow(result),
+      n_significant = if (nrow(result)) sum(result$significant, na.rm = TRUE) else 0L,
+      attempts = attempts,
+      runtime_seconds = runtime,
+      gprofiler_annotation_data_version = data_version,
+      result_dir = file.path("query_results", mode, row$query_id),
+      error_message = error_message
     )
-    if (nrow(primary) > 0 || nrow(iea) > 0) {
-      p <- primary[, .(query_id, query_family, direction, source, term_id, term_name,
-                       category, cohort, contrast, source_marker_table,
-                       p_primary = p_value, significant_primary = p_value <= opt$alpha,
-                       intersection_primary = intersection)]
-      e <- iea[, .(query_id, source, term_id,
-                   p_iea_excluded = p_value,
-                   significant_iea_excluded = p_value <= opt$alpha,
-                   intersection_iea_excluded = intersection)]
-      joined <- merge(p, e, by = c("query_id", "source", "term_id"), all = TRUE)
-      joined[, p_primary := as.numeric(p_primary)]
-      joined[, p_iea_excluded := as.numeric(p_iea_excluded)]
-      joined[, delta_log10_p := -log10(p_iea_excluded) - (-log10(p_primary))]
-      joined[, changed_significance := significant_primary != significant_iea_excluded]
-      sens_rows[[length(sens_rows) + 1]] <- joined[, .(
-        query_id, query_family, category, cohort, contrast, direction,
-        source_marker_table, source, term_id, term_name,
-        p_primary, p_iea_excluded, significant_primary,
-        significant_iea_excluded, delta_log10_p, changed_significance,
-        intersection_primary, intersection_iea_excluded
-      )]
+    if (identical(status, "failed")) {
+      failed_rows[[length(failed_rows) + 1L]] <- data.table(
+        query_id = row$query_id,
+        analysis_mode = mode,
+        status = status,
+        error_message = error_message
+      )
     }
+    write_batch_records()
   }
+  if (i < nrow(todo) && opt$`query-delay-seconds` > 0) Sys.sleep(opt$`query-delay-seconds`)
 }
 
-corpus <- if (length(corpus_rows)) rbindlist(corpus_rows, fill = TRUE) else data.table()
-tops <- if (length(top_rows)) rbindlist(top_rows, fill = TRUE) else data.table()
-sens <- if (length(sens_rows)) rbindlist(sens_rows, fill = TRUE) else data.table()
+write_batch_records()
+if (length(failed_rows) && isTRUE(opt$`fail-on-query-error`)) {
+  stop("One or more runnable g:Profiler query modes failed; see ", file.path(batch_dir, "failed_query_modes.tsv"), call. = FALSE)
+}
 
-corpus_schema <- c("query_id", "query_name", "category", "query_family",
-                   "cohort", "contrast", "profile", "disease", "group_id",
-                   "direction", "source_marker_table", "gene_list_path",
-                   "background_path", "ordered", "rank_source", "iea_mode",
-                   "n_terms", "n_significant", "gene_count", "background_count",
-                   "full_tsv", "sig_tsv", "raw_rds")
-for (nm in corpus_schema) if (!nm %in% names(corpus)) corpus[, (nm) := NA]
-corpus <- corpus[, ..corpus_schema]
-
-top_schema <- c("query_id", "query_name", "category", "query_family",
-                "cohort", "contrast", "profile", "disease", "group_id",
-                "direction", "source_marker_table", "gene_list_path",
-                "background_path", "ordered", "rank_source", "iea_mode", "source",
-                "term_id", "term_name", "p_value", "intersection_size",
-                "query_size", "gene_count", "background_count",
-                "term_size", "effective_domain_size",
-                "precision", "recall", "enrichment_ratio", "intersection",
-                "top_intersection_genes", "rank_within_query", "rank_within_source")
-for (nm in top_schema) if (!nm %in% names(tops)) tops[, (nm) := NA]
-tops <- tops[, ..top_schema]
-
-sens_schema <- c("query_id", "query_family", "category", "cohort", "contrast",
-                 "direction", "source_marker_table", "source", "term_id",
-                 "term_name", "p_primary", "p_iea_excluded",
-                 "significant_primary", "significant_iea_excluded",
-                 "delta_log10_p", "changed_significance",
-                 "intersection_primary", "intersection_iea_excluded")
-for (nm in sens_schema) if (!nm %in% names(sens)) sens[, (nm) := NA]
-sens <- sens[, ..sens_schema]
-
-fwrite(corpus, file.path(opt$outdir, "corpus_manifest.tsv"), sep = "\t")
-fwrite(tops, file.path(opt$outdir, "top_terms.tsv"), sep = "\t")
-fwrite(sens, file.path(opt$outdir, "iea_sensitivity_summary.tsv"), sep = "\t")
-fwrite(skipped, file.path(opt$outdir, "skipped_queries.tsv"), sep = "\t")
-
-run_summary <- data.table(
-  metric = c(
-    "manifest_queries",
-    "submitted_queries",
-    "skipped_queries",
-    "primary_queries_with_significant_terms",
-    "primary_significant_terms",
-    "iea_sensitivity_enabled",
-    "alpha",
-    "correction_method"
-  ),
-  value = c(
-    as.character(nrow(manifest)),
-    as.character(nrow(todo)),
-    as.character(nrow(skipped)),
-    as.character(uniqueN(corpus[iea_mode == "primary" & n_significant > 0, query_id])),
-    as.character(nrow(tops[iea_mode == "primary"])),
-    as.character(isTRUE(opt$`run-iea-sensitivity`)),
-    as.character(opt$alpha),
-    opt$`correction-method`
-  )
-)
-fwrite(run_summary, file.path(opt$outdir, "run_summary.tsv"), sep = "\t")
-
-version_info <- data.table(
-  item = c("gprofiler2_version", "organism", "sources", "archive_url",
-           "correction_method", "alpha", "as_short_link"),
-  value = c(as.character(utils::packageVersion("gprofiler2")), opt$organism,
-            paste(sources, collapse = ","), opt$`archive-url`,
-            opt$`correction-method`, as.character(opt$alpha),
-            as.character(opt$`as-short-link`))
-)
-fwrite(version_info, file.path(opt$outdir, "gprofiler_version.tsv"), sep = "\t")
-
-writeLines(c(
-  "g:Profiler enrichment report",
-  "",
-  "Primary interpretation files:",
-  "  top_terms.tsv: significant terms, capped per source and query for review.",
-  "  corpus_manifest.tsv: one row per submitted query and mode, with result counts and file paths.",
-  "  iea_sensitivity_summary.tsv: compares primary results with electronic annotations excluded.",
-  "  run_summary.tsv: batch-level counts and statistical settings.",
-  "  primary/<query_id>/gprofiler_full.tsv: all returned terms for one query.",
-  "  primary/<query_id>/gprofiler_sig.tsv: significant terms for one query.",
-  "",
-  "Column notes:",
-  "  p_value is g:Profiler's corrected p-value under the selected correction method.",
-  "  enrichment_ratio = precision / (term_size / effective_domain_size).",
-  "  precision = intersection_size / query_size.",
-  "  recall = intersection_size / term_size.",
-  "  leading_intersection_genes/top_intersection_genes list up to 20 query genes driving a term.",
-  "",
-  "Scientific notes:",
-  "  query_manifest.tsv is treated as an enrichment job manifest, not as a gene list.",
-  "  Each valid query uses its row-level gene_list_path/genes_path/genes_tsv file.",
-  "  Each valid query uses its row-level background_path/background_tsv file as the custom background.",
-  "  category, cohort, contrast, direction, and source_marker_table metadata are preserved in tabular outputs.",
-  "  ordered=TRUE uses ranked_genes.tsv and ordered_query=TRUE in g:Profiler.",
-  "  primary includes IEA annotations unless the upstream command changes exclude_iea."
-), file.path(opt$outdir, "README_gprofiler_results.txt"))
+writeLines("success\n", file.path(batch_dir, ".success"))
+message("[g:Profiler execution] Batch completed without failed required query modes.")
