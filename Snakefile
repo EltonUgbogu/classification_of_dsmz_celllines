@@ -6494,3 +6494,4 @@ PIPELINE_TARGET = build_pipeline_targets()
 # Stage role: loads external rule files after their required variables and target paths are defined.
 # Canonical graph-derived functional-enrichment workflow.
 include: "rules/graph_derived_functional_enrichment.smk"
+include: "rules/minimal_example_test.smk"

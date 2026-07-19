@@ -1,0 +1,8 @@
+sample_id	profile	cancer_type	sample_type	source
+BRCA_CELL_LINE_SYN_001	brca	BRCA	cell_line	synthetic_minimal
+BRCA_CELL_LINE_SYN_002	brca	BRCA	cell_line	synthetic_minimal
+BRCA_CELL_LINE_SYN_003	brca	BRCA	cell_line	synthetic_minimal
+BRCA_TUMOUR_SYN_001	brca	BRCA	tumour	synthetic_minimal
+BRCA_TUMOUR_SYN_002	brca	BRCA	tumour	synthetic_minimal
+BRCA_TUMOUR_SYN_003	brca	BRCA	tumour	synthetic_minimal
+BRCA_TUMOUR_SYN_004	brca	BRCA	tumour	synthetic_minimal

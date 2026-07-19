@@ -1,0 +1,8 @@
+sample_id	profile	cancer_type	sample_type	source
+RBL_CELL_LINE_SYN_001	rbl	RBL	cell_line	synthetic_minimal
+RBL_CELL_LINE_SYN_002	rbl	RBL	cell_line	synthetic_minimal
+RBL_CELL_LINE_SYN_003	rbl	RBL	cell_line	synthetic_minimal
+RBL_TUMOUR_SYN_001	rbl	RBL	tumour	synthetic_minimal
+RBL_TUMOUR_SYN_002	rbl	RBL	tumour	synthetic_minimal
+RBL_TUMOUR_SYN_003	rbl	RBL	tumour	synthetic_minimal
+RBL_TUMOUR_SYN_004	rbl	RBL	tumour	synthetic_minimal
