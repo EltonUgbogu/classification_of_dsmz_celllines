@@ -230,3 +230,9 @@ test_logs/
 /logs/
 /benchmarks/
 /.snakemake/
+
+# Optional local scientific validation outputs/scripts not shipped in code-only main
+/validation/
+
+# Optional local scientific validation scripts or outputs
+/validation/
