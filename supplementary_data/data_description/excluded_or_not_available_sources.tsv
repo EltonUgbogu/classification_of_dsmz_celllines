@@ -1,5 +1,0 @@
-item	status	reason
-Raw/pre-filter patient tumour data	not_available_at_time_of_documentation	Only the tumour-purity-passed analysis set is available for documentation.
-Samples failing tumour-purity threshold	not_available_at_time_of_documentation	Failed/pre-filter sample IDs are not available unless a separate record is later found.
-Ongoing RBL raw-data reconstruction	not_part_of_reported_analysis	Should only be treated as used if reported results are regenerated from its verified output.
-Ongoing NBL raw-data reconstruction	not_part_of_reported_analysis	Current NBL reconstruction is incomplete and separate from the reported analysis dataset.

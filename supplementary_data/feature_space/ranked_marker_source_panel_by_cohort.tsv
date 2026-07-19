@@ -1,4 +1,0 @@
-method	cohort	n_anchor_sources	n_isolate_sources	anchor_selected_genes_before_global_dedup	isolate_selected_genes_before_global_dedup	tier1_recurrent_rows	tier2_singleton_ranked_rows	tier3_ranked_nonrecurrent_rows	selected_genes_before_global_dedup	final_owner_profile_genes_after_global_dedup	final_genes_with_cohort_evidence
-ranked_marker_source_pan_cancer_panel	brca	4	3	185	45	20	0	210	228	221	228
-ranked_marker_source_pan_cancer_panel	nbl	3	4	71	31	4	0	98	101	99	101
-ranked_marker_source_pan_cancer_panel	rbl	1	4	24	35	0	24	35	59	59	59
