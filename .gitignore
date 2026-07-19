@@ -217,3 +217,16 @@ test_logs/
 *.zip
 *.tar
 *.tar.gz
+# Code-only main: generated, curated, local, or bulky outputs
+/supplementary_data/
+/figures/
+/reports/
+/archive/
+/derived_results/
+/exploratory_257_gene_pan_cancer_network_sensitivity/
+/data/
+/reference_data/
+/sync_logs/
+/logs/
+/benchmarks/
+/.snakemake/
