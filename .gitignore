@@ -236,3 +236,6 @@ test_logs/
 
 # Optional local scientific validation scripts or outputs
 /validation/
+
+# Experimental workflow drafts not shipped in code-only main
+/Snakefile.v2
