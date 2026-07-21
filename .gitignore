@@ -239,3 +239,6 @@ test_logs/
 
 # Experimental workflow drafts not shipped in code-only main
 /Snakefile.v2
+
+# Local/Jarvis-generated reports and handoff material
+/reports/
