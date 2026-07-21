@@ -1,0 +1,5 @@
+# Explicitly archived source snapshots are not part of the active review surface.
+# Active R, Python, shell, tests, workflow files, documentation and configuration
+# remain eligible for indexing.
+scripts/archive/
+preprocessing_and_quality_control/nbl/scripts/archieve/
