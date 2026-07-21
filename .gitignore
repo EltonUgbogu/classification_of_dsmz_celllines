@@ -176,7 +176,6 @@ validation/*.txt
 validation/*_jobs.tsv
 
 # Local/unreviewed files not currently part of public release
-.github/
 AGENT.md
 run_all_neighbourhoods.sh
 run_pipeline.sh
@@ -230,6 +229,12 @@ test_logs/
 /logs/
 /benchmarks/
 /.snakemake/
+
+# Local Code Review Graph visualisation exports
+/graph.html
+/graph.json
+/graph.graphml
+/graph.svg
 
 # Optional local scientific validation outputs/scripts not shipped in code-only main
 /validation/
