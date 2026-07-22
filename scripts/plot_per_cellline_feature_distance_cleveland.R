@@ -10,6 +10,29 @@ suppressPackageStartupMessages({
   library(tidyr)
 })
 
+# ==============================================================================
+# REVISION NOTE
+# ------------------------------------------------------------------------------
+# Drop-in replacement for scripts/plot_per_cellline_feature_distance_cleveland.R.
+# Same CLI contract, same two input tables, same output paths -- the
+# Snakemake rule (plot_per_cellline_feature_distance_cleveland) does not need
+# to change. This still answers the question the original plot answered --
+# representation/distance-metric robustness of a cell line's OWN
+# tumour-neighbourhood recovery, within one cancer-type cohort -- it does
+# not, and cannot, show cross-cancer-type separation (see the companion
+# script and accompanying review for that question).
+#
+# Two changes:
+#   1. Distance metric is now a facet (Euclidean | Pearson), not a point
+#      shape, so each point needs only a 10-level colour decode instead of a
+#      10 x 2 (20-way) colour-and-shape decode, and comparing metrics for one
+#      cell line is a left/right glance instead of untangling shapes.
+#   2. A thin grey range segment (min-max frac_ge_thr across all directions
+#      for that cell line) is drawn behind the points, so cell lines whose
+#      recovery is inconsistent across methodological choices are visible
+#      before reading any individual point.
+# ==============================================================================
+
 option_list <- list(
   make_option("--summary-tsv", type = "character",
               help = "p_consensus_cellline_direction_summary.tsv"),
@@ -96,11 +119,6 @@ distance_labels <- c(
   corr = "Pearson correlation distance"
 )
 
-distance_shapes <- c(
-  "Euclidean distance" = 21,
-  "Pearson correlation distance" = 24
-)
-
 direction_info <- parse_direction(unique(summary_tbl$direction)) %>%
   mutate(
     feature_label = unname(feature_labels[feature_raw]),
@@ -130,14 +148,6 @@ feature_order <- c(
 )
 feature_order <- c(feature_order[feature_order %in% direction_info$feature_label],
                    setdiff(sort(unique(direction_info$feature_label)), feature_order))
-
-direction_order <- direction_info %>%
-  mutate(
-    feature_label = factor(feature_label, levels = feature_order),
-    distance_label = factor(distance_label, levels = distance_labels)
-  ) %>%
-  arrange(feature_label, distance_label, direction) %>%
-  pull(direction)
 
 winner_long <- winners_tbl %>%
   mutate(
@@ -169,34 +179,42 @@ if (nrow(plot_tbl) == 0) {
   stop("No plottable rows after filtering frac_ge_thr to [0, 1].", call. = FALSE)
 }
 
+# Per-cell-line ordering AND per-cell-line range (spread across every
+# direction, both distance metrics combined). The range is what makes a
+# methodologically inconsistent cell line (e.g. one that only one
+# representation recovers) visible before reading any individual point.
 order_tbl <- plot_tbl %>%
   group_by(cell_line) %>%
   summarise(
     best_frac_ge_thr = max(frac_ge_thr, na.rm = TRUE),
+    worst_frac_ge_thr = min(frac_ge_thr, na.rm = TRUE),
     n_recovered_directions = sum(frac_ge_thr >= opt$threshold, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   arrange(desc(best_frac_ge_thr), desc(n_recovered_directions), cell_line)
 
-n_directions <- length(direction_order)
-offset_tbl <- tibble(
-  direction = direction_order,
-  direction_index = seq_along(direction_order),
-  direction_offset = if (n_directions <= 1) {
+cell_levels <- rev(order_tbl$cell_line)
+
+# Offsets now separate FEATURE REPRESENTATION only (<= 10 levels), not full
+# direction (<= 20 levels): distance metric is a facet, so within one facet a
+# row only ever needs to separate feature-representation ties.
+n_features <- length(feature_order)
+feature_offset_tbl <- tibble(
+  feature_label = feature_order,
+  feature_offset = if (n_features <= 1) {
     0
   } else {
-    ((seq_along(direction_order) - (n_directions + 1) / 2) / (n_directions - 1)) * 0.52
+    ((seq_along(feature_order) - (n_features + 1) / 2) / (n_features - 1)) * 0.42
   }
 )
 
-cell_levels <- rev(order_tbl$cell_line)
 plot_tbl <- plot_tbl %>%
-  left_join(offset_tbl, by = "direction") %>%
+  mutate(feature_label = factor(feature_label, levels = feature_order)) %>%
+  left_join(feature_offset_tbl, by = "feature_label") %>%
   mutate(
     cell_line_factor = factor(cell_line, levels = cell_levels),
     y_base = as.numeric(cell_line_factor),
-    y_plot = y_base + direction_offset,
-    feature_label = factor(feature_label, levels = feature_order),
+    y_plot = y_base + feature_offset,
     distance_label = factor(distance_label, levels = distance_labels)
   )
 
@@ -206,8 +224,17 @@ if (length(missing_palette) > 0) {
        paste(missing_palette, collapse = ", "), call. = FALSE)
 }
 
+range_tbl <- order_tbl %>%
+  transmute(
+    cell_line,
+    cell_line_factor = factor(cell_line, levels = cell_levels),
+    y_base = as.numeric(cell_line_factor),
+    x_min = worst_frac_ge_thr,
+    x_max = best_frac_ge_thr
+  )
+
 plot_height <- max(5.8, 0.34 * length(cell_levels) + 3.4)
-plot_width <- 11.2
+plot_width <- 12.6
 
 threshold_text <- format(opt$threshold, trim = TRUE, scientific = FALSE)
 subtitle_text <- sprintf("%s; threshold: p_consensus \u2265 %s", opt$`disease-label`, threshold_text)
@@ -215,21 +242,22 @@ subtitle_text <- sprintf("%s; threshold: p_consensus \u2265 %s", opt$`disease-la
 p <- ggplot(plot_tbl, aes(x = frac_ge_thr, y = y_plot)) +
   geom_vline(xintercept = opt$threshold, colour = "#6F6F6F",
              linetype = "dashed", linewidth = 0.35) +
+  geom_segment(
+    data = range_tbl,
+    aes(x = x_min, xend = x_max, y = y_base, yend = y_base),
+    inherit.aes = FALSE,
+    colour = "#BFBFBF", linewidth = 2.1, alpha = 0.55, lineend = "round"
+  ) +
   geom_point(
-    aes(fill = feature_label, shape = distance_label),
-    colour = "#4D4D4D",
-    size = 2.05,
-    stroke = 0.28,
-    alpha = 0.80
+    aes(fill = feature_label),
+    shape = 21, colour = "#4D4D4D", size = 2.15, stroke = 0.28, alpha = 0.85
   ) +
   geom_point(
     data = plot_tbl %>% filter(is_winner),
-    aes(fill = feature_label, shape = distance_label),
-    colour = "black",
-    size = 3.15,
-    stroke = 0.90,
-    alpha = 1
+    aes(fill = feature_label),
+    shape = 21, colour = "black", size = 3.25, stroke = 0.95, alpha = 1
   ) +
+  facet_wrap(~ distance_label, ncol = 2) +
   scale_x_continuous(
     limits = c(0, 1),
     breaks = seq(0, 1, by = 0.25),
@@ -246,32 +274,26 @@ p <- ggplot(plot_tbl, aes(x = frac_ge_thr, y = y_plot)) +
     values = feature_palette[feature_order],
     drop = FALSE
   ) +
-  scale_shape_manual(
-    name = "Distance metric",
-    values = distance_shapes,
-    drop = FALSE
-  ) +
   guides(
     fill = guide_legend(
       ncol = 2,
       override.aes = list(shape = 21, size = 3.2, colour = "#4D4D4D", alpha = 1)
-    ),
-    shape = guide_legend(
-      nrow = 1,
-      override.aes = list(fill = "white", size = 3.2, colour = "#4D4D4D", alpha = 1)
     )
   ) +
   labs(
     title = "Consensus recovery across feature\u2013distance representations",
     subtitle = subtitle_text,
     x = "Fraction of tumour-neighbour pairs with p_consensus \u2265 threshold",
-    y = "Cell line"
+    y = "Cell line",
+    caption = "Grey bar: range of the recovery fraction across all feature representations and both distance metrics for that cell line."
   ) +
   coord_cartesian(clip = "off") +
   theme_bw(base_size = 11) +
   theme(
     plot.title = element_text(face = "bold", size = 12.5),
     plot.subtitle = element_text(size = 10.5),
+    plot.caption = element_text(size = 7.6, colour = "#595959", hjust = 0),
+    strip.text = element_text(face = "bold", size = 10),
     axis.title.x = element_text(margin = margin(t = 7)),
     axis.title.y = element_text(margin = margin(r = 8)),
     axis.text.y = element_text(size = 8.8),
@@ -279,13 +301,12 @@ p <- ggplot(plot_tbl, aes(x = frac_ge_thr, y = y_plot)) +
     panel.grid.major.y = element_line(colour = "#E6E6E6", linewidth = 0.30),
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_line(colour = "#EFEFEF", linewidth = 0.25),
+    panel.spacing.x = unit(14, "pt"),
     legend.position = "bottom",
-    legend.box = "vertical",
     legend.title = element_text(size = 9.5),
     legend.text = element_text(size = 8.6),
     legend.key.height = unit(0.42, "cm"),
-    legend.spacing.y = unit(0.12, "cm"),
-    plot.margin = margin(10, 20, 10, 16)
+    plot.margin = margin(10, 22, 10, 16)
   )
 
 dir.create(dirname(opt$`out-pdf`), recursive = TRUE, showWarnings = FALSE)
@@ -297,5 +318,5 @@ ggsave(opt$`out-png`, p, width = plot_width, height = plot_height, dpi = 320)
 cat("[OK] Wrote ", opt$`out-pdf`, "\n", sep = "")
 cat("[OK] Wrote ", opt$`out-png`, "\n", sep = "")
 cat("[INFO] Cell lines: ", length(cell_levels), "\n", sep = "")
-cat("[INFO] Directions: ", n_directions, "\n", sep = "")
+cat("[INFO] Feature representations: ", n_features, "\n", sep = "")
 cat("[INFO] Winner rows highlighted: ", sum(plot_tbl$is_winner), "\n", sep = "")
