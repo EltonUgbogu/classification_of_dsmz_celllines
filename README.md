@@ -1,12 +1,12 @@
 # Classification of DSMZ Cell Lines to Cancer Types Based on Transcriptomic Analysis
 
-This repository contains the Snakemake workflow used to prioritise DSMZ cancer cell-line models by their transcriptomic proximity to patient tumour RNA-seq cohorts. The central question is not whether a cell line carries the same cancer-type label as a patient cohort, but how closely its expression profile relates to retained patient tumour samples in a configured, graph-informed feature space.
+This repository contains the Snakemake workflow used to prioritise DSMZ cancer cell-line models by their transcriptomic proximity to patient tumour RNA-seq cohorts. The eventual result of this analysis is to evaluate how closely cell lines expression profile map to patient tumour samples, beyond the same cancer-type label as a patient cohort.
 
 The patient-referenced analyses use breast cancer (BRCA), neuroblastoma (NBL), and retinoblastoma (RBL) cohorts. An auxiliary haematological malignancy (HEME) profile is included for cell-line-only network context, but it is not a source cohort for the active BRCA/NBL/RBL pan-cancer marker panel or the corresponding patient-referenced ranking analyses.
 
-The workflow constructs feature-distance representations, infers patient tumour neighbourhoods, builds multi-representation consensus networks, resolves cell-line neighbours, derives graph-informed marker evidence, constructs a revised Version 1 pan-cancer feature panel, and performs reciprocal tumour--cell-line ranking. These outputs provide relative transcriptomic model prioritisation within the configured data and feature space.
+The workflow constructs feature-distance representations, infers patient tumour neighbourhoods, builds multi-representation consensus networks, resolves cell-line neighbours, derives graph-informed marker evidence, constructs a pan-cancer feature panel, and performs reciprocal tumour--cell-line ranking. These outputs provide relative transcriptomic model prioritisation within the configured data and feature space.
 
-The repository is maintained as a **code-focused workflow repository**. Raw sequencing data, large expression matrices, reference indexes, complete result trees, runtime logs, and most generated outputs are intentionally excluded from the main Git history. A tiny synthetic example is included so that repository structure and input schemas can be tested without access to the real datasets.
+The repository is maintained as a code-focused workflow repository. Raw sequencing data, large expression matrices, reference indexes, complete result trees, runtime logs, and most generated outputs are excluded from the main Git history. A tiny synthetic example is included so that repository structure and input schemas can be tested without access to the real datasets.
 
 **Navigation:** [Key terms](#key-terms) | [Scientific aim](#scientific-aim) | [Workflow overview](#workflow-overview) | [Current analytical design](#current-analytical-design) | [Repository structure](#repository-structure) | [Quick start](#quick-start) | [Installation](#installation) | [Synthetic minimal example](#synthetic-minimal-example) | [Data and outputs](#data-and-outputs) | [Configuration](#configuration) | [Running the full workflow](#running-the-full-workflow) | [Expected output classes](#expected-output-classes) | [Reproducibility checks](#reproducibility-checks) | [Interpretation guide](#interpretation-guide) | [Scope assumptions and validation requirements](#scope-assumptions-and-validation-requirements) | [Citation and contact](#citation-and-contact)
 
@@ -76,7 +76,7 @@ Differential-expression analysis uses cell-line-only raw integer count matrices 
 
 For anchor contrasts, non-anchor profiles from the focal component are excluded from the reference set. Marker-list caps are maxima, not required list sizes.
 
-### Revised Version 1 pan-cancer feature selection
+### Pan-cancer feature selection
 
 Marker recurrence is counted separately within each cancer type and marker-evidence stratum.
 
@@ -88,8 +88,6 @@ Marker recurrence is counted separately within each cancer type and marker-evide
   - median `baseMean` at or above the candidate-pool median.
 - Empirical thresholds are estimated within cancer type, marker-evidence stratum, and candidate-pool type.
 - The final panel is the union of recurrent genes, accepted singleton candidates, and accepted non-recurrent candidates.
-
-This revised Version 1 procedure replaces the obsolete minimum-panel-size and sequential top-up rules used in earlier development states.
 
 ## Repository structure
 
@@ -112,7 +110,7 @@ The public repository contains workflow source code, configuration, small resour
 └── tests/                             # repository checks and test-related files
 ```
 
-The following paths contain local data, references, generated outputs, provenance, or runtime state and are excluded from the public code-only main branch unless deliberately packaged as release assets:
+The following paths show the structure of the repository:
 
 ```text
 data/
@@ -173,14 +171,14 @@ The workflow uses per-rule Conda environments through `--use-conda`. Tracked env
 
 Additional preprocessing environments are stored under [`preprocessing_and_quality_control/envs/`](preprocessing_and_quality_control/envs/).
 
-No machine-specific Conda bootstrap script is required. Install Conda, Mamba, or an equivalent compatible environment manager separately, then construct the tracked environments from the YAML definitions.
+Install Conda, Mamba, or an equivalent compatible environment manager separately, then construct the tracked environments from the YAML definitions.
 
 ## Synthetic minimal example
 
 The repository includes tiny synthetic BRCA, NBL, and RBL inputs under [`examples/minimal/`](examples/minimal/). They contain:
 
-- fake Ensembl-like gene identifiers;
-- fake cell-line and tumour sample identifiers;
+- synthetic Ensembl-like gene identifiers;
+- synthetic cell-line and tumour sample identifiers;
 - small numeric VST-like matrices stored as RDS files;
 - metadata tables describing the synthetic samples.
 
@@ -302,14 +300,12 @@ When the required real inputs are available, the workflow can generate:
 - multi-representation consensus-network outputs;
 - resolved cell-line neighbours and node summaries;
 - graph-derived DESeq2 marker tables;
-- revised Version 1 pan-cancer feature-panel tables;
+- pan-cancer feature-panel tables;
 - reciprocal tumour--cell-line ranking metrics;
 - pan-cancer cell-line similarity-network outputs;
 - Louvain and Leiden community and sensitivity summaries;
 - functional-enrichment query, background, result, and plotting tables;
 - selected figures, manifests, and run reports.
-
-Generated outputs are excluded from GitHub by default. A clean Git working tree means the tracked code tree is clean; it does not mean all workflow outputs exist locally.
 
 ## Reproducibility checks
 
@@ -335,7 +331,7 @@ Full-analysis releases should provide checksums and manifests alongside the corr
 
 ### Patient tumour neighbourhoods and graph outputs
 
-Patient tumour-neighbourhood support describes how consistently retained tumour samples are assigned near a focal cell-line profile within the configured representations. Patient-referenced edges and resolved neighbours summarise shared tumour-neighbourhood evidence under the selected thresholds and representation rules.
+Patient tumour-neighbourhood support describes how consistently retained tumour samples are assigned near a focal cell-line profile within the configured representations. Patient-referenced edges and resolved neighbours show shared tumour-neighbourhood evidence under the selected thresholds and representation rules.
 
 An isolate is therefore a profile without a retained resolved cell-line neighbour. It may still show strong similarity to patient tumours in ranking analyses.
 
@@ -369,5 +365,3 @@ The workflow provides computational, transcriptomic model prioritisation. Its re
 ## Citation and contact
 
 Repository: [classification_of_dsmz_celllines](https://github.com/EltonUgbogu/classification_of_dsmz_celllines)
-
-Until a versioned release DOI is available, cite the repository URL together with the Git commit hash or release tag used for the analysis. Add formal citation metadata and archival DOI information when the workflow is deposited as a versioned software release.
