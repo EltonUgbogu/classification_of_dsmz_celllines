@@ -15,13 +15,11 @@ The repository is maintained as a code-focused workflow repository. Raw sequenci
 - **p-consensus tumour-neighbourhood support:** the fraction of available tumour-neighbourhood clustering outputs within a fixed feature-distance representation that support assignment of a tumour sample to a focal cell-line neighbourhood.
 - **Patient-referenced graph:** a cell-line graph constructed from shared patient-tumour neighbourhoods across feature-selection and distance representations. It reduces high-dimensional tumour–cell-line expression proximity to a graph representation, enabling graph-based comparison, resolved-neighbour analysis, and computationally tractable model prioritisation.
 - **Multi-representation consensus network:** the primary cross-representation graph layer, which retains an edge when it is supported in at least `m = max(2, floor(|R| / 2) + 1)` configured feature-distance representations. A separate union-supported network retains every edge observed in at least one representation as a sensitivity view.
-- **Resolved graph:** a patient-referenced cell-line graph with resolved edge set \(E_{\mathrm{resolved}}\). For each focal cell-line profile \(v\), retained incident edges are defined by the intersection of global-best and local-best incident edge support:
+- **Resolved graph:** a patient-referenced cell-line graph with resolved edge set `E_resolved`. For each focal cell-line profile `v`, retained incident edges are defined by the intersection of global-best and local-best incident edge support:
 
-  \[
-  E_{\mathrm{retained}}(v) = E_G(v) \cap E_L(v)
-  \]
-
-  Here, \(E_G(v)\) contains edges incident to \(v\) in the cohort-level global-best representation, and \(E_L(v)\) contains edges incident to \(v\) pooled across that profile’s local-best representation set. The final resolved edge set \(E_{\mathrm{resolved}}\) is the union of retained focal edge sets across all cell-line profiles; each retained pair is rendered as one undirected edge.
+  ```text
+  E_retained(v) = E_G(v) ∩ E_L(v)
+  ```
 - **Resolved neighbour:** a cell-line profile connected to a focal cell-line profile in the resolved graph.
 - **Global-best representation:** the cohort-level feature–distance representation with the strongest overall `p_consensus` tumour-neighbourhood support across the configured cell-line profiles.
 - **Local-best representation set:** the one or more feature–distance representations with the strongest `p_consensus` tumour-neighbourhood support for an individual cell-line profile.
