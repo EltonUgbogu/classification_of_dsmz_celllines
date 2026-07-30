@@ -18,7 +18,7 @@ The repository is maintained as a code-focused workflow repository. Raw sequenci
 - **Resolved graph:** a patient-referenced cell-line graph with resolved edge set `E_resolved`. For each focal cell-line profile `v`, retained incident edges are defined by the intersection of global-best and local-best incident edge support:
 
   ```text
-  E_retained(v) = E_G(v) ∩ E_L(v)
+  E_resolved(v) = E_G(v) ∩ E_L(v)
   ```
 - **Resolved neighbour:** a cell-line profile connected to a focal cell-line profile in the resolved graph.
 - **Global-best representation:** the cohort-level feature–distance representation with the strongest overall `p_consensus` tumour-neighbourhood support across the configured cell-line profiles.
