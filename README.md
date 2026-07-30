@@ -2,8 +2,6 @@
 
 This repository contains the Snakemake workflow used to prioritise DSMZ cancer cell-line models by their transcriptomic proximity to patient tumour RNA-seq cohorts. The workflow maps DSMZ cell lines to patient tumours by transcriptomic proximity; such mappings indicate relative molecular similarity, not biological equivalence or experimental suitability.
 
-The pan-cancer patient-referenced analyses use breast cancer (BRCA), neuroblastoma (NBL), and retinoblastoma (RBL) cohorts. The selectable haematological malignancy (HEME) profile has LAML and CLL tumour-expression inputs for its standalone analysis. In the active BRCA/NBL/RBL pan-cancer products, however, only HEME cell-line profiles provide auxiliary cell-line-only network context; HEME tumours are not a source cohort for the marker panel or reciprocal ranking.
-
 The workflow constructs feature-distance representations, infers patient tumour neighbourhoods, builds multi-representation consensus networks, resolves cell-line neighbours, derives graph-informed marker evidence, constructs a pan-cancer feature panel, and performs reciprocal tumour--cell-line ranking. These outputs provide relative transcriptomic model prioritisation within the configured data and feature space.
 
 The repository is maintained as a code-focused workflow repository. Raw sequencing data, large expression matrices, reference indexes, complete result trees, runtime logs, and most generated outputs are excluded from the main Git history. A tiny synthetic example is included so that repository structure and input schemas can be tested without access to the real datasets.
@@ -33,7 +31,7 @@ Cancer cell lines are widely used as laboratory models; however, selecting a cel
 
 This workflow evaluates DSMZ cell-line profiles in a patient-referenced expression space. It constructs unsupervised feature–distance representations and quantifies patient-referenced tumour-neighbourhood proximity between DSMZ cell-line profiles and retained tumour samples across those representations. Resolved-graph construction then retains cell-line adjacencies supported by both cohort-level and cell-line-specific representation criteria, while graph-derived marker contrasts connect resolved graph structure to pan-cancer feature construction.
 
-Reciprocal ranking prioritises DSMZ models within a cohort-informed, graph-derived marker feature space. Cancer-type labels are not used to compute tumour–cell-line similarity scores or rank orderings; BRCA, NBL, and RBL annotations are applied afterwards to evaluate post hoc cancer-type annotation concordance.
+Reciprocal ranking provides label-free DSMZ model ranking within a cohort-informed, graph-derived marker feature space. Cancer-type labels are not used to compute tumour–cell-line similarity scores or rank orderings; BRCA, NBL, and RBL annotations are applied afterwards to evaluate post hoc cancer-type annotation concordance.
 
 ## Workflow overview
 
@@ -310,7 +308,7 @@ An isolate is therefore a profile without a retained resolved cell-line neighbou
 
 Reciprocal ranking provides **relative transcriptomic model prioritisation** among the configured candidate cell-line profiles and retained patient tumour samples. A favourable rank supports prioritisation within that analysis space; it is not a universal declaration that the model is suitable for every biological question.
 
-Post hoc cancer-type annotation-concordance metrics describe whether highly ranked tumour--cell-line relationships share the annotated cancer type after the graph-informed ranking stage. They are evaluation measures, not training objectives.
+Post hoc cancer-type annotation-concordance metrics describe whether highly ranked tumour--cell-line relationships share the annotated cancer type after the label-free and graph-informed stages. They are evaluation measures, not training objectives.
 
 ### Pan-cancer cell-line network
 
