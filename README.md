@@ -15,11 +15,16 @@ The repository is maintained as a code-focused workflow repository. Raw sequenci
 - **p-consensus tumour-neighbourhood support:** the fraction of available tumour-neighbourhood clustering outputs within a fixed feature-distance representation that support assignment of a tumour sample to a focal cell-line neighbourhood.
 - **Patient-referenced graph:** a cell-line graph constructed from shared patient-tumour neighbourhoods across feature-selection and distance representations. It reduces high-dimensional tumour–cell-line expression proximity to a graph representation, enabling graph-based comparison, resolved-neighbour analysis, and computationally tractable model prioritisation.
 - **Multi-representation consensus network:** the primary cross-representation graph layer, which retains an edge when it is supported in at least `m = max(2, floor(|R| / 2) + 1)` configured feature-distance representations. A separate union-supported network retains every edge observed in at least one representation as a sensitivity view.
-- **Resolved graph:** let \(E_r\) be the undirected cell-line edge set induced by representation \(r\). For a focal profile \(v\), the retained incident edges are \(E_G(v) \cap E_L(v)\), where \(E_G(v)\) is the set of edges in the global-best representation incident to \(v\), and \(E_L(v)\) is the pooled set of edges incident to \(v\) across its local-best representations. The final resolved edge set is the union of these retained focal edge sets over all profiles; each retained pair is rendered as one undirected edge.
-- **Resolved neighbour:** a cell-line neighbour retained in the resolved graph.
-- **Global-best representation:** the cohort-level representation \(g\) selected by maximising aggregate `frac_ge_thr`, with ties ordered by median `p_consensus` and, when supplied as a distinct field, mean `p_consensus`. Its graph contributes the global edge set \(E_g\); for focal profile \(v\), \(E_G(v) = \{\{v,u\} \in E_g\}\).
-- **Local-best representation set:** for focal profile \(v\), \(L(v)\) is the set of all representations tied for its highest per-cell-line `frac_ge_thr`. Their incident edge sets are pooled by union: \(E_L(v) = \bigcup_{r \in L(v)} \{\{v,u\} \in E_r\}\).
-- **Isolate:** a cell-line profile with degree zero in the resolved graph. This means no stable cell-line neighbour was retained under the configured graph-resolution rules; it does not mean that the cell line lacks similarity to patient tumours.
+- **Resolved graph:** a patient-referenced cell-line graph with resolved edge set \(E_{\mathrm{resolved}}\). For each focal cell-line profile \(v\), retained incident edges are defined by the intersection of global-best and local-best incident edge support:
+
+  \[
+  E_{\mathrm{retained}}(v) = E_G(v) \cap E_L(v)
+  \]
+
+  Here, \(E_G(v)\) contains edges incident to \(v\) in the cohort-level global-best representation, and \(E_L(v)\) contains edges incident to \(v\) pooled across that profile’s local-best representation set. The final resolved edge set \(E_{\mathrm{resolved}}\) is the union of retained focal edge sets across all cell-line profiles; each retained pair is rendered as one undirected edge.
+- **Resolved neighbour:** a cell-line profile connected to a focal cell-line profile in the resolved graph.
+- **Global-best representation:** the cohort-level feature–distance representation with the strongest overall `p_consensus` tumour-neighbourhood support across the configured cell-line profiles.
+- **Local-best representation set:** the one or more feature–distance representations with the strongest `p_consensus` tumour-neighbourhood support for an individual cell-line profile.
 - **Component anchor:** a profile selected from a non-isolate resolved component through highest-degree or highest unnormalised-betweenness criteria.
 - **Marker-evidence stratum:** the graph-derived evidence category used during marker aggregation: anchor-associated or isolate-associated marker evidence.
 - **Pan-cancer feature panel:** the graph-informed marker-derived feature set used for pan-cancer cell-line similarity analysis and reciprocal tumour--cell-line ranking.
