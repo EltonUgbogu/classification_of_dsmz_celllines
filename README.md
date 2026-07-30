@@ -1,6 +1,6 @@
 # Classification of DSMZ Cell Lines to Cancer Types Based on Transcriptomic Analysis
 
-This repository contains the Snakemake workflow used to prioritise DSMZ cancer cell-line models by their transcriptomic proximity to patient tumour RNA-seq cohorts. The workflow maps DSMZ cell lines to patient tumours by transcriptomic proximity; such mappings indicate relative molecular similarity, not biological equivalence or experimental suitability.
+This repository contains the Snakemake workflow used to prioritise DSMZ cancer cell-line models by their transcriptomic proximity to patient tumour RNA-seq cohorts. The workflow maps DSMZ cell lines to patient tumours by transcriptomic proximity; these mappings provide computational evidence of relative transcriptomic similarity and should be interpreted alongside biological context and experimental validation.
 
 The workflow constructs feature-distance representations, infers patient tumour neighbourhoods, builds multi-representation consensus networks, resolves cell-line neighbours, derives graph-informed marker evidence, constructs a pan-cancer feature panel, and performs reciprocal tumour--cell-line ranking. These outputs provide relative transcriptomic model prioritisation within the configured data and feature space.
 
