@@ -1,118 +1,142 @@
 # Classification of DSMZ Cell Lines to Cancer Types Based on Transcriptomic Analysis
 
-Cancer cell lines are standard laboratory models, however matching a cell line to a disease label does not guarantee that its transcriptome resembles patient tumours from that disease. This project asks a more specific question: in gene-expression space, how close are DSMZ (German Collection of Microorganisms and Cell Cultures) cancer cell lines to patient tumour RNA-seq cohorts, and does that proximity agree with the expected cancer context? The analysis constructs feature-distance representations from expression data and evaluates cancer-type agreement afterwards. The resulting scores describe feature-space transcriptomic proximity and require biological or experimental follow-up.
+This repository contains the Snakemake workflow used to prioritise DSMZ cancer cell-line models by their transcriptomic proximity to patient tumour RNA-seq cohorts. The workflow maps DSMZ cell lines to patient tumours by transcriptomic proximity; such mappings indicate relative molecular similarity, not biological equivalence or experimental suitability.
 
-This repository provides the Snakemake workflow used for the analysis. It combines tumour-purity filtering, source-aware RNA-seq preprocessing, unsupervised feature selection, feature-distance representations, adaptive tumour-neighbourhood inference, patient-referenced graph resolution, graph-derived marker selection, pan-cancer feature-panel construction, and reciprocal tumour-cell-line ranking across breast cancer (BRCA), neuroblastoma (NBL), retinoblastoma (RBL), and a configured haematological malignancy (HEME) profile.
+The pan-cancer patient-referenced analyses use breast cancer (BRCA), neuroblastoma (NBL), and retinoblastoma (RBL) cohorts. The selectable haematological malignancy (HEME) profile has LAML and CLL tumour-expression inputs for its standalone analysis. In the active BRCA/NBL/RBL pan-cancer products, however, only HEME cell-line profiles provide auxiliary cell-line-only network context; HEME tumours are not a source cohort for the marker panel or reciprocal ranking.
 
-Curated outputs are organised under [`supplementary_data/`](supplementary_data/); the file-level output catalogue belongs in [`supplementary_data/README.md`](supplementary_data/README.md).
+The workflow constructs feature-distance representations, infers patient tumour neighbourhoods, builds multi-representation consensus networks, resolves cell-line neighbours, derives graph-informed marker evidence, constructs a pan-cancer feature panel, and performs reciprocal tumour--cell-line ranking. These outputs provide relative transcriptomic model prioritisation within the configured data and feature space.
 
-**Navigation:** [Key terms](#key-terms) | [Scientific rationale](#scientific-rationale) | [Method overview](#method-overview) | [Repository structure](#repository-structure) | [Installation](#installation) | [Data availability](#data-availability) | [Configuration](#configuration) | [Running the workflow](#running-the-workflow) | [Outputs](#outputs) | [Interpretation notes](#interpretation-notes) | [Limitations](#limitations) | [Citation and contact](#citation-and-contact)
+The repository is maintained as a code-focused workflow repository. Raw sequencing data, large expression matrices, reference indexes, complete result trees, runtime logs, and most generated outputs are excluded from the main Git history. A tiny synthetic example is included so that repository structure and input schemas can be tested without access to the real datasets.
+
+**Navigation:** [Key terms](#key-terms) | [Scientific aim](#scientific-aim) | [Workflow overview](#workflow-overview) | [Current analytical design](#current-analytical-design) | [Repository structure](#repository-structure) | [Quick start](#quick-start) | [Installation](#installation) | [Synthetic minimal example](#synthetic-minimal-example) | [Data and outputs](#data-and-outputs) | [Configuration](#configuration) | [Running the full workflow](#running-the-full-workflow) | [Expected output classes](#expected-output-classes) | [Reproducibility checks](#reproducibility-checks) | [Interpretation guide](#interpretation-guide) | [Scope assumptions and validation requirements](#scope-assumptions-and-validation-requirements) | [Citation and contact](#citation-and-contact)
 
 ## Key terms
 
-- **Feature-distance representation:** a selected gene set paired with an expression space and distance or similarity metric.
-- **Tumour neighbourhood:** the adaptive set of patient tumour samples assigned near a focal cell line within a clustering representation.
-- **p-consensus tumour-neighbourhood support:** the fraction of available clustering outputs within a feature-distance representation that assign a tumour sample to a cell-line neighbourhood. Values range from 0 to 1; configured strong-support thresholds identify stable neighbourhood assignments.
-- **Patient-referenced graph:** a support-filtered cell-line graph derived from shared patient tumour-neighbourhood evidence, not a direct biological interaction network.
-- **Resolved neighbour:** a cell-line neighbour retained after intersecting cohort-level representation support with cell-line-specific representation support.
-- **Global-best representation:** the cohort-level representation selected from p-consensus tumour-neighbourhood metrics across cell lines.
-- **Local-best representation:** the cell-line-specific representation set selected from co-optimal or best-supported evidence for an individual cell line.
-- **Isolate:** a cell line with degree zero in the final resolved graph. This means no stable graph-resolved cell-line neighbour was retained under the threshold-constrained graph-resolution rules, not absence of tumour similarity.
-- **Component anchor:** a representative cell line selected within a non-isolate resolved component, including most-connected and bridge-like graph anchors used for marker-contrast construction.
-- **Marker-source class:** the graph-derived source category recording whether retained marker evidence came from isolate-derived or anchor/component-derived contrasts. Membership can be non-exclusive.
+- **Feature-distance representation:** a selected gene set, expression space, and distance or similarity metric considered together as one representation.
+- **Tumour neighbourhood:** the adaptive set of retained patient tumour samples assigned near a focal cell-line profile within a feature-distance representation.
+- **p-consensus tumour-neighbourhood support:** the fraction of available tumour-neighbourhood clustering outputs within a fixed feature-distance representation that support assignment of a tumour sample to a focal cell-line neighbourhood.
+- **Patient-referenced graph:** a cell-line graph constructed from shared patient-tumour neighbourhoods across feature-selection and distance representations. It reduces high-dimensional tumour–cell-line expression proximity to a graph representation, enabling graph-based comparison, resolved-neighbour analysis, and computationally tractable model prioritisation.
+- **Multi-representation consensus network:** the primary cross-representation graph layer, which retains an edge when it is supported in at least `m = max(2, floor(|R| / 2) + 1)` configured feature-distance representations. A separate union-supported network retains every edge observed in at least one representation as a sensitivity view.
+- **Resolved graph:** let \(E_r\) be the undirected cell-line edge set induced by representation \(r\). For a focal profile \(v\), the retained incident edges are \(E_G(v) \cap E_L(v)\), where \(E_G(v)\) is the set of edges in the global-best representation incident to \(v\), and \(E_L(v)\) is the pooled set of edges incident to \(v\) across its local-best representations. The final resolved edge set is the union of these retained focal edge sets over all profiles; each retained pair is rendered as one undirected edge.
+- **Resolved neighbour:** a cell-line neighbour retained in the resolved graph.
+- **Global-best representation:** the cohort-level representation \(g\) selected by maximising aggregate `frac_ge_thr`, with ties ordered by median `p_consensus` and, when supplied as a distinct field, mean `p_consensus`. Its graph contributes the global edge set \(E_g\); for focal profile \(v\), \(E_G(v) = \{\{v,u\} \in E_g\}\).
+- **Local-best representation set:** for focal profile \(v\), \(L(v)\) is the set of all representations tied for its highest per-cell-line `frac_ge_thr`. Their incident edge sets are pooled by union: \(E_L(v) = \bigcup_{r \in L(v)} \{\{v,u\} \in E_r\}\).
+- **Isolate:** a cell-line profile with degree zero in the resolved graph. This means no stable cell-line neighbour was retained under the configured graph-resolution rules; it does not mean that the cell line lacks similarity to patient tumours.
+- **Component anchor:** a profile selected from a non-isolate resolved component through highest-degree or highest unnormalised-betweenness criteria.
+- **Marker-evidence stratum:** the graph-derived evidence category used during marker aggregation: anchor-associated or isolate-associated marker evidence.
+- **Pan-cancer feature panel:** the graph-informed marker-derived feature set used for pan-cancer cell-line similarity analysis and reciprocal tumour--cell-line ranking.
+- **Model prioritisation:** relative ordering of candidate cell-line models according to patient-referenced transcriptomic proximity in the configured feature space.
 
-## Scientific rationale
+## Scientific aim
 
-Cancer cell lines are widely used to study tumour biology and test experimental hypotheses. Label-level cancer matching is insufficient because patient tumours and cell lines can show intra-cancer-type transcriptomic heterogeneity.
+Cancer cell lines are widely used as laboratory models; however, selecting a cell line by cancer-type label alone does not establish how well its transcriptome represents patient tumours. Patient tumours and cell-line profiles can vary substantially within the same cancer type, and this variation can affect which models appear most representative.
 
-Patient-referenced tumour-neighbourhood evidence gives the workflow a structured comparison space. Instead of relying on label-only matching, the analysis evaluates whether cell lines and patient tumours appear near one another across unsupervised feature-distance representations.
+This workflow evaluates DSMZ cell-line profiles in a patient-referenced expression space. It constructs unsupervised feature–distance representations and quantifies patient-referenced tumour-neighbourhood proximity between DSMZ cell-line profiles and retained tumour samples across those representations. Resolved-graph construction then retains cell-line adjacencies supported by both cohort-level and cell-line-specific representation criteria, while graph-derived marker contrasts connect resolved graph structure to pan-cancer feature construction.
 
-Graph resolution aggregates stable shared tumour-neighbourhood support into a threshold-constrained graph-resolution layer. Graph-derived marker contrasts connect graph structure to pan-cancer feature-panel construction. Reciprocal ranking evaluates post hoc cancer-type agreement in the configured marker-derived feature space.
+Reciprocal ranking prioritises DSMZ models within a cohort-informed, graph-derived marker feature space. Cancer-type labels are not used to compute tumour–cell-line similarity scores or rank orderings; BRCA, NBL, and RBL annotations are applied afterwards to evaluate post hoc cancer-type annotation concordance.
 
-## Method overview
+## Workflow overview
 
-The workflow proceeds through the following stages:
+The workflow performs the following stages:
 
-1. Computes source-aware RNA-seq expression objects and variance-stabilising transformation (VST) inputs.
-2. Applies tumour-purity filtering to patient tumour samples.
-3. Derives unsupervised feature-selection outputs from variance, distributional, principal-component, and network-based criteria.
-4. Constructs feature-distance representations from selected genes, expression spaces, and distance or similarity metrics.
-5. Computes adaptive tumour-neighbourhood evidence for cell lines and patient tumours.
-6. Aggregates p-consensus tumour-neighbourhood support within each feature-distance representation.
-7. Performs patient-referenced graph construction from shared tumour-neighbourhood support.
-8. Resolves cell-line neighbours through global-local representation intersection.
-9. Computes DESeq2 graph-derived marker contrasts for isolates, component anchors, and graph components.
-10. Derives the ranked marker-source pan-cancer feature panel.
-11. Performs reciprocal tumour-cell-line ranking in the configured feature space.
-12. Constructs the pan-cancer cell-line-only k-nearest-neighbour similarity network and evaluates Louvain and Leiden community structure.
-13. Evaluates enrichment interpretation outputs and quality-control visualisation.
+1. Validate raw patient-tumour count matrices and gene identifiers.
+2. Estimate tumour purity from a tumour-only expression representation derived inside the purity stage, then apply the configured threshold to the original raw tumour counts.
+3. Join only purity-retained raw tumour counts with raw DSMZ counts, harmonise genes, apply ComBat-seq, and generate joint DESeq2 variance-stabilised matrices.
+4. Derive profile-specific unsupervised feature-selection gene lists from joint VST expression using variance/HVG, MAD/MeanAbsDev, entropy, PCA-loading, and Spearman-, MX-, and WGCNA-derived connectivity criteria.
+5. Combine feature sets, expression spaces, and distance or similarity metrics into feature-distance representations.
+6. Infer adaptive patient tumour neighbourhoods for focal cell-line profiles.
+7. Aggregate p-consensus tumour-neighbourhood support within each representation.
+8. Construct representation-specific patient-referenced cell-line graphs.
+9. Construct a majority-threshold multi-representation consensus network and a union-supported sensitivity network.
+10. Resolve cell-line neighbours by intersecting the global-best neighbour set with the pooled neighbour support from the cell-line-specific tied local-best representation set, then render retained adjacencies as undirected edges.
+11. Identify graph-derived isolate and anchor profiles for differential-expression analysis.
+12. Run DESeq2 isolate and anchor contrasts using cancer-type-specific cell-line count matrices.
+13. Aggregate contrast-level marker evidence into pan-cancer feature panel.
+14. Perform reciprocal tumour--cell-line ranking in the configured pan-cancer feature space.
+15. Construct the pan-cancer cell-line-only \(k\)-nearest-neighbour similarity network.
+16. Compute Louvain and Leiden community assignments and evaluate both algorithms across configured resolution sweeps.
+17. Construct and evaluate functional-enrichment query and background sets for marker interpretation.
+
+## Current analytical design
+
+### Patient-referenced graph resolution
+
+Tumour-neighbourhood evidence is calculated separately within each feature-distance representation. Strong within-representation p-consensus evidence is used to construct representation-specific cell-line graphs. The primary multi-representation consensus network retains edges supported by the configured majority threshold across the representations, using \(m = \max(2, \lfloor |R|/2 \rfloor + 1)\). The union-supported sensitivity network instead retains every edge observed in at least one representation.
+
+Let \(E_r\) denote the undirected edge set of representation \(r\). The global-best representation \(g\) maximises cohort-level `frac_ge_thr`; the resolver orders ties by median `p_consensus` and, when supplied as a distinct field, mean `p_consensus`. Its focal edge set is \(E_G(v) = \{\{v,u\} \in E_g\}\). For each focal cell-line profile \(v\), the local-best set \(L(v)\) contains every representation tied for its highest per-cell-line `frac_ge_thr`, and its pooled local edge set is \(E_L(v) = \bigcup_{r \in L(v)} \{\{v,u\} \in E_r\}\). The resolver retains \(E_G(v) \cap E_L(v)\). The final graph takes the union of these retained focal sets over all \(v\) and renders each retained pair as one undirected edge.
+
+### Graph-derived DESeq2 contrasts
+
+Differential-expression analysis uses cell-line-only raw integer count matrices within each cancer type. Patient tumour samples are not included in the DESeq2 contrasts. Before model fitting, genes with a total raw count below 10 across the relevant cell-line count matrix are removed. Marker retention additionally requires at least 10 DESeq2-normalised counts in the focal isolate or anchor profile.
+
+| Contrast type | Focal profile | Reference profiles | Marker filter |
+| --- | --- | --- | --- |
+| isolate | one degree-zero resolved-graph profile | all other same-cancer-type cell-line profiles | adjusted \(p \leq 0.01\), \(|\log_2\mathrm{FC}| \geq 1.5\), `baseMean >= 10`, maximum 50 markers |
+| anchor | one graph-selected anchor profile | same-cancer-type profiles outside the focal resolved component | adjusted \(p \leq 0.05\), \(|\log_2\mathrm{FC}| \geq 1.0\), `baseMean >= 10`, maximum 200 markers |
+
+For anchor contrasts, non-anchor profiles from the focal component are excluded from the reference set. Marker-list caps are maxima, not required list sizes.
+
+### Pan-cancer feature selection
+
+Marker recurrence is counted separately within each cancer type and marker-evidence stratum.
+
+- Genes observed in at least two filtered contrast-level marker lists are included directly as recurrent evidence.
+- Genes observed once are separated into singleton candidates or non-recurrent candidates according to the number of available contrast lists in the relevant cancer type and marker-evidence stratum.
+- Singleton and non-recurrent candidate genes are accepted only when they pass all three empirical evidence criteria:
+  - minimum adjusted \(p\)-value at or below the candidate-pool first quartile;
+  - median absolute \(\log_2\) fold change at or above the candidate-pool third quartile;
+  - median `baseMean` at or above the candidate-pool median.
+- Empirical thresholds are estimated within cancer type, marker-evidence stratum, and candidate-pool type.
+- The final panel is the union of recurrent genes, accepted singleton candidates, and accepted non-recurrent candidates.
 
 ## Repository structure
 
+The public repository contains workflow source code, configuration, small resources, environment definitions, documentation, tests, and the synthetic minimal example.
+
 ```text
 .
-├── README.md                         # project overview
-├── Snakefile                         # main Snakemake workflow
-├── config/                           # workflow configuration and study-design manifest
-├── rules/                            # included Snakemake rule modules
-├── scripts/                          # R, Python, and shell scripts called by rules
-├── R/                                # shared R helper functions
-├── envs/                             # Conda environment specifications
-├── resources/                        # small curated resources, such as gene lists and symbol maps
-├── preprocessing_and_quality_control/ # upstream preprocessing workflows and environment specifications
-├── profiles/                         # Snakemake profile configuration
-├── docs/                             # project documentation
-├── reports/                          # generated or local reporting artifacts
-├── validation/                       # validation scripts and run records
-├── supplementary_data/               # curated supplementary data
-├── figures/                          # selected curated figures
-├── data/                             # external input data; excluded from GitHub
-├── results/                          # generated workflow outputs; excluded by default except curated exports
-├── logs/                             # runtime logs; excluded from GitHub
-├── reference_data/                   # external reference and index resources; excluded from GitHub
-└── .snakemake/                       # Snakemake runtime state; excluded from GitHub
+├── README.md                          # project overview and usage notes
+├── Snakefile                          # main Snakemake workflow
+├── config/                            # workflow configuration and study-design files
+├── rules/                             # included Snakemake rule modules
+├── scripts/                           # R, Python, and shell scripts called by rules
+├── R/                                 # shared R helper functions
+├── envs/                              # Conda environment specifications
+├── resources/                         # small curated resources and identifier maps
+├── preprocessing_and_quality_control/ # preprocessing workflows for tumour-purity analysis, batch correction, and normalisation
+├── profiles/                          # local and SLURM Snakemake profiles
+├── docs/                              # project documentation
+├── examples/minimal/                  # tiny synthetic schema-compatible inputs
+└── tests/                             # repository checks and test-related files
 ```
-
-The repository excludes raw data, large generated outputs, runtime state, and local environment artifacts through ignore policies. Selected curated outputs may be versioned when they support reproducibility or release documentation.
 
 ## Quick start
 
-No bundled toy dataset is currently provided. Full execution requires prepared expression/count inputs, reference resources, and profile-specific configuration. Repository-level checks, configuration inspection, and Snakemake dry-runs can still be used to validate the workflow structure after cloning.
-
-Typical first checks are:
+Clone the repository and create the Snakemake driver environment:
 
 ```bash
-git status
-snakemake --list --config pipeline_profile=brca
-snakemake -n --use-conda --config pipeline_profile=brca
+git clone --depth 1 https://github.com/EltonUgbogu/classification_of_dsmz_celllines.git
+cd classification_of_dsmz_celllines
+conda env create -f envs/smk.yaml
+conda activate smk
 ```
 
-Runtime and memory requirements depend on the selected profile, available input matrices, and enabled optional stages. Lightweight checks such as `snakemake -n` and `snakemake --list` can be run locally. Full RNA-seq preprocessing, clustering grids, graph construction, and enrichment stages are intended for a configured execution environment with sufficient CPU, memory, and storage.
+List the available rules:
 
-Verified execution-profile settings include:
+```bash
+snakemake --list --config pipeline_profile=brca
+```
 
-| profile file | configured setting |
-| --- | --- |
-| `profiles/local/config.yaml` | `cores: 8`; `use-conda: true` |
-| `profiles/slurm/config.yaml` | `jobs: 200`; default `mem_mb=4000`, `runtime=60`, `threads=1`; rule-specific overrides for selected pan-cancer rules |
+Run the bundled synthetic validation target:
+
+```bash
+snakemake -n --use-conda test_minimal_inputs --config pipeline_profile=brca
+snakemake --use-conda --cores 1 test_minimal_inputs --config pipeline_profile=brca
+```
+
+The synthetic target checks the expected matrix and metadata schemas and the inclusion of the rule in the main workflow. It does not execute the full biological analysis or produce scientifically interpretable results.
 
 ## Installation
-
-Clone the repository with HTTPS:
-
-```bash
-git clone https://github.com/EltonUgbogu/classification_of_dsmz_celllines.git
-cd classification_of_dsmz_celllines
-git status
-```
-
-An SSH clone is also valid when GitHub SSH keys are configured:
-
-```bash
-git clone git@github.com:EltonUgbogu/classification_of_dsmz_celllines.git
-cd classification_of_dsmz_celllines
-git status
-```
 
 The driver Snakemake environment is defined by [`envs/smk.yaml`](envs/smk.yaml) and uses the Conda environment name `smk`:
 
@@ -121,135 +145,149 @@ conda env create -f envs/smk.yaml
 conda activate smk
 ```
 
-The workflow uses per-rule Conda environments through `--use-conda`. Main rule environments include:
+The workflow uses per-rule Conda environments through `--use-conda`. Tracked environment definitions include:
 
-- [`envs/tcga-r-env.yaml`](envs/tcga-r-env.yaml): R analysis rules, including DESeq2, clustering, ranking, enrichment, and plotting.
-- [`envs/python-graph-env.yaml`](envs/python-graph-env.yaml): Python graph construction and plotting utilities.
-- [`envs/tumour_nh_qc.yaml`](envs/tumour_nh_qc.yaml): tumour-neighbourhood quality-control and UMAP (Uniform Manifold Approximation and Projection) rules.
+- [`envs/tcga-r-env.yaml`](envs/tcga-r-env.yaml): the principal R analysis environment, including DESeq2, clustering, ranking, enrichment, and plotting dependencies;
+- [`envs/python-graph-env.yaml`](envs/python-graph-env.yaml): Python graph construction and plotting utilities;
+- [`envs/tumour_nh_qc.yaml`](envs/tumour_nh_qc.yaml): tumour-neighbourhood quality control and UMAP dependencies;
+- [`envs/r-base.yaml`](envs/r-base.yaml): lightweight R rules where the full analysis environment is unnecessary.
 
-Additional upstream preprocessing environments are stored under [`preprocessing_and_quality_control/envs/`](preprocessing_and_quality_control/envs/).
+Additional preprocessing environments are stored under [`preprocessing_and_quality_control/envs/`](preprocessing_and_quality_control/envs/).
 
-## Data availability
+Install Conda, Mamba, or an equivalent compatible environment manager separately, then construct the tracked environments from the YAML definitions.
 
-Raw FASTQ, BAM/CRAM, reference genome, index, and large intermediate files are not stored in GitHub. Controlled-access or bulky data must be obtained from the original repositories or made available in the execution environment before running the workflow.
+## Synthetic minimal example
 
-Source abbreviations used by the project include TCGA (The Cancer Genome Atlas), GDC (Genomic Data Commons), GEO (Gene Expression Omnibus), SRA (Sequence Read Archive), ENA (European Nucleotide Archive), and TARGET (Therapeutically Applicable Research to Generate Effective Treatments). Curated data-description files record transformed inputs, retained tumour identifiers, cell-line metadata, unavailable sources, and checksum information without redistributing restricted raw sequencing data.
+The repository includes tiny synthetic BRCA, NBL, and RBL inputs under [`examples/minimal/`](examples/minimal/). They contain:
 
-| Repository item | GitHub policy | Reason |
-| --- | --- | --- |
-| `Snakefile`, `config/`, `rules/`, `scripts/`, `R/` | tracked | workflow source and reproducible method definition |
-| `envs/*.yaml` | tracked | portable Conda environment specifications |
-| Raw FASTQ/BAM/CRAM/SRA files | excluded | controlled-access, bulky, or reconstructable from original repositories |
-| Reference genomes, indexes, and large annotations | excluded | bulky external resources |
-| `data/` and full `results/` trees | excluded by default | external inputs, intermediates, and generated outputs |
-| Selected final tables and supplementary data | tracked when curated | reproducibility and release documentation |
-| Selected final figures | tracked when curated | reporting outputs |
-| `.snakemake/`, `logs/`, `benchmarks/`, Conda payloads | excluded | runtime state and local execution artifacts |
+- synthetic Ensembl-like gene identifiers;
+- synthetic cell-line and tumour sample identifiers;
+- small numeric VST-like matrices stored as RDS files;
+- metadata tables describing the synthetic samples.
 
-The 171-gene analysis is retained only as archived provenance material under [`supplementary_data/archive/stale_171_gene_panel/`](supplementary_data/archive/stale_171_gene_panel/) and is not part of the current active feature space.
+The matrices reproduce the object class expected by the validation target: a numeric R `matrix`/`array` with genes as rows and samples as columns. They are not biologically meaningful.
+
+Regenerate the synthetic inputs:
+
+```bash
+Rscript examples/minimal/make_synthetic_minimal_inputs.R
+```
+
+Validate them directly:
+
+```bash
+Rscript scripts/validate_minimal_example_inputs.R examples/minimal
+```
+
+Validate them through Snakemake:
+
+```bash
+snakemake -n --use-conda test_minimal_inputs --config pipeline_profile=brca
+snakemake --use-conda --cores 1 test_minimal_inputs --config pipeline_profile=brca
+```
+
+The Snakemake rule creates `results/tests/minimal_inputs.ok` as a generated touch file. It should not be committed.
+
+## Data and outputs
+
+Raw FASTQ, BAM/CRAM, SRA files, reference genomes, STAR indexes, large count matrices, complete VST matrices, full result trees, runtime logs, and most generated outputs are not redistributed in the main repository.
+
+Abbreviations used by the project include TCGA, GDC, GEO, SRA, ENA, and TARGET.
 
 ## Configuration
 
-The main workflow configuration is [`config/config.yaml`](config/config.yaml). The study-design manifest is [`config/study_design.yaml`](config/study_design.yaml). Paths in the configuration are relative to the repository root unless explicitly absolute.
+The main workflow configuration is [`config/config.yaml`](config/config.yaml). Cohort design, candidate-inference settings, and study-level metadata are recorded in [`config/study_design.yaml`](config/study_design.yaml). Paths are interpreted relative to the repository root unless explicitly provided as absolute paths.
 
-Before the first run, configure the local data locations:
+The configuration separates biological study design, data interfaces, analysis parameters, and runtime paths. Before a full run:
 
-- Main workflow inputs are under `profiles.<profile>.paths` in `config/config.yaml`. Relative values resolve from the repository root; absolute values may point to external storage.
-- NBL and RBL preprocessing roots and reference files are configured in `preprocessing_and_quality_control/nbl/config/config.yaml` and `preprocessing_and_quality_control/rbl/config/config.yaml`. Set `data_root` and the `genome.star_index`, `genome.gtf`, and `genome.fasta` values for the execution environment.
-- Standalone download and preprocessing helpers accept `BRCA_DATA_ROOT`, `NBL_DATA_ROOT`, `RBL_DATA_ROOT`, `TARGET_NBL_DIR`, `REFERENCE_ROOT`, and `STAR_INDEX_DIR` environment overrides. `CONDA_SH_PATH` may identify a non-standard Conda installation.
-- `external_inputs.retained_source_contrasts` is optional. Set it to the local TSV path only when rebuilding the corresponding g:Profiler query sets; `GPROFILER_RETAINED_SOURCE_CONTRASTS` is the equivalent environment override.
+- configure profile-specific inputs under `profiles.<profile>.paths` in [`config/config.yaml`](config/config.yaml);
+- make the required count matrices, expression matrices, metadata tables, gene-identifier references, tumour-purity outputs, and DSMZ cell-line annotations available;
+- confirm that preprocessing outputs for BRCA, NBL, and RBL point to the intended retained tumour and DSMZ cell-line expression objects;
+- ensure that cancer-type-specific DESeq2 inputs use raw, non-negative integer count matrices rather than transformed expression values;
+- verify that feature-selection, tumour-neighbourhood, graph-resolution, ranking, network, and enrichment parameters match the intended analysis profile;
+- use repository-relative paths for reproducible workflow inputs wherever possible;
+- use absolute paths or an untracked local configuration override only for machine-specific storage locations;
 
-Repository-relative defaults preserve the existing layout when data are stored under `data/`. Large data and references may instead remain outside the checkout by using absolute values in a local configuration override. Machine-specific paths should not be committed.
 
-`pipeline_profile` selects the configured analysis profile:
+`pipeline_profile` selects the active analysis profile:
 
-| profile | biological scope | notes |
+| profile | scope | notes |
 | --- | --- | --- |
-| `brca` | breast cancer | full unsupervised grid plus PAM50 directions |
-| `nbl` | neuroblastoma | full unsupervised grid without PAM50 |
-| `rbl` | retinoblastoma | full unsupervised grid without PAM50 |
-| `heme` | haematological malignancy profiles | configured for cell-line network analyses; not part of the BRCA/NBL/RBL active pan-cancer feature panel |
-| `multicohort_cancer` | combined BRCA, NBL, and RBL | adds PanCancerFeatureSet directions and shared multicohort outputs |
+| `brca` | breast cancer | patient-referenced BRCA workflow using retained TCGA-BRCA tumour samples and DSMZ BRCA cell-line profiles |
+| `nbl` | neuroblastoma | patient-referenced NBL workflow using retained NBL tumour samples and DSMZ NBL cell-line profiles |
+| `rbl` | retinoblastoma | patient-referenced RBL workflow using retained RBL tumour samples and DSMZ RBL cell-line profiles |
+| `heme` | standalone haematological malignancy analysis | uses configured LAML and CLL tumour-expression inputs; only its cell-line profiles provide auxiliary context to the BRCA/NBL/RBL pan-cancer cell-line network |
+| `multicohort_cancer` | combined BRCA, NBL, and RBL | multicohort patient-referenced analysis and compatibility profile for explicit pan-cancer targets |
+| `pan_cancer` | marker-derived pan-cancer analysis | selectable profile for shared feature-space, ranking, enrichment, and cell-line network products under `results/unsupervised/pan_cancer` |
 
-`pan_cancer` is an output namespace, not a selectable Snakemake profile.
+## Running the full workflow
 
-## Running the workflow
+Run commands from the repository root. Full execution requires prepared inputs, configured paths, adequate storage, and sufficient CPU and memory.
 
-Commands are run from the repository root. Dry-runs build the directed acyclic graph without executing jobs:
+After the required inputs are available, inspect the directed acyclic graph for each profile with a dry-run:
 
 ```bash
 snakemake -n --use-conda --config pipeline_profile=brca
 snakemake -n --use-conda --config pipeline_profile=nbl
 snakemake -n --use-conda --config pipeline_profile=rbl
-snakemake -n --use-conda --config pipeline_profile=multicohort_cancer
 snakemake -n --use-conda --config pipeline_profile=heme
+snakemake -n --use-conda --config pipeline_profile=multicohort_cancer
+snakemake -n --use-conda --config pipeline_profile=pan_cancer
 ```
 
-Execution uses the same profile selection with an explicit core count:
+Execute the required profile locally with an explicit core count:
 
 ```bash
 snakemake --use-conda --cores 8 --config pipeline_profile=brca
 snakemake --use-conda --cores 8 --config pipeline_profile=nbl
 snakemake --use-conda --cores 8 --config pipeline_profile=rbl
-snakemake --use-conda --cores 8 --config pipeline_profile=multicohort_cancer
 snakemake --use-conda --cores 8 --config pipeline_profile=heme
+snakemake --use-conda --cores 8 --config pipeline_profile=multicohort_cancer
+snakemake --use-conda --cores 8 --config pipeline_profile=pan_cancer
 ```
 
-Specific rules or exact file targets can be dry-run or executed without requesting the default target. A verified rule-level example for the pan-cancer two-panel figure is:
+On a SLURM cluster, inspect and adapt [`profiles/slurm/config.yaml`](profiles/slurm/config.yaml) before execution:
 
 ```bash
-snakemake -n --use-conda plot_pan_cancer_cell_line_two_panel --config pipeline_profile=multicohort_cancer
-snakemake --use-conda --cores 4 plot_pan_cancer_cell_line_two_panel --config pipeline_profile=multicohort_cancer
+snakemake --profile profiles/slurm --config pipeline_profile=multicohort_cancer
 ```
 
-A verified file target for the same rule is:
+Specific rules or output targets may be requested directly. For example:
 
 ```bash
-TARGET_FILE=figures/Fig_pan_cancer_cell_line_similarity_network_lineage_community.pdf
-snakemake -n --use-conda "$TARGET_FILE" --config pipeline_profile=multicohort_cancer
-snakemake --use-conda --cores 4 "$TARGET_FILE" --config pipeline_profile=multicohort_cancer
+snakemake --use-conda --cores 1 test_minimal_inputs --config pipeline_profile=brca
 ```
 
-## Outputs
+## Expected output classes
 
-### Current pan-cancer feature panel
+When the required real inputs are available, the workflow can generate:
 
-The current pan-cancer feature panel is graph-informed and DESeq2 marker-derived:
-
-- method: `graph_derived_pan_cancer_feature_selection_v1_revised`
-- selection route: recurrent direct retention plus all-three acceptance for singleton and non-recurrent candidates
-- feature table: [`supplementary_data/feature_space/pan_cancer_features.tsv`](supplementary_data/feature_space/pan_cancer_features.tsv)
-- clean Ensembl list: [`supplementary_data/feature_space/pan_cancer_features_clean.txt`](supplementary_data/feature_space/pan_cancer_features_clean.txt)
-
-Marker-source-class membership records whether a retained marker had anchor-derived or isolate-derived graph-derived marker evidence within a cancer type. Membership is non-exclusive.
-
-### Curated supplementary data
-
-See [`supplementary_data/README.md`](supplementary_data/README.md) for file-level descriptions. The top-level categories are:
-
-| directory | contents |
-| --- | --- |
-| `supplementary_data/feature_space/` | current pan-cancer feature panel and marker-source annotations |
-| `supplementary_data/ranking/` | tumour-to-cell-line and cell-line-to-tumour ranking metrics |
-| `supplementary_data/tumour_neighbourhood/` | patient-neighbourhood and resolved-neighbour outputs |
-| `supplementary_data/pan_cancer_similarity/` | pan-cancer cell-line network and community outputs |
-| `supplementary_data/model_prioritisation/` | model-prioritisation inputs and scores |
-| `supplementary_data/enrichment/` | enrichment query, background, and result tables |
-| `supplementary_data/data_description/` | input descriptions, retained samples, exclusions, and checksums |
-| `supplementary_data/manifests/` | file manifests, checksums, and figure provenance |
-| `supplementary_data/archive/` | provenance-only stale or historical outputs |
-
-Selected curated figures are stored under [`figures/`](figures/), and figure provenance is recorded in [`supplementary_data/manifests/figure_manifest.tsv`](supplementary_data/manifests/figure_manifest.tsv).
+- source-aware count and expression objects;
+- tumour-purity-filtered patient sample sets;
+- unsupervised feature-selection outputs;
+- feature-distance representation outputs;
+- patient tumour-neighbourhood and p-consensus support tables;
+- representation-specific patient-referenced graphs;
+- majority-threshold consensus-network and union-supported sensitivity-network outputs;
+- resolved cell-line neighbours and node summaries;
+- graph-derived DESeq2 marker tables;
+- pan-cancer feature-panel tables;
+- reciprocal tumour--cell-line ranking metrics;
+- pan-cancer cell-line similarity-network outputs;
+- Louvain and Leiden community and sensitivity summaries;
+- functional-enrichment query, background, result, and plotting tables;
+- selected figures, manifests, and run reports.
 
 ## Reproducibility checks
 
-Common repository checks include:
+Repository-level checks that do not require the real datasets include:
 
 ```bash
-git status
+git status --short --branch
 snakemake --list --config pipeline_profile=brca
-snakemake -n --use-conda --config pipeline_profile=brca
-sha256sum -c supplementary_data/manifests/checksums_sha256.tsv
+Rscript scripts/validate_minimal_example_inputs.R examples/minimal
+snakemake -n --use-conda test_minimal_inputs --config pipeline_profile=brca
+snakemake --use-conda --cores 1 test_minimal_inputs --config pipeline_profile=brca
 ```
 
 Optional rule-graph visualisation can be generated when Graphviz is installed:
@@ -258,34 +296,48 @@ Optional rule-graph visualisation can be generated when Graphviz is installed:
 snakemake --rulegraph --config pipeline_profile=brca | dot -Tpdf > rulegraph_brca.pdf
 ```
 
-Generated workflow outputs are intentionally excluded from GitHub by default. A clean Git state does not imply that all generated outputs are present.
+Full-analysis releases should provide checksums and manifests alongside the corresponding release assets or archival deposit.
 
-## Interpretation notes
+## Interpretation guide
 
-High tumour-cell-line similarity indicates rank-based transcriptomic proximity in the configured feature space. It does not establish model relevance, causal similarity, or functional substitutability.
+### Patient tumour neighbourhoods and graph outputs
 
-Resolved neighbours indicate stable patient-referenced support after applying the configured global-best and local-best representation rules. Isolates indicate lack of retained graph-resolved neighbours under the threshold-constrained graph-resolution rules; they do not indicate absence of tumour similarity.
+Patient tumour-neighbourhood support describes how consistently retained tumour samples are assigned near a focal cell-line profile within the configured representations. Patient-referenced edges and resolved neighbours show shared tumour-neighbourhood evidence under the selected thresholds and representation rules.
 
-The patient-referenced graph is a support-filtered graph representation of shared tumour-neighbourhood evidence, not a direct biological interaction network.
+An isolate is therefore a profile without a retained resolved cell-line neighbour. It may still show strong similarity to patient tumours in ranking analyses.
 
-Marker-derived features reflect graph-informed contrast selection and filtering. Enrichment terms provide interpretability and must be interpreted with respect to the configured query sets, background definitions, source databases, and multiple-testing correction.
+### Reciprocal tumour--cell-line ranking
 
-Ranking metrics assess agreement with annotated cancer type after unsupervised analysis. They are post hoc agreement metrics rather than training objectives.
+Reciprocal ranking provides **relative transcriptomic model prioritisation** among the configured candidate cell-line profiles and retained patient tumour samples. A favourable rank supports prioritisation within that analysis space; it is not a universal declaration that the model is suitable for every biological question.
 
-## Limitations
+Post hoc cancer-type annotation-concordance metrics describe whether highly ranked tumour--cell-line relationships share the annotated cancer type after the graph-informed ranking stage. They are evaluation measures, not training objectives.
 
-- RNA-seq source effects and sample-type confounding can affect transcriptomic proximity.
-- Feature-set dependence and distance-metric dependence influence graph topology and rank ordering.
-- Threshold dependence affects p-consensus support calls and the graph-resolved neighbourhood.
-- High-dimensional nearest-neighbour instability can arise from preprocessing, scaling, and sparse rank margins.
-- Small rank-margin sensitivity can alter model-prioritisation order when candidates have similar scores.
-- Tumour-purity uncertainty and cohort-composition dependence affect the patient-reference space.
-- Functional-enrichment signal can be limited by query size, background definition, annotation coverage, and multiple-testing correction.
-- Cell-line model prioritisation requires independent experimental, perturbational, or pharmacological validation beyond transcriptomic similarity.
-- Controlled-access and bulky data are not redistributed, so full reproduction requires access to the original data sources or equivalent prepared inputs.
+### Pan-cancer cell-line network
+
+The cell-line-only network describes transcriptomic proximity among DSMZ profiles in the selected pan-cancer feature space. Louvain and Leiden assignments, together with their configured resolution sweeps, assess community structure and its sensitivity to the algorithm and resolution setting. Co-assignment indicates network proximity under those settings; it does not by itself establish a shared biological programme, molecular subtype, or functional equivalence.
+
+### Functional enrichment
+
+Functional-enrichment results provide biological context for graph-derived marker sets. Their interpretation is conditional on the query definition, eligible background, annotation source, database version, and multiple-testing procedure.
+
+## Scope, assumptions, and validation requirements
+
+The workflow provides computational transcriptomic model prioritisation. Its results should be interpreted under the following assumptions:
+
+- The unsupervised patient-referenced workflow is defined by the tumour samples retained after ESTIMATE-based purity filtering. Retained cohort composition, cancer-subtype representation, and tumour microenvironmental admixture may influence tumour-neighbourhood structure, graph resolution, and ranking results.
+
+- Expression-space proximity is affected by RNA-seq source effects, library-preparation differences, count processing, normalisation, batch correction, and systematic differences between patient tumour and DSMZ cell-line samples.
+
+- The inferred patient-referenced graph depends on the configured feature-selection components, expression transformation, distance or similarity metric, `p_consensus` threshold, and cross-representation support rule. These choices may affect graph topology, resolved-neighbour status, isolate/anchor assignment, and final rank ordering.
+
+- Tumour–cell-line ranking was performed in a graph-derived pan-cancer marker feature space constructed from recurrent and empirically retained isolate- and anchor-associated DESeq2 markers, rather than across the full transcriptome. This reduces, but does not remove, high-dimensional nearest-neighbour instability and distance-concentration effects; rankings should therefore be interpreted cautiously when the highest-ranked DSMZ models have similar Spearman similarity scores.
+
+- Reciprocal ranking prioritises DSMZ cell-line models relative to the configured candidate set and retained patient-reference cohorts. It does not establish universal model validity, causal equivalence, or suitability for every experimental endpoint.
+
+- Functional-enrichment findings depend on the retained marker lists, enrichment-query construction, eligible gene background, query size, annotation coverage, database version, and multiple-testing correction.
+
+- The computational classification and model prioritisation performed by the workflow require independent biological, perturbational, or pharmacological validation before experimental or translational conclusions are drawn.
 
 ## Citation and contact
 
 Repository: [classification_of_dsmz_celllines](https://github.com/EltonUgbogu/classification_of_dsmz_celllines)
-
-Citation metadata and release DOI information will be added when a versioned software release is archived.
