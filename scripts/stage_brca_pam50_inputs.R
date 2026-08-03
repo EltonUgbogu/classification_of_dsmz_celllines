@@ -5,7 +5,7 @@ options(stringsAsFactors = FALSE)
 parse_args_simple <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   out <- list(
-    joint_rds = "data/brca/brca_vst_joint.rds",
+    joint_rds = "preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds",
     genes = "resources/pam50_ensembl_ids.txt",
     metadata = "data/dsmz/DSMZ_metadata.csv",
     out_expr = "results/unsupervised/brca/tumour_neighbourhoods_input/expr_pam50.rds",

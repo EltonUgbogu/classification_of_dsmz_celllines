@@ -483,11 +483,11 @@ features[, source_lineage_or_contrast := fifelse(
   fifelse(nzchar(recurrent_disease), recurrent_disease, isolate_source_contrasts)
 )]
 features[, selection_reason := fifelse(
-  source_category == "strict recurrent core" & nzchar(isolate_source_contrasts),
-  "strict recurrent core marker retained in pan-cancer feature set; also supported by isolate rescue contrast",
+  source_category == "recurrence-supported core" & nzchar(isolate_source_contrasts),
+  "recurrence-supported core marker retained in pan-cancer feature set; also supported by isolate rescue contrast",
   fifelse(
-    source_category == "strict recurrent core",
-    "strict recurrent core marker retained in pan-cancer feature set",
+    source_category == "recurrence-supported core",
+    "recurrence-supported core marker retained in pan-cancer feature set",
     "isolate rescue marker retained in pan-cancer feature set"
   )
 )]

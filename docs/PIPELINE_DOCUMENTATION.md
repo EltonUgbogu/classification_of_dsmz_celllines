@@ -447,7 +447,7 @@
 #       cancer_type: "BRCA"
 #       use_pam50: true
 #     paths:
-#       vst_joint_rds: "data/brca/vst_joint.rds"
+#       vst_joint_rds: "preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds"
 #   nbl:
 #     analysis:
 #       cancer_type: "NBL"

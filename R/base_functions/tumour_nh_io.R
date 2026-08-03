@@ -19,7 +19,7 @@ get_nh_methods <- function(unsup_root, direction) {
   
   stopifnot(dir.exists(unsup_root))
   # Accept any direction ending in _euc or _corr (all feature sets + PAM50 + HVG)
-  # Remove the hardcoded restriction to allow Variance_euc, MAD_euc, etc.
+  # Remove the hardcoded constraint to allow Variance_euc, MAD_euc, etc.
   if (!grepl("_(euc|corr)$", direction)) {
     stop("direction must end with _euc or _corr, got: ", direction)
   }

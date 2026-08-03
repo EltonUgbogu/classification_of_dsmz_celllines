@@ -56,7 +56,7 @@ Supporting TSVs:
     figure_provenance.tsv
     plot_publication_cell_line_similarity_and_resolved_networks.log
 
-Strict mode (default) requires all three cohorts. --allow-missing-cohorts is
+Complete-cohort mode (default) requires all three cohorts. --allow-missing-cohorts is
 for diagnostic runs only.
 """
 
@@ -1620,7 +1620,7 @@ def parse_args():
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
-            Strict mode (default) — all three cohorts required:
+            Complete-cohort mode (default) — all three cohorts required:
               python %(prog)s \\
                 --brca-tn-dir PATH --brca-resolved PATH \\
                 --nbl-tn-dir  PATH --nbl-resolved  PATH \\
@@ -1709,7 +1709,7 @@ def main():
                 missing.append(c)
         if missing:
             sys.exit(
-                "[ERROR] Strict mode requires both --<cohort>-tn-dir and "
+                "[ERROR] Complete-cohort mode requires both --<cohort>-tn-dir and "
                 f"--<cohort>-resolved for: {', '.join(missing)}.\n"
                 "  Pass --allow-missing-cohorts only for diagnostic runs."
             )
@@ -1977,7 +1977,7 @@ def main():
         cohort_data[cohort] = d
 
     # ------------------------------------------------------------------
-    # 2. Validate at least Fig 2 is fully covered for strict mode
+    # 2. Validate at least Fig 2 is fully covered for complete-cohort mode
     # ------------------------------------------------------------------
     if not args.allow_missing_cohorts:
         missing_res = [c for c in COHORTS
@@ -1986,7 +1986,7 @@ def main():
             write_validation_report(val_rows, out_dir)
             sys.exit(
                 "[ERROR] Resolved network could not be built for: "
-                f"{', '.join(missing_res)}. Strict mode aborted."
+                f"{', '.join(missing_res)}. Complete-cohort mode aborted."
             )
 
     write_validation_report(val_rows, out_dir)

@@ -98,7 +98,7 @@ load_expr_mat <- function(path) {
 #
 # Statistical considerations:
 #   • When operating in integrated (cell_tumour) mode, the feature space is
-#     restricted to the intersection of genes present in both cohorts. This
+#     limited to the intersection of genes present in both cohorts. This
 #     ensures that all pairwise distances and PC loadings are computed on a
 #     consistent, jointly observed feature set, avoiding spurious dissimilarity
 #     attributable to missing features rather than true biological divergence.
@@ -130,7 +130,7 @@ build_sample_matrix <- function(kind,
     cell_gx   <- load_expr_mat(cell_rds)    # genes × cell line samples
     tumour_gx <- load_expr_mat(tumour_rds)  # genes × tumour samples
 
-    # Feature alignment: restrict to genes measured in both cohorts.
+    # Feature alignment: limit to genes measured in both cohorts.
     common_genes <- intersect(rownames(cell_gx), rownames(tumour_gx))
     if (!length(common_genes)) {
       stop("No common genes between cell and tumour matrices.")
@@ -207,7 +207,7 @@ build_sample_matrix <- function(kind,
 #   Constant genes carry no discriminatory information: their contribution to
 #   Euclidean distances is zero, and their inclusion in PCA introduces
 #   ill-conditioned covariance estimates. By default, min_sd = 0 removes only
-#   strictly constant genes; a stricter threshold may be applied to further
+#   exactly constant genes; a more stringent threshold may be applied to further
 #   attenuate low-information features. A minimum of five genes is enforced
 #   as a safeguard against degenerate downstream analyses.
 # -----------------------------------------------------------------------------
@@ -504,7 +504,7 @@ run_agnostic_clustering <- function(kind,
   X       <- built$mat
   dataset <- built$dataset
 
-  # Step 1b: Baseline QC — remove strictly constant genes (SD = 0).
+  # Step 1b: Baseline QC — remove exactly constant genes (SD = 0).
   X <- filter_zero_var_genes(X, min_sd = 0)
 
   # ------------------------------------------------------------------

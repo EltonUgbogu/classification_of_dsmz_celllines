@@ -827,10 +827,9 @@ profiles:
         - HVG
     paths:
       unsup_root: results/unsupervised/brca
-      vst_joint_rds: data/brca/brca_vst_joint.rds
-      cell_vst_rds: data/brca/tmp/brca_vst_joint_cell_lines.rds
-      tumour_vst_rds: data/brca/tmp/brca_vst_joint_tumours.rds
-      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+      vst_joint_rds: preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds
+      cell_vst_rds: preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/dsmz_vst_purity_filtered_post_bc.rds
+      tumour_vst_rds: preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/tumour_vst_purity_filtered_post_bc.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -853,6 +852,12 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
+      # Existing BRCA PAM50 p-consensus artefacts are included only in the
+      # cross-direction summaries and Cleveland plot. They are not routed
+      # through the generic feature-selection or neighbourhood rules.
+      additional_summary_directions:
+        - pam50_euc
+        - pam50_corr
     features:
       mx_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/mx_joint_scores.tsv
       mx_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/mx_final_gene_list.txt
@@ -879,10 +884,9 @@ profiles:
         - HVG
     paths:
       unsup_root: results/unsupervised/nbl
-      vst_joint_rds: data/nbl/nbl_vst_joint.rds
-      cell_vst_rds: data/nbl/tmp/nbl_vst_joint_cell_lines.rds
-      tumour_vst_rds: data/nbl/tmp/nbl_vst_joint_tumours.rds
-      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+      vst_joint_rds: preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds
+      cell_vst_rds: preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/dsmz_vst_purity_filtered_post_bc.rds
+      tumour_vst_rds: preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/tumour_vst_purity_filtered_post_bc.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -931,10 +935,9 @@ profiles:
         - HVG
     paths:
       unsup_root: results/unsupervised/rbl
-      vst_joint_rds: data/rbl/rbl_vst_joint.rds
-      cell_vst_rds: data/rbl/tmp/rbl_vst_joint_cell_lines.rds
-      tumour_vst_rds: data/rbl/tmp/rbl_vst_joint_tumours.rds
-      dsmz_counts_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
+      vst_joint_rds: preprocessing_and_quality_control/rbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds
+      cell_vst_rds: preprocessing_and_quality_control/rbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/dsmz_vst_purity_filtered_post_bc_collapsed_cellline.rds
+      tumour_vst_rds: preprocessing_and_quality_control/rbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/tumour_vst_purity_filtered_post_bc.rds
       dsmz_meta_csv: data/dsmz/DSMZ_metadata.csv
       meta_tsv: data/dsmz/DSMZ_metadata.csv
     tumour_neighbourhoods:
@@ -1044,6 +1047,9 @@ pan_cancer_cell_line_similarity:
   louvain_resolution_sweep: [0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.75, 1.0]
   # Configures full-expression sensitivity inputs for the cell-line-only network.
   full_expression:
+    # This is a transformed 58-profile DSMZ VST matrix for downstream
+    # expression-space sensitivity analysis only. It is never a raw-count
+    # preprocessing or batch-correction input.
     dsmz_vst_rds: data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds
     dsmz_metadata_tsv: results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv
     heme_vst_rds: data/heme/heme_joint_expr_vst_batch_corrected.rds

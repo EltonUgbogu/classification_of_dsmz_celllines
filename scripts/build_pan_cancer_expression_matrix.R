@@ -3,7 +3,7 @@
 # build_pan_cancer_expression_matrix.R
 # =============================================================================
 #
-# Build a feature-restricted pan-cancer expression object by combining the
+# Build a feature-limited pan-cancer expression object by combining the
 # BRCA, NBL, and RBL joint VST matrices (optional HEME) into a single list
 # containing expr, meta, and genes. The gene set is supplied by
 # pan_cancer_features_clean.txt and the output preserves that ordering.
@@ -287,7 +287,7 @@ result <- list(
 )
 
 saveRDS(result, file = opt$output)
-cat(sprintf("[OK] Saved feature-restricted expression matrix: %s\n", opt$output))
+cat(sprintf("[OK] Saved feature-limited expression matrix: %s\n", opt$output))
 cat(sprintf("      Dimensions: %d genes x %d samples\n",
             nrow(combined_expr), ncol(combined_expr)))
 

@@ -1,7 +1,15 @@
 profiles:
   nbl:
-    tumour_rds: "data/nbl/tests/fixtures/VST_NBL_brca.rds"
-    dsmz_rds: "data/dsmz/DSMZ_count_gene.rds"
+    # Standalone integration tests must consume genuine raw counts. Until a
+    # dedicated fixture exists, use the validated purity-retained raw object.
+    tumour_rds: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
+    tumour_meta_csv: "data/nbl/count_data/nbl_tumour_sample_metadata.csv"
+    retained_samples: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/retained_samples.tsv"
+    excluded_samples: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
+    purity_validation: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/purity_stage_validation.ok"
+    expected_tumour_samples: 235
+    output_dir: "preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess"
+    dsmz_rds: "preprocessing_and_quality_control/nbl/results/dsmz_input/DSMZ_nbl_raw_counts.rds"
     dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
     min_shared_genes: 5000
     tumour_label: "NBL_TUMOUR"

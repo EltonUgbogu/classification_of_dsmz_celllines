@@ -652,7 +652,7 @@ def remove_edge_support_legend_handles(handles: list) -> list:
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Plot resolved cell-line neighbourhood graph (strict + "
+        description="Plot resolved cell-line neighbourhood graph (resolved + "
                     "packed components + §5 visual language).",
     )
     ap.add_argument("resolved_tsv", help="Path to resolved_dsmz_neighbours.tsv")

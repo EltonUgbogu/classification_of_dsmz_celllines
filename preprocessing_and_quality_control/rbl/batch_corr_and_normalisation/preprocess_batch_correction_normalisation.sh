@@ -109,6 +109,7 @@ echo "[INFO] Unlocking Snakemake working directory if needed..."
   --snakefile "$SNAKEFILE" \
   --configfile "$CONFIGFILE" \
   --use-conda \
+  --conda-frontend conda \
   --unlock || true
 
 echo "[INFO] Starting Snakemake target: $TARGET"
@@ -118,6 +119,7 @@ N_CORES="${SLURM_CPUS_PER_TASK:-8}"
   --configfile "$CONFIGFILE" \
   --cores "$N_CORES" \
   --use-conda \
+  --conda-frontend conda \
   --printshellcmds \
   --rerun-incomplete \
   --latency-wait 300 \

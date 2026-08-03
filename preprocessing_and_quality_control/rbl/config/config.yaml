@@ -15,7 +15,17 @@ expected_samples:
   total: 69
 
 purity_threshold: 0.7
-purity_output_dir: "data/rbl/results/tumour_purity_analysis"
+purity_output_dir: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction"
+purity_method: "ESTIMATE/tidyestimate"
+# The verified tumour-only scores were generated with this cohort-specific map.
+gene_map_tsv: "data/rbl/count_data/rbl_ensembl_to_hgnc.tsv"
+verified_purity_scores: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/rbl_estimate_scores.csv"
+verified_purity_script: "preprocessing_and_quality_control/rbl/tumour_purity_analysis/rbl_tumour_purity_analysis.R"
+verified_purity_log: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/rbl_purity_pipeline_20260622_030351.log"
+expected_retained_tumour_samples: 68
+expected_dsmz_profiles: 11
+expected_dsmz_biological_profiles: 9
+purity_threads: 4
 
 cell_line_data:
   dsmz_count_matrix: "results/unsupervised/rbl/deseq2_inputs/counts.tsv"
@@ -24,7 +34,7 @@ cell_line_data:
   dsmz_subset_description: "Retinoblastoma DSMZ cell-line count-level DESeq2 input"
 
 batch_correction_normalisation:
-  output_dir: "data/rbl/results/batch_corr_and_normalisation/preprocess"
+  output_dir: "preprocessing_and_quality_control/rbl/results/batch_corr_and_normalisation/purity_filtered_preprocess"
   tumour_rds: "data/rbl/count_data/rbl_tumour_count.rds"
   min_shared_genes: 5000
   tumour_label: "RBL_TUMOUR"

@@ -1,0 +1,13 @@
+name: r_brca_preprocess
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3
+  - r-digest
+  - r-matrixstats
+  - r-uwot
+  - bioconductor-deseq2
+  - bioconductor-sva
+  - bioconductor-summarizedexperiment

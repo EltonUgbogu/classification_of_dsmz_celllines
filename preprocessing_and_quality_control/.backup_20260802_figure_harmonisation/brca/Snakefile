@@ -1,0 +1,409 @@
+#!/usr/bin/env snakemake
+"""BRCA raw tumour purity filtering before joint tumour-DSMZ preprocessing."""
+
+from pathlib import Path
+
+
+WORKFLOW_ROOT = Path(workflow.basedir).resolve()
+REPO_ROOT = WORKFLOW_ROOT.parents[1]
+
+configfile: str(WORKFLOW_ROOT / "config" / "config.yaml")
+
+
+def repo_path(value):
+    path = Path(str(value)).expanduser()
+    return str(path if path.is_absolute() else (REPO_ROOT / path).resolve())
+
+
+def repo_relative(path):
+    return str(Path(path).resolve().relative_to(REPO_ROOT))
+
+
+def required(mapping, key, context):
+    if key not in mapping or mapping[key] in (None, ""):
+        raise ValueError(f"Missing required BRCA configuration key: {context}.{key}")
+    return mapping[key]
+
+
+profiles = required(config, "profiles", "config")
+BRCA = required(profiles, "brca", "profiles")
+PURITY = required(BRCA, "tumour_purity_analysis", "profiles.brca")
+BATCH = required(BRCA, "batch_correction_and_normalisation", "profiles.brca")
+
+if not PURITY.get("enabled", False):
+    raise ValueError("BRCA tumour_purity_analysis.enabled must be true")
+if not BATCH.get("enabled", False):
+    raise ValueError("BRCA batch_correction_and_normalisation.enabled must be true")
+
+TUMOUR_RDS = repo_path(required(BRCA, "tumour_rds", "profiles.brca"))
+DSMZ_RDS = repo_path(required(BRCA, "dsmz_rds", "profiles.brca"))
+DSMZ_META = repo_path(required(BRCA, "dsmz_meta_csv", "profiles.brca"))
+GENE_MAP = repo_path(required(BRCA, "gene_map_tsv", "profiles.brca"))
+# Reused in-repo annotation (already pinned for the DSMZ STAR step); not a new download.
+GENE_ANNOTATION_GTF = repo_path(
+    BATCH.get(
+        "gene_annotation_gtf",
+        "data/reference/gencode_v44/gencode.v44.basic.annotation.gtf",
+    )
+)
+
+OUTPUT_ROOT = Path(repo_path(required(BRCA, "output_root", "profiles.brca")))
+PURITY_DIR = Path(repo_path(required(PURITY, "output_dir", "profiles.brca.tumour_purity_analysis")))
+BATCH_DIR = Path(repo_path(required(BATCH, "output_dir", "profiles.brca.batch_correction_and_normalisation")))
+VALIDATION_DIR = OUTPUT_ROOT / "validation"
+
+for output_dir in (PURITY_DIR, BATCH_DIR, VALIDATION_DIR):
+    if OUTPUT_ROOT not in (output_dir, *output_dir.parents):
+        raise ValueError(f"BRCA output directory escapes configured output_root: {output_dir}")
+
+BATCH_ENV = str(WORKFLOW_ROOT / "envs" / "r_brca_preprocess.yaml")
+PURITY_ENV = repo_path("preprocessing_and_quality_control/envs/tcga-r-env.yaml")
+PURITY_SCRIPT = repo_path(
+    "preprocessing_and_quality_control/scripts/R/raw_tumour_purity_analysis.R"
+)
+SHARED_FIGURE_MODULE = repo_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
+)
+# Cohort-agnostic batch-effect quantification driver, shared with NBL and RBL.
+BATCH_EFFECT_SCRIPT = repo_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_quantification.R"
+)
+
+try:
+    from snakemake import __version__ as SNAKEMAKE_VERSION
+except Exception:  # pragma: no cover - recorded as unknown rather than failing
+    SNAKEMAKE_VERSION = "unknown"
+FINAL_VALIDATION_SCRIPT = repo_path(
+    "preprocessing_and_quality_control/scripts/R/validate_purity_filtered_joint_outputs.R"
+)
+
+INPUT_VALIDATION = {
+    "report_tsv": str(VALIDATION_DIR / "brca_count_input_validation.tsv"),
+    "validation_ok": str(VALIDATION_DIR / "brca_count_input_validation.ok"),
+    "validation_log": str(VALIDATION_DIR / "brca_count_input_validation.log"),
+}
+
+PURITY_OUTPUTS = {
+    "eligible_samples": str(PURITY_DIR / "eligible_tumour_samples.tsv"),
+    "purity_scoring_expression": str(PURITY_DIR / "tumour_only_purity_scoring_expression.rds"),
+    "purity_scores": str(PURITY_DIR / "purity_scores.csv"),
+    "retained_samples": str(PURITY_DIR / "retained_samples.tsv"),
+    "excluded_samples": str(PURITY_DIR / "excluded_samples.tsv"),
+    "retained_raw_tumour_counts": str(PURITY_DIR / "retained_raw_tumour_counts.rds"),
+    "purity_diagnostics": str(PURITY_DIR / "purity_diagnostics.pdf"),
+    "sample_retention": str(PURITY_DIR / "sample_retention_by_cohort.pdf"),
+    "provenance": str(PURITY_DIR / "purity_provenance.tsv"),
+    "validation_report": str(PURITY_DIR / "purity_stage_validation.tsv"),
+    "validation_ok": str(PURITY_DIR / "purity_stage_validation.ok"),
+    "execution_log": str(PURITY_DIR / "tumour_purity_analysis.log"),
+}
+
+BATCH_OUTPUTS = {
+    "tumour_counts_rds": str(BATCH_DIR / "tumour_counts.rds"),
+    "dsmz_counts_rds": str(BATCH_DIR / "dsmz_brca_counts.rds"),
+    "merged_counts_rds": str(BATCH_DIR / "merged_counts_raw.rds"),
+    "coldata_tsv": str(BATCH_DIR / "coldata.tsv"),
+    "batch_corrected_counts_rds": str(BATCH_DIR / "merged_counts_batch_corrected.rds"),
+    "tumour_vst_rds": str(BATCH_DIR / "tumour_vst_pre_bc.rds"),
+    "dsmz_vst_rds": str(BATCH_DIR / "dsmz_vst_pre_bc.rds"),
+    "joint_vst_pre_bc_rds": str(BATCH_DIR / "joint_vst_pre_bc.rds"),
+    "joint_vst_post_bc_rds": str(BATCH_DIR / "joint_vst_purity_filtered_post_bc.rds"),
+    "tumour_vst_post_bc_rds": str(BATCH_DIR / "tumour_vst_purity_filtered_post_bc.rds"),
+    "dsmz_vst_post_bc_rds": str(BATCH_DIR / "dsmz_vst_purity_filtered_post_bc.rds"),
+    "pca_pre_pdf": str(BATCH_DIR / "pca_pre_BC.pdf"),
+    "pca_post_pdf": str(BATCH_DIR / "pca_post_BC.pdf"),
+    "umap_pre_pdf": str(BATCH_DIR / "umap_pre_BC.pdf"),
+    "umap_post_pdf": str(BATCH_DIR / "umap_post_BC.pdf"),
+    "umap_before_after_pdf": str(BATCH_DIR / "umap_before_after_BC.pdf"),
+    "tumour_qc_pdf": str(BATCH_DIR / "qc_tumour_vst.pdf"),
+    "dsmz_qc_pdf": str(BATCH_DIR / "qc_dsmz_vst.pdf"),
+    "tumour_dispersion_pdf": str(BATCH_DIR / "qc_tumour_dispersion.pdf"),
+    "dsmz_dispersion_pdf": str(BATCH_DIR / "qc_dsmz_dispersion.pdf"),
+    "provenance_tsv": str(BATCH_DIR / "batch_normalisation_provenance.tsv"),
+    "workflow_log": str(BATCH_DIR / "brca_batch_correction_and_normalisation.log"),
+}
+
+# Derived batch-effect statistics and figures. Produced by a rule of their own
+# so they can be deleted and rebuilt without regenerating a count or VST matrix,
+# which is what makes the reproducibility re-run meaningful.
+BATCH_EFFECT_OUTPUTS = {
+    "pca_before_after_pdf": str(BATCH_DIR / "pca_before_after_BC.pdf"),
+    "pca_before_after_top3000_pdf": str(BATCH_DIR / "pca_before_after_BC_top3000.pdf"),
+    "pca_before_after_protein_coding_pdf": str(
+        BATCH_DIR / "pca_before_after_BC_protein_coding.pdf"
+    ),
+    "pca_before_after_full_expression_pdf": str(
+        BATCH_DIR / "pca_before_after_BC_full_expression.pdf"
+    ),
+    "batch_effect_tsv": str(BATCH_DIR / "batch_effect_quantification.tsv"),
+    "batch_effect_provenance_tsv": str(
+        BATCH_DIR / "batch_effect_quantification_provenance.tsv"
+    ),
+    "batch_effect_run_metadata_tsv": str(
+        BATCH_DIR / "batch_effect_run_metadata.tsv"
+    ),
+    "protein_coding_ids_tsv": str(BATCH_DIR / "protein_coding_gene_ids.tsv"),
+    "feature_manifest_top3000_tsv": str(
+        BATCH_DIR / "feature_manifest_top3000.tsv"
+    ),
+    "feature_manifest_protein_coding_tsv": str(
+        BATCH_DIR / "feature_manifest_protein_coding.tsv"
+    ),
+    "feature_manifest_full_expression_tsv": str(
+        BATCH_DIR / "feature_manifest_full_expression.tsv"
+    ),
+}
+
+FINAL_VALIDATION = {
+    "report": str(BATCH_DIR / "final_matrix_validation.tsv"),
+    "manifest": str(BATCH_DIR / "final_matrix_manifest.tsv"),
+    "ok": str(BATCH_DIR / "final_matrix_validation.ok"),
+    "log": str(BATCH_DIR / "final_matrix_validation.log"),
+}
+
+
+rule all:
+    input:
+        list(INPUT_VALIDATION.values()),
+        list(PURITY_OUTPUTS.values()),
+        list(BATCH_OUTPUTS.values()),
+        list(BATCH_EFFECT_OUTPUTS.values()),
+        list(FINAL_VALIDATION.values())
+
+
+rule validate_brca_count_inputs:
+    input:
+        tumour_rds=TUMOUR_RDS,
+        dsmz_rds=DSMZ_RDS,
+        dsmz_meta_csv=DSMZ_META,
+    output:
+        report_tsv=INPUT_VALIDATION["report_tsv"],
+        validation_ok=INPUT_VALIDATION["validation_ok"],
+        validation_log=INPUT_VALIDATION["validation_log"],
+    params:
+        expected_raw_tcga=int(required(BRCA, "expected_raw_tcga_samples", "profiles.brca")),
+        expected_primary=int(required(BRCA, "expected_primary_tumour_samples", "profiles.brca")),
+        expected_dsmz=int(required(BRCA, "expected_dsmz_cell_line_profiles", "profiles.brca")),
+        expected_shared_genes=int(required(BRCA, "expected_shared_genes", "profiles.brca")),
+        primary_code=str(required(BRCA, "tcga_primary_tumour_code", "profiles.brca")),
+        dsmz_sample_col=str(required(BRCA, "dsmz_sample_id_column", "profiles.brca")),
+        dsmz_code_col=str(required(BRCA, "dsmz_cancer_code_column", "profiles.brca")),
+        dsmz_code=str(required(BRCA, "dsmz_cancer_code", "profiles.brca")),
+        dsmz_cell_line_col=str(required(BRCA, "dsmz_cell_line_column", "profiles.brca")),
+    conda:
+        BATCH_ENV
+    script:
+        str(WORKFLOW_ROOT / "scripts" / "R" / "validate_brca_count_inputs.R")
+
+
+rule brca_tumour_purity_analysis:
+    input:
+        raw_tumour_counts=TUMOUR_RDS,
+        gene_map=GENE_MAP,
+        input_validation=INPUT_VALIDATION["validation_ok"],
+    output:
+        eligible_samples=PURITY_OUTPUTS["eligible_samples"],
+        purity_scoring_expression=PURITY_OUTPUTS["purity_scoring_expression"],
+        purity_scores=PURITY_OUTPUTS["purity_scores"],
+        retained_samples=PURITY_OUTPUTS["retained_samples"],
+        excluded_samples=PURITY_OUTPUTS["excluded_samples"],
+        retained_raw_tumour_counts=PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        purity_diagnostics=PURITY_OUTPUTS["purity_diagnostics"],
+        sample_retention=PURITY_OUTPUTS["sample_retention"],
+        provenance=PURITY_OUTPUTS["provenance"],
+        validation_report=PURITY_OUTPUTS["validation_report"],
+        validation_ok=PURITY_OUTPUTS["validation_ok"],
+        execution_log=PURITY_OUTPUTS["execution_log"],
+    params:
+        cohort="BRCA",
+        threshold=float(PURITY.get("threshold", 0.70)),
+        expected_input_samples=int(BRCA["expected_raw_tcga_samples"]),
+        expected_eligible_samples=int(BRCA["expected_primary_tumour_samples"]),
+        expected_retained_samples=int(PURITY.get("expected_retained_tumour_samples", 0)),
+        primary_sample_type=str(BRCA["tcga_primary_tumour_code"]),
+        score_policy="compute",
+        rule_name="brca_tumour_purity_analysis",
+        config_path=repo_relative(WORKFLOW_ROOT / "config" / "config.yaml"),
+    threads:
+        int(PURITY.get("threads", 4))
+    resources:
+        mem_mb=64000
+    conda:
+        PURITY_ENV
+    script:
+        PURITY_SCRIPT
+
+
+rule brca_batch_correction_and_normalisation:
+    input:
+        tumour_rds=PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        retained_samples=PURITY_OUTPUTS["retained_samples"],
+        excluded_samples=PURITY_OUTPUTS["excluded_samples"],
+        purity_scores=PURITY_OUTPUTS["purity_scores"],
+        purity_validation=PURITY_OUTPUTS["validation_ok"],
+        purity_provenance=PURITY_OUTPUTS["provenance"],
+        dsmz_rds=DSMZ_RDS,
+        dsmz_meta_csv=DSMZ_META,
+        # The GTF moved to brca_batch_effect_quantification with the
+        # protein-coding selection; this rule no longer reads it.
+        shared_figure_module=SHARED_FIGURE_MODULE,
+        input_validation=INPUT_VALIDATION["validation_ok"],
+    output:
+        tumour_counts_rds=BATCH_OUTPUTS["tumour_counts_rds"],
+        dsmz_counts_rds=BATCH_OUTPUTS["dsmz_counts_rds"],
+        merged_counts_rds=BATCH_OUTPUTS["merged_counts_rds"],
+        coldata_tsv=BATCH_OUTPUTS["coldata_tsv"],
+        batch_corrected_counts_rds=BATCH_OUTPUTS["batch_corrected_counts_rds"],
+        tumour_vst_rds=BATCH_OUTPUTS["tumour_vst_rds"],
+        dsmz_vst_rds=BATCH_OUTPUTS["dsmz_vst_rds"],
+        joint_vst_pre_bc_rds=BATCH_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds=BATCH_OUTPUTS["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc_rds=BATCH_OUTPUTS["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc_rds=BATCH_OUTPUTS["dsmz_vst_post_bc_rds"],
+        pca_pre_pdf=BATCH_OUTPUTS["pca_pre_pdf"],
+        pca_post_pdf=BATCH_OUTPUTS["pca_post_pdf"],
+        umap_pre_pdf=BATCH_OUTPUTS["umap_pre_pdf"],
+        umap_post_pdf=BATCH_OUTPUTS["umap_post_pdf"],
+        umap_before_after_pdf=BATCH_OUTPUTS["umap_before_after_pdf"],
+        tumour_qc_pdf=BATCH_OUTPUTS["tumour_qc_pdf"],
+        dsmz_qc_pdf=BATCH_OUTPUTS["dsmz_qc_pdf"],
+        tumour_dispersion_pdf=BATCH_OUTPUTS["tumour_dispersion_pdf"],
+        dsmz_dispersion_pdf=BATCH_OUTPUTS["dsmz_dispersion_pdf"],
+        provenance_tsv=BATCH_OUTPUTS["provenance_tsv"],
+        workflow_log=BATCH_OUTPUTS["workflow_log"],
+    params:
+        expected_tumours=int(PURITY.get("expected_retained_tumour_samples", 0)),
+        expected_dsmz=int(BRCA["expected_dsmz_cell_line_profiles"]),
+        expected_shared_genes=int(BRCA["expected_shared_genes"]),
+        tumour_label=str(BRCA["tumour_label"]),
+        dsmz_label=str(BRCA["dsmz_label"]),
+        dsmz_sample_col=str(BRCA["dsmz_sample_id_column"]),
+        dsmz_code_col=str(BRCA["dsmz_cancer_code_column"]),
+        dsmz_code=str(BRCA["dsmz_cancer_code"]),
+        dsmz_cell_line_col=str(BRCA["dsmz_cell_line_column"]),
+        min_shared=int(BATCH.get("min_shared_genes", 5000)),
+        seed=int(BATCH.get("random_seed", 42)),
+        qc_top_genes=int(BATCH.get("qc_top_variable_genes", 3000)),
+        permanova_permutations=int(BATCH.get("permanova_permutations", 9999)),
+        batch_variance_target=float(BATCH.get("batch_variance_target", 0.80)),
+        gene_annotation_release=str(BATCH.get("gene_annotation_release", "GENCODE v44 (basic, GRCh38)")),
+        gene_annotation_source=str(
+            BATCH.get(
+                "gene_annotation_source",
+                "ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.basic.annotation.gtf.gz",
+            )
+        ),
+    threads:
+        int(BATCH.get("threads", 8))
+    resources:
+        mem_mb=64000
+    conda:
+        BATCH_ENV
+    script:
+        str(
+            WORKFLOW_ROOT
+            / "batch_corr_and_normalisation"
+            / "scripts"
+            / "R"
+            / "brca_preprocess_snakemake.R"
+        )
+
+
+rule brca_batch_effect_quantification:
+    """PERMANOVA + betadisper and paired before/after PCA over three feature spaces.
+
+    Reads the joint VST matrices; never writes one. Every file that can move a
+    number -- matrices, coldata, pinned GTF, the shared module, this script and
+    this Snakefile -- is a declared input and is checksummed into the provenance
+    record.
+    """
+    input:
+        joint_vst_pre_bc_rds=BATCH_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds=BATCH_OUTPUTS["joint_vst_post_bc_rds"],
+        coldata_tsv=BATCH_OUTPUTS["coldata_tsv"],
+        gene_annotation_gtf=GENE_ANNOTATION_GTF,
+        shared_figure_module=SHARED_FIGURE_MODULE,
+        quantification_script=BATCH_EFFECT_SCRIPT,
+        snakefile=str(WORKFLOW_ROOT / "Snakefile"),
+    output:
+        **BATCH_EFFECT_OUTPUTS,
+    params:
+        cohort="BRCA",
+        repo_root=str(REPO_ROOT),
+        master_seed=int(BATCH.get("permutation_master_seed", BATCH.get("random_seed", 42))),
+        qc_top_genes=int(BATCH.get("qc_top_variable_genes", 3000)),
+        permanova_permutations=int(BATCH.get("permanova_permutations", 9999)),
+        primary_predictor=str(BATCH.get("batch_effect_primary_predictor", "dataset")),
+        # Column holding the tumour study/source label, used for the
+        # tumour-only tumour_source model. BRCA has a single source, so that
+        # analysis is skipped and the reason recorded.
+        tumour_source_column=str(BATCH.get("tumour_source_column", "cohort")),
+        tumour_label=str(BRCA["tumour_label"]),
+        dsmz_label=str(BRCA["dsmz_label"]),
+        gene_annotation_release=str(
+            BATCH.get("gene_annotation_release", "GENCODE v44 (basic, GRCh38)")
+        ),
+        gene_annotation_source=str(
+            BATCH.get(
+                "gene_annotation_source",
+                "ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.basic.annotation.gtf.gz",
+            )
+        ),
+        snakemake_version=SNAKEMAKE_VERSION,
+        snakemake_command=(
+            "snakemake --snakefile preprocessing_and_quality_control/brca/Snakefile "
+            "--cores 8 --use-conda --conda-frontend conda "
+            "--conda-prefix .snakemake_conda_envs brca_batch_effect_quantification"
+        ),
+    threads:
+        1
+    resources:
+        mem_mb=48000
+    log:
+        str(BATCH_DIR / "brca_batch_effect_quantification.log")
+    conda:
+        BATCH_ENV
+    script:
+        BATCH_EFFECT_SCRIPT
+
+
+rule validate_brca_purity_filtered_joint_outputs:
+    input:
+        purity_scores=PURITY_OUTPUTS["purity_scores"],
+        retained_samples=PURITY_OUTPUTS["retained_samples"],
+        excluded_samples=PURITY_OUTPUTS["excluded_samples"],
+        retained_raw_tumour_counts=PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        purity_validation=PURITY_OUTPUTS["validation_ok"],
+        dsmz_counts=BATCH_OUTPUTS["dsmz_counts_rds"],
+        merged_counts_raw=BATCH_OUTPUTS["merged_counts_rds"],
+        merged_counts_batch_corrected=BATCH_OUTPUTS["batch_corrected_counts_rds"],
+        joint_vst_pre_bc=BATCH_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc=BATCH_OUTPUTS["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc=BATCH_OUTPUTS["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc=BATCH_OUTPUTS["dsmz_vst_post_bc_rds"],
+        coldata=BATCH_OUTPUTS["coldata_tsv"],
+        figure_purity=PURITY_OUTPUTS["purity_diagnostics"],
+        figure_retention=PURITY_OUTPUTS["sample_retention"],
+        figure_pca_pre=BATCH_OUTPUTS["pca_pre_pdf"],
+        figure_pca_post=BATCH_OUTPUTS["pca_post_pdf"],
+        figure_tumour_vst=BATCH_OUTPUTS["tumour_qc_pdf"],
+        figure_dsmz_vst=BATCH_OUTPUTS["dsmz_qc_pdf"],
+        figure_tumour_dispersion=BATCH_OUTPUTS["tumour_dispersion_pdf"],
+        figure_dsmz_dispersion=BATCH_OUTPUTS["dsmz_dispersion_pdf"],
+    output:
+        validation_report=FINAL_VALIDATION["report"],
+        final_matrix_manifest=FINAL_VALIDATION["manifest"],
+        validation_ok=FINAL_VALIDATION["ok"],
+        validation_log=FINAL_VALIDATION["log"],
+    params:
+        cohort="BRCA",
+        expected_tumours=int(PURITY.get("expected_retained_tumour_samples", 0)),
+        expected_dsmz=int(BRCA["expected_dsmz_cell_line_profiles"]),
+        expected_collapsed_dsmz=0,
+        final_relative_path=repo_relative(BATCH_OUTPUTS["joint_vst_post_bc_rds"]),
+    resources:
+        mem_mb=32000
+    conda:
+        BATCH_ENV
+    script:
+        FINAL_VALIDATION_SCRIPT

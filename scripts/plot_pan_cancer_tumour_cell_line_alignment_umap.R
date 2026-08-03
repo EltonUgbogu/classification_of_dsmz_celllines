@@ -77,7 +77,7 @@ suppressPackageStartupMessages({
   # data frames. Essential for metadata processing and result aggregation.
   library(dplyr)
   
-  # tibble: Modern reimplementation of data frames with stricter subsetting
+  # tibble: Modern reimplementation of data frames with more stringent subsetting
   # rules and improved printing. Tibbles never convert strings to factors.
   library(tibble)
   
@@ -993,11 +993,11 @@ cat("[INFO] X_sub:", nrow(X_sub), "samples x", ncol(X_sub), "genes\n")
 cat("[INFO] Sample summary (pre-lineage filter):\n")
 print(table(meta$cancer_type, meta$sample_type))
 
-# Restrict to BRCA/NBL/RBL for UMAP and plotting.
+# limit to BRCA/NBL/RBL for UMAP and plotting.
 keep <- meta$cancer_type %in% c("BRCA", "NBL", "RBL")
 meta <- meta[keep, ]
 X_sub <- X_sub[meta$sample_id, , drop = FALSE]
-cat("[INFO] Restricted to BRCA/NBL/RBL:", nrow(X_sub), "samples\n")
+cat("[INFO] limited to BRCA/NBL/RBL:", nrow(X_sub), "samples\n")
 print(table(meta$cancer_type, meta$sample_type))
 
 non_tcga_ids_labelled_tcga <- meta %>%

@@ -18,6 +18,7 @@
 import os
 import glob
 from pathlib import Path
+from snakemake.exceptions import WorkflowError
 
 WORKFLOW_ROOT = Path(workflow.basedir).resolve()
 REPO_ROOT = WORKFLOW_ROOT.parents[1]
@@ -39,13 +40,21 @@ def workflow_config_path(value):
 # ------------------------------------------------------------------------------
 # A configuration file is used to hold stable reference and tool paths.
 # This prevents hard-coding genome resources and improves reproducibility.
-configfile: "config/config.yaml"
+configfile: str(WORKFLOW_ROOT / "config" / "config.yaml")
 
 # data_root is controlled by config/config.yaml and resolved relative to this
 # workflow directory to avoid accidental SLURM environment-variable leakage.
 DATA_ROOT = workflow_config_path(config.get("data_root", "../../data/nbl"))
 PROJECTS = config.get("projects", ["GSE189367", "SRP409177"])
 ENV_DIR = repo_config_path(config.get("env_dir") or "preprocessing_and_quality_control/envs")
+INPUT_MODE = str(config.get("input_mode", "fastq")).strip().lower()
+VALID_INPUT_MODES = {"existing_counts", "fastq"}
+if INPUT_MODE not in VALID_INPUT_MODES:
+    raise ValueError(
+        f"Unsupported input_mode={INPUT_MODE!r}; expected one of "
+        + ", ".join(sorted(VALID_INPUT_MODES))
+    )
+USING_EXISTING_COUNTS = INPUT_MODE == "existing_counts"
 
 # ------------------------------------------------------------------------------
 # Reference resources and tool paths
@@ -61,11 +70,13 @@ REF_FASTA = repo_config_path(_genome.get("fasta", "")) if _genome.get("fasta") e
 THREADS   = config.get("threads", 12)
 
 # Validate required keys with a clear message before any KeyError can surface.
-missing_required = {k: v for k, v in {
-    "genome.star_index": REF_INDEX,
-    "genome.gtf":        GTF,
-    "genome.fasta":      REF_FASTA,
-}.items() if not v}
+required_resources = {"genome.gtf": GTF}
+if not USING_EXISTING_COUNTS:
+    required_resources.update({
+        "genome.star_index": REF_INDEX,
+        "genome.fasta": REF_FASTA,
+    })
+missing_required = {k: v for k, v in required_resources.items() if not v}
 if missing_required:
     raise ValueError(
         "Missing required configuration values: "
@@ -136,8 +147,16 @@ for project_id in PROJECTS:
 ALL_RUNS = [(p, s) for p in PROJECTS for s in ALL_SAMPLES_BY_PROJECT.get(p, [])]
 
 if not ALL_RUNS:
-    # Failing early here prevents misleading further execution with empty targets.
-    raise ValueError("No paired-end samples found in fastq/ directories! Check file names and paths.")
+    if USING_EXISTING_COUNTS:
+        print(
+            "[COUNT-ONLY] No paired-end FASTQs were discovered. "
+            "Downstream rules will use the configured existing count matrix."
+        )
+    else:
+        print(
+            "[WARN] No paired-end FASTQs were discovered. Alignment and "
+            "count-generation targets will fail if requested."
+        )
 else:
     # Reporting sample counts supports auditability and quick verification
     # against expected cohort sizes from GEO/SRA metadata.
@@ -239,10 +258,29 @@ FASTQC_HTML = [f"{DATA_ROOT}/{r['project']}/results/fastqc/{r['sample_read']}_fa
 DISCOVERED_PROJECTS = [p for p in PROJECTS if p in ALL_SAMPLES_BY_PROJECT]
 MULTIQC_HTML = [f"{DATA_ROOT}/{p}/results/multiqc/multiqc_report.html" for p in DISCOVERED_PROJECTS]
 
-# Count matrix outputs produced by merge_star_counts.R (GEO cohorts)
-COUNT_MATRIX = f"{DATA_ROOT}/count_data/nbl_tumour_count.rds"
-COUNT_META   = f"{DATA_ROOT}/count_data/nbl_tumour_sample_metadata.csv"
-COUNT_GENES  = f"{DATA_ROOT}/count_data/nbl_tumour_gene_list_hgnc.txt"
+# Count-space inputs. In existing_counts mode these paths are external,
+# immutable inputs configured in config/config.yaml. The separate rebuild paths
+# prevent Snakemake from treating them as outputs of FASTQ-based rules.
+COUNT_INPUT_CONFIG = config.get("count_inputs", {})
+COUNT_MATRIX = repo_config_path(
+    COUNT_INPUT_CONFIG.get("matrix", "data/nbl/count_data/nbl_tumour_count.rds")
+)
+COUNT_META = repo_config_path(
+    COUNT_INPUT_CONFIG.get("metadata", "data/nbl/count_data/nbl_tumour_sample_metadata.csv")
+)
+COUNT_GENES = repo_config_path(
+    COUNT_INPUT_CONFIG.get("genes", "data/nbl/count_data/nbl_tumour_gene_list_hgnc.txt")
+)
+
+if USING_EXISTING_COUNTS:
+    REBUILT_COUNT_DIR = f"{DATA_ROOT}/count_data/rebuilt_from_fastq"
+    GENERATED_COUNT_MATRIX = f"{REBUILT_COUNT_DIR}/nbl_tumour_count.rds"
+    GENERATED_COUNT_META = f"{REBUILT_COUNT_DIR}/nbl_tumour_sample_metadata.csv"
+    GENERATED_COUNT_GENES = f"{REBUILT_COUNT_DIR}/nbl_tumour_gene_list_hgnc.txt"
+else:
+    GENERATED_COUNT_MATRIX = COUNT_MATRIX
+    GENERATED_COUNT_META = COUNT_META
+    GENERATED_COUNT_GENES = COUNT_GENES
 
 # Count matrix outputs produced by merge_target_nbl_counts.R (TARGET-NBL)
 TARGET_NBL_DIR    = f"{DATA_ROOT}/target_nbl"
@@ -263,74 +301,210 @@ EXPECTED_COHORT_SAMPLES = {
 
 PURITY_THRESHOLD = float(config.get("purity_threshold", 0.7))
 PURITY_LABEL = f"{PURITY_THRESHOLD:.1f}"
+EXPECTED_RETAINED_TUMOURS = int(config.get("expected_retained_tumour_samples", 235))
+EXPECTED_DSMZ_PROFILES = int(config.get("expected_dsmz_profiles", 18))
 
 NBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/nbl_ensembl_to_hgnc.tsv"
 NBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/nbl_count_matrix_verified_{EXPECTED_NBL_SAMPLES}.ok"
+PURITY_GENE_MAP = repo_config_path(config.get("gene_map_tsv", "resources/ensembl_to_symbol.tsv"))
+VERIFIED_PURITY_SCORES = repo_config_path(config["verified_purity_scores"])
+VERIFIED_PURITY_SCRIPT = repo_config_path(config["verified_purity_script"])
+VERIFIED_PURITY_LOG = repo_config_path(config["verified_purity_log"])
 
 NBL_PURITY_DIR = repo_config_path(
-    config.get("purity_output_dir", "results/tumour_purity_analysis/nbl")
+    config.get(
+        "purity_output_dir",
+        "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction",
+    )
 )
 
-NBL_PURITY_SCRIPT = f"{WORKFLOW_DIR}/tumour_purity_analysis/nbl_tumour_purity_analysis.R"
+SHARED_PURITY_SCRIPT = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/raw_tumour_purity_analysis.R"
+)
+FINAL_VALIDATION_SCRIPT = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/validate_purity_filtered_joint_outputs.R"
+)
+PURITY_ENV = repo_config_path("preprocessing_and_quality_control/envs/tcga-r-env.yaml")
 
-NBL_PURITY_OUTPUTS = [
-    f"{NBL_PURITY_DIR}/nbl_estimate_scores.csv",
-    f"{NBL_PURITY_DIR}/nbl_filtered_hgnc_counts_purity{PURITY_LABEL}.rds",
-    f"{NBL_PURITY_DIR}/nbl_filtered_count_matrix_ensembl_purity{PURITY_LABEL}.rds",
-    f"{NBL_PURITY_DIR}/nbl_sample_retention_by_cohort.pdf",
-    f"{NBL_PURITY_DIR}/nbl_purity_diagnostics.pdf",
-]
+NBL_PURITY_OUTPUTS = {
+    "eligible_samples": f"{NBL_PURITY_DIR}/eligible_tumour_samples.tsv",
+    "purity_scoring_expression": f"{NBL_PURITY_DIR}/tumour_only_purity_scoring_expression.rds",
+    "purity_scores": f"{NBL_PURITY_DIR}/purity_scores.csv",
+    "retained_samples": f"{NBL_PURITY_DIR}/retained_samples.tsv",
+    "excluded_samples": f"{NBL_PURITY_DIR}/excluded_samples.tsv",
+    "retained_raw_tumour_counts": f"{NBL_PURITY_DIR}/retained_raw_tumour_counts.rds",
+    "purity_diagnostics": f"{NBL_PURITY_DIR}/purity_diagnostics.pdf",
+    "sample_retention": f"{NBL_PURITY_DIR}/sample_retention_by_cohort.pdf",
+    "provenance": f"{NBL_PURITY_DIR}/purity_provenance.tsv",
+    "validation_report": f"{NBL_PURITY_DIR}/purity_stage_validation.tsv",
+    "validation_ok": f"{NBL_PURITY_DIR}/purity_stage_validation.ok",
+    "execution_log": f"{NBL_PURITY_DIR}/tumour_purity_analysis.log",
+}
+
+# Batch correction consumes only the raw tumour columns retained by the
+# upstream tumour-only purity rule.
+BATCH_CONFIG = config.get("batch_corr_and_normalisation", {})
+BATCH_ENABLED = bool(BATCH_CONFIG.get("enabled", True))
+BATCH_OUTPUT_DIR = repo_config_path(
+    BATCH_CONFIG.get(
+        "output_dir",
+        "preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess",
+    )
+)
+if not BATCH_CONFIG.get("dsmz_rds"):
+    raise WorkflowError(
+        "batch_corr_and_normalisation.dsmz_rds must explicitly name the "
+        "validated NBL-specific DSMZ raw-count input"
+    )
+BATCH_DSMZ_RDS = repo_config_path(BATCH_CONFIG["dsmz_rds"])
+BATCH_DSMZ_META = repo_config_path(
+    BATCH_CONFIG.get("dsmz_meta_csv", "data/dsmz/DSMZ_metadata.csv")
+)
+BATCH_MODULE_DIR = f"{WORKFLOW_DIR}/batch_corr_and_normalisation"
+BATCH_SCRIPT = f"{BATCH_MODULE_DIR}/scripts/R/nbl_preprocess_snakemake.R"
+BATCH_ENV = f"{BATCH_MODULE_DIR}/envs/r_nbl_preprocess.yaml"
+
+SHARED_FIGURE_MODULE = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
+)
+# Cohort-agnostic batch-effect quantification driver, shared with BRCA and RBL.
+BATCH_EFFECT_SCRIPT = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_quantification.R"
+)
+
+try:
+    from snakemake import __version__ as SNAKEMAKE_VERSION
+except Exception:  # pragma: no cover - recorded as unknown rather than failing
+    SNAKEMAKE_VERSION = "unknown"
+# Reused in-repo annotation already pinned for this cohort's STAR step.
+GENE_ANNOTATION_GTF = repo_config_path(
+    BATCH_CONFIG.get(
+        "gene_annotation_gtf",
+        "data/reference/gencode_v44/gencode.v44.basic.annotation.gtf",
+    )
+)
+
+BATCH_OUTPUTS = {
+    "tumour_counts_rds": f"{BATCH_OUTPUT_DIR}/tumour_counts.rds",
+    "dsmz_counts_rds": f"{BATCH_OUTPUT_DIR}/dsmz_nbl_counts.rds",
+    "merged_counts_rds": f"{BATCH_OUTPUT_DIR}/merged_counts_raw.rds",
+    "coldata_tsv": f"{BATCH_OUTPUT_DIR}/coldata.tsv",
+    "batch_corrected_counts_rds": f"{BATCH_OUTPUT_DIR}/merged_counts_batch_corrected.rds",
+    "tumour_vst_rds": f"{BATCH_OUTPUT_DIR}/tumour_vst_pre_bc.rds",
+    "dsmz_vst_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
+    "joint_vst_pre_bc_rds": f"{BATCH_OUTPUT_DIR}/joint_vst_pre_bc.rds",
+    "joint_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/joint_vst_purity_filtered_post_bc.rds",
+    "tumour_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/tumour_vst_purity_filtered_post_bc.rds",
+    "dsmz_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_purity_filtered_post_bc.rds",
+    "pca_pre_pdf": f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
+    "pca_post_pdf": f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
+    "umap_pre_pdf": f"{BATCH_OUTPUT_DIR}/umap_pre_BC.pdf",
+    "umap_post_pdf": f"{BATCH_OUTPUT_DIR}/umap_post_BC.pdf",
+    "tumour_qc_pdf": f"{BATCH_OUTPUT_DIR}/qc_tumour_vst.pdf",
+    "dsmz_qc_pdf": f"{BATCH_OUTPUT_DIR}/qc_dsmz_vst.pdf",
+    "tumour_dispersion_pdf": f"{BATCH_OUTPUT_DIR}/qc_tumour_dispersion.pdf",
+    "dsmz_dispersion_pdf": f"{BATCH_OUTPUT_DIR}/qc_dsmz_dispersion.pdf",
+    "provenance_tsv": f"{BATCH_OUTPUT_DIR}/batch_normalisation_provenance.tsv",
+}
+
+# Derived batch-effect statistics and figures. Their own rule, so they can be
+# deleted and rebuilt without regenerating a count or VST matrix.
+BATCH_EFFECT_OUTPUTS = {
+    "pca_before_after_top3000_pdf": f"{BATCH_OUTPUT_DIR}/pca_before_after_BC_top3000.pdf",
+    "pca_before_after_protein_coding_pdf": f"{BATCH_OUTPUT_DIR}/pca_before_after_BC_protein_coding.pdf",
+    "pca_before_after_full_expression_pdf": f"{BATCH_OUTPUT_DIR}/pca_before_after_BC_full_expression.pdf",
+    "batch_effect_tsv": f"{BATCH_OUTPUT_DIR}/batch_effect_quantification.tsv",
+    "batch_effect_provenance_tsv": f"{BATCH_OUTPUT_DIR}/batch_effect_quantification_provenance.tsv",
+    "batch_effect_run_metadata_tsv": f"{BATCH_OUTPUT_DIR}/batch_effect_run_metadata.tsv",
+    "protein_coding_ids_tsv": f"{BATCH_OUTPUT_DIR}/protein_coding_gene_ids.tsv",
+    "feature_manifest_top3000_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_top3000.tsv",
+    "feature_manifest_protein_coding_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_protein_coding.tsv",
+    "feature_manifest_full_expression_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_full_expression.tsv",
+}
+
+FINAL_VALIDATION = {
+    "report": f"{BATCH_OUTPUT_DIR}/final_matrix_validation.tsv",
+    "manifest": f"{BATCH_OUTPUT_DIR}/final_matrix_manifest.tsv",
+    "ok": f"{BATCH_OUTPUT_DIR}/final_matrix_validation.ok",
+    "log": f"{BATCH_OUTPUT_DIR}/final_matrix_validation.log",
+}
+
+PROTECTED_ACTIVE_VST = f"{DATA_ROOT}/nbl_vst_joint.rds"
+if PROTECTED_ACTIVE_VST in BATCH_OUTPUTS.values():
+    raise ValueError(
+        "Batch output configuration would overwrite the protected active NBL VST: "
+        + PROTECTED_ACTIVE_VST
+    )
+
+COUNT_BASED_OUTPUTS = list(NBL_PURITY_OUTPUTS.values()) + (
+    list(BATCH_OUTPUTS.values())
+    + list(BATCH_EFFECT_OUTPUTS.values())
+    + list(FINAL_VALIDATION.values())
+    if BATCH_ENABLED else []
+)
 
 # ------------------------------------------------------------------------------
 # Final pipeline outputs
 # ------------------------------------------------------------------------------
-# This target definition ensures that successful completion implies:
-# - all samples were QC-checked
-# - all samples were aligned and indexed
-# - gene-level counts were collected
-# - alignment QC metrics were generated
-# - MultiQC reports were built per project
-# - all per-sample counts merged into a single count matrix
+# In existing_counts mode, the default target is intentionally downstream-only:
+# it verifies the configured count object, runs purity filtering, and then runs
+# batch correction/normalisation. It never requests FASTQ or alignment outputs.
 rule all:
     input:
-        STAR_BAMS,
-        STAR_BAIS,
-        STAR_COUNTS,
-        PICARD_TXT,
-        PICARD_HIST,
-        FASTQC_HTML,
-        MULTIQC_HTML,
-        COUNT_MATRIX,
-        COUNT_META,
-        COUNT_GENES,
-        TARGET_MATRIX,
-        TARGET_META,
-        TARGET_GENES,
-        NBL_ENSEMBL_TO_HGNC,
-        NBL_COUNT_VERIFY,
-        NBL_PURITY_OUTPUTS
+        COUNT_BASED_OUTPUTS if USING_EXISTING_COUNTS else (
+            STAR_BAMS
+            + STAR_BAIS
+            + STAR_COUNTS
+            + PICARD_TXT
+            + PICARD_HIST
+            + FASTQC_HTML
+            + MULTIQC_HTML
+            + [COUNT_MATRIX, COUNT_META, COUNT_GENES]
+            + [TARGET_MATRIX, TARGET_META, TARGET_GENES]
+            + [NBL_ENSEMBL_TO_HGNC, NBL_COUNT_VERIFY]
+            + list(NBL_PURITY_OUTPUTS.values())
+            + list(BATCH_OUTPUTS.values())
+            + list(BATCH_EFFECT_OUTPUTS.values())
+            + list(FINAL_VALIDATION.values())
+        )
 
-# Post-download orchestration target for the full NBL workflow.
-# Dry-run after downloads complete:
-#   snakemake -n nbl_full_pipeline --cores 1 --use-conda
+rule nbl_count_based_preprocessing:
+    input:
+        COUNT_BASED_OUTPUTS
+
+def require_paired_fastq_outputs(wildcards):
+    if not ALL_RUNS:
+        raise WorkflowError(
+            "nbl_full_pipeline requires paired FASTQs, but none were discovered. "
+            "Use nbl_count_based_preprocessing with input_mode: existing_counts."
+        )
+    return STAR_COUNTS
+
+# Full read-level orchestration remains opt-in. Its FASTQ guard is evaluated
+# only when this target is requested, so it cannot block downstream count-based
+# targets during Snakefile parsing.
 rule nbl_full_pipeline:
     input:
-        STAR_BAMS,
-        STAR_BAIS,
-        STAR_COUNTS,
-        PICARD_TXT,
-        PICARD_HIST,
-        FASTQC_HTML,
-        MULTIQC_HTML,
-        COUNT_MATRIX,
-        COUNT_META,
-        COUNT_GENES,
-        TARGET_MATRIX,
-        TARGET_META,
-        TARGET_GENES,
-        NBL_ENSEMBL_TO_HGNC,
-        NBL_COUNT_VERIFY,
-        NBL_PURITY_OUTPUTS
+        fastq_guard = require_paired_fastq_outputs,
+        bams = STAR_BAMS,
+        bais = STAR_BAIS,
+        counts = STAR_COUNTS,
+        picard_txt = PICARD_TXT,
+        picard_hist = PICARD_HIST,
+        fastqc = FASTQC_HTML,
+        multiqc = MULTIQC_HTML,
+        matrix = GENERATED_COUNT_MATRIX,
+        metadata = GENERATED_COUNT_META,
+        genes = GENERATED_COUNT_GENES,
+        target_matrix = TARGET_MATRIX,
+        target_metadata = TARGET_META,
+        target_genes = TARGET_GENES,
+        gene_map = NBL_ENSEMBL_TO_HGNC,
+        count_verification = NBL_COUNT_VERIFY,
+        purity = list(NBL_PURITY_OUTPUTS.values()),
+        batch = list(BATCH_OUTPUTS.values()),
+        batch_effect = list(BATCH_EFFECT_OUTPUTS.values()),
+        validation = list(FINAL_VALIDATION.values()),
 
 # ------------------------------------------------------------------------------
 # Rule: FastQC on each FASTQ file
@@ -602,13 +776,13 @@ rule picard_insert_size_metrics:
 # Depends on build_target_nbl_count_matrix completing first.
 rule build_nbl_count_matrix:
     input:
-        tabs   = STAR_COUNTS,
+        tabs   = require_paired_fastq_outputs,
         target = TARGET_MATRIX,
         script = f"{WORKFLOW_DIR}/scripts/merge_star_counts.R"
     output:
-        matrix = COUNT_MATRIX,
-        meta   = COUNT_META,
-        genes  = COUNT_GENES
+        matrix = GENERATED_COUNT_MATRIX,
+        meta   = GENERATED_COUNT_META,
+        genes  = GENERATED_COUNT_GENES
     params:
         cohorts = ",".join(PROJECTS)
     log:
@@ -731,32 +905,206 @@ rule verify_final_nbl_count_matrix:
 
 rule nbl_tumour_purity_analysis:
     input:
-        matrix = COUNT_MATRIX,
-        meta = COUNT_META,
-        map = NBL_ENSEMBL_TO_HGNC,
-        verify = NBL_COUNT_VERIFY,
-        script = NBL_PURITY_SCRIPT
+        raw_tumour_counts = COUNT_MATRIX,
+        tumour_metadata = COUNT_META,
+        gene_map = PURITY_GENE_MAP,
+        reference_scores = VERIFIED_PURITY_SCORES,
+        reference_script = VERIFIED_PURITY_SCRIPT,
+        reference_log = VERIFIED_PURITY_LOG,
+        shared_figure_module = SHARED_FIGURE_MODULE,
+        count_validation = NBL_COUNT_VERIFY,
     output:
-        NBL_PURITY_OUTPUTS
+        eligible_samples = NBL_PURITY_OUTPUTS["eligible_samples"],
+        purity_scoring_expression = NBL_PURITY_OUTPUTS["purity_scoring_expression"],
+        purity_scores = NBL_PURITY_OUTPUTS["purity_scores"],
+        retained_samples = NBL_PURITY_OUTPUTS["retained_samples"],
+        excluded_samples = NBL_PURITY_OUTPUTS["excluded_samples"],
+        retained_raw_tumour_counts = NBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        purity_diagnostics = NBL_PURITY_OUTPUTS["purity_diagnostics"],
+        sample_retention = NBL_PURITY_OUTPUTS["sample_retention"],
+        provenance = NBL_PURITY_OUTPUTS["provenance"],
+        validation_report = NBL_PURITY_OUTPUTS["validation_report"],
+        validation_ok = NBL_PURITY_OUTPUTS["validation_ok"],
+        execution_log = NBL_PURITY_OUTPUTS["execution_log"],
     params:
-        output_dir = NBL_PURITY_DIR,
-        threshold = PURITY_THRESHOLD
-    log:
-        f"{NBL_PURITY_DIR}/nbl_tumour_purity_analysis.snakemake.log"
+        cohort = "NBL",
+        threshold = PURITY_THRESHOLD,
+        expected_input_samples = EXPECTED_NBL_SAMPLES,
+        expected_eligible_samples = EXPECTED_NBL_SAMPLES,
+        expected_retained_samples = EXPECTED_RETAINED_TUMOURS,
+        primary_sample_type = "",
+        score_policy = "reuse_verified",
+        rule_name = "nbl_tumour_purity_analysis",
+        config_path = "preprocessing_and_quality_control/nbl/config/config.yaml",
+    threads:
+        int(config.get("purity_threads", 4))
+    resources:
+        mem_mb = 64000
     conda:
-        f"{ENV_DIR}/tcga-r-env.yaml"
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p "{params.output_dir}" "$(dirname "{log}")"
+        PURITY_ENV
+    script:
+        SHARED_PURITY_SCRIPT
 
-        SE_PATH="{input.matrix}" \
-        META_CSV="{input.meta}" \
-        MAP_TSV="{input.map}" \
-        OUTPUT_DIR="{params.output_dir}" \
-        PURITY_THRESHOLD="{params.threshold}" \
-        Rscript "{input.script}" > "{log}" 2>&1
-        """
+rule nbl_batch_corr_and_normalisation:
+    input:
+        tumour_rds = NBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        tumour_meta_csv = COUNT_META,
+        retained_samples = NBL_PURITY_OUTPUTS["retained_samples"],
+        excluded_samples = NBL_PURITY_OUTPUTS["excluded_samples"],
+        purity_scores = NBL_PURITY_OUTPUTS["purity_scores"],
+        purity_validation = NBL_PURITY_OUTPUTS["validation_ok"],
+        purity_provenance = NBL_PURITY_OUTPUTS["provenance"],
+        dsmz_rds = BATCH_DSMZ_RDS,
+        dsmz_meta_csv = BATCH_DSMZ_META,
+        shared_figure_module = SHARED_FIGURE_MODULE,
+        verify = NBL_COUNT_VERIFY,
+    output:
+        tumour_counts_rds = BATCH_OUTPUTS["tumour_counts_rds"],
+        dsmz_counts_rds = BATCH_OUTPUTS["dsmz_counts_rds"],
+        merged_counts_rds = BATCH_OUTPUTS["merged_counts_rds"],
+        coldata_tsv = BATCH_OUTPUTS["coldata_tsv"],
+        batch_corrected_counts_rds = BATCH_OUTPUTS["batch_corrected_counts_rds"],
+        tumour_vst_rds = BATCH_OUTPUTS["tumour_vst_rds"],
+        dsmz_vst_rds = BATCH_OUTPUTS["dsmz_vst_rds"],
+        joint_vst_pre_bc_rds = BATCH_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds = BATCH_OUTPUTS["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc_rds = BATCH_OUTPUTS["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc_rds = BATCH_OUTPUTS["dsmz_vst_post_bc_rds"],
+        pca_pre_pdf = BATCH_OUTPUTS["pca_pre_pdf"],
+        pca_post_pdf = BATCH_OUTPUTS["pca_post_pdf"],
+        umap_pre_pdf = BATCH_OUTPUTS["umap_pre_pdf"],
+        umap_post_pdf = BATCH_OUTPUTS["umap_post_pdf"],
+        tumour_qc_pdf = BATCH_OUTPUTS["tumour_qc_pdf"],
+        dsmz_qc_pdf = BATCH_OUTPUTS["dsmz_qc_pdf"],
+        tumour_dispersion_pdf = BATCH_OUTPUTS["tumour_dispersion_pdf"],
+        dsmz_dispersion_pdf = BATCH_OUTPUTS["dsmz_dispersion_pdf"],
+        provenance_tsv = BATCH_OUTPUTS["provenance_tsv"],
+    params:
+        min_shared = int(BATCH_CONFIG.get("min_shared_genes", 5000)),
+        expected_tumour_samples = EXPECTED_RETAINED_TUMOURS,
+        seed = int(BATCH_CONFIG.get("random_seed", 42)),
+        qc_top_genes = int(BATCH_CONFIG.get("qc_top_variable_genes", 3000)),
+        permanova_permutations = int(BATCH_CONFIG.get("permanova_permutations", 9999)),
+        tumour_label = BATCH_CONFIG.get("tumour_label", "NBL_TUMOUR"),
+        dsmz_label = BATCH_CONFIG.get("dsmz_label", "DSMZ_NBL"),
+        dsmz_sample_col = BATCH_CONFIG.get("dsmz_sample_col", "sample_name"),
+        dsmz_cellline_col = BATCH_CONFIG.get("dsmz_cellline_col", "Cell_Line"),
+        dsmz_filter_col = BATCH_CONFIG.get("dsmz_filter_col", "Disease"),
+        dsmz_filter_values = BATCH_CONFIG.get(
+            "dsmz_filter_values", ["Neuroblastoma"]
+        ),
+        subtype_metadata = BATCH_CONFIG.get("subtype_metadata", ""),
+        subtype_sample_col = BATCH_CONFIG.get("subtype_sample_col", "sample"),
+        subtype_col = BATCH_CONFIG.get("subtype_col", "subtype"),
+    log:
+        f"{BATCH_OUTPUT_DIR}/nbl_batch_corr_and_normalisation.snakemake.log"
+    conda:
+        BATCH_ENV
+    script:
+        BATCH_SCRIPT
+
+
+rule nbl_batch_effect_quantification:
+    """PERMANOVA + betadisper and paired before/after PCA over three feature spaces.
+
+    Reads the joint VST matrices; never writes one. Every file that can move a
+    number -- matrices, coldata, pinned GTF, the shared module, this script and
+    this Snakefile -- is a declared input and is checksummed into the provenance
+    record.
+    """
+    input:
+        joint_vst_pre_bc_rds = BATCH_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds = BATCH_OUTPUTS["joint_vst_post_bc_rds"],
+        coldata_tsv = BATCH_OUTPUTS["coldata_tsv"],
+        gene_annotation_gtf = GENE_ANNOTATION_GTF,
+        shared_figure_module = SHARED_FIGURE_MODULE,
+        quantification_script = BATCH_EFFECT_SCRIPT,
+        snakefile = f"{WORKFLOW_DIR}/Snakefile",
+    output:
+        **BATCH_EFFECT_OUTPUTS,
+    params:
+        cohort = "NBL",
+        repo_root = PIPELINE_DIR,
+        master_seed = int(
+            BATCH_CONFIG.get(
+                "permutation_master_seed", BATCH_CONFIG.get("random_seed", 42)
+            )
+        ),
+        qc_top_genes = int(BATCH_CONFIG.get("qc_top_variable_genes", 3000)),
+        permanova_permutations = int(BATCH_CONFIG.get("permanova_permutations", 9999)),
+        primary_predictor = BATCH_CONFIG.get("batch_effect_primary_predictor", "dataset"),
+        # Column holding the tumour study/source label, used for the
+        # tumour-only tumour_source model (DSMZ profiles excluded).
+        tumour_source_column = BATCH_CONFIG.get("tumour_source_column", "cohort"),
+        tumour_label = BATCH_CONFIG.get("tumour_label", "NBL_TUMOUR"),
+        dsmz_label = BATCH_CONFIG.get("dsmz_label", "DSMZ_NBL"),
+        gene_annotation_release = BATCH_CONFIG.get(
+            "gene_annotation_release", "GENCODE v44 (basic, GRCh38)"
+        ),
+        gene_annotation_source = BATCH_CONFIG.get(
+            "gene_annotation_source",
+            "ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.basic.annotation.gtf.gz",
+        ),
+        snakemake_version = SNAKEMAKE_VERSION,
+        snakemake_command = (
+            "snakemake --snakefile preprocessing_and_quality_control/nbl/Snakefile "
+            "--cores 8 --use-conda --conda-frontend conda "
+            "--conda-prefix .snakemake_conda_envs nbl_batch_effect_quantification"
+        ),
+    threads:
+        1
+    resources:
+        mem_mb=48000
+    log:
+        f"{BATCH_OUTPUT_DIR}/nbl_batch_effect_quantification.log"
+    conda:
+        BATCH_ENV
+    script:
+        BATCH_EFFECT_SCRIPT
+
+
+rule validate_nbl_purity_filtered_joint_outputs:
+    input:
+        purity_scores = NBL_PURITY_OUTPUTS["purity_scores"],
+        retained_samples = NBL_PURITY_OUTPUTS["retained_samples"],
+        excluded_samples = NBL_PURITY_OUTPUTS["excluded_samples"],
+        retained_raw_tumour_counts = NBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        purity_validation = NBL_PURITY_OUTPUTS["validation_ok"],
+        dsmz_counts = BATCH_OUTPUTS["dsmz_counts_rds"],
+        merged_counts_raw = BATCH_OUTPUTS["merged_counts_rds"],
+        merged_counts_batch_corrected = BATCH_OUTPUTS["batch_corrected_counts_rds"],
+        joint_vst_pre_bc = BATCH_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc = BATCH_OUTPUTS["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc = BATCH_OUTPUTS["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc = BATCH_OUTPUTS["dsmz_vst_post_bc_rds"],
+        coldata = BATCH_OUTPUTS["coldata_tsv"],
+        figure_purity = NBL_PURITY_OUTPUTS["purity_diagnostics"],
+        figure_retention = NBL_PURITY_OUTPUTS["sample_retention"],
+        figure_pca_pre = BATCH_OUTPUTS["pca_pre_pdf"],
+        figure_pca_post = BATCH_OUTPUTS["pca_post_pdf"],
+        figure_tumour_vst = BATCH_OUTPUTS["tumour_qc_pdf"],
+        figure_dsmz_vst = BATCH_OUTPUTS["dsmz_qc_pdf"],
+        figure_tumour_dispersion = BATCH_OUTPUTS["tumour_dispersion_pdf"],
+        figure_dsmz_dispersion = BATCH_OUTPUTS["dsmz_dispersion_pdf"],
+    output:
+        validation_report = FINAL_VALIDATION["report"],
+        final_matrix_manifest = FINAL_VALIDATION["manifest"],
+        validation_ok = FINAL_VALIDATION["ok"],
+        validation_log = FINAL_VALIDATION["log"],
+    params:
+        cohort = "NBL",
+        expected_tumours = EXPECTED_RETAINED_TUMOURS,
+        expected_dsmz = EXPECTED_DSMZ_PROFILES,
+        expected_collapsed_dsmz = 0,
+        final_relative_path = str(
+            Path(BATCH_OUTPUTS["joint_vst_post_bc_rds"]).resolve().relative_to(REPO_ROOT)
+        ),
+    resources:
+        mem_mb = 32000
+    conda:
+        BATCH_ENV
+    script:
+        FINAL_VALIDATION_SCRIPT
 
 # ------------------------------------------------------------------------------
 # MultiQC: per-project aggregation of QC and alignment metrics

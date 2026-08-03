@@ -317,7 +317,7 @@ cat(sprintf("[INFO] Total genes: %d\n", nrow(counts_mat)))
 # or underpowered comparisons should be interpreted with caution.
 #
 # The script enforces a minimum of one sample per group; users requiring
-# stricter thresholds should implement additional validation.
+# more stringent thresholds should implement additional validation.
 
 n_comp <- sum(meta_df$group == paste0("Component_", opt$component))
 n_rest <- sum(meta_df$group == "Rest")

@@ -175,8 +175,9 @@ def main() -> None:
 
             paths_cfg = profile_cfg.get("paths", {})
 
-            # RDS input paths: vst_joint_rds, cell_vst_rds, tumour_vst_rds, dsmz_counts_rds
-            rds_keys = ["vst_joint_rds", "cell_vst_rds", "tumour_vst_rds", "dsmz_counts_rds"]
+            # RDS expression inputs. Raw preprocessing counts are validated by
+            # their disease-specific workflows and are never placeholder data.
+            rds_keys = ["vst_joint_rds", "cell_vst_rds", "tumour_vst_rds"]
             seen_rds = set()
             for key in rds_keys:
                 rds_path = paths_cfg.get(key, "")

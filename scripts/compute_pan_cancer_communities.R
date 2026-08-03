@@ -890,7 +890,7 @@ if (!is.null(meta)) {
   lin_levels <- sort(unique(na.omit(lin)))
   lin_id <- match(lin, lin_levels)
 
-  # Restrict to vertices with valid lineage annotations
+  # limit to vertices with valid lineage annotations
   # assortativity_nominal() handles NAs poorly, so exclusion is necessary
   keep_v <- which(!is.na(lin_id))
   g_lin <- induced_subgraph(g, vids = keep_v)

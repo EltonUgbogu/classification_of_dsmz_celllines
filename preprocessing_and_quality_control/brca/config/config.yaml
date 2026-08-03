@@ -1,0 +1,47 @@
+# Standalone BRCA count-level preprocessing configuration.
+# All generated outputs remain outside protected data/brca paths.
+
+profiles:
+  brca:
+    tumour_rds: "data/brca/tcga_brca_counts.rds"
+    dsmz_rds: "data/brca/dsmz_brca_counts.rds"
+    dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
+    gene_map_tsv: "resources/ensembl_to_symbol.tsv"
+
+    tumour_label: "BRCA_TUMOUR"
+    dsmz_label: "DSMZ_BRCA"
+
+    expected_raw_tcga_samples: 913
+    expected_primary_tumour_samples: 830
+    expected_dsmz_cell_line_profiles: 29
+    expected_shared_genes: 60616
+
+    tcga_primary_tumour_code: "01"
+    dsmz_sample_id_column: "sample_name"
+    dsmz_cancer_code_column: "codes/tcga_codes"
+    dsmz_cancer_code: "BRCA"
+    dsmz_cell_line_column: "DSMZ_Cell_line_norm"
+
+    output_root: "preprocessing_and_quality_control/brca/results"
+
+    tumour_purity_analysis:
+      enabled: true
+      method: "ESTIMATE/tidyestimate"
+      threshold: 0.70
+      # Observed from the tumour-only raw-count-derived purity recomputation.
+      expected_retained_tumour_samples: 773
+      threads: 4
+      output_dir: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction"
+
+    batch_correction_and_normalisation:
+      enabled: true
+      output_dir: "preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess"
+      min_shared_genes: 5000
+      random_seed: 42
+      qc_top_variable_genes: 3000
+      threads: 8
+
+    validation:
+      output_dir: "preprocessing_and_quality_control/brca/results/validation"
+      replacement_min_median_sample_pearson: 0.95
+      distribution_sample_size: 1000000

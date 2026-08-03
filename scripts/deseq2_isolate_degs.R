@@ -497,7 +497,7 @@ rownames(meta_sub) <- meta_sub[[opt$sample_id_col]]
 # -----------------------------------------------------------------------------
 # Count Matrix Validation
 # -----------------------------------------------------------------------------
-# DESeq2 has strict requirements for input count data. This section validates
+# DESeq2 has specific requirements for input count data. This section validates
 # that the count matrix meets these requirements:
 #
 #   - No missing values (NA): DESeq2 cannot handle missing counts
@@ -914,7 +914,7 @@ writeLines(unique_genes, unique_path)
 # Also report recurrence >= 1 for context
 unique_genes_k1 <- as.character(gene_freq_df$gene_id[gene_freq_df$freq >= 1])
 message(sprintf("[INFO] Recurrence >= 1: %d genes (for context)", length(unique_genes_k1)))
-message(sprintf("[INFO] Recurrence >= %d: %d genes (strict threshold)", k, length(unique_genes)))
+message(sprintf("[INFO] Recurrence >= %d: %d genes (recurrence threshold)", k, length(unique_genes)))
 
 # Generate manifest summarising marker sets
 manifest <- data.frame(

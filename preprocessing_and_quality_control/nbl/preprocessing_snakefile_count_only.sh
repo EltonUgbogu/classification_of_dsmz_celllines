@@ -12,11 +12,13 @@
 set -euo pipefail
 
 # ------------------------------------------------------------------
-# 0. Paths (single source of truth - auto-detected)
+# 0. Repository-relative path resolution
 # ------------------------------------------------------------------
+# Resolve paths from this launcher so execution does not depend on the
+# caller's current working directory. PROJECT_DIR remains configurable.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$SCRIPT_DIR}}"
+PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
 PIPELINE_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
 
 SNAKEFILE="${SNAKEFILE:-$PROJECT_DIR/Snakefile}"
@@ -27,7 +29,8 @@ LOG_DIR="${LOG_DIR:-$PROJECT_DIR/logs}"
 # not read inherited DATA_ROOT values, which avoids accidental SLURM environment
 # leakage into Snakemake configuration.
 
-# Auto-detect envs directory and tolerate stale ENVS_DIR exports.
+# Resolve the Snakemake runner environment from an explicit override,
+# workflow-local definitions, or the repository-level environment directory.
 for candidate in "${ENVS_DIR:-}" \
                  "$PROJECT_DIR/envs" \
                  "$PIPELINE_DIR/envs" \
@@ -41,7 +44,7 @@ done
 ENVS_DIR="${ENVS_DIR:-$REPO_ROOT/envs}"
 SMK_ENV_YAML="${SMK_ENV_YAML:-$ENVS_DIR/smk.yaml}"
 
-# Always ensure logs directory exists in the project
+# Create the configured log directory before invoking Snakemake.
 mkdir -p "$LOG_DIR"
 
 
@@ -66,7 +69,7 @@ if [ ! -f "$CONFIGFILE" ]; then
 fi
 
 # ------------------------------------------------------------------
-# 1. Conda-only setup + create/activate Snakemake env from ENVS_DIR
+# 1. Configurable Snakemake execution environment
 # ------------------------------------------------------------------
 if ! command -v conda >/dev/null 2>&1; then
   echo "[ERROR] 'conda' not found in PATH."
@@ -80,12 +83,14 @@ if [ ! -f "$SMK_ENV_YAML" ]; then
   exit 1
 fi
 
-# Create a local runtime env inside preprocessing project (portable)
+# Keep the Snakemake runner environment inside the preprocessing workspace
+# unless the caller supplies SMK_ENV_PATH.
 SMK_ENV_PATH="${SMK_ENV_PATH:-$PROJECT_DIR/envs/.conda/smk}"
+SNAKEMAKE_CONDA_PREFIX="${SNAKEMAKE_CONDA_PREFIX:-$PROJECT_DIR/.snakemake/conda}"
 mkdir -p "$(dirname "$SMK_ENV_PATH")"
 SKIP_ENV_CREATE="${SKIP_ENV_CREATE:-0}"
 
-# Load conda shell function
+# Initialise conda shell integration before activating the runner environment.
 # shellcheck disable=SC1091
 if [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
   source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -94,8 +99,8 @@ else
   exit 1
 fi
 
-# Create or reuse env at envs/.conda/smk.
-# Useful on restricted compute nodes: set SKIP_ENV_CREATE=1 to avoid network calls.
+# Create or reuse the configured runner environment. On compute nodes without
+# network access, set SKIP_ENV_CREATE=1 to require an existing environment.
 if [ "$SKIP_ENV_CREATE" = "1" ]; then
   if [ -d "$SMK_ENV_PATH" ]; then
     echo "[INFO] SKIP_ENV_CREATE=1; reusing existing env: $SMK_ENV_PATH"
@@ -119,35 +124,39 @@ conda activate "$SMK_ENV_PATH" || {
   exit 1
 }
 
-SNAKEMAKE_BIN="$(command -v snakemake || true)"
-if [ -z "$SNAKEMAKE_BIN" ]; then
+SNAKEMAKE="${SNAKEMAKE:-${SNAKEMAKE_BIN:-$(command -v snakemake || true)}}"
+if [ -z "$SNAKEMAKE" ]; then
   echo "[ERROR] snakemake not found in activated env ($SMK_ENV_PATH)"
   exit 1
 fi
-echo "[INFO] Using snakemake: $SNAKEMAKE_BIN ($(snakemake --version))"
+echo "[INFO] Using snakemake: $SNAKEMAKE ($("$SNAKEMAKE" --version))"
+echo "[INFO] Snakemake conda prefix: $SNAKEMAKE_CONDA_PREFIX"
 
 # ------------------------------------------------------------------
-# 2. Unlock any previous Snakemake run (safe if not locked)
+# 2. Clear any stale Snakemake working-directory lock
 # ------------------------------------------------------------------
 echo "[INFO] Unlocking Snakemake working directory (if locked)..."
-"$SNAKEMAKE_BIN" \
+"$SNAKEMAKE" \
   --snakefile "$SNAKEFILE" \
   --configfile "$CONFIGFILE" \
   --use-conda \
+  --conda-frontend conda \
   --unlock || true
 
 # ------------------------------------------------------------------
-# 3. Run Snakemake pipeline
+# 3. Execute the configured workflow target
 # ------------------------------------------------------------------
 echo "[INFO] Starting Snakemake pipeline..."
-N_CORES="${SLURM_CPUS_PER_TASK:-8}"
+CORES="${CORES:-${N_CORES:-${SLURM_CPUS_PER_TASK:-8}}}"
 
 set +e
-"$SNAKEMAKE_BIN" \
+"$SNAKEMAKE" \
   --snakefile "$SNAKEFILE" \
   --configfile "$CONFIGFILE" \
-  --cores "$N_CORES" \
+  --cores "$CORES" \
   --use-conda \
+  --conda-frontend conda \
+  --conda-prefix "$SNAKEMAKE_CONDA_PREFIX" \
   --printshellcmds -p \
   --rerun-incomplete \
   --rerun-triggers mtime \

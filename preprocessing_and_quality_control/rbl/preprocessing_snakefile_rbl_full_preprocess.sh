@@ -108,7 +108,7 @@ else
 fi
 
 # Create or reuse env at envs/.conda/smk.
-# Useful on restricted compute nodes: set SKIP_ENV_CREATE=1 to avoid network calls.
+# Useful on limited compute nodes: set SKIP_ENV_CREATE=1 to avoid network calls.
 if [ "$SKIP_ENV_CREATE" = "1" ]; then
   if [ -d "$SMK_ENV_PATH" ]; then
     echo "[INFO] SKIP_ENV_CREATE=1; reusing existing env: $SMK_ENV_PATH"
@@ -147,6 +147,7 @@ echo "[INFO] Unlocking Snakemake working directory (if locked)..."
   --snakefile "$SNAKEFILE" \
   --configfile "$CONFIGFILE" \
   --use-conda \
+  --conda-frontend conda \
   --unlock || true
 
 # ------------------------------------------------------------------
@@ -161,6 +162,7 @@ set +e
   --configfile "$CONFIGFILE" \
   --cores "$N_CORES" \
   --use-conda \
+  --conda-frontend conda \
   --printshellcmds -p \
   --rerun-incomplete \
   --rerun-triggers mtime \

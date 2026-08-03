@@ -12,54 +12,81 @@ if "profiles" not in config or "nbl" not in config["profiles"]:
 
 PROFILE = config["profiles"]["nbl"]
 TUMOUR_RDS = repo_config_path(PROFILE["tumour_rds"])
+RETAINED_SAMPLES = repo_config_path(PROFILE["retained_samples"])
+EXCLUDED_SAMPLES = repo_config_path(PROFILE["excluded_samples"])
+PURITY_VALIDATION = repo_config_path(PROFILE["purity_validation"])
+TUMOUR_META_CSV = (
+    repo_config_path(PROFILE["tumour_meta_csv"])
+    if PROFILE.get("tumour_meta_csv")
+    else None
+)
 DSMZ_RDS = repo_config_path(PROFILE["dsmz_rds"])
 DSMZ_META_CSV = repo_config_path(PROFILE["dsmz_meta_csv"])
+EXPECTED_TUMOUR_COHORTS = PROFILE.get("expected_tumour_cohorts", {})
+OUTPUT_DIR = repo_config_path(
+    PROFILE.get(
+        "output_dir",
+        "preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/preprocess",
+    )
+)
 
-FINAL_OUTPUTS = [
-    "results/nbl/preprocess/tumour_counts.rds",
-    "results/nbl/preprocess/dsmz_nbl_counts.rds",
-    "results/nbl/preprocess/merged_counts_raw.rds",
-    "results/nbl/preprocess/coldata.tsv",
-    "results/nbl/preprocess/merged_counts_batch_corrected.rds",
-    "results/nbl/preprocess/tumour_vst_pre_bc.rds",
-    "results/nbl/preprocess/dsmz_vst_pre_bc.rds",
-    "results/nbl/preprocess/joint_vst_pre_bc.rds",
-    "results/nbl/preprocess/joint_vst_post_bc.rds",
-    "results/nbl/preprocess/tumour_vst_post_bc.rds",
-    "results/nbl/preprocess/dsmz_vst_post_bc.rds",
-    "results/nbl/preprocess/pca_pre_BC.pdf",
-    "results/nbl/preprocess/pca_post_BC.pdf",
-    "results/nbl/preprocess/umap_pre_BC.pdf",
-    "results/nbl/preprocess/umap_post_BC.pdf",
-    "results/nbl/preprocess/qc_tumour_vst.pdf",
-    "results/nbl/preprocess/qc_dsmz_vst.pdf",
-]
+FINAL_OUTPUTS = {
+    "tumour_counts_rds": f"{OUTPUT_DIR}/tumour_counts.rds",
+    "dsmz_counts_rds": f"{OUTPUT_DIR}/dsmz_nbl_counts.rds",
+    "merged_counts_rds": f"{OUTPUT_DIR}/merged_counts_raw.rds",
+    "coldata_tsv": f"{OUTPUT_DIR}/coldata.tsv",
+    "batch_corrected_counts_rds": f"{OUTPUT_DIR}/merged_counts_batch_corrected.rds",
+    "tumour_vst_rds": f"{OUTPUT_DIR}/tumour_vst_pre_bc.rds",
+    "dsmz_vst_rds": f"{OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
+    "joint_vst_pre_bc_rds": f"{OUTPUT_DIR}/joint_vst_pre_bc.rds",
+    "joint_vst_post_bc_rds": f"{OUTPUT_DIR}/joint_vst_purity_filtered_post_bc.rds",
+    "tumour_vst_post_bc_rds": f"{OUTPUT_DIR}/tumour_vst_purity_filtered_post_bc.rds",
+    "dsmz_vst_post_bc_rds": f"{OUTPUT_DIR}/dsmz_vst_purity_filtered_post_bc.rds",
+    "pca_pre_pdf": f"{OUTPUT_DIR}/pca_pre_BC.pdf",
+    "pca_post_pdf": f"{OUTPUT_DIR}/pca_post_BC.pdf",
+    "umap_pre_pdf": f"{OUTPUT_DIR}/umap_pre_BC.pdf",
+    "umap_post_pdf": f"{OUTPUT_DIR}/umap_post_BC.pdf",
+    "tumour_qc_pdf": f"{OUTPUT_DIR}/qc_tumour_vst.pdf",
+    "dsmz_qc_pdf": f"{OUTPUT_DIR}/qc_dsmz_vst.pdf",
+    "tumour_dispersion_pdf": f"{OUTPUT_DIR}/qc_tumour_dispersion.pdf",
+    "dsmz_dispersion_pdf": f"{OUTPUT_DIR}/qc_dsmz_dispersion.pdf",
+}
 
 rule preprocess_integrate_nbl:
     input:
         tumour_rds = TUMOUR_RDS,
+        retained_samples = RETAINED_SAMPLES,
+        excluded_samples = EXCLUDED_SAMPLES,
+        purity_validation = PURITY_VALIDATION,
+        tumour_meta_csv = lambda wildcards: [TUMOUR_META_CSV] if TUMOUR_META_CSV else [],
         dsmz_rds = DSMZ_RDS,
         dsmz_meta_csv = DSMZ_META_CSV,
     output:
-        tumour_counts_rds = "results/nbl/preprocess/tumour_counts.rds",
-        dsmz_counts_rds = "results/nbl/preprocess/dsmz_nbl_counts.rds",
-        merged_counts_rds = "results/nbl/preprocess/merged_counts_raw.rds",
-        coldata_tsv = "results/nbl/preprocess/coldata.tsv",
-        batch_corrected_counts_rds = "results/nbl/preprocess/merged_counts_batch_corrected.rds",
-        tumour_vst_rds = "results/nbl/preprocess/tumour_vst_pre_bc.rds",
-        dsmz_vst_rds = "results/nbl/preprocess/dsmz_vst_pre_bc.rds",
-        joint_vst_pre_bc_rds = "results/nbl/preprocess/joint_vst_pre_bc.rds",
-        joint_vst_post_bc_rds = "results/nbl/preprocess/joint_vst_post_bc.rds",
-        tumour_vst_post_bc_rds = "results/nbl/preprocess/tumour_vst_post_bc.rds",
-        dsmz_vst_post_bc_rds = "results/nbl/preprocess/dsmz_vst_post_bc.rds",
-        pca_pre_pdf = "results/nbl/preprocess/pca_pre_BC.pdf",
-        pca_post_pdf = "results/nbl/preprocess/pca_post_BC.pdf",
-        umap_pre_pdf = "results/nbl/preprocess/umap_pre_BC.pdf",
-        umap_post_pdf = "results/nbl/preprocess/umap_post_BC.pdf",
-        tumour_qc_pdf = "results/nbl/preprocess/qc_tumour_vst.pdf",
-        dsmz_qc_pdf = "results/nbl/preprocess/qc_dsmz_vst.pdf",
+        tumour_counts_rds = FINAL_OUTPUTS["tumour_counts_rds"],
+        dsmz_counts_rds = FINAL_OUTPUTS["dsmz_counts_rds"],
+        merged_counts_rds = FINAL_OUTPUTS["merged_counts_rds"],
+        coldata_tsv = FINAL_OUTPUTS["coldata_tsv"],
+        batch_corrected_counts_rds = FINAL_OUTPUTS["batch_corrected_counts_rds"],
+        tumour_vst_rds = FINAL_OUTPUTS["tumour_vst_rds"],
+        dsmz_vst_rds = FINAL_OUTPUTS["dsmz_vst_rds"],
+        joint_vst_pre_bc_rds = FINAL_OUTPUTS["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds = FINAL_OUTPUTS["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc_rds = FINAL_OUTPUTS["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc_rds = FINAL_OUTPUTS["dsmz_vst_post_bc_rds"],
+        pca_pre_pdf = FINAL_OUTPUTS["pca_pre_pdf"],
+        pca_post_pdf = FINAL_OUTPUTS["pca_post_pdf"],
+        umap_pre_pdf = FINAL_OUTPUTS["umap_pre_pdf"],
+        umap_post_pdf = FINAL_OUTPUTS["umap_post_pdf"],
+        tumour_qc_pdf = FINAL_OUTPUTS["tumour_qc_pdf"],
+        dsmz_qc_pdf = FINAL_OUTPUTS["dsmz_qc_pdf"],
+        tumour_dispersion_pdf = FINAL_OUTPUTS["tumour_dispersion_pdf"],
+        dsmz_dispersion_pdf = FINAL_OUTPUTS["dsmz_dispersion_pdf"],
     params:
         min_shared = PROFILE.get("min_shared_genes", 5000),
+        expected_tumour_samples = int(PROFILE.get("expected_tumour_samples", 0)),
+        expected_gse189367 = int(EXPECTED_TUMOUR_COHORTS.get("GSE189367", 0)),
+        expected_srp409177 = int(EXPECTED_TUMOUR_COHORTS.get("SRP409177", 0)),
+        expected_target_nbl = int(EXPECTED_TUMOUR_COHORTS.get("TARGET-NBL", 0)),
         tumour_label = PROFILE.get("tumour_label", "NBL_TUMOUR"),
         dsmz_label = PROFILE.get("dsmz_label", "DSMZ_NBL"),
         dsmz_sample_col = PROFILE.get("dsmz_sample_col", "sample_name"),
@@ -70,7 +97,7 @@ rule preprocess_integrate_nbl:
         subtype_sample_col = PROFILE.get("subtype_sample_col", "sample"),
         subtype_col = PROFILE.get("subtype_col", "subtype"),
     log:
-        "logs/nbl/preprocess_integrate_nbl.log"
+        f"{OUTPUT_DIR}/nbl_batch_corr_and_normalisation.snakemake.log"
     conda:
         "envs/r_nbl_preprocess.yaml"
     script:
@@ -78,4 +105,4 @@ rule preprocess_integrate_nbl:
 
 rule all:
     input:
-        FINAL_OUTPUTS
+        list(FINAL_OUTPUTS.values())

@@ -1,0 +1,16 @@
+name: nbl-tumour-purity
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base>=4.3,<4.4
+  - r-remotes
+  - r-dplyr
+  - r-ggplot2
+  - r-ggpubr
+  - r-data.table
+  - r-tibble
+  - r-rcolorbrewer
+  - r-patchwork
+  - bioconductor-summarizedexperiment

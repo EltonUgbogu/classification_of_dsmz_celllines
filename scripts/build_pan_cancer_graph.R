@@ -7,7 +7,7 @@
 #
 # NOTE: This is a simplified kNN graph for validation purposes (negative
 # control testing). For production analysis, this should be replaced with
-# the strict consensus policy (best_overall_dir ∩ winner_dir) used in
+# the intersection consensus policy (best_overall_dir ∩ winner_dir) used in
 # disease-specific analysis.
 #
 # This script computes kNN graphs from correlation matrix to test hematologic

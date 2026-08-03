@@ -9,7 +9,7 @@
 #   1. Builds combined expression matrix (Step 2)
 #   2. Computes correlation matrix (Step 3.1)
 #   3. Computes NN purity test (Step 3.2)
-#   4. Builds strict neighbourhood graph (Step 3.3)
+#   4. Builds resolved neighbourhood graph (Step 3.3)
 #   5. Quantifies cross-lineage edges (Step 3.4)
 #
 # USAGE:
@@ -102,8 +102,8 @@ fi
 echo "  ✓ NN purity table created: ${NN_PURITY_OUT}"
 echo ""
 
-# Step 3.3: Build strict neighbourhood graph
-echo "[STEP 3.3] Building strict neighbourhood graph..."
+# Step 3.3: Build resolved neighbourhood graph
+echo "[STEP 3.3] Building resolved neighbourhood graph..."
 mkdir -p "${GRAPH_DIR}"
 Rscript ${SCRIPTS_DIR}/build_pan_cancer_graph.R \
   --cor-matrix "${COR_OUT}" \

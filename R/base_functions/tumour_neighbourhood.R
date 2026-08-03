@@ -11,7 +11,7 @@
 # interpretation of cell line–tumour relationships.
 #
 # The algorithm operates within the context of consensus clustering results,
-# restricting neighbour candidates to tumours in the same cluster as the query
+# limiting neighbour candidates to tumours in the same cluster as the query
 # cell line. This constraint ensures that neighbourhoods reflect biologically
 # coherent sample groupings.
 #
@@ -280,7 +280,7 @@ compute_tumour_neighbourhoods <- function(
     # ------------------------------------------------------------------------
     # STEP 2: IDENTIFY CANDIDATE TUMOURS
     # ------------------------------------------------------------------------
-    # Candidate tumours are restricted to those in the same cluster as the
+    # Candidate tumours are limited to those in the same cluster as the
     # query cell line. This constraint ensures biological coherence of the
     # neighbourhood.
     

@@ -5,7 +5,7 @@
 # ============================================================
 #
 # This script:
-# 1) Reads DSMZ_count_gene.rds (all cell lines)
+# 1) Reads an explicitly configured disease-specific DSMZ raw-count object
 # 2) Filters to disease-specific cell lines (from node stats)
 # 3) Creates metadata with sample_id, cell_line columns
 # 4) Writes counts TSV and metadata TSV for DESeq2
@@ -13,7 +13,7 @@
 # Usage:
 # Rscript scripts/prepare_deseq2_inputs.R \
 #   --profile brca \
-#   --dsmz_counts data/dsmz/DSMZ_count_gene.rds \
+#   --dsmz_counts data/brca/dsmz_brca_counts.rds \
 #   --dsmz_meta data/dsmz/DSMZ_metadata.csv \
 #   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/plots/patient_referenced_resolved_cell_line_neighbourhood_graph_node_stats.tsv \
 #   --outdir results/unsupervised/brca/deseq2_inputs
@@ -52,13 +52,92 @@ canon_cl <- function(x) {
 
 opt_list <- list(
   make_option("--profile", type="character", help="Profile name: brca, nbl, or rbl"),
-  make_option("--dsmz_counts", type="character", default="data/dsmz/DSMZ_count_gene.rds", help="Path to DSMZ count RDS"),
+  make_option("--dsmz_counts", type="character", help="Required path to a validated disease-specific DSMZ raw-count RDS/TSV"),
   make_option("--dsmz_meta", type="character", default="data/dsmz/DSMZ_metadata.csv", help="Path to DSMZ metadata CSV"),
   make_option("--node_stats", type="character", help="Path to node stats TSV with cell_line column"),
   make_option("--outdir", type="character", help="Output directory for counts.tsv and metadata.tsv")
 )
 
 opt <- parse_args(OptionParser(option_list = opt_list))
+if (is.null(opt$dsmz_counts) || !nzchar(opt$dsmz_counts)) {
+  stop("--dsmz_counts is required; configure a validated disease-specific DSMZ raw-count input")
+}
+
+DSMZ_RAW_COUNT_ERROR <- paste(
+  "Configured DSMZ input is not a raw integer count matrix.",
+  "Do not use transformed VST/log expression for batch-correction input."
+)
+
+stop_invalid_dsmz_counts <- function(detail) {
+  stop(sprintf("%s %s", DSMZ_RAW_COUNT_ERROR, detail), call. = FALSE)
+}
+
+read_dsmz_count_matrix <- function(path) {
+  if (!file.exists(path)) {
+    stop_invalid_dsmz_counts(sprintf("Configured file does not exist: %s.", path))
+  }
+  ext <- tolower(tools::file_ext(path))
+  obj <- tryCatch(
+    if (ext == "rds") {
+      readRDS(path)
+    } else if (ext %in% c("tsv", "txt")) {
+      utils::read.delim(path, check.names = FALSE, stringsAsFactors = FALSE)
+    } else {
+      stop("unsupported extension")
+    },
+    error = function(e) stop_invalid_dsmz_counts(sprintf(
+      "Could not read %s: %s.",
+      path,
+      conditionMessage(e)
+    ))
+  )
+  if (!(is.matrix(obj) || is.data.frame(obj))) {
+    stop_invalid_dsmz_counts("Expected matrix/data.frame-like input.")
+  }
+
+  if (is.data.frame(obj) && "gene_id" %in% colnames(obj)) {
+    gene_ids <- as.character(obj$gene_id)
+    count_df <- obj[, setdiff(colnames(obj), "gene_id"), drop = FALSE]
+  } else if (
+    is.data.frame(obj) &&
+    all(c("Ensembl_ID", "gene_name") %in% colnames(obj))
+  ) {
+    gene_ids <- if ("Ensembl_ID_with_version" %in% colnames(obj)) {
+      as.character(obj$Ensembl_ID_with_version)
+    } else {
+      as.character(obj$Ensembl_ID)
+    }
+    annotation <- c("Ensembl_ID", "gene_name", "Ensembl_ID_with_version")
+    count_df <- obj[, setdiff(colnames(obj), annotation), drop = FALSE]
+  } else {
+    gene_ids <- rownames(obj)
+    count_df <- as.data.frame(obj, check.names = FALSE)
+  }
+
+  if (
+    is.null(gene_ids) ||
+    anyNA(gene_ids) ||
+    any(!nzchar(gene_ids)) ||
+    anyDuplicated(gene_ids) ||
+    anyDuplicated(colnames(count_df))
+  ) {
+    stop_invalid_dsmz_counts("Missing or duplicated gene/sample identifiers were detected.")
+  }
+  if (!ncol(count_df) || !all(vapply(count_df, is.numeric, logical(1)))) {
+    stop_invalid_dsmz_counts("All sample columns must be numeric.")
+  }
+  counts <- as.matrix(count_df)
+  rownames(counts) <- gene_ids
+  storage.mode(counts) <- "double"
+  if (anyNA(counts) || any(!is.finite(counts))) {
+    stop_invalid_dsmz_counts("NA or non-finite values were detected.")
+  }
+  if (any(counts < 0)) stop_invalid_dsmz_counts("Negative values were detected.")
+  if (any(abs(counts - round(counts)) > 1e-8)) {
+    stop_invalid_dsmz_counts("Non-integer values were detected.")
+  }
+  counts
+}
 
 # Read node stats to get cell lines for this disease
 node_stats <- read_tsv(opt$node_stats, show_col_types = FALSE)
@@ -66,8 +145,8 @@ target_cell_lines <- unique(node_stats$cell_line)
 target_canon <- canon_cl(target_cell_lines)
 message(sprintf("[INFO] Found %d cell lines for %s", length(target_cell_lines), opt$profile))
 
-# Read DSMZ counts
-counts_mat <- readRDS(opt$dsmz_counts)
+# Read validated disease-specific DSMZ counts.
+counts_mat <- read_dsmz_count_matrix(opt$dsmz_counts)
 counts_df <- as.data.frame(counts_mat, check.names = FALSE)
 counts_df <- data.frame(gene_id = rownames(counts_mat), counts_df, check.names = FALSE)
 message(sprintf("[INFO] DSMZ counts: %d genes, %d samples", nrow(counts_df), ncol(counts_df) - 1))

@@ -2,7 +2,7 @@
 """
 Graph-derived marker aggregation and pan-cancer feature selection.
 
-Inputs are restricted to the contrast-level marker manifest and retained
+Inputs are limited to the contrast-level marker manifest and retained
 per-contrast marker tables produced by the DESeq2 marker-prioritisation module.
 This script does not read raw RNA-seq counts, fit DESeq2 models, estimate size
 factors, construct DESeq2 contrast factors, or repeat contrast-level filtering.

@@ -68,7 +68,23 @@ cohorts:
     disease: "Breast cancer"
     tumour_sources:
       - "TCGA-BRCA"
-    current_analysis_input: "data/brca/bcc_analysis_results/vst_dsmz_bcc_tcga_brca_batch_corrected.rds"
+    current_analysis_input: "preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds"
+    tumour_purity:
+      method: "ESTIMATE/tidyestimate on a tumour-only per-sample rank-normalised expression object derived inside the purity stage from raw primary-tumour counts"
+      threshold: 0.70
+      samples_before: 830
+      samples_retained: 773
+      samples_excluded: 57
+      scoring_expression: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/tumour_only_purity_scoring_expression.rds"
+      retained_manifest: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/retained_samples.tsv"
+      excluded_manifest: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
+      retained_raw_counts: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
+    tumour_selection:
+      policy: "Primary tumour sample type followed by configured tumour-purity filtering"
+      primary_sample_type: "01"
+      pam50_annotation_required: false
+      tumour_purity_filtering: true
+      evidence: "The active tumour set must exactly equal the retained-sample manifest generated from raw primary-tumour counts"
     cell_line_panel: "DSMZ"
     runtime_labels:
       - label: "PAM50_Subtype"
@@ -80,12 +96,21 @@ cohorts:
   nbl:
     disease: "Neuroblastoma"
     tumour_sources:
-      - "GSE100148"
       - "GSE189367"
       - "SRP409177"
       - "TARGET-NBL"
     current_preprocessing_output: "data/nbl/count_data/nbl_tumour_count.rds"
-    current_analysis_input: "data/nbl/preprocessing_results/vst_NBL_joint_batch_corrected.rds"
+    current_analysis_input: "preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds"
+    tumour_purity:
+      method: "Verified ESTIMATE/tidyestimate scores from tumour-only raw counts with the method's internal per-sample rank transformation"
+      threshold: 0.70
+      samples_before: 273
+      samples_retained: 235
+      samples_excluded: 38
+      scoring_expression: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/tumour_only_purity_scoring_expression.rds"
+      retained_manifest: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/retained_samples.tsv"
+      excluded_manifest: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
+      retained_raw_counts: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
     cell_line_panel: "DSMZ"
     runtime_labels:
       - label: "cohort"
@@ -107,7 +132,17 @@ cohorts:
       - "GSE111168"
       - "GSE196420"
       - "GSE268136"
-    current_analysis_input: "data/rbl/preprocessing_results/vst_RBL_joint_batch_corrected.rds"
+    current_analysis_input: "preprocessing_and_quality_control/rbl/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds"
+    tumour_purity:
+      method: "Verified ESTIMATE/tidyestimate scores from tumour-only raw counts with the method's internal per-sample rank transformation"
+      threshold: 0.70
+      samples_before: 69
+      samples_retained: 68
+      samples_excluded: 1
+      scoring_expression: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/tumour_only_purity_scoring_expression.rds"
+      retained_manifest: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/retained_samples.tsv"
+      excluded_manifest: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
+      retained_raw_counts: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
     cell_line_panel: "DSMZ"
     runtime_labels: []
 

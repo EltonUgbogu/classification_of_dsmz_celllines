@@ -641,7 +641,7 @@ if (!is.null(components)) {
 cat("\n[6] Analysing top-k lineage consistency...\n")
 
 # Compute lineage consistency metrics for each tumour
-# The analysis is restricted to top-10 rankings using rank <= 10
+# The analysis is limited to top-10 rankings using rank <= 10
 topk_consistency <- rankings[rank <= 10, .(
   # Total number of cell lines in the top-k (should be 10 if rankings complete)
   n_total = .N,

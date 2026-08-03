@@ -169,7 +169,7 @@ def main():
     observed_nodes = set()
     canonicalisation_rows = []
 
-    # Discover all per-direction edge files, or restrict to the configured
+    # Discover all per-direction edge files, or limit to the configured
     # representation list passed by Snakemake.
     if args.directions:
         directions = [d.strip() for d in args.directions.split(",") if d.strip()]

@@ -5,7 +5,7 @@ plot_publication_cell_line_component_networks.py
 Standalone publication-quality figure and summary tables for DSMZ cell line
 similarity component and community analysis across BRCA, NBL, and RBL cohorts.
 
-Usage (strict — all three cohorts required):
+Usage (complete-cohort — all three cohorts required):
     python plot_publication_cell_line_component_networks.py \
         --brca-resolved PATH --brca-node-stats PATH --brca-edges PATH \
         --nbl-resolved  PATH --nbl-node-stats  PATH --nbl-edges  PATH \
@@ -1087,7 +1087,7 @@ def parse_args():
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
-            Strict mode (default) — all three cohorts required:
+            Complete-cohort mode (default) — all three cohorts required:
               python %(prog)s \\
                 --brca-resolved PATH --brca-node-stats PATH --brca-edges PATH \\
                 --nbl-resolved  PATH --nbl-node-stats  PATH --nbl-edges  PATH \\
@@ -1165,7 +1165,7 @@ def main():
     log.info("Git commit: %s", git_commit)
 
     # ------------------------------------------------------------------
-    # 1. Strict / relaxed mode check
+    # 1. Complete-cohort / relaxed mode check
     # ------------------------------------------------------------------
     cohort_paths = {
         "BRCA": (args.brca_resolved, args.brca_node_stats,

@@ -23,7 +23,7 @@ Use `pipeline_profile=pan_cancer` for the marker-derived pan-cancer target famil
 
 - disease-level marker outputs from `brca`, `nbl`, and `rbl`;
 - the pan-cancer feature set in `results/unsupervised/pan_cancer/feature_space/`;
-- pan-cancer feature-restricted expression matrices in `results/unsupervised/pan_cancer/inputs/`;
+- pan-cancer feature-limited expression matrices in `results/unsupervised/pan_cancer/inputs/`;
 - tumour/cell-line mapping and graph products in `results/unsupervised/pan_cancer/`;
 - bidirectional ranking diagnostics in `results/unsupervised/pan_cancer/ranking/diagnostics/`;
 - pan-cancer enrichment query sets in `results/unsupervised/pan_cancer/enrichment/query_sets/`.

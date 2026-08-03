@@ -8,7 +8,7 @@
 #
 # USAGE:
 # Rscript scripts/extract_heme_vst.R \
-#   --counts data/dsmz/DSMZ_count_gene.rds \
+#   --counts <validated HEME-specific DSMZ raw-count RDS> \
 #   --metadata data/dsmz/DSMZ_metadata.csv \
 #   --output results/heme/inputs/vst_joint.rds
 #
@@ -41,11 +41,52 @@ output_dir <- dirname(opt$output)
 dir.create(output_dir, recursive=TRUE, showWarnings=FALSE)
 
 cat("Loading DSMZ count file...\n")
-counts_df <- readRDS(opt$counts)
+DSMZ_RAW_COUNT_ERROR <- paste(
+  "Configured DSMZ input is not a raw integer count matrix.",
+  "Do not use transformed VST/log expression for batch-correction input."
+)
+stop_invalid_dsmz_counts <- function(detail) {
+  stop(sprintf("%s %s", DSMZ_RAW_COUNT_ERROR, detail), call. = FALSE)
+}
+if (!file.exists(opt$counts)) {
+  stop_invalid_dsmz_counts(sprintf("Configured file does not exist: %s.", opt$counts))
+}
+counts_df <- tryCatch(
+  readRDS(opt$counts),
+  error = function(e) stop_invalid_dsmz_counts(sprintf(
+    "readRDS failed for %s: %s.",
+    opt$counts,
+    conditionMessage(e)
+  ))
+)
+if (!(is.matrix(counts_df) || is.data.frame(counts_df))) {
+  stop_invalid_dsmz_counts("Expected matrix/data.frame-like input.")
+}
+if (is.null(rownames(counts_df)) || is.null(colnames(counts_df))) {
+  stop_invalid_dsmz_counts("Row and column names are required.")
+}
+if (anyDuplicated(rownames(counts_df)) || anyDuplicated(colnames(counts_df))) {
+  stop_invalid_dsmz_counts("Duplicated row or column names were detected.")
+}
 
 # Check structure
 if (!"Ensembl_ID" %in% colnames(counts_df)) {
   stop("Count file must have 'Ensembl_ID' column")
+}
+annotation <- c("Ensembl_ID", "gene_name", "Ensembl_ID_with_version")
+sample_cols <- setdiff(colnames(counts_df), annotation)
+if (!length(sample_cols) || !all(vapply(counts_df[sample_cols], is.numeric, logical(1)))) {
+  stop_invalid_dsmz_counts("All sample columns must be numeric.")
+}
+count_payload <- as.matrix(counts_df[, sample_cols, drop = FALSE])
+if (anyNA(count_payload) || any(!is.finite(count_payload))) {
+  stop_invalid_dsmz_counts("NA or non-finite values were detected.")
+}
+if (any(count_payload < 0)) {
+  stop_invalid_dsmz_counts("Negative values were detected.")
+}
+if (any(abs(count_payload - round(count_payload)) > 1e-8)) {
+  stop_invalid_dsmz_counts("Non-integer values were detected.")
 }
 
 cat("  Count file: ", nrow(counts_df), " genes, ", ncol(counts_df), " columns\n", sep="")

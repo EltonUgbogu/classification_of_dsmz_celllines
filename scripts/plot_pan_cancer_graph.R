@@ -216,7 +216,7 @@ if (isTRUE(opt$require_ng_prefix)) {
   comps <- comps[is_ng(sample_id)]
 }
 
-# Optionally restrict to nodes we actually have in meta (prevents stray nodes)
+# Optionally limit to nodes we actually have in meta (prevents stray nodes)
 keep_ids <- meta$sample_id
 edges <- edges[from %in% keep_ids & to %in% keep_ids]
 comps <- comps[sample_id %in% keep_ids]

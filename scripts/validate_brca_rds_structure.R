@@ -4,7 +4,7 @@ options(stringsAsFactors = FALSE)
 
 parse_args <- function(args) {
   out <- list(
-    joint_rds = "data/brca/brca_vst_joint.rds",
+    joint_rds = "preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds",
     dsmz_rds = "data/brca/dsmz_brca_counts.rds",
     tcga_rds = "data/brca/tcga_brca_counts.rds",
     pam50_annotation_csv = "data/brca/annotations/TCGA_BRCA_project_subtype.csv",

@@ -1,15 +1,36 @@
+DSMZ_RAW_COUNT_ERROR <- paste(
+  "Configured DSMZ input is not a raw integer count matrix.",
+  "Do not use transformed VST/log expression for batch-correction input."
+)
+
+stop_invalid_dsmz_counts <- function(detail) {
+  stop(sprintf("%s %s", DSMZ_RAW_COUNT_ERROR, detail), call. = FALSE)
+}
+
 validate_count_matrix_values <- function(counts, path) {
+  if (!is.matrix(counts) && !is.data.frame(counts)) {
+    stop_invalid_dsmz_counts(sprintf(
+      "Expected matrix/data.frame-like input at %s.",
+      path
+    ))
+  }
+  if (is.null(rownames(counts)) || is.null(colnames(counts))) {
+    stop_invalid_dsmz_counts("Row and column names are required.")
+  }
+  if (anyDuplicated(rownames(counts)) || anyDuplicated(colnames(counts))) {
+    stop_invalid_dsmz_counts("Duplicated row or column names were detected.")
+  }
   if (anyNA(counts)) {
-    stop(sprintf("[ERROR] DSMZ count matrix contains non-numeric or missing values: %s", path))
+    stop_invalid_dsmz_counts(sprintf("NA values were detected in %s.", path))
   }
   if (any(!is.finite(counts))) {
-    stop(sprintf("[ERROR] DSMZ count matrix contains non-finite values: %s", path))
+    stop_invalid_dsmz_counts(sprintf("Non-finite values were detected in %s.", path))
   }
   if (any(counts < 0)) {
-    stop(sprintf("[ERROR] DSMZ count matrix contains negative values: %s", path))
+    stop_invalid_dsmz_counts(sprintf("Negative values were detected in %s.", path))
   }
   if (any(abs(counts - round(counts)) > sqrt(.Machine$double.eps))) {
-    stop(sprintf("[ERROR] DSMZ count matrix contains non-integer-like values: %s", path))
+    stop_invalid_dsmz_counts(sprintf("Non-integer values were detected in %s.", path))
   }
   invisible(TRUE)
 }
@@ -29,10 +50,12 @@ read_dsmz_tsv_counts <- function(counts_path) {
     stop(sprintf("[ERROR] First DSMZ TSV column must be gene_id or another non-numeric gene identifier column: %s", gene_col))
   }
   if (any(is.na(gene_ids_chr)) || any(!nzchar(gene_ids_chr))) {
-    stop("[ERROR] DSMZ TSV gene identifier column contains missing or empty values")
+    stop_invalid_dsmz_counts("The gene identifier column contains missing or empty values.")
   }
-
   count_df <- raw[, -1, drop = FALSE]
+  if (anyDuplicated(gene_ids_chr) || anyDuplicated(colnames(count_df))) {
+    stop_invalid_dsmz_counts("Duplicated gene identifiers or sample columns were detected.")
+  }
   counts <- as.matrix(data.frame(lapply(count_df, function(x) suppressWarnings(as.numeric(x))), check.names = FALSE))
   colnames(counts) <- colnames(count_df)
   rownames(counts) <- gene_ids_chr
@@ -42,20 +65,36 @@ read_dsmz_tsv_counts <- function(counts_path) {
 }
 
 read_dsmz_rds_counts <- function(counts_path) {
-  raw <- readRDS(counts_path)
+  raw <- tryCatch(
+    readRDS(counts_path),
+    error = function(e) stop_invalid_dsmz_counts(sprintf(
+      "readRDS failed for %s: %s.",
+      counts_path,
+      conditionMessage(e)
+    ))
+  )
   if (methods::is(raw, "SummarizedExperiment")) {
-    return(harmonize_count_matrix(SummarizedExperiment::assay(raw)))
+    raw <- SummarizedExperiment::assay(raw)
   }
   if (is.list(raw) && !is.null(raw$counts)) {
-    return(harmonize_count_matrix(raw$counts))
+    raw <- raw$counts
   }
   if (is.data.frame(raw) && all(c("Ensembl_ID", "gene_name") %in% colnames(raw))) {
+    annotation <- c("Ensembl_ID", "gene_name", "Ensembl_ID_with_version")
+    count_cols <- setdiff(colnames(raw), annotation)
+    payload <- as.matrix(raw[, count_cols, drop = FALSE])
+    storage.mode(payload) <- "numeric"
+    rownames(payload) <- rownames(raw)
+    validate_count_matrix_values(payload, counts_path)
     return(build_dsmz_matrix(raw))
   }
   if (is.matrix(raw) || is.data.frame(raw)) {
+    validate_count_matrix_values(raw, counts_path)
     return(harmonize_count_matrix(raw))
   }
-  stop("Unsupported DSMZ RDS input type. Expected SummarizedExperiment, matrix/data.frame, list(counts=...), or DSMZ count table.")
+  stop_invalid_dsmz_counts(
+    "Expected SummarizedExperiment, matrix/data.frame, list(counts=...), or an annotated DSMZ count table."
+  )
 }
 
 validate_dsmz_metadata_matches <- function(counts, metadata, sample_col = "sample_name") {
@@ -76,7 +115,9 @@ validate_dsmz_metadata_matches <- function(counts, metadata, sample_col = "sampl
 
 load_dsmz_data <- function(counts_path, meta_path, sample_col = "sample_name") {
   cat("[INFO] Loading DSMZ data...\n")
-  if (!file.exists(counts_path)) stop(sprintf("[ERROR] DSMZ count matrix not found: %s", counts_path))
+  if (!file.exists(counts_path)) {
+    stop_invalid_dsmz_counts(sprintf("Configured file does not exist: %s.", counts_path))
+  }
   if (!file.exists(meta_path)) stop(sprintf("[ERROR] DSMZ metadata CSV not found: %s", meta_path))
   meta <- utils::read.csv(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
 

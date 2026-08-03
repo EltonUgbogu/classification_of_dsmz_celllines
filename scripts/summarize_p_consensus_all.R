@@ -102,17 +102,45 @@ if (is.null(directions) || length(directions) == 0) {
 }
 directions <- as.character(directions)
 
+# Append aggregation-only representations that already have final-consensus
+# artefacts. These directions are intentionally separate from the generic
+# feature-selection and tumour-neighbourhood direction grid.
+additional_summary_directions <- as.character(
+  cfg$tumour_neighbourhoods$additional_summary_directions %||% character()
+)
+if (any(!nzchar(str_trim(additional_summary_directions)))) {
+  stop("tumour_neighbourhoods.additional_summary_directions contains an empty value.")
+}
+duplicate_directions <- intersect(directions, additional_summary_directions)
+if (length(duplicate_directions) > 0) {
+  stop(
+    "Duplicate p-consensus summary direction(s): ",
+    paste(duplicate_directions, collapse = ", ")
+  )
+}
+directions <- c(directions, additional_summary_directions)
+
 # Filter out PAM50 directions if use_pam50 is false (e.g., for RBL/NBL profiles).
-# BRCA declares PAM50 at analysis level and lists pam50 directions explicitly.
+# A profile opts in by declaring a PAM50 aggregation direction or use_pam50=true.
 use_pam50 <- cfg$tumour_neighbourhoods$use_pam50 %||%
   cfg$analysis$use_pam50 %||%
-  any(grepl("^pam50_", directions))
+  any(grepl("^pam50_", directions, ignore.case = TRUE))
 if (!use_pam50) {
-  directions <- directions[!grepl("^pam50_", directions)]
+  directions <- directions[!grepl("^pam50_", directions, ignore.case = TRUE)]
   if (length(directions) == 0) {
     stop("No valid directions found after filtering PAM50. Check config tumour_neighbourhoods.directions and use_pam50.")
   }
 }
+
+# Input paths retain their on-disk identifiers, while visible and tabular
+# output uses the canonical uppercase PAM50 method label.
+direction_output_labels <- sub(
+  "^pam50_", "PAM50_", directions, ignore.case = TRUE
+)
+if (anyDuplicated(direction_output_labels)) {
+  stop("Canonical p-consensus direction labels are not unique.")
+}
+direction_label_map <- setNames(direction_output_labels, directions)
 
 # Helper to locate the expected RDS file
 cons_rds_path <- function(direction) {
@@ -139,7 +167,12 @@ dat <- paths %>%
   mutate(df = map(rds, readRDS)) %>%
   select(direction, df) %>%
   unnest(df) %>%
-  mutate(direction = factor(direction, levels = directions))
+  mutate(
+    direction = factor(
+      unname(direction_label_map[as.character(direction)]),
+      levels = direction_output_labels
+    )
+  )
 
 # Ensure cell_line column exists (use cell_tech_id if cell_line is missing)
 if (!"cell_line" %in% colnames(dat) && "cell_tech_id" %in% colnames(dat)) {
@@ -428,7 +461,7 @@ direction_plot_order <- c(
   "PCA_euc", "PCA_corr", "Spearman_euc", "Spearman_corr",
   "MX_euc", "MX_corr", "kTotal_euc", "kTotal_corr",
   "HVG_euc", "HVG_corr",   # included for future profiles that wire HVG directions
-  "pam50_euc", "pam50_corr"  # if present
+  "PAM50_euc", "PAM50_corr"  # if present
 )
 # Use only directions that exist in the data, in canonical order; append any others at end
 dirs_in_data <- unique(as.character(dir_summary$direction))
@@ -445,7 +478,7 @@ feature_cols <- c(
   MX          = "#2E8B57",
   kTotal      = "#B00020",
   HVG         = "#800000",
-  pam50       = "#C71585"
+  PAM50       = "#C71585"
 )
 
 # Prepare data: extract feature names and add percentage labels; fix direction order for plot
@@ -458,8 +491,8 @@ dir_summary_plot <- dir_summary %>%
     # enforce canonical x-axis order (same as RBL)
     direction = factor(as.character(direction), levels = order_used)
   )
-# Force same legend/order so NBL matches RBL (stable fill mapping); pam50 last for BRCA
-feature_levels <- c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG", "pam50")
+# Force the same legend/order across profiles; PAM50 appears last for BRCA only.
+feature_levels <- c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG", "PAM50")
 dir_summary_plot <- dir_summary_plot %>%
   mutate(feature = factor(as.character(feature), levels = feature_levels))
 

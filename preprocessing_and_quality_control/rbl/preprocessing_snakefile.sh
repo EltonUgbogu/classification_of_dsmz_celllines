@@ -27,7 +27,7 @@ export DATA_ROOT
 if [ -z "$CONFIGFILE" ]; then
   for candidate in \
     "$PROJECT_DIR/config/config.yaml" \
-    "$PIPELINE_DIR/preprocessing_and_quality_control/nbl/config/config.yaml" \
+    "$PIPELINE_DIR/preprocessing_and_quality_control/rbl/config/config.yaml" \
     "$PIPELINE_DIR/config/config.yaml"
   do
     if [ -f "$candidate" ]; then
@@ -107,7 +107,7 @@ else
 fi
 
 # Create or reuse env at envs/.conda/smk.
-# Useful on restricted compute nodes: set SKIP_ENV_CREATE=1 to avoid network calls.
+# Useful on limited compute nodes: set SKIP_ENV_CREATE=1 to avoid network calls.
 if [ "$SKIP_ENV_CREATE" = "1" ]; then
   if [ -d "$SMK_ENV_PATH" ]; then
     echo "[INFO] SKIP_ENV_CREATE=1; reusing existing env: $SMK_ENV_PATH"
@@ -147,6 +147,7 @@ echo "[INFO] Unlocking Snakemake working directory (if locked)..."
   --configfile "$CONFIGFILE" \
   --config data_root="$DATA_ROOT" \
   --use-conda \
+  --conda-frontend conda \
   --unlock || true
 
 # ------------------------------------------------------------------
@@ -162,6 +163,7 @@ set +e
   --config data_root="$DATA_ROOT" \
   --cores "$N_CORES" \
   --use-conda \
+  --conda-frontend conda \
   --printshellcmds -p \
   --rerun-incomplete \
   --latency-wait 300 \

@@ -302,7 +302,7 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
     cat("[WARN] cell_line_col '", cell_col, "' not in metadata; labels derived from technical IDs\n")
   }
 
-  # Restrict to DSMZ samples present in matrix; fill missing with sample ID fallback
+  # limit to DSMZ samples present in matrix; fill missing with sample ID fallback
   mapping <- mapping_raw[names(mapping_raw) %in% dsmz_sample_ids]
   missing_in_meta <- setdiff(dsmz_sample_ids, names(mapping))
   if (length(missing_in_meta) > 0L) {

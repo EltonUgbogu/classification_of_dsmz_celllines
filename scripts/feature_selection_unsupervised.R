@@ -300,7 +300,7 @@ run_unsupervised_feature_selection <- function(
   # ---------------------------------------------------------------------------
   # The input must be a numeric matrix with genes as rows and samples as columns.
   # Gene identifiers (e.g., ENSG00000141510) must be present as rownames.
-  # Sample identifiers should be present as colnames (though not strictly required).
+  # Sample identifiers should be present as colnames (though optional).
   #
   # VST (Variance Stabilising Transformation) normalisation is assumed to have
   # been applied upstream (e.g., via DESeq2::vst()). VST transforms count data

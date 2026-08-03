@@ -152,7 +152,7 @@ suppressPackageStartupMessages({
   # functions for handling character encodings and column type inference.
   library(readr)
   
-  # tibble: A modern reimplementation of data frames with stricter subsetting
+  # tibble: A modern reimplementation of data frames with more stringent subsetting
   # rules and better printing methods. Tibbles never convert strings to
   # factors and never create row names automatically.
   library(tibble)

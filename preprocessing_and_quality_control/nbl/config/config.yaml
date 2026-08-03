@@ -2,13 +2,22 @@
 # Usage:
 #   snakemake -s preprocessing_and_quality_control/nbl/Snakefile --configfile preprocessing_and_quality_control/nbl/config/config.yaml --cores 12 --use-conda
 
-# Root folder containing one subfolder per project, each with:
-#   {project}/fastq/*.fastq.gz
-# and where results/logs will be written:
-#   {project}/results/, {project}/logs/
-# If omitted, the Snakefile falls back to a project-relative data directory.
+# Count-based mode treats the existing count matrix as an immutable input.
+# Use "fastq" only when read-level QC, alignment, and count generation are
+# intentionally being rebuilt from paired FASTQ files.
+input_mode: "existing_counts"
+
+# Root folder containing the NBL data products. FASTQ subdirectories are
+# optional in existing_counts mode.
 data_root: "../../data/nbl"
 env_dir: "preprocessing_and_quality_control/envs"  # resolved from the repository root
+
+# Existing count-space inputs, resolved from the repository root. These are
+# consumed directly in existing_counts mode and are never outputs of a rule.
+count_inputs:
+  matrix: "data/nbl/count_data/nbl_tumour_count.rds"
+  metadata: "data/nbl/count_data/nbl_tumour_sample_metadata.csv"
+  genes: "data/nbl/count_data/nbl_tumour_gene_list_hgnc.txt"
 
 projects:
   - GSE189367
@@ -21,7 +30,34 @@ expected_samples:
   total: 273
 
 purity_threshold: 0.7
-purity_output_dir: "results/tumour_purity_analysis/nbl"
+purity_output_dir: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction"
+purity_method: "ESTIMATE/tidyestimate"
+# The verified tumour-only scores were generated with this cohort-specific map.
+gene_map_tsv: "data/nbl/count_data/nbl_ensembl_to_hgnc.tsv"
+verified_purity_scores: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/nbl_estimate_scores.csv"
+verified_purity_script: "preprocessing_and_quality_control/nbl/tumour_purity_analysis/nbl_tumour_purity_analysis.R"
+verified_purity_log: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/nbl_purity_pipeline_20260727_011111.log"
+expected_retained_tumour_samples: 235
+expected_dsmz_profiles: 18
+purity_threads: 4
+
+# Batch correction consumes the 235 raw tumour profiles retained by the
+# upstream verified tumour-only purity analysis plus 18 raw DSMZ profiles.
+batch_corr_and_normalisation:
+  enabled: true
+  output_dir: "preprocessing_and_quality_control/nbl/results/batch_corr_and_normalisation/purity_filtered_preprocess"
+  # NBL-specific raw counts materialised reproducibly from the validated
+  # downstream DSMZ NBL count table; see scripts/materialise_nbl_dsmz_counts.R.
+  dsmz_rds: "preprocessing_and_quality_control/nbl/results/dsmz_input/DSMZ_nbl_raw_counts.rds"
+  dsmz_meta_csv: "data/dsmz/DSMZ_metadata.csv"
+  min_shared_genes: 5000
+  tumour_label: "NBL_TUMOUR"
+  dsmz_label: "DSMZ_NBL"
+  dsmz_sample_col: "sample_name"
+  dsmz_cellline_col: "Cell_Line"
+  dsmz_filter_col: "Disease"
+  dsmz_filter_values:
+    - "Neuroblastoma"
 
 threads: 12
 

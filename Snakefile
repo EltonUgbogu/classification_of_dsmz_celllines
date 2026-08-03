@@ -36,6 +36,7 @@ PIPE_ROOT = BASE
 
 # Centralises conda environment paths to avoid hardcoded absolute strings in rules.
 CONDA_ENV_R = repo_path("envs", "tcga-r-env.yaml")
+CONDA_ENV_R_BASE = repo_path("envs", "r-base.yaml")
 CONDA_ENV_PY = repo_path("envs", "python-graph-env.yaml")
 CONDA_ENV_QC = repo_path("envs", "tumour_nh_qc.yaml")
 
@@ -143,13 +144,29 @@ def get_profile_cfg(profile):
 
 
 # Method helper: resolves per-profile VST inputs used when constructing the multicohort expression matrix.
+def validate_authoritative_vst_path(profile, path):
+    """Fails closed when an active tumour profile points at a superseded matrix."""
+    tumour_profiles = {"brca", "nbl", "rbl"}
+    required_name = "joint_vst_purity_filtered_post_bc.rds"
+    basename = os.path.basename(str(path))
+    if profile in tumour_profiles and basename != required_name:
+        raise ValueError(
+            f"Profile '{profile}' must use {required_name}; configured path is {path}. "
+            "Only the authoritative purity-filtered, post-batch-correction joint VST path is accepted; "
+            "legacy downstream matrices are superseded."
+        )
+    if str(path).endswith("vst_RBL_joint_batch_corrected.rds"):
+        raise ValueError("The removed RBL placeholder is not a valid active matrix")
+    return path
+
+
 def profile_vst_joint_abs(profile):
     """Resolves the absolute path to vst_joint_rds for a given profile."""
     cfgp = get_profile_cfg(profile)
     p = cfgp.get("paths", {}).get("vst_joint_rds")
     if not p:
         raise KeyError(f"paths.vst_joint_rds missing for profile '{profile}'")
-    return abspath(p)
+    return abspath(validate_authoritative_vst_path(profile, p))
 
 
 if "profiles" in config:
@@ -157,7 +174,7 @@ if "profiles" in config:
     # Reads the mandatory pipeline_profile flag; raises an informative error if absent.
     profile_name = config.get("pipeline_profile")
 
-    # Enforces strict profile selection: pipeline_profile must be supplied via --config.
+    # Enforces explicit profile selection: pipeline_profile must be supplied via --config.
     if not profile_name:
         available = ", ".join(profiles.keys())
         raise ValueError(
@@ -322,6 +339,30 @@ def build_directions():
 
 AGN_DIRECTIONS = build_directions()
 
+# Adds precomputed representation outputs to cross-direction p-consensus
+# summaries without admitting them to the generic clustering, neighbourhood,
+# similarity-graph, or support-threshold direction universes.
+_P_CONS_ADDITIONAL_SUMMARY_DIRECTIONS = cfg.get(
+    "tumour_neighbourhoods", {}
+).get("additional_summary_directions", [])
+if not isinstance(_P_CONS_ADDITIONAL_SUMMARY_DIRECTIONS, list):
+    raise ValueError(
+        "tumour_neighbourhoods.additional_summary_directions must be a list"
+    )
+P_CONS_SUMMARY_DIRECTIONS = list(AGN_DIRECTIONS)
+for _direction in _P_CONS_ADDITIONAL_SUMMARY_DIRECTIONS:
+    _direction = str(_direction).strip()
+    if not _direction:
+        raise ValueError(
+            "tumour_neighbourhoods.additional_summary_directions contains an empty value"
+        )
+    if _direction in P_CONS_SUMMARY_DIRECTIONS:
+        raise ValueError(
+            "Duplicate p-consensus summary direction: "
+            f"{_direction}"
+        )
+    P_CONS_SUMMARY_DIRECTIONS.append(_direction)
+
 
 def cfgrel(*keys):
     """
@@ -363,7 +404,7 @@ def cfgget_path_abs(default_rel, *keys):
     return abspath(cfgget_path_rel(default_rel, *keys))
 
 
-# Sets strict shell execution flags and pins thread counts for linear algebra libraries
+# Sets fail-fast shell execution flags and pins thread counts for linear algebra libraries
 # to prevent unintended CPU over-subscription on shared HPC nodes.
 shell.prefix(
     f"set -euo pipefail; export PIPELINE_ROOT={shlex.quote(PIPE_ROOT)}; "
@@ -405,7 +446,35 @@ vprint(f"[Snakefile] UNSUP (final, absolute) = {UNSUP}")
 # =============================================================================
 # Stage role: resolves configured expression inputs and multicohort staging paths before data-preparation rules.
 # Resolves the joint VST-normalised expression matrix (absolute; external input).
-VST_JOINT = cfgabs("paths", "vst_joint_rds")
+VST_JOINT = profile_vst_joint_abs(profile_name)
+ACTIVE_VST_VALIDATION = os.path.join(
+    UNSUP_REL, "inputs", "active_joint_vst.validated.ok"
+)
+
+
+# Rule: validate_profile_joint_vst
+# Rejects placeholders, truncated objects, duplicated identifiers, and invalid
+# values before any active cohort matrix can enter downstream analyses.
+rule validate_profile_joint_vst:
+    input:
+        joint = VST_JOINT
+    output:
+        marker = ACTIVE_VST_VALIDATION
+    params:
+        script = os.path.join(SCRIPTS_DIR, "validate_active_expression_matrix.R")
+    log:
+        os.path.join(LOGROOT, "validate_profile_joint_vst.log")
+    conda: CONDA_ENV_R_BASE
+    shell:
+        r'''
+        mkdir -p "$(dirname "{output.marker}")" "$(dirname "{log}")"
+        Rscript "{params.script}" \
+          --input "{input.joint}" \
+          --output "{output.marker}" \
+          --min-genes 1000 \
+          --min-samples 3 \
+          > "{log}" 2>&1
+        '''
 
 # Multicohort input construction (only active when running the multicohort_cancer profile).
 MC_PROFILES    = [str(p) for p in MULTICOHORT_CFG.get("profiles", [])]
@@ -478,7 +547,8 @@ if profile_name in ("brca", "nbl", "rbl"):
     # Provides input for agnostic clustering and tumour-neighbourhood input construction.
     rule split_profile_joint_vst:
         input:
-            joint = VST_JOINT
+            joint = VST_JOINT,
+            validation = ACTIVE_VST_VALIDATION
         output:
             cell = CELL_VST,
             tumour = TUMOUR_VST
@@ -537,6 +607,7 @@ rule feature_selection_unsupervised:
     """
     input:
         vst = VST_JOINT,
+        validation = ACTIVE_VST_VALIDATION,
         cfg_file = CFGFILE_ABS
     output:
         # Relative paths for portable DAG tracking; R script writes via absolute --outdir.
@@ -609,9 +680,9 @@ PAN_CANCER_FEATURE_SET_GENE_LIST = cfg.get("features", {}).get("pan_cancer_featu
 EXTERNAL_GENE_LIST_FEATURES = {PAN_CANCER_FEATURE_SET_NAME} if PAN_CANCER_FEATURE_SET_GENE_LIST else set()
 
 
-# Method helper: derives the strict-majority edge-support threshold from the
+# Method helper: derives the majority edge-support threshold from the
 # active feature-distance representation graphs for this profile.
-def derive_strict_majority_support_threshold(active_representations):
+def derive_majority_support_threshold(active_representations):
     """
     Return m = max(2, floor(|R| / 2) + 1), where |R| is the number of active
     feature-distance representations contributing to the current graph.
@@ -626,18 +697,18 @@ def derive_strict_majority_support_threshold(active_representations):
     if len(representations) < 2:
         raise ValueError(
             "[Support threshold] At least two active representations are required "
-            "for strict-majority support-threshold graph construction."
+            "for majority-threshold graph construction."
         )
     threshold = max(2, len(representations) // 2 + 1)
     print(
         "[Support threshold] "
         f"profile={profile_name} active_representations={len(representations)} "
-        f"strict_majority_support_threshold={threshold}"
+        f"majority_support_threshold={threshold}"
     )
     return threshold
 
 
-SIMILARITY_CONSENSUS_MIN_SUPPORT = derive_strict_majority_support_threshold(CONS_DIRECTIONS)
+SIMILARITY_CONSENSUS_MIN_SUPPORT = derive_majority_support_threshold(CONS_DIRECTIONS)
 
 # Defines the six HC and six k-means clustering kind identifiers.
 # PCA-prefixed kinds are optionally removed for pan-cancer runs where
@@ -2128,7 +2199,7 @@ VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 # Analysis role: selects best-supported representations for resolved-neighbour graph construction and validation.
 rule summarize_p_consensus_all:
     input:
-        consensus_rds = [nh_final_consensus_rds(d) for d in AGN_DIRECTIONS],
+        consensus_rds = [nh_final_consensus_rds(d) for d in P_CONS_SUMMARY_DIRECTIONS],
         cfg = CFGFILE_ABS
     output:
         dir_summary = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
@@ -2179,7 +2250,7 @@ rule plot_per_cellline_feature_distance_cleveland:
         disease_label = P_CONS_DISEASE_LABEL,
         threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
     log: os.path.join(LOGROOT, "plot_per_cellline_feature_distance_cleveland.log")
-    conda: CONDA_ENV_R
+    conda: CONDA_ENV_R_BASE
     shell:
         r'''
         mkdir -p {P_CONS_PLOTS_DIR} $(dirname {log})
@@ -2215,7 +2286,7 @@ rule plot_p_consensus_direction_comparison_dumbbell:
         out_prefix = P_CONS_DIRECTION_DUMBBELL_PREFIX,
         threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
     log: os.path.join(LOGROOT, "plot_p_consensus_direction_comparison_dumbbell.log")
-    conda: CONDA_ENV_R
+    conda: CONDA_ENV_R_BASE
     shell:
         r'''
         mkdir -p $(dirname {output.pdf}) $(dirname {log})
@@ -2285,13 +2356,13 @@ rule resolve_dsmz_graph_neighbours:
 # Stage role: builds support networks by aggregating edges across feature-distance representations.
 
 # Rule: build_multi_representation_majority_threshold_consensus_network
-# Method role: analysis rule that retains edges supported by the configured strict-majority threshold across representations.
+# Method role: analysis rule that retains edges meeting the configured majority threshold across representations.
 # Flow: per-representation graph edges -> majority-threshold support network and edge-support table.
 # Provides support-network plots and post-resolution support stratification.
 rule build_multi_representation_majority_threshold_consensus_network:
     """
     Computes the shared feature--distance representation edge-support table and
-    retains only edges satisfying the strict-majority support threshold.
+    retains only edges satisfying the majority support threshold.
     """
     input:
         node_universe = P_CONS_SHORTNAMES_TSV,
@@ -2394,7 +2465,7 @@ rule build_patient_referenced_support_threshold_consensus_cell_line_similarity_n
         script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
         tumour_nh_dir = TUMOUR_NH_ROOT_ABS,
         directions = ",".join(CONS_DIRECTIONS),
-        # Strict-majority support threshold m = max(2, floor(|R| / 2) + 1),
+        # Majority support threshold m = max(2, floor(|R| / 2) + 1),
         # derived from the configured active feature-distance representation list.
         min_support = SIMILARITY_CONSENSUS_MIN_SUPPORT
     log: os.path.join(LOGROOT, "build_patient_referenced_support_threshold_consensus_cell_line_similarity_network.log")
@@ -3574,9 +3645,10 @@ rule compute_multicohort_cancer_communities:
 # DESEQ2 MARKER ANALYSIS
 # =============================================================================
 # Stage role: derives graph-informed marker contrasts from resolved isolates and component anchors.
-# Gated to brca, nbl, and rbl only — the three profiles that have
-# dsmz_counts_rds + dsmz_meta_csv configured and whose metadata schema is
-# compatible with prepare_deseq2_inputs.R.  heme and pan_cancer are deferred.
+# Gated to brca, nbl, and rbl only — the profiles whose disease-specific
+# raw-count source tables are declared under defaults.deseq2_inputs and whose
+# metadata schema is compatible with prepare_deseq2_inputs.R. heme and
+# pan_cancer are deferred.
 
 DESEQ2_PROFILE_CFG = cfg.get("deseq2", {})
 DESEQ2_CFG = deep_merge(config.get("defaults", {}).get("deseq2", {}), DESEQ2_PROFILE_CFG)
@@ -4699,17 +4771,17 @@ if MARKER_POST_ENABLED:
     _PAN_EXPR_NBL_VST = profile_vst_joint_abs("nbl")
     _PAN_EXPR_RBL_VST = profile_vst_joint_abs("rbl")
 
-    # Main expression inputs are restricted to cohorts with tumour samples.
+    # Main expression inputs are limited to cohorts with tumour samples.
     _PAN_EXPR_INPUTS = [_PAN_EXPR_BRCA_VST, _PAN_EXPR_NBL_VST, _PAN_EXPR_RBL_VST]
     if _PAN_EXPR_HEME_PATH:
         _PAN_EXPR_INPUTS.append(_PAN_EXPR_HEME_PATH)
 
     # Rule: build_pan_cancer_feature_expression_matrix
-    # Method role: expression-construction rule that restricts tumour/cell-line matrices to the marker-derived feature panel.
+    # Method role: expression-construction rule that filters tumour/cell-line matrices to the marker-derived feature panel.
     # Flow: cohort VST inputs plus feature table -> pan-cancer feature-space expression matrix.
     # Provides input for UMAP, mapping, ranking, and pan-cancer graph analyses.
     rule build_pan_cancer_feature_expression_matrix:
-        """Combine per-profile VST inputs into the feature-restricted pan-cancer matrix."""
+        """Combine per-profile VST inputs into the feature-limited pan-cancer matrix."""
         input:
             genes = PAN_FEATURES_CLEAN,
             brca = _PAN_EXPR_BRCA_VST,
@@ -4746,7 +4818,7 @@ if MARKER_POST_ENABLED:
     # Flow: configured cell-line VST inputs plus feature table -> cell-line-only feature matrix.
     # Provides input for cell-line-only similarity network and community sensitivity analyses.
     rule build_pan_cancer_feature_expression_matrix_cell_lines_only:
-        """Build a feature-restricted pan-cancer matrix containing cell lines only."""
+        """Build a feature-limited pan-cancer matrix containing cell lines only."""
         input:
             genes = PAN_FEATURES_CLEAN,
             brca = _PAN_EXPR_BRCA_VST,
@@ -5166,9 +5238,9 @@ if MARKER_POST_ENABLED:
 
     # Direct, profile-independent paths to the three per-cohort joint VST RDS
     # files (samples x genes after orientation handling in the merge script).
-    VST_ALLGENE_BRCA_VST = os.path.join(BASE, "data", "brca", "brca_vst_joint.rds")
-    VST_ALLGENE_NBL_VST  = os.path.join(BASE, "data", "nbl",  "nbl_vst_joint.rds")
-    VST_ALLGENE_RBL_VST  = os.path.join(BASE, "data", "rbl",  "rbl_vst_joint.rds")
+    VST_ALLGENE_BRCA_VST = profile_vst_joint_abs("brca")
+    VST_ALLGENE_NBL_VST  = profile_vst_joint_abs("nbl")
+    VST_ALLGENE_RBL_VST  = profile_vst_joint_abs("rbl")
 
     # Joint metadata produced by the multicohort_cancer profile (sample_id,
     # cancer_type, sample_type[, cohort]). Used here purely to annotate
@@ -5927,10 +5999,12 @@ if _PAN_CELL_LINE_SIM_CFG:
         "output_dir",
         os.path.join(_CL_SIM_DIR, "dsmz_joint_expression")
     ))
-    _CL_SIM_FULL_DSMZ_VST = abspath(_CL_SIM_FULL_CFG.get(
-        "dsmz_vst_rds",
-        "data/dsmz/tmp/DSMZ_vst_joint_from_brca_nbl_rbl.rds"
-    ))
+    if not _CL_SIM_FULL_CFG.get("dsmz_vst_rds"):
+        raise WorkflowError(
+            "pan_cancer_cell_line_similarity.full_expression.dsmz_vst_rds "
+            "must explicitly name a transformed DSMZ VST expression object"
+        )
+    _CL_SIM_FULL_DSMZ_VST = abspath(_CL_SIM_FULL_CFG["dsmz_vst_rds"])
     _CL_SIM_FULL_DSMZ_META = abspath(_CL_SIM_FULL_CFG.get(
         "dsmz_metadata_tsv",
         "results/unsupervised/multicohort_cancer/inputs/joint_metadata.tsv"

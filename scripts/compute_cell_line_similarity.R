@@ -293,7 +293,7 @@ if (!is.null(opt$meta_tsv) && nzchar(opt$meta_tsv)) {
 # in "tumour space", where the coordinates are the consensus probabilities
 # with each tumour.
 
-# Apply mode restriction and disease filtering
+# Apply mode constraint and disease filtering
 cp <- consensus_pairs
 
 # If we have metadata, enforce that rows are DSMZ cell lines we can label

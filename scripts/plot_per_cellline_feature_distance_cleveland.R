@@ -10,39 +10,105 @@ suppressPackageStartupMessages({
   library(tidyr)
 })
 
+# ==============================================================================
+# plot_per_cellline_feature_distance_cleveland.R
+# ------------------------------------------------------------------------------
+# Generate per-cell-line Cleveland plots from p_consensus summary tables.
+#
+# The plot summarises, for each cell line, the fraction of cell-line--tumour
+# neighbourhood pairs passing a consensus threshold across feature-selection
+# methods and distance metrics. Distance metrics are shown as facets, feature-
+# selection methods are encoded by point colour, and the winning representation
+# for each cell line is highlighted by point type.
+#
+# Inputs:
+#   --summary-tsv
+#       Table with one row per cell_line x feature--distance direction.
+#       Required columns: direction, cell_line, frac_ge_thr.
+#
+#   --winners-tsv
+#       Table identifying the best feature--distance representation(s) per
+#       cell line.
+#       Required columns: cell_line, best_frac_ge_thr, best_dir_frac_ge_thr.
+#
+# Outputs:
+#   --out-pdf
+#       Vector PDF plot.
+#
+#   --out-png
+#       Raster PNG plot.
+#
+# Cohort behaviour:
+#   The script is driven by the directions present in the summary table.
+#   BRCA may include PAM50 when PAM50_euc/PAM50_corr are present.
+#   NBL and RBL usually contain only the unsupervised feature-selection methods.
+#
+# Validation:
+#   --validate-only performs input parsing, column checks, direction parsing,
+#   winner matching, and plot-dimension diagnostics without writing outputs.
+# ==============================================================================
+
+
+# ------------------------------------------------------------------------------
+# Command-line interface
+# ------------------------------------------------------------------------------
+
 option_list <- list(
   make_option("--summary-tsv", type = "character",
               help = "p_consensus_cellline_direction_summary.tsv"),
   make_option("--winners-tsv", type = "character",
               help = "p_consensus_winners_by_frac_ge_thr.tsv"),
-  make_option("--out-pdf", type = "character", help = "Output PDF path"),
-  make_option("--out-png", type = "character", help = "Output PNG path"),
+  make_option("--out-pdf", type = "character", default = NA,
+              help = "Output PDF path (ignored with --validate-only)"),
+  make_option("--out-png", type = "character", default = NA,
+              help = "Output PNG path (ignored with --validate-only)"),
   make_option("--disease-label", type = "character",
               help = "Full disease label for visible plot text"),
   make_option("--threshold", type = "double", default = 0.7,
-              help = "p_consensus threshold used for recovery score")
+              help = "p_consensus threshold used for the plotted fraction [default 0.7]"),
+  make_option("--validate-only", action = "store_true", default = FALSE,
+              help = "Validate inputs and print diagnostics without writing outputs")
 )
+
 opt <- parse_args(OptionParser(option_list = option_list))
 
-required <- c("summary-tsv", "winners-tsv", "out-pdf", "out-png", "disease-label")
+
+# ------------------------------------------------------------------------------
+# Required argument and file validation
+# ------------------------------------------------------------------------------
+
+required <- c("summary-tsv", "winners-tsv", "disease-label")
+if (!isTRUE(opt$`validate-only`)) {
+  required <- c(required, "out-pdf", "out-png")
+}
+
 missing <- required[vapply(required, function(x) {
-  is.null(opt[[x]]) || !nzchar(opt[[x]])
+  is.null(opt[[x]]) || is.na(opt[[x]]) || !nzchar(opt[[x]])
 }, logical(1))]
+
 if (length(missing) > 0) {
   stop("Missing required option(s): ", paste(missing, collapse = ", "), call. = FALSE)
 }
+
 if (!file.exists(opt$`summary-tsv`)) {
   stop("Summary TSV does not exist: ", opt$`summary-tsv`, call. = FALSE)
 }
+
 if (!file.exists(opt$`winners-tsv`)) {
   stop("Winners TSV does not exist: ", opt$`winners-tsv`, call. = FALSE)
 }
+
+
+# ------------------------------------------------------------------------------
+# Input loading and schema checks
+# ------------------------------------------------------------------------------
 
 summary_tbl <- read_tsv(opt$`summary-tsv`, show_col_types = FALSE, progress = FALSE)
 winners_tbl <- read_tsv(opt$`winners-tsv`, show_col_types = FALSE, progress = FALSE)
 
 summary_required <- c("direction", "cell_line", "frac_ge_thr")
 summary_missing <- setdiff(summary_required, names(summary_tbl))
+
 if (length(summary_missing) > 0) {
   stop("Summary TSV missing required column(s): ",
        paste(summary_missing, collapse = ", "), call. = FALSE)
@@ -50,11 +116,19 @@ if (length(summary_missing) > 0) {
 
 winners_required <- c("cell_line", "best_frac_ge_thr", "best_dir_frac_ge_thr")
 winners_missing <- setdiff(winners_required, names(winners_tbl))
+
 if (length(winners_missing) > 0) {
   stop("Winners TSV missing required column(s): ",
        paste(winners_missing, collapse = ", "), call. = FALSE)
 }
 
+
+# ------------------------------------------------------------------------------
+# Direction parsing
+# ------------------------------------------------------------------------------
+
+# Direction names encode both the feature-selection method and the distance
+# metric using the suffix pattern <feature>_<euc|corr>.
 parse_direction <- function(x) {
   x <- as.character(x)
   tibble(
@@ -64,18 +138,41 @@ parse_direction <- function(x) {
   )
 }
 
+
+# ------------------------------------------------------------------------------
+# Feature and distance display labels
+# ------------------------------------------------------------------------------
+
+# Feature labels preserve the terminology used in the thesis methods and figures.
+# Spearman and WGCNA retain distinct connectivity labels because they represent
+# different connectivity-based feature-selection procedures.
 feature_labels <- c(
   Variance = "Variance",
   MAD = "Median absolute deviation",
   MeanAbsDev = "Mean absolute deviation",
   Entropy = "Entropy",
   PCA = "Principal component loadings",
-  Spearman = "Mean absolute Spearman correlation",
-  MX = "MX score",
+  Spearman = "Spearman connectivity",
+  MX = "MX",
   kTotal = "WGCNA total connectivity",
-  HVG = "Highly variable genes",
+  HVG = "HVG residual variance",
   pam50 = "PAM50 gene set",
   PAM50 = "PAM50 gene set"
+)
+
+# Feature order controls legend order and the deterministic visual offsets.
+# The order separates visually similar colours where possible.
+feature_order <- c(
+  "Variance",
+  "Median absolute deviation",
+  "Entropy",
+  "Principal component loadings",
+  "Spearman connectivity",
+  "WGCNA total connectivity",
+  "Mean absolute deviation",
+  "MX",
+  "HVG residual variance",
+  "PAM50 gene set"
 )
 
 feature_palette <- c(
@@ -84,22 +181,22 @@ feature_palette <- c(
   "Mean absolute deviation" = "#CC79A7",
   "Entropy" = "#6A3D9A",
   "Principal component loadings" = "#999999",
-  "Mean absolute Spearman correlation" = "#56B4E9",
-  "MX score" = "#000000",
+  "Spearman connectivity" = "#56B4E9",
+  "MX" = "#000000",
   "WGCNA total connectivity" = "#D55E00",
-  "Highly variable genes" = "#332288",
+  "HVG residual variance" = "#332288",
   "PAM50 gene set" = "#AA4499"
 )
 
 distance_labels <- c(
   euc = "Euclidean distance",
-  corr = "Pearson correlation distance"
+  corr = "Pearson-correlation distance"
 )
 
-distance_shapes <- c(
-  "Euclidean distance" = 21,
-  "Pearson correlation distance" = 24
-)
+
+# ------------------------------------------------------------------------------
+# Direction metadata table
+# ------------------------------------------------------------------------------
 
 direction_info <- parse_direction(unique(summary_tbl$direction)) %>%
   mutate(
@@ -109,36 +206,36 @@ direction_info <- parse_direction(unique(summary_tbl$direction)) %>%
     distance_label = if_else(is.na(distance_label), distance_raw, distance_label)
   )
 
-unknown_dist <- direction_info %>% filter(is.na(distance_raw) | !(distance_raw %in% names(distance_labels)))
+unknown_dist <- direction_info %>%
+  filter(is.na(distance_raw) | !(distance_raw %in% names(distance_labels)))
+
 if (nrow(unknown_dist) > 0) {
   stop("Unsupported direction suffix in: ",
-       paste(unique(unknown_dist$direction), collapse = ", "),
-       call. = FALSE)
+       paste(unique(unknown_dist$direction), collapse = ", "), call. = FALSE)
 }
 
-feature_order <- c(
-  "Variance",
-  "Median absolute deviation",
-  "Mean absolute deviation",
-  "Entropy",
-  "Principal component loadings",
-  "Mean absolute Spearman correlation",
-  "MX score",
-  "WGCNA total connectivity",
-  "Highly variable genes",
-  "PAM50 gene set"
+# Only feature-selection methods present in the input table are included in the
+# plot and legend. This keeps PAM50 cohort-specific without special-case logic.
+active_feature_order <- c(
+  feature_order[feature_order %in% direction_info$feature_label],
+  setdiff(sort(unique(direction_info$feature_label)), feature_order)
 )
-feature_order <- c(feature_order[feature_order %in% direction_info$feature_label],
-                   setdiff(sort(unique(direction_info$feature_label)), feature_order))
 
-direction_order <- direction_info %>%
-  mutate(
-    feature_label = factor(feature_label, levels = feature_order),
-    distance_label = factor(distance_label, levels = distance_labels)
-  ) %>%
-  arrange(feature_label, distance_label, direction) %>%
-  pull(direction)
+n_features <- length(active_feature_order)
 
+if (n_features < length(feature_order) &&
+    "PAM50 gene set" %in% feature_order &&
+    !("PAM50 gene set" %in% active_feature_order)) {
+  message("[INFO] PAM50 gene set absent from this cohort's directions.")
+}
+
+
+# ------------------------------------------------------------------------------
+# Winner-direction expansion
+# ------------------------------------------------------------------------------
+
+# Winner tables may contain multiple tied best directions separated by semicolons.
+# Each winning feature--distance representation is expanded to one row.
 winner_long <- winners_tbl %>%
   mutate(
     best_dir_frac_ge_thr = as.character(best_dir_frac_ge_thr),
@@ -147,12 +244,12 @@ winner_long <- winners_tbl %>%
   separate_rows(best_dir_frac_ge_thr, sep = ";") %>%
   mutate(best_dir_frac_ge_thr = str_trim(best_dir_frac_ge_thr)) %>%
   filter(nzchar(best_dir_frac_ge_thr)) %>%
-  transmute(
-    cell_line,
-    direction = best_dir_frac_ge_thr,
-    is_winner = TRUE,
-    winner_score = best_frac_ge_thr
-  )
+  transmute(cell_line, direction = best_dir_frac_ge_thr, is_winner = TRUE)
+
+
+# ------------------------------------------------------------------------------
+# Plot table construction
+# ------------------------------------------------------------------------------
 
 plot_tbl <- summary_tbl %>%
   mutate(
@@ -169,67 +266,178 @@ if (nrow(plot_tbl) == 0) {
   stop("No plottable rows after filtering frac_ge_thr to [0, 1].", call. = FALSE)
 }
 
+
+# ------------------------------------------------------------------------------
+# Soft diagnostics
+# ------------------------------------------------------------------------------
+
+# Missing winner rows or reduced direction counts are reported as warnings because
+# the plot can still be generated. Missing required files or columns remain hard
+# errors earlier in the script.
+cell_lines_in_summary <- unique(plot_tbl$cell_line)
+cell_lines_in_winners <- unique(winners_tbl$cell_line)
+
+no_winner_row <- setdiff(cell_lines_in_summary, cell_lines_in_winners)
+
+if (length(no_winner_row) > 0) {
+  warning("Cell line(s) with no entry in the winners table: ",
+          paste(no_winner_row, collapse = ", "),
+          call. = FALSE, immediate. = TRUE)
+}
+
+dir_counts <- plot_tbl %>%
+  count(cell_line, name = "n_directions")
+
+thin_cell_lines <- dir_counts %>%
+  filter(n_directions < 2 * n_features - 2)
+
+if (nrow(thin_cell_lines) > 0) {
+  warning("Cell line(s) with fewer than expected directions: ",
+          paste(thin_cell_lines$cell_line, collapse = ", "),
+          call. = FALSE, immediate. = TRUE)
+}
+
+
+# ------------------------------------------------------------------------------
+# Cell-line ordering and per-cell-line range calculation
+# ------------------------------------------------------------------------------
+
+# Cell lines are ordered by their strongest consensus-supported fraction, then by
+# the number of directions passing the threshold. The grey range segment spans
+# the minimum and maximum fraction observed across all feature-selection methods
+# and both distance metrics for the same cell line.
 order_tbl <- plot_tbl %>%
   group_by(cell_line) %>%
   summarise(
     best_frac_ge_thr = max(frac_ge_thr, na.rm = TRUE),
+    worst_frac_ge_thr = min(frac_ge_thr, na.rm = TRUE),
     n_recovered_directions = sum(frac_ge_thr >= opt$threshold, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   arrange(desc(best_frac_ge_thr), desc(n_recovered_directions), cell_line)
 
-n_directions <- length(direction_order)
+cell_levels <- rev(order_tbl$cell_line)
+
+
+# ------------------------------------------------------------------------------
+# Deterministic visual offsets
+# ------------------------------------------------------------------------------
+
+# Small deterministic offsets separate overlapping feature-selection points
+# within each cell-line row. The x-offset is intentionally small and only improves
+# visibility of tied or near-tied values; it is not used for any calculation.
 offset_tbl <- tibble(
-  direction = direction_order,
-  direction_index = seq_along(direction_order),
-  direction_offset = if (n_directions <= 1) {
+  feature_label = active_feature_order,
+  feature_offset = if (n_features <= 1) {
     0
   } else {
-    ((seq_along(direction_order) - (n_directions + 1) / 2) / (n_directions - 1)) * 0.52
+    ((seq_along(active_feature_order) - (n_features + 1) / 2) /
+       (n_features - 1)) * 0.42
   }
-)
+) %>%
+  mutate(x_nudge = feature_offset * 0.012)
 
-cell_levels <- rev(order_tbl$cell_line)
 plot_tbl <- plot_tbl %>%
-  left_join(offset_tbl, by = "direction") %>%
+  mutate(feature_label = factor(feature_label, levels = active_feature_order)) %>%
+  left_join(offset_tbl, by = "feature_label") %>%
   mutate(
     cell_line_factor = factor(cell_line, levels = cell_levels),
     y_base = as.numeric(cell_line_factor),
-    y_plot = y_base + direction_offset,
-    feature_label = factor(feature_label, levels = feature_order),
-    distance_label = factor(distance_label, levels = distance_labels)
+    y_plot = y_base + feature_offset,
+    x_plot = pmin(1, pmax(0, frac_ge_thr + x_nudge)),
+    distance_label = factor(distance_label, levels = distance_labels),
+    point_role = factor(
+      if_else(is_winner, "Winning representation", "Other representations"),
+      levels = c("Other representations", "Winning representation")
+    )
   )
 
 missing_palette <- setdiff(levels(plot_tbl$feature_label), names(feature_palette))
+
 if (length(missing_palette) > 0) {
-  stop("No colour mapping for feature representation(s): ",
+  stop("No colour mapping for feature-selection method(s): ",
        paste(missing_palette, collapse = ", "), call. = FALSE)
 }
 
-plot_height <- max(5.8, 0.34 * length(cell_levels) + 3.4)
-plot_width <- 11.2
+range_tbl <- order_tbl %>%
+  transmute(
+    cell_line,
+    cell_line_factor = factor(cell_line, levels = cell_levels),
+    y_base = as.numeric(cell_line_factor),
+    x_min = worst_frac_ge_thr,
+    x_max = best_frac_ge_thr
+  )
+
+
+# ------------------------------------------------------------------------------
+# Plot dimensions and labels
+# ------------------------------------------------------------------------------
+
+n_cell_lines <- length(cell_levels)
+plot_height <- max(5.8, 0.34 * n_cell_lines + 3.4)
+plot_width <- 12.6
 
 threshold_text <- format(opt$threshold, trim = TRUE, scientific = FALSE)
-subtitle_text <- sprintf("%s; threshold: p_consensus \u2265 %s", opt$`disease-label`, threshold_text)
 
-p <- ggplot(plot_tbl, aes(x = frac_ge_thr, y = y_plot)) +
-  geom_vline(xintercept = opt$threshold, colour = "#6F6F6F",
-             linetype = "dashed", linewidth = 0.35) +
-  geom_point(
-    aes(fill = feature_label, shape = distance_label),
-    colour = "#4D4D4D",
-    size = 2.05,
-    stroke = 0.28,
-    alpha = 0.80
+subtitle_text <- sprintf(
+  "%s; threshold: p_consensus \u2265 %s",
+  opt$`disease-label`,
+  threshold_text
+)
+
+x_lab <- sprintf(
+  "Fraction of cell-line\u2013tumour neighbourhood pairs with p_consensus \u2265 %s",
+  threshold_text
+)
+
+
+# ------------------------------------------------------------------------------
+# Validate-only diagnostic output
+# ------------------------------------------------------------------------------
+
+if (isTRUE(opt$`validate-only`)) {
+  cat("[VALIDATE-ONLY] ", opt$`disease-label`, "\n", sep = "")
+  cat("  cell lines               : ", n_cell_lines, "\n", sep = "")
+  cat("  feature-selection methods: ", n_features, " (",
+      paste(active_feature_order, collapse = ", "), ")\n", sep = "")
+  cat("  distance metrics         : ",
+      paste(levels(plot_tbl$distance_label), collapse = ", "), "\n", sep = "")
+  cat("  rows in summary_tbl      : ", nrow(summary_tbl), "\n", sep = "")
+  cat("  winner rows matched      : ", sum(plot_tbl$is_winner),
+      " of ", n_cell_lines, " cell lines\n", sep = "")
+  cat("  planned output height    : ", round(plot_height, 2),
+      "in; width: ", plot_width, "in\n", sep = "")
+  cat("[OK] Validation complete -- no files written.\n")
+  quit(status = 0)
+}
+
+
+# ------------------------------------------------------------------------------
+# Plot construction
+# ------------------------------------------------------------------------------
+
+p <- ggplot(plot_tbl, aes(x = x_plot, y = y_plot)) +
+  geom_vline(
+    xintercept = opt$threshold,
+    colour = "#6F6F6F",
+    linetype = "dashed",
+    linewidth = 0.35
+  ) +
+  geom_segment(
+    data = range_tbl,
+    aes(x = x_min, xend = x_max, y = y_base, yend = y_base),
+    inherit.aes = FALSE,
+    colour = "#BFBFBF",
+    linewidth = 2.1,
+    alpha = 0.55,
+    lineend = "round"
   ) +
   geom_point(
-    data = plot_tbl %>% filter(is_winner),
-    aes(fill = feature_label, shape = distance_label),
-    colour = "black",
-    size = 3.15,
-    stroke = 0.90,
-    alpha = 1
+    aes(fill = feature_label, size = point_role, colour = point_role),
+    shape = 21,
+    stroke = 0.32
   ) +
+  facet_wrap(~ distance_label, ncol = 2) +
   scale_x_continuous(
     limits = c(0, 1),
     breaks = seq(0, 1, by = 0.25),
@@ -242,36 +450,57 @@ p <- ggplot(plot_tbl, aes(x = frac_ge_thr, y = y_plot)) +
     expand = expansion(add = c(0.55, 0.75))
   ) +
   scale_fill_manual(
-    name = "Feature representation",
-    values = feature_palette[feature_order],
-    drop = FALSE
-  ) +
-  scale_shape_manual(
-    name = "Distance metric",
-    values = distance_shapes,
-    drop = FALSE
-  ) +
-  guides(
-    fill = guide_legend(
+    name = "Feature-selection method",
+    values = feature_palette[active_feature_order],
+    drop = FALSE,
+    guide = guide_legend(
       ncol = 2,
-      override.aes = list(shape = 21, size = 3.2, colour = "#4D4D4D", alpha = 1)
-    ),
-    shape = guide_legend(
-      nrow = 1,
-      override.aes = list(fill = "white", size = 3.2, colour = "#4D4D4D", alpha = 1)
+      order = 1,
+      override.aes = list(shape = 21, size = 3.0, colour = "#4D4D4D")
     )
   ) +
+  scale_size_manual(
+    name = "Point type",
+    values = c(
+      "Other representations" = 2.15,
+      "Winning representation" = 3.25
+    ),
+    guide = guide_legend(
+      order = 2,
+      override.aes = list(
+        shape = 21,
+        fill = "grey75",
+        colour = c("#4D4D4D", "black"),
+        alpha = c(0.85, 1)
+      )
+    )
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Other representations" = "#4D4D4D",
+      "Winning representation" = "black"
+    ),
+    guide = "none"
+  ) +
+  scale_alpha_identity() +
   labs(
-    title = "Consensus recovery across feature\u2013distance representations",
+    title = "Consensus-supported neighbourhood fraction across feature\u2013distance representations",
     subtitle = subtitle_text,
-    x = "Fraction of tumour-neighbour pairs with p_consensus \u2265 threshold",
-    y = "Cell line"
+    x = x_lab,
+    y = "Cell line",
+    caption = paste0(
+      "Grey bar: range of the consensus-supported neighbourhood fraction across all feature-selection methods ",
+      "and both distance metrics for that cell line. Larger, black-outlined point: winning feature\u2013distance ",
+      "representation for that cell line. Small deterministic offsets separate overlapping points."
+    )
   ) +
   coord_cartesian(clip = "off") +
   theme_bw(base_size = 11) +
   theme(
     plot.title = element_text(face = "bold", size = 12.5),
     plot.subtitle = element_text(size = 10.5),
+    plot.caption = element_text(size = 7.6, colour = "#595959", hjust = 0),
+    strip.text = element_text(face = "bold", size = 10),
     axis.title.x = element_text(margin = margin(t = 7)),
     axis.title.y = element_text(margin = margin(r = 8)),
     axis.text.y = element_text(size = 8.8),
@@ -279,14 +508,19 @@ p <- ggplot(plot_tbl, aes(x = frac_ge_thr, y = y_plot)) +
     panel.grid.major.y = element_line(colour = "#E6E6E6", linewidth = 0.30),
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_line(colour = "#EFEFEF", linewidth = 0.25),
+    panel.spacing.x = unit(14, "pt"),
     legend.position = "bottom",
     legend.box = "vertical",
     legend.title = element_text(size = 9.5),
     legend.text = element_text(size = 8.6),
     legend.key.height = unit(0.42, "cm"),
-    legend.spacing.y = unit(0.12, "cm"),
-    plot.margin = margin(10, 20, 10, 16)
+    plot.margin = margin(10, 22, 10, 16)
   )
+
+
+# ------------------------------------------------------------------------------
+# Output writing
+# ------------------------------------------------------------------------------
 
 dir.create(dirname(opt$`out-pdf`), recursive = TRUE, showWarnings = FALSE)
 dir.create(dirname(opt$`out-png`), recursive = TRUE, showWarnings = FALSE)
@@ -296,6 +530,6 @@ ggsave(opt$`out-png`, p, width = plot_width, height = plot_height, dpi = 320)
 
 cat("[OK] Wrote ", opt$`out-pdf`, "\n", sep = "")
 cat("[OK] Wrote ", opt$`out-png`, "\n", sep = "")
-cat("[INFO] Cell lines: ", length(cell_levels), "\n", sep = "")
-cat("[INFO] Directions: ", n_directions, "\n", sep = "")
+cat("[INFO] Cell lines: ", n_cell_lines, "\n", sep = "")
+cat("[INFO] Feature-selection methods: ", n_features, "\n", sep = "")
 cat("[INFO] Winner rows highlighted: ", sum(plot_tbl$is_winner), "\n", sep = "")

@@ -40,7 +40,7 @@ def workflow_config_path(value):
 # ------------------------------------------------------------------------------
 # A configuration file is used to hold stable reference and tool paths.
 # This prevents hard-coding genome resources and improves reproducibility.
-configfile: "config/config.yaml"
+configfile: str(WORKFLOW_ROOT / "config" / "config.yaml")
 
 # data_root is controlled by config/config.yaml and resolved relative to this
 # workflow directory to avoid accidental SLURM environment-variable leakage.
@@ -317,36 +317,51 @@ EXPECTED_COHORT_SAMPLES = {
 
 PURITY_THRESHOLD = float(config.get("purity_threshold", 0.7))
 PURITY_LABEL = f"{PURITY_THRESHOLD:.1f}"
+EXPECTED_RETAINED_TUMOURS = int(config.get("expected_retained_tumour_samples", 68))
+EXPECTED_DSMZ_PROFILES = int(config.get("expected_dsmz_profiles", 11))
 
 RBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/rbl_ensembl_to_hgnc.tsv"
 RBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/rbl_count_matrix_verified_{EXPECTED_RBL_SAMPLES}.ok"
+PURITY_GENE_MAP = repo_config_path(config.get("gene_map_tsv", "resources/ensembl_to_symbol.tsv"))
+VERIFIED_PURITY_SCORES = repo_config_path(config["verified_purity_scores"])
+VERIFIED_PURITY_SCRIPT = repo_config_path(config["verified_purity_script"])
+VERIFIED_PURITY_LOG = repo_config_path(config["verified_purity_log"])
 
 RBL_PURITY_DIR = repo_config_path(
-    config.get("purity_output_dir", "results/tumour_purity_analysis/rbl")
+    config.get(
+        "purity_output_dir",
+        "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction",
+    )
 )
 
-RBL_PURITY_SCRIPT = f"{WORKFLOW_DIR}/tumour_purity_analysis/rbl_tumour_purity_analysis.R"
-
-# The unfiltered 69-sample matrix remains the input to count verification and
-# ESTIMATE/tidyestimate scoring. Batch correction must consume the resulting
-# purity-filtered Ensembl count matrix, not the unfiltered matrix.
-RBL_PURITY_FILTERED_ENSEMBL = (
-    f"{RBL_PURITY_DIR}/rbl_filtered_count_matrix_ensembl_purity{PURITY_LABEL}.rds"
+SHARED_PURITY_SCRIPT = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/raw_tumour_purity_analysis.R"
 )
+FINAL_VALIDATION_SCRIPT = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/validate_purity_filtered_joint_outputs.R"
+)
+PURITY_ENV = repo_config_path("preprocessing_and_quality_control/envs/tcga-r-env.yaml")
 
-RBL_PURITY_OUTPUTS = [
-    f"{RBL_PURITY_DIR}/rbl_estimate_scores.csv",
-    f"{RBL_PURITY_DIR}/rbl_filtered_hgnc_counts_purity{PURITY_LABEL}.rds",
-    RBL_PURITY_FILTERED_ENSEMBL,
-    f"{RBL_PURITY_DIR}/rbl_sample_retention_by_cohort.pdf",
-    f"{RBL_PURITY_DIR}/rbl_purity_diagnostics.pdf",
-]
+RBL_PURITY_OUTPUTS = {
+    "eligible_samples": f"{RBL_PURITY_DIR}/eligible_tumour_samples.tsv",
+    "purity_scoring_expression": f"{RBL_PURITY_DIR}/tumour_only_purity_scoring_expression.rds",
+    "purity_scores": f"{RBL_PURITY_DIR}/purity_scores.csv",
+    "retained_samples": f"{RBL_PURITY_DIR}/retained_samples.tsv",
+    "excluded_samples": f"{RBL_PURITY_DIR}/excluded_samples.tsv",
+    "retained_raw_tumour_counts": f"{RBL_PURITY_DIR}/retained_raw_tumour_counts.rds",
+    "purity_diagnostics": f"{RBL_PURITY_DIR}/purity_diagnostics.pdf",
+    "sample_retention": f"{RBL_PURITY_DIR}/sample_retention_by_cohort.pdf",
+    "provenance": f"{RBL_PURITY_DIR}/purity_provenance.tsv",
+    "validation_report": f"{RBL_PURITY_DIR}/purity_stage_validation.tsv",
+    "validation_ok": f"{RBL_PURITY_DIR}/purity_stage_validation.ok",
+    "execution_log": f"{RBL_PURITY_DIR}/tumour_purity_analysis.log",
+}
 
 BATCH_CONFIG = config.get("batch_correction_normalisation", {})
 CELL_LINE_CONFIG = config.get("cell_line_data", {})
 BATCH_OUTPUT_DIR = repo_config_path(BATCH_CONFIG.get(
     "output_dir",
-    "data/rbl/results/batch_corr_and_normalisation/preprocess"
+    "preprocessing_and_quality_control/rbl/results/batch_corr_and_normalisation/purity_filtered_preprocess"
 ))
 DSMZ_COUNT_MATRIX = CELL_LINE_CONFIG.get(
     "dsmz_count_matrix",
@@ -361,26 +376,73 @@ DSMZ_SAMPLE_METADATA = repo_config_path(DSMZ_SAMPLE_METADATA)
 BATCH_TUMOUR_RDS = repo_config_path(BATCH_CONFIG.get("tumour_rds", COUNT_MATRIX))
 DSMZ_SAMPLE_ID_COLUMN = CELL_LINE_CONFIG.get("dsmz_sample_id_column", "sample_name")
 
-BATCH_OUTPUTS = [
-    f"{BATCH_OUTPUT_DIR}/tumour_counts.rds",
-    f"{BATCH_OUTPUT_DIR}/dsmz_rbl_counts.rds",
-    f"{BATCH_OUTPUT_DIR}/merged_counts_raw.rds",
-    f"{BATCH_OUTPUT_DIR}/coldata.tsv",
-    f"{BATCH_OUTPUT_DIR}/merged_counts_batch_corrected.rds",
-    f"{BATCH_OUTPUT_DIR}/tumour_vst_pre_bc.rds",
-    f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
-    f"{BATCH_OUTPUT_DIR}/joint_vst_pre_bc.rds",
-    f"{BATCH_OUTPUT_DIR}/joint_vst_post_bc.rds",
-    f"{BATCH_OUTPUT_DIR}/tumour_vst_post_bc.rds",
-    f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc.rds",
-    f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc_collapsed_cellline.rds",
-    f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
-    f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
-    f"{BATCH_OUTPUT_DIR}/umap_pre_BC.pdf",
-    f"{BATCH_OUTPUT_DIR}/umap_post_BC.pdf",
-    f"{BATCH_OUTPUT_DIR}/qc_tumour_vst.pdf",
-    f"{BATCH_OUTPUT_DIR}/qc_dsmz_vst.pdf",
-]
+SHARED_FIGURE_MODULE = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
+)
+# Cohort-agnostic batch-effect quantification driver, shared with BRCA and NBL.
+BATCH_EFFECT_SCRIPT = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_quantification.R"
+)
+
+try:
+    from snakemake import __version__ as SNAKEMAKE_VERSION
+except Exception:  # pragma: no cover - recorded as unknown rather than failing
+    SNAKEMAKE_VERSION = "unknown"
+# Reused in-repo annotation already pinned for this cohort's STAR step.
+GENE_ANNOTATION_GTF = repo_config_path(
+    BATCH_CONFIG.get(
+        "gene_annotation_gtf",
+        "data/reference/gencode_v44/gencode.v44.basic.annotation.gtf",
+    )
+)
+
+BATCH_OUTPUT = {
+    "tumour_counts_rds": f"{BATCH_OUTPUT_DIR}/tumour_counts.rds",
+    "dsmz_counts_rds": f"{BATCH_OUTPUT_DIR}/dsmz_rbl_counts.rds",
+    "merged_counts_rds": f"{BATCH_OUTPUT_DIR}/merged_counts_raw.rds",
+    "coldata_tsv": f"{BATCH_OUTPUT_DIR}/coldata.tsv",
+    "batch_corrected_counts_rds": f"{BATCH_OUTPUT_DIR}/merged_counts_batch_corrected.rds",
+    "tumour_vst_rds": f"{BATCH_OUTPUT_DIR}/tumour_vst_pre_bc.rds",
+    "dsmz_vst_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
+    "joint_vst_pre_bc_rds": f"{BATCH_OUTPUT_DIR}/joint_vst_pre_bc.rds",
+    "joint_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/joint_vst_purity_filtered_post_bc.rds",
+    "tumour_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/tumour_vst_purity_filtered_post_bc.rds",
+    "dsmz_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_purity_filtered_post_bc.rds",
+    "dsmz_vst_post_bc_collapsed_cellline_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_purity_filtered_post_bc_collapsed_cellline.rds",
+    "pca_pre_pdf": f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
+    "pca_post_pdf": f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
+    "umap_pre_pdf": f"{BATCH_OUTPUT_DIR}/umap_pre_BC.pdf",
+    "umap_post_pdf": f"{BATCH_OUTPUT_DIR}/umap_post_BC.pdf",
+    "tumour_qc_pdf": f"{BATCH_OUTPUT_DIR}/qc_tumour_vst.pdf",
+    "dsmz_qc_pdf": f"{BATCH_OUTPUT_DIR}/qc_dsmz_vst.pdf",
+    "tumour_dispersion_pdf": f"{BATCH_OUTPUT_DIR}/qc_tumour_dispersion.pdf",
+    "dsmz_dispersion_pdf": f"{BATCH_OUTPUT_DIR}/qc_dsmz_dispersion.pdf",
+    "provenance_tsv": f"{BATCH_OUTPUT_DIR}/batch_normalisation_provenance.tsv",
+}
+# Derived batch-effect statistics and figures. Their own rule, so they can be
+# deleted and rebuilt without regenerating a count or VST matrix.
+BATCH_EFFECT_OUTPUTS = {
+    "pca_before_after_top3000_pdf": f"{BATCH_OUTPUT_DIR}/pca_before_after_BC_top3000.pdf",
+    "pca_before_after_protein_coding_pdf": f"{BATCH_OUTPUT_DIR}/pca_before_after_BC_protein_coding.pdf",
+    "pca_before_after_full_expression_pdf": f"{BATCH_OUTPUT_DIR}/pca_before_after_BC_full_expression.pdf",
+    "batch_effect_tsv": f"{BATCH_OUTPUT_DIR}/batch_effect_quantification.tsv",
+    "batch_effect_provenance_tsv": f"{BATCH_OUTPUT_DIR}/batch_effect_quantification_provenance.tsv",
+    "batch_effect_run_metadata_tsv": f"{BATCH_OUTPUT_DIR}/batch_effect_run_metadata.tsv",
+    "protein_coding_ids_tsv": f"{BATCH_OUTPUT_DIR}/protein_coding_gene_ids.tsv",
+    "feature_manifest_top3000_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_top3000.tsv",
+    "feature_manifest_protein_coding_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_protein_coding.tsv",
+    "feature_manifest_full_expression_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_full_expression.tsv",
+}
+
+BATCH_OUTPUTS = list(BATCH_OUTPUT.values())
+BATCH_EFFECT_TARGETS = list(BATCH_EFFECT_OUTPUTS.values())
+
+FINAL_VALIDATION = {
+    "report": f"{BATCH_OUTPUT_DIR}/final_matrix_validation.tsv",
+    "manifest": f"{BATCH_OUTPUT_DIR}/final_matrix_manifest.tsv",
+    "ok": f"{BATCH_OUTPUT_DIR}/final_matrix_validation.ok",
+    "log": f"{BATCH_OUTPUT_DIR}/final_matrix_validation.log",
+}
 
 # ------------------------------------------------------------------------------
 # Final pipeline outputs
@@ -392,22 +454,36 @@ BATCH_OUTPUTS = [
 # - alignment QC metrics were generated
 # - MultiQC reports were built per project
 # - all per-sample counts merged into a single count matrix
+# Read-level QC targets exist only when FASTQs were discovered. In the
+# count-only mode this cohort actually runs in, STAR_COUNTS and MULTIQC_HTML
+# still enumerate every registered sample, so requesting them from the default
+# target made a bare `snakemake -s rbl/Snakefile` abort with a
+# MissingInputException on picard_validate_samfile even though every
+# count-based product was complete and up to date. NBL already guards its
+# default target this way; RBL now matches, and `rbl_full_pipeline` remains the
+# explicit opt-in for the read-level workflow.
+READ_LEVEL_TARGETS = (
+    STAR_BAMS
+    + STAR_BAIS
+    + STAR_COUNTS
+    + PICARD_TXT
+    + PICARD_HIST
+    + FASTQC_HTML
+    + MULTIQC_HTML
+) if FASTQ_RUNS else []
+
 rule all:
     input:
-        STAR_BAMS,
-        STAR_BAIS,
-        STAR_COUNTS,
-        PICARD_TXT,
-        PICARD_HIST,
-        FASTQC_HTML,
-        MULTIQC_HTML,
+        READ_LEVEL_TARGETS,
         COUNT_MATRIX,
         COUNT_META,
         COUNT_GENES,
         RBL_ENSEMBL_TO_HGNC,
         RBL_COUNT_VERIFY,
-        RBL_PURITY_OUTPUTS,
-        BATCH_OUTPUTS
+        list(RBL_PURITY_OUTPUTS.values()),
+        BATCH_OUTPUTS,
+        BATCH_EFFECT_TARGETS,
+        list(FINAL_VALIDATION.values())
 
 # Post-download orchestration target for the full RBL workflow.
 # Dry-run after downloads complete:
@@ -426,8 +502,17 @@ rule rbl_full_pipeline:
         COUNT_GENES,
         RBL_ENSEMBL_TO_HGNC,
         RBL_COUNT_VERIFY,
-        RBL_PURITY_OUTPUTS,
-        BATCH_OUTPUTS
+        list(RBL_PURITY_OUTPUTS.values()),
+        BATCH_OUTPUTS,
+        BATCH_EFFECT_TARGETS,
+        list(FINAL_VALIDATION.values())
+
+rule rbl_count_based_preprocessing:
+    input:
+        BATCH_OUTPUTS,
+        BATCH_EFFECT_TARGETS,
+        list(RBL_PURITY_OUTPUTS.values()),
+        list(FINAL_VALIDATION.values())
 
 # ------------------------------------------------------------------------------
 # Rule: FastQC on each FASTQ file
@@ -788,66 +873,91 @@ rule verify_final_rbl_count_matrix:
 
 rule rbl_tumour_purity_analysis:
     input:
-        matrix = COUNT_MATRIX,
-        meta = COUNT_META,
-        map = RBL_ENSEMBL_TO_HGNC,
-        verify = RBL_COUNT_VERIFY,
-        script = RBL_PURITY_SCRIPT
+        raw_tumour_counts = COUNT_MATRIX,
+        tumour_metadata = COUNT_META,
+        gene_map = PURITY_GENE_MAP,
+        reference_scores = VERIFIED_PURITY_SCORES,
+        reference_script = VERIFIED_PURITY_SCRIPT,
+        reference_log = VERIFIED_PURITY_LOG,
+        shared_figure_module = SHARED_FIGURE_MODULE,
+        count_validation = RBL_COUNT_VERIFY,
     output:
-        RBL_PURITY_OUTPUTS
+        eligible_samples = RBL_PURITY_OUTPUTS["eligible_samples"],
+        purity_scoring_expression = RBL_PURITY_OUTPUTS["purity_scoring_expression"],
+        purity_scores = RBL_PURITY_OUTPUTS["purity_scores"],
+        retained_samples = RBL_PURITY_OUTPUTS["retained_samples"],
+        excluded_samples = RBL_PURITY_OUTPUTS["excluded_samples"],
+        retained_raw_tumour_counts = RBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        purity_diagnostics = RBL_PURITY_OUTPUTS["purity_diagnostics"],
+        sample_retention = RBL_PURITY_OUTPUTS["sample_retention"],
+        provenance = RBL_PURITY_OUTPUTS["provenance"],
+        validation_report = RBL_PURITY_OUTPUTS["validation_report"],
+        validation_ok = RBL_PURITY_OUTPUTS["validation_ok"],
+        execution_log = RBL_PURITY_OUTPUTS["execution_log"],
     params:
-        output_dir = RBL_PURITY_DIR,
-        threshold = PURITY_THRESHOLD
-    log:
-        f"{RBL_PURITY_DIR}/rbl_tumour_purity_analysis.snakemake.log"
+        cohort = "RBL",
+        threshold = PURITY_THRESHOLD,
+        expected_input_samples = EXPECTED_RBL_SAMPLES,
+        expected_eligible_samples = EXPECTED_RBL_SAMPLES,
+        expected_retained_samples = EXPECTED_RETAINED_TUMOURS,
+        primary_sample_type = "",
+        score_policy = "reuse_verified",
+        rule_name = "rbl_tumour_purity_analysis",
+        config_path = "preprocessing_and_quality_control/rbl/config/config.yaml",
+    threads:
+        int(config.get("purity_threads", 4))
+    resources:
+        mem_mb = 32000
     conda:
-        f"{ENV_DIR}/rbl-tumour-purity-env.yaml"
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p "{params.output_dir}" "$(dirname "{log}")"
-
-        SE_PATH="{input.matrix}" \
-        META_CSV="{input.meta}" \
-        MAP_TSV="{input.map}" \
-        OUTPUT_DIR="{params.output_dir}" \
-        PURITY_THRESHOLD="{params.threshold}" \
-        Rscript "{input.script}" > "{log}" 2>&1
-        """
+        PURITY_ENV
+    script:
+        SHARED_PURITY_SCRIPT
 
 # Required dependency chain:
-# raw 69-sample RBL tumour count matrix
-# -> count-matrix verification
-# -> ESTIMATE/tidyestimate tumour-purity filtering
-# -> purity-filtered tumour count matrix
-# -> DSMZ/RBL batch correction and integration
+# raw 69-sample RBL tumour count matrix -> tumour-only purity analysis
+# -> 68 retained raw tumours + 11 raw DSMZ libraries -> ComBat-seq -> joint VST.
 rule preprocess_integrate_rbl:
     input:
-        tumour_rds = RBL_PURITY_FILTERED_ENSEMBL,
+        tumour_rds = RBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        tumour_meta_csv = COUNT_META,
+        retained_samples = RBL_PURITY_OUTPUTS["retained_samples"],
+        excluded_samples = RBL_PURITY_OUTPUTS["excluded_samples"],
+        purity_scores = RBL_PURITY_OUTPUTS["purity_scores"],
+        purity_validation = RBL_PURITY_OUTPUTS["validation_ok"],
+        purity_provenance = RBL_PURITY_OUTPUTS["provenance"],
         dsmz_count_matrix = DSMZ_COUNT_MATRIX,
         dsmz_sample_metadata = DSMZ_SAMPLE_METADATA,
-        verify = RBL_COUNT_VERIFY
+        shared_figure_module = SHARED_FIGURE_MODULE,
+        verify = RBL_COUNT_VERIFY,
     output:
-        tumour_counts_rds = f"{BATCH_OUTPUT_DIR}/tumour_counts.rds",
-        dsmz_counts_rds = f"{BATCH_OUTPUT_DIR}/dsmz_rbl_counts.rds",
-        merged_counts_rds = f"{BATCH_OUTPUT_DIR}/merged_counts_raw.rds",
-        coldata_tsv = f"{BATCH_OUTPUT_DIR}/coldata.tsv",
-        batch_corrected_counts_rds = f"{BATCH_OUTPUT_DIR}/merged_counts_batch_corrected.rds",
-        tumour_vst_rds = f"{BATCH_OUTPUT_DIR}/tumour_vst_pre_bc.rds",
-        dsmz_vst_rds = f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc.rds",
-        joint_vst_pre_bc_rds = f"{BATCH_OUTPUT_DIR}/joint_vst_pre_bc.rds",
-        joint_vst_post_bc_rds = f"{BATCH_OUTPUT_DIR}/joint_vst_post_bc.rds",
-        tumour_vst_post_bc_rds = f"{BATCH_OUTPUT_DIR}/tumour_vst_post_bc.rds",
-        dsmz_vst_post_bc_rds = f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc.rds",
-        dsmz_vst_post_bc_collapsed_cellline_rds = f"{BATCH_OUTPUT_DIR}/dsmz_vst_post_bc_collapsed_cellline.rds",
-        pca_pre_pdf = f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
-        pca_post_pdf = f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
-        umap_pre_pdf = f"{BATCH_OUTPUT_DIR}/umap_pre_BC.pdf",
-        umap_post_pdf = f"{BATCH_OUTPUT_DIR}/umap_post_BC.pdf",
-        tumour_qc_pdf = f"{BATCH_OUTPUT_DIR}/qc_tumour_vst.pdf",
-        dsmz_qc_pdf = f"{BATCH_OUTPUT_DIR}/qc_dsmz_vst.pdf",
+        tumour_counts_rds = BATCH_OUTPUT["tumour_counts_rds"],
+        dsmz_counts_rds = BATCH_OUTPUT["dsmz_counts_rds"],
+        merged_counts_rds = BATCH_OUTPUT["merged_counts_rds"],
+        coldata_tsv = BATCH_OUTPUT["coldata_tsv"],
+        batch_corrected_counts_rds = BATCH_OUTPUT["batch_corrected_counts_rds"],
+        tumour_vst_rds = BATCH_OUTPUT["tumour_vst_rds"],
+        dsmz_vst_rds = BATCH_OUTPUT["dsmz_vst_rds"],
+        joint_vst_pre_bc_rds = BATCH_OUTPUT["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds = BATCH_OUTPUT["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc_rds = BATCH_OUTPUT["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc_rds = BATCH_OUTPUT["dsmz_vst_post_bc_rds"],
+        dsmz_vst_post_bc_collapsed_cellline_rds = BATCH_OUTPUT["dsmz_vst_post_bc_collapsed_cellline_rds"],
+        pca_pre_pdf = BATCH_OUTPUT["pca_pre_pdf"],
+        pca_post_pdf = BATCH_OUTPUT["pca_post_pdf"],
+        umap_pre_pdf = BATCH_OUTPUT["umap_pre_pdf"],
+        umap_post_pdf = BATCH_OUTPUT["umap_post_pdf"],
+        tumour_qc_pdf = BATCH_OUTPUT["tumour_qc_pdf"],
+        dsmz_qc_pdf = BATCH_OUTPUT["dsmz_qc_pdf"],
+        tumour_dispersion_pdf = BATCH_OUTPUT["tumour_dispersion_pdf"],
+        dsmz_dispersion_pdf = BATCH_OUTPUT["dsmz_dispersion_pdf"],
+        provenance_tsv = BATCH_OUTPUT["provenance_tsv"],
     params:
         min_shared = BATCH_CONFIG.get("min_shared_genes", 5000),
+        expected_tumour_samples = EXPECTED_RETAINED_TUMOURS,
+        expected_collapsed_dsmz = int(config.get("expected_dsmz_biological_profiles", 9)),
+        seed = int(BATCH_CONFIG.get("random_seed", 42)),
+        qc_top_genes = int(BATCH_CONFIG.get("qc_top_variable_genes", 3000)),
+        permanova_permutations = int(BATCH_CONFIG.get("permanova_permutations", 9999)),
         tumour_label = BATCH_CONFIG.get("tumour_label", "RBL_TUMOUR"),
         dsmz_label = BATCH_CONFIG.get("dsmz_label", "DSMZ_RBL"),
         dsmz_sample_col = DSMZ_SAMPLE_ID_COLUMN,
@@ -863,6 +973,110 @@ rule preprocess_integrate_rbl:
         "batch_corr_and_normalisation/envs/r_rbl_preprocess.yaml"
     script:
         "batch_corr_and_normalisation/scripts/R/rbl_preprocess_snakemake.R"
+
+
+rule rbl_batch_effect_quantification:
+    """PERMANOVA + betadisper and paired before/after PCA over three feature spaces.
+
+    Reads the joint VST matrices; never writes one. Every file that can move a
+    number -- matrices, coldata, pinned GTF, the shared module, this script and
+    this Snakefile -- is a declared input and is checksummed into the provenance
+    record.
+    """
+    input:
+        joint_vst_pre_bc_rds = BATCH_OUTPUT["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc_rds = BATCH_OUTPUT["joint_vst_post_bc_rds"],
+        coldata_tsv = BATCH_OUTPUT["coldata_tsv"],
+        gene_annotation_gtf = GENE_ANNOTATION_GTF,
+        shared_figure_module = SHARED_FIGURE_MODULE,
+        quantification_script = BATCH_EFFECT_SCRIPT,
+        snakefile = f"{WORKFLOW_DIR}/Snakefile",
+    output:
+        **BATCH_EFFECT_OUTPUTS,
+    params:
+        cohort = "RBL",
+        repo_root = PIPELINE_DIR,
+        master_seed = int(
+            BATCH_CONFIG.get(
+                "permutation_master_seed", BATCH_CONFIG.get("random_seed", 42)
+            )
+        ),
+        qc_top_genes = int(BATCH_CONFIG.get("qc_top_variable_genes", 3000)),
+        permanova_permutations = int(BATCH_CONFIG.get("permanova_permutations", 9999)),
+        primary_predictor = BATCH_CONFIG.get("batch_effect_primary_predictor", "dataset"),
+        # Column holding the tumour study/source label, used for the
+        # tumour-only tumour_source model (DSMZ profiles excluded).
+        tumour_source_column = BATCH_CONFIG.get("tumour_source_column", "cohort"),
+        tumour_label = BATCH_CONFIG.get("tumour_label", "RBL_TUMOUR"),
+        dsmz_label = BATCH_CONFIG.get("dsmz_label", "DSMZ_RBL"),
+        gene_annotation_release = BATCH_CONFIG.get(
+            "gene_annotation_release", "GENCODE v44 (basic, GRCh38)"
+        ),
+        gene_annotation_source = BATCH_CONFIG.get(
+            "gene_annotation_source",
+            "ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.basic.annotation.gtf.gz",
+        ),
+        snakemake_version = SNAKEMAKE_VERSION,
+        snakemake_command = (
+            "snakemake --snakefile preprocessing_and_quality_control/rbl/Snakefile "
+            "--cores 8 --use-conda --conda-frontend conda "
+            "--conda-prefix .snakemake_conda_envs rbl_batch_effect_quantification"
+        ),
+    threads:
+        1
+    resources:
+        mem_mb=48000
+    log:
+        f"{BATCH_OUTPUT_DIR}/rbl_batch_effect_quantification.log"
+    conda:
+        "batch_corr_and_normalisation/envs/r_rbl_preprocess.yaml"
+    script:
+        BATCH_EFFECT_SCRIPT
+
+
+rule validate_rbl_purity_filtered_joint_outputs:
+    input:
+        purity_scores = RBL_PURITY_OUTPUTS["purity_scores"],
+        retained_samples = RBL_PURITY_OUTPUTS["retained_samples"],
+        excluded_samples = RBL_PURITY_OUTPUTS["excluded_samples"],
+        retained_raw_tumour_counts = RBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
+        purity_validation = RBL_PURITY_OUTPUTS["validation_ok"],
+        dsmz_counts = BATCH_OUTPUT["dsmz_counts_rds"],
+        merged_counts_raw = BATCH_OUTPUT["merged_counts_rds"],
+        merged_counts_batch_corrected = BATCH_OUTPUT["batch_corrected_counts_rds"],
+        joint_vst_pre_bc = BATCH_OUTPUT["joint_vst_pre_bc_rds"],
+        joint_vst_post_bc = BATCH_OUTPUT["joint_vst_post_bc_rds"],
+        tumour_vst_post_bc = BATCH_OUTPUT["tumour_vst_post_bc_rds"],
+        dsmz_vst_post_bc = BATCH_OUTPUT["dsmz_vst_post_bc_rds"],
+        collapsed_dsmz = BATCH_OUTPUT["dsmz_vst_post_bc_collapsed_cellline_rds"],
+        coldata = BATCH_OUTPUT["coldata_tsv"],
+        figure_purity = RBL_PURITY_OUTPUTS["purity_diagnostics"],
+        figure_retention = RBL_PURITY_OUTPUTS["sample_retention"],
+        figure_pca_pre = BATCH_OUTPUT["pca_pre_pdf"],
+        figure_pca_post = BATCH_OUTPUT["pca_post_pdf"],
+        figure_tumour_vst = BATCH_OUTPUT["tumour_qc_pdf"],
+        figure_dsmz_vst = BATCH_OUTPUT["dsmz_qc_pdf"],
+        figure_tumour_dispersion = BATCH_OUTPUT["tumour_dispersion_pdf"],
+        figure_dsmz_dispersion = BATCH_OUTPUT["dsmz_dispersion_pdf"],
+    output:
+        validation_report = FINAL_VALIDATION["report"],
+        final_matrix_manifest = FINAL_VALIDATION["manifest"],
+        validation_ok = FINAL_VALIDATION["ok"],
+        validation_log = FINAL_VALIDATION["log"],
+    params:
+        cohort = "RBL",
+        expected_tumours = EXPECTED_RETAINED_TUMOURS,
+        expected_dsmz = EXPECTED_DSMZ_PROFILES,
+        expected_collapsed_dsmz = int(config.get("expected_dsmz_biological_profiles", 9)),
+        final_relative_path = str(
+            Path(BATCH_OUTPUT["joint_vst_post_bc_rds"]).resolve().relative_to(REPO_ROOT)
+        ),
+    resources:
+        mem_mb = 32000
+    conda:
+        "batch_corr_and_normalisation/envs/r_rbl_preprocess.yaml"
+    script:
+        FINAL_VALIDATION_SCRIPT
 
 # ------------------------------------------------------------------------------
 # MultiQC: per-project aggregation of QC and alignment metrics

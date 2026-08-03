@@ -11,7 +11,7 @@ option_list <- list(
   make_option("--direction",  type="character", default=NULL),
   make_option("--hc_rds",     type="character", default=NULL),
   make_option("--kmeans_rds", type="character", default=NULL),
-  make_option("--meta_tsv",   type="character", default=NULL),  # not strictly needed here but kept for compatibility
+  make_option("--meta_tsv",   type="character", default=NULL),  # not required here but kept for compatibility
   make_option("--view",       type="character", default=NULL),  # cell, tumour, or cell_tumour
   make_option("--out_root",   type="character", default=NULL)
 )

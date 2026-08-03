@@ -24,9 +24,9 @@ option_list <- list(
   make_option("--component-rank-stat", type = "character", default = "median_abs_log2fc"),
   make_option("--operative-feature-set-gene-file", type = "character", default = ""),
   make_option("--operative-feature-set-rank-tsv", type = "character", default = ""),
-  make_option("--strict-union-primary", type = "logical", default = TRUE),
+  make_option("--recurrent-union-primary", type = "logical", default = TRUE),
   make_option("--operative-feature-set-primary", type = "logical", default = TRUE),
-  make_option("--ordered-strict-union", type = "logical", default = TRUE),
+  make_option("--ordered-recurrent-union", type = "logical", default = TRUE),
   make_option("--ordered-operative-feature-set", type = "logical", default = FALSE),
   make_option("--disease-profiles", type = "character", default = "")
 )
@@ -209,7 +209,7 @@ add_manifest_row <- function(query_id, family, profile, disease, group_id, contr
 collect_profile <- function(profile, profile_root) {
   isolate_dir <- file.path(profile_root, "deseq2_markers")
   component_dir <- file.path(profile_root, "deseq2", "component_vs_rest")
-  out <- list(contrasts = list(), strict = character(), backgrounds = character(),
+  out <- list(contrasts = list(), recurrent = character(), backgrounds = character(),
               up = character(), down = character(), ranks_up = data.table(), ranks_down = data.table())
 
   manifest_path <- file.path(isolate_dir, "markers", "marker_sets_manifest.tsv")
@@ -296,8 +296,8 @@ collect_profile <- function(profile, profile_root) {
     }
   }
 
-  strict_file <- file.path(isolate_dir, "markers", paste0("unique_feature_set_recurrence_ge_", opt$`recurrence-k`, ".txt"))
-  out$strict <- read_gene_list(strict_file)
+  recurrent_file <- file.path(isolate_dir, "markers", paste0("unique_feature_set_recurrence_ge_", opt$`recurrence-k`, ".txt"))
+  out$recurrent <- read_gene_list(recurrent_file)
 
   # Disease-level summaries combine contrast-level query sets and backgrounds.
   for (x in out$contrasts) {
@@ -351,50 +351,50 @@ for (p in names(profiles)) {
   pr <- profiles[[p]]
   add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "all", sep = "__"),
                    "disease_recurrent", opt$profile, p, paste0("recurrence_ge_", opt$`recurrence-k`),
-                   "", "all", FALSE, "", pr$strict, pr$backgrounds)
+                   "", "all", FALSE, "", pr$recurrent, pr$backgrounds)
   add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "up", sep = "__"),
                    "disease_recurrent", opt$profile, p, paste0("recurrence_ge_", opt$`recurrence-k`),
-                   "", "up", FALSE, "", intersect(pr$strict, pr$up), pr$backgrounds)
+                   "", "up", FALSE, "", intersect(pr$recurrent, pr$up), pr$backgrounds)
   add_manifest_row(paste(p, "disease_recurrent_ge", opt$`recurrence-k`, "down", sep = "__"),
                    "disease_recurrent", opt$profile, p, paste0("recurrence_ge_", opt$`recurrence-k`),
-                   "", "down", FALSE, "", intersect(pr$strict, pr$down), pr$backgrounds)
+                   "", "down", FALSE, "", intersect(pr$recurrent, pr$down), pr$backgrounds)
 }
 
-strict_union <- Reduce(union, lapply(profiles, `[[`, "strict"))
-strict_bg <- Reduce(union, lapply(profiles, `[[`, "backgrounds"))
-strict_up <- Reduce(union, lapply(profiles, `[[`, "up"))
-strict_down <- Reduce(union, lapply(profiles, `[[`, "down"))
-strict_ranks_up <- rbindlist(lapply(profiles, `[[`, "ranks_up"), fill = TRUE)
-strict_ranks_down <- rbindlist(lapply(profiles, `[[`, "ranks_down"), fill = TRUE)
+recurrent_union <- Reduce(union, lapply(profiles, `[[`, "recurrent"))
+recurrent_bg <- Reduce(union, lapply(profiles, `[[`, "backgrounds"))
+recurrent_up <- Reduce(union, lapply(profiles, `[[`, "up"))
+recurrent_down <- Reduce(union, lapply(profiles, `[[`, "down"))
+recurrent_ranks_up <- rbindlist(lapply(profiles, `[[`, "ranks_up"), fill = TRUE)
+recurrent_ranks_down <- rbindlist(lapply(profiles, `[[`, "ranks_down"), fill = TRUE)
 collapse_ranks <- function(x, genes) {
   if (nrow(x) == 0) return(data.table(gene_id = character(), rank_stat = numeric()))
   x[gene_id %in% genes & !is.na(rank_stat), .(rank_stat = median(rank_stat, na.rm = TRUE)), by = gene_id]
 }
-strict_ranks_up <- collapse_ranks(strict_ranks_up, intersect(strict_union, strict_up))
-strict_ranks_down <- collapse_ranks(strict_ranks_down, intersect(strict_union, strict_down))
+recurrent_ranks_up <- collapse_ranks(recurrent_ranks_up, intersect(recurrent_union, recurrent_up))
+recurrent_ranks_down <- collapse_ranks(recurrent_ranks_down, intersect(recurrent_union, recurrent_down))
 
 # Pan-cancer recurrence-filtered marker-union queries test recurrent disease
 # marker sets against the combined DESeq2-tested background.
-if (isTRUE(opt$`strict-union-primary`)) {
+if (isTRUE(opt$`recurrent-union-primary`)) {
   add_manifest_row("recurrence_filtered_marker_union__all", "recurrence_filtered_marker_union",
                    opt$profile, "pan_cancer", "recurrence_filtered_marker_union", "",
-                   "all", FALSE, "", strict_union, strict_bg)
+                   "all", FALSE, "", recurrent_union, recurrent_bg)
   add_manifest_row("recurrence_filtered_marker_union__up", "recurrence_filtered_marker_union",
                    opt$profile, "pan_cancer", "recurrence_filtered_marker_union", "",
-                   "up", FALSE, "", intersect(strict_union, strict_up), strict_bg)
+                   "up", FALSE, "", intersect(recurrent_union, recurrent_up), recurrent_bg)
   add_manifest_row("recurrence_filtered_marker_union__down", "recurrence_filtered_marker_union",
                    opt$profile, "pan_cancer", "recurrence_filtered_marker_union", "",
-                   "down", FALSE, "", intersect(strict_union, strict_down), strict_bg)
+                   "down", FALSE, "", intersect(recurrent_union, recurrent_down), recurrent_bg)
 }
-if (isTRUE(opt$`ordered-strict-union`) && isTRUE(opt$`strict-union-primary`)) {
+if (isTRUE(opt$`ordered-recurrent-union`) && isTRUE(opt$`recurrent-union-primary`)) {
   add_manifest_row("ordered_recurrence_filtered_marker_union__up_ordered",
                    "ordered_recurrence_filtered_marker_union", opt$profile,
                    "pan_cancer", "recurrence_filtered_marker_union", "", "up_ordered", TRUE,
-                   opt$`component-rank-stat`, strict_ranks_up$gene_id, strict_bg, strict_ranks_up)
+                   opt$`component-rank-stat`, recurrent_ranks_up$gene_id, recurrent_bg, recurrent_ranks_up)
   add_manifest_row("ordered_recurrence_filtered_marker_union__down_ordered",
                    "ordered_recurrence_filtered_marker_union", opt$profile,
                    "pan_cancer", "recurrence_filtered_marker_union", "", "down_ordered", TRUE,
-                   opt$`component-rank-stat`, strict_ranks_down$gene_id, strict_bg, strict_ranks_down)
+                   opt$`component-rank-stat`, recurrent_ranks_down$gene_id, recurrent_bg, recurrent_ranks_down)
 }
 
 # The final pan-cancer feature set is the downstream selected gene panel, tested
@@ -404,12 +404,12 @@ if (length(final_feature_genes) > 0) {
   if (isTRUE(opt$`operative-feature-set-primary`)) {
     add_manifest_row("final_pan_cancer_feature_set__all", "final_pan_cancer_feature_set",
                      opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "",
-                     "all", FALSE, "", final_feature_genes, strict_bg)
+                     "all", FALSE, "", final_feature_genes, recurrent_bg)
   }
 } else if (isTRUE(opt$`operative-feature-set-primary`)) {
   add_manifest_row("final_pan_cancer_feature_set__all", "final_pan_cancer_feature_set",
                    opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "",
-                   "all", FALSE, "", character(), strict_bg,
+                   "all", FALSE, "", character(), recurrent_bg,
                    skip_reason = "missing_final_pan_cancer_feature_set_gene_file")
 }
 
@@ -420,31 +420,31 @@ if (isTRUE(opt$`ordered-operative-feature-set`) && isTRUE(opt$`operative-feature
       add_manifest_row("ordered_final_pan_cancer_feature_set__up_ordered",
                        "ordered_final_pan_cancer_feature_set",
                        opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "", "up_ordered",
-                       TRUE, "initial_run_log2fc", character(), strict_bg,
+                       TRUE, "initial_run_log2fc", character(), recurrent_bg,
                        skip_reason = "missing_rank_statistics")
     } else {
       ranks[, gene_id := clean_gene(gene_id)]
       add_manifest_row("ordered_final_pan_cancer_feature_set__up_ordered",
                        "ordered_final_pan_cancer_feature_set",
                        opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "", "up_ordered",
-                       TRUE, "initial_run_log2fc", ranks[direction == "up", gene_id], strict_bg,
+                       TRUE, "initial_run_log2fc", ranks[direction == "up", gene_id], recurrent_bg,
                        ranks[direction == "up", .(gene_id, rank_stat)])
       add_manifest_row("ordered_final_pan_cancer_feature_set__down_ordered",
                        "ordered_final_pan_cancer_feature_set",
                        opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "", "down_ordered",
-                       TRUE, "initial_run_log2fc", ranks[direction == "down", gene_id], strict_bg,
+                       TRUE, "initial_run_log2fc", ranks[direction == "down", gene_id], recurrent_bg,
                        ranks[direction == "down", .(gene_id, rank_stat)])
     }
   } else {
     add_manifest_row("ordered_final_pan_cancer_feature_set__up_ordered",
                      "ordered_final_pan_cancer_feature_set",
                      opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "", "up_ordered",
-                     TRUE, "initial_run_log2fc", character(), strict_bg,
+                     TRUE, "initial_run_log2fc", character(), recurrent_bg,
                      skip_reason = "missing_rank_statistics")
     add_manifest_row("ordered_final_pan_cancer_feature_set__down_ordered",
                      "ordered_final_pan_cancer_feature_set",
                      opt$profile, "pan_cancer", "final_pan_cancer_feature_set", "", "down_ordered",
-                     TRUE, "initial_run_log2fc", character(), strict_bg,
+                     TRUE, "initial_run_log2fc", character(), recurrent_bg,
                      skip_reason = "missing_rank_statistics")
   }
 }
