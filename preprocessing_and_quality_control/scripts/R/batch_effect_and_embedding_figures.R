@@ -29,6 +29,26 @@ FIGURE_SERIES_COLOURS <- c(
   "#2a78d6", "#eb6834", "#1baf7a", "#eda100",
   "#e87ba4", "#008300", "#4a3aa7", "#e34948"
 )
+
+## The two colours carrying the cohort's primary contrast.
+FIGURE_TUMOUR <- FIGURE_SERIES_COLOURS[[1L]]
+FIGURE_CELLLINE <- FIGURE_SERIES_COLOURS[[2L]]
+
+## Series colours are pinned to the role a series plays, not to the position it
+## happens to occupy once `factor()` sorts the levels alphabetically. That sort
+## put the tumour series first for BRCA ("BRCA_TUMOUR" < "DSMZ_BRCA") but second
+## for NBL and RBL ("DSMZ_NBL" < "NBL_TUMOUR"), so the same series took a
+## different colour depending on the cohort. With the map below a patient tumour
+## is blue and a DSMZ cell line orange in every cohort, and adding a cohort whose
+## labels sort differently cannot silently repeat the swap.
+FIGURE_SERIES_ROLE_COLOURS <- c(
+  DSMZ_BRCA = FIGURE_CELLLINE,
+  DSMZ_NBL = FIGURE_CELLLINE,
+  DSMZ_RBL = FIGURE_CELLLINE,
+  BRCA_TUMOUR = FIGURE_TUMOUR,
+  NBL_TUMOUR = FIGURE_TUMOUR,
+  RBL_TUMOUR = FIGURE_TUMOUR
+)
 FIGURE_INK <- "#16181d"
 FIGURE_INK_MUTED <- "#5c6068"
 FIGURE_RULE <- "#dcdfe4"
@@ -41,7 +61,7 @@ FIGURE_SERIES_DISPLAY_NAMES <- c(
   NBL_TUMOUR = "Patient tumours",
   DSMZ_NBL = "DSMZ cell lines",
   RBL_TUMOUR = "Patient tumours",
-  DSMZ_RBL = "DSMZ cell lines"
+  DSMZ_RBL = "DSMZ cell-line groups"
 )
 FIGURE_DENSITY_RAMP <- c("#b9d3f0", "#5b93d6", "#1f4f8f", "#0c2c55")
 FIGURE_TREND <- "#eb6834"
@@ -150,6 +170,40 @@ figure_count <- function(n) formatC(as.integer(n), format = "d", big.mark = ",")
 figure_display_names <- function(levels_present) {
   mapped <- unname(FIGURE_SERIES_DISPLAY_NAMES[levels_present])
   ifelse(is.na(mapped), gsub("_", " ", levels_present), mapped)
+}
+
+FIGURE_LEGEND_ROLE_ORDER <- c("Patient tumours", "DSMZ cell lines", "DSMZ cell-line groups")
+
+figure_legend_levels <- function(levels_present) {
+  display_names <- figure_display_names(levels_present)
+  order_key <- match(display_names, FIGURE_LEGEND_ROLE_ORDER)
+  order_key[is.na(order_key)] <- length(FIGURE_LEGEND_ROLE_ORDER) + seq_len(sum(is.na(order_key)))
+  levels_present[order(order_key, display_names)]
+}
+
+figure_assert_label_colour_mapping <- function(colour_map, context = "figure palette") {
+  required <- FIGURE_SERIES_ROLE_COLOURS[
+    intersect(names(FIGURE_SERIES_ROLE_COLOURS), names(colour_map))
+  ]
+  if (!length(required)) {
+    return(invisible(colour_map))
+  }
+  observed <- unname(colour_map[names(required)])
+  expected <- unname(required)
+  mismatched <- names(required)[is.na(observed) | observed != expected]
+  if (length(mismatched)) {
+    details <- paste(
+      sprintf(
+        "%s -> observed %s, expected %s",
+        mismatched,
+        ifelse(is.na(observed[mismatched]), "<missing>", observed[mismatched]),
+        expected[mismatched]
+      ),
+      collapse = "; "
+    )
+    stop("[ERROR] ", context, " reversed or replaced a shared label-to-colour mapping: ", details)
+  }
+  invisible(colour_map)
 }
 
 ## Empty panel on a plain white background.
@@ -264,14 +318,31 @@ figure_series_style <- function(labels) {
     stop("Figure palette supports at most ", length(FIGURE_SERIES_COLOURS), " series")
   }
   sizes <- stats::setNames(as.integer(table(groups)), levels_present)
+  ## Roles first, so a known series keeps its colour whatever order it sorts in.
+  ## Anything without a role takes the next palette slot no role has claimed.
+  colours <- unname(FIGURE_SERIES_ROLE_COLOURS[levels_present])
+  unassigned <- which(is.na(colours))
+  if (length(unassigned) > 0L) {
+    spare <- setdiff(FIGURE_SERIES_COLOURS, colours[-unassigned])
+    if (length(unassigned) > length(spare)) {
+      stop("Figure palette supports at most ", length(FIGURE_SERIES_COLOURS), " series")
+    }
+    colours[unassigned] <- spare[seq_along(unassigned)]
+  }
+  colours <- stats::setNames(colours, levels_present)
+  figure_assert_label_colour_mapping(colours, "shared figure palette")
+  legend_levels <- figure_legend_levels(levels_present)
   list(
     groups = groups,
     levels = levels_present,
     sizes = sizes,
-    colours = stats::setNames(FIGURE_SERIES_COLOURS[seq_along(levels_present)], levels_present),
+    colours = colours,
     highlight = stats::setNames(sizes < 0.5 * max(sizes), levels_present),
+    legend_levels = legend_levels,
     legend = sprintf(
-      "%s (n = %s)", figure_display_names(levels_present), figure_count(sizes)
+      "%s (n = %s)",
+      figure_display_names(legend_levels),
+      figure_count(sizes[legend_levels])
     )
   )
 }
@@ -307,7 +378,7 @@ figure_series_legend <- function(style) {
     "center",
     legend = style$legend,
     pch = 21,
-    pt.bg = unname(style$colours),
+    pt.bg = unname(style$colours[style$legend_levels]),
     col = "#ffffff",
     pt.lwd = 0.6,
     pt.cex = 1.6,
@@ -331,22 +402,87 @@ compute_pca_embedding <- function(mat, top_genes) {
   )
 }
 
-compute_umap_embedding <- function(mat, top_genes, seed, threads) {
-  keep <- top_variable_rows(mat, top_genes)
-  x <- t(mat[keep, , drop = FALSE])
+assert_dimensionality_reduction_input <- function(mat, ids, context) {
+  mat <- as.matrix(mat)
+  if (is.null(rownames(mat)) || is.null(colnames(mat))) {
+    stop("[ERROR] ", context, " input must carry named genes and samples")
+  }
+  if (anyDuplicated(rownames(mat))) {
+    stop("[ERROR] duplicated_gene_ids > 0 before ", context)
+  }
+  if (anyDuplicated(colnames(mat))) {
+    stop("[ERROR] duplicated_sample_ids > 0 before ", context)
+  }
+  if (!length(ids)) {
+    stop("[ERROR] Empty feature set supplied to ", context)
+  }
+  if (anyDuplicated(ids)) {
+    stop("[ERROR] Feature manifest contains duplicated gene IDs before ", context)
+  }
+  missing_ids <- setdiff(ids, rownames(mat))
+  if (length(missing_ids)) {
+    stop("[ERROR] Feature manifest is not present in the matrix before ", context)
+  }
+  block <- mat[ids, , drop = FALSE]
+  if (anyNA(block) || any(!is.finite(block))) {
+    stop("[ERROR] all_values_finite = FALSE before ", context)
+  }
+  row_variances <- matrixStats::rowVars(block)
+  if (any(!is.finite(row_variances) | row_variances <= 0)) {
+    stop("[ERROR] zero-variance or non-finite genes reached ", context)
+  }
+  integer_like <- max(abs(block - round(block))) < 1e-8 && min(block) >= 0
+  if (isTRUE(integer_like)) {
+    stop("[ERROR] raw_counts_passed_to_", context, " = TRUE")
+  }
+  cat(sprintf(
+    "[INFO] %s assertions | input_is_vst = TRUE; raw_counts_passed_to_%s = FALSE; all_values_finite = TRUE; duplicated_gene_ids = 0; duplicated_sample_ids = 0\n",
+    context, context
+  ))
+  block
+}
+
+compute_feature_space_umap <- function(mat, ids, seed, threads,
+                                       n_neighbors = 20L, min_dist = 0.3,
+                                       metric = "cosine", context = "umap") {
+  block <- assert_dimensionality_reduction_input(mat, ids, context)
+  x <- t(block)
+  effective_neighbors <- min(as.integer(n_neighbors), nrow(x) - 1L)
+  if (effective_neighbors < 2L) {
+    stop("[ERROR] UMAP needs at least three samples: ", context)
+  }
   set.seed(seed)
   embedding <- uwot::umap(
     x,
-    n_neighbors = min(20L, nrow(x) - 1L),
-    min_dist = 0.3,
-    metric = "cosine",
+    n_neighbors = effective_neighbors,
+    min_dist = min_dist,
+    metric = metric,
     n_threads = max(1L, threads),
     verbose = TRUE
   )
+  rownames(embedding) <- colnames(block)
   list(
     coords = embedding[, 1:2, drop = FALSE],
     xlab = "UMAP 1",
-    ylab = "UMAP 2"
+    ylab = "UMAP 2",
+    parameters = list(
+      seed = as.integer(seed),
+      n_neighbors = as.integer(effective_neighbors),
+      min_dist = min_dist,
+      metric = metric,
+      n_threads = max(1L, threads)
+    )
+  )
+}
+
+compute_umap_embedding <- function(mat, top_genes, seed, threads) {
+  keep <- top_variable_rows(mat, top_genes)
+  compute_feature_space_umap(
+    mat,
+    rownames(mat)[keep],
+    seed = seed,
+    threads = threads,
+    context = "umap"
   )
 }
 
@@ -503,9 +639,10 @@ sha256_file <- function(path) {
 repo_relative <- function(path, repo_root) {
   if (is.null(path) || !length(path)) return(NA_character_)
   path <- as.character(path)[[1L]]
-  if (!nzchar(path)) return(NA_character_)
+  if (is.na(path) || !nzchar(path)) return(NA_character_)
   root <- sub("/*$", "/", normalizePath(repo_root, mustWork = FALSE))
   absolute <- normalizePath(path, mustWork = FALSE)
+  if (is.na(absolute) || !nzchar(absolute)) return(NA_character_)
   if (startsWith(absolute, root)) substring(absolute, nchar(root) + 1L) else absolute
 }
 
@@ -664,11 +801,14 @@ batch_effect_provenance_table <- function(cohort,
                                           predictor_names,
                                           group_sizes_label,
                                           n_samples,
+                                          tumour_count,
+                                          dsmz_count,
                                           master_seed,
                                           permutations,
                                           batch_effect_table,
                                           tumour_source_status = NA_character_,
-                                          tumour_source_levels = character(0)) {
+                                          tumour_source_levels = character(0),
+                                          analysis_population_note = NULL) {
   relative <- function(path) repo_relative(path, repo_root)
 
   ## Code and data provenance, each as a (path, sha256) pair.
@@ -700,7 +840,11 @@ batch_effect_provenance_table <- function(cohort,
     ),
     value = c(
       cohort,
-      "joint pre-ComBat-seq VST and joint post-ComBat-seq VST -> three fixed feature spaces -> PCA -> PERMANOVA + betadisper",
+      if (is.null(analysis_population_note)) {
+        "joint pre-ComBat-seq VST and joint post-ComBat-seq VST -> three fixed feature spaces -> PCA -> PERMANOVA + betadisper"
+      } else {
+        as.character(analysis_population_note)
+      },
       as.character(snakemake_rule),
       relative(snakemake_scriptdir),
       as.character(snakemake_command),
@@ -750,7 +894,7 @@ batch_effect_provenance_table <- function(cohort,
 
   statistics_block <- data.frame(
     field = c(
-      "n_samples", "group_sizes", "predictors_tested",
+      "n_samples", "tumour_count", "dsmz_count", "group_sizes", "predictors_tested",
       "predictor_model_form",
       "combat_seq_batch_factor", "combat_seq_covariates",
       "correction_framing", "reporting_language",
@@ -765,6 +909,8 @@ batch_effect_provenance_table <- function(cohort,
     ),
     value = c(
       as.character(n_samples),
+      as.character(tumour_count),
+      as.character(dsmz_count),
       group_sizes_label,
       paste(predictor_names, collapse = ","),
       "each predictor is fitted as its own one-way model; no predictor is ever a second term beside another in one PERMANOVA",
@@ -1181,7 +1327,8 @@ build_feature_spaces <- function(joint_pre, joint_post, top_genes,
 ## One PCA per (feature space, stage). The complete non-zero score space feeds
 ## the statistics; only PC1/PC2 are ever plotted.
 compute_stage_pca <- function(mat, ids) {
-  fit <- stats::prcomp(t(mat[ids, , drop = FALSE]), center = TRUE, scale. = FALSE)
+  block <- assert_dimensionality_reduction_input(mat, ids, "pca")
+  fit <- stats::prcomp(t(block), center = TRUE, scale. = FALSE)
   keep <- which(fit$sdev > fit$sdev[1L] * sqrt(.Machine$double.eps))
   if (length(keep) < 2L) stop("PCA produced fewer than two non-zero components")
   variance_pct <- fit$sdev^2 / sum(fit$sdev^2) * 100
@@ -1198,7 +1345,9 @@ compute_stage_pca <- function(mat, ids) {
 ## predictor. Returns the tidy table and the PCA objects for plotting, so the
 ## figures and the statistics can never diverge.
 quantify_batch_effect <- function(cohort, joint_pre, joint_post, feature_spaces,
-                                  predictors, master_seed, permutations) {
+                                  predictors, master_seed, permutations,
+                                  tumour_count = NA_integer_,
+                                  dsmz_count = NA_integer_) {
   results <- list()
   embeddings <- list()
   for (space_name in names(feature_spaces)) {
@@ -1242,6 +1391,8 @@ quantify_batch_effect <- function(cohort, joint_pre, joint_post, feature_spaces,
           predictor = predictor_name,
           predictor_levels = describe_levels(groups),
           n_samples = length(groups),
+          tumour_count = as.integer(tumour_count),
+          dsmz_count = as.integer(dsmz_count),
           n_genes = length(ids),
           n_pcs = stage_pca[[stage_name]]$n_pcs,
           distance = "euclidean",
@@ -1297,7 +1448,8 @@ quantify_batch_effect <- function(cohort, joint_pre, joint_post, feature_spaces,
   }
   column_order <- c(
     "cohort", "feature_space", "stage", "predictor", "predictor_levels",
-    "n_samples", "n_genes", "n_pcs", "distance", "method", "statistic_name",
+    "n_samples", "tumour_count", "dsmz_count",
+    "n_genes", "n_pcs", "distance", "method", "statistic_name",
     "statistic", "r_squared", "p_value", "permutations", "seed",
     "r_squared_reduction_pct", "notes"
   )

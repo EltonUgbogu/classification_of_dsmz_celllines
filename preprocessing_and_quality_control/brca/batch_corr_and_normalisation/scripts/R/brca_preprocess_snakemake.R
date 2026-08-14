@@ -370,10 +370,23 @@ qc_stage_pca <- list(
   after = compute_stage_pca(joint_vst_post, qc_ids)
 )
 
-## Per-stage PCA and UMAP figures retain the top-variable-gene feature space.
-embedding_footer <- qc_feature_spaces$spaces$top3000$label
-umap_pre_embedding <- compute_umap_embedding(joint_vst_pre, qc_top_genes, seed, threads)
-umap_post_embedding <- compute_umap_embedding(joint_vst_post, qc_top_genes, seed, threads)
+## Per-stage PCA and UMAP figures reuse the same ordered pre-correction top3000
+## manifest, so the standalone qualitative figures stay on the audited paired
+## feature space rather than re-ranking genes independently per stage.
+embedding_footer <- paste(
+  qc_feature_spaces$spaces$top3000$label,
+  " | PCA center=TRUE scale.=FALSE",
+  sprintf(" | UMAP seed=%d metric=cosine n_neighbors=%d min_dist=%.1f",
+          seed, min(20L, ncol(joint_vst_pre) - 1L), 0.3)
+)
+umap_pre_embedding <- compute_feature_space_umap(
+  joint_vst_pre, qc_ids, seed, threads,
+  context = "pca_umap_qualitative_pre"
+)
+umap_post_embedding <- compute_feature_space_umap(
+  joint_vst_post, qc_ids, seed, threads,
+  context = "pca_umap_qualitative_post"
+)
 
 plot_embedding_figure(
   list(list(embedding = qc_stage_pca$before)),
@@ -484,6 +497,12 @@ provenance <- data.frame(
     "vst_method",
     "random_seed",
     "qc_top_variable_genes",
+    "pca_center_scale_policy",
+    "paired_feature_space_qc",
+    "umap_seed",
+    "umap_metric",
+    "umap_n_neighbors",
+    "umap_min_dist",
     "R_version",
     paste0("package_", package_names),
     paste0("output_sha256_", names(key_output_paths))
@@ -512,6 +531,12 @@ provenance <- data.frame(
     "DESeq2::vst(blind=TRUE) fitted jointly before and jointly after ComBat-seq",
     seed,
     qc_top_genes,
+    "prcomp(t(vst_matrix[feature_ids, , drop = FALSE]), center = TRUE, scale. = FALSE)",
+    "top3000 selected once from the pre-ComBat-seq joint VST matrix and reused unchanged before and after correction for standalone PCA/UMAP QC",
+    seed,
+    "cosine",
+    min(20L, ncol(joint_vst_pre) - 1L),
+    0.3,
     R.version.string,
     unname(package_versions),
     vapply(key_output_paths, sha256_file, character(1))

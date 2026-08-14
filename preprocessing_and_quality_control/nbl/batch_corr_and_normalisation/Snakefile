@@ -22,6 +22,9 @@ TUMOUR_META_CSV = (
 )
 DSMZ_RDS = repo_config_path(PROFILE["dsmz_rds"])
 DSMZ_META_CSV = repo_config_path(PROFILE["dsmz_meta_csv"])
+SHARED_FIGURE_MODULE = repo_config_path(
+    "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
+)
 EXPECTED_TUMOUR_COHORTS = PROFILE.get("expected_tumour_cohorts", {})
 OUTPUT_DIR = repo_config_path(
     PROFILE.get(
@@ -61,6 +64,7 @@ rule preprocess_integrate_nbl:
         tumour_meta_csv = lambda wildcards: [TUMOUR_META_CSV] if TUMOUR_META_CSV else [],
         dsmz_rds = DSMZ_RDS,
         dsmz_meta_csv = DSMZ_META_CSV,
+        shared_figure_module = SHARED_FIGURE_MODULE,
     output:
         tumour_counts_rds = FINAL_OUTPUTS["tumour_counts_rds"],
         dsmz_counts_rds = FINAL_OUTPUTS["dsmz_counts_rds"],

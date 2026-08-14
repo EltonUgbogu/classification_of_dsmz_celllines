@@ -10,7 +10,7 @@
 ## Only the rendering changed. Colours, point styling, legend wording,
 ## typography and the gridless panel frame now come from the shared figure
 ## module (`preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R`),
-## so a patient tumour is the same blue and a DSMZ cell line the same orange in
+## so a patient tumour is the same blue and a DSMZ cell line the same purple in
 ## every cohort, and no panel carries a background grid.
 ##
 ## The shared module must be loaded before any function here is called; the

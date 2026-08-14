@@ -226,16 +226,78 @@ if (anyNA(cell_line_key) || any(!nzchar(cell_line_key))) {
   stop(sprintf("[ERROR] Missing DSMZ cell-line collapse key for samples: %s", paste(missing_samples, collapse = ", ")))
 }
 collapsed_celllines <- unique(cell_line_key)
-dsmz_vst_post_collapsed <- vapply(
-  collapsed_celllines,
-  function(cell_line) {
-    rowMeans(dsmz_vst_post[, cell_line_key == cell_line, drop = FALSE])
-  },
-  numeric(nrow(dsmz_vst_post))
-)
-rownames(dsmz_vst_post_collapsed) <- rownames(dsmz_vst_post)
-colnames(dsmz_vst_post_collapsed) <- collapsed_celllines
+
+## RBL sequences some cell lines more than once, so the DSMZ block holds more
+## libraries than distinct cell lines. Averaging the replicate libraries of a
+## cell line in VST space gives one profile per biological cell line; the same
+## key and the same column order are used pre- and post-correction so the two
+## embedding figures stay comparable.
+collapse_dsmz_by_cellline <- function(mat) {
+  collapsed <- vapply(
+    collapsed_celllines,
+    function(cell_line) rowMeans(mat[, cell_line_key == cell_line, drop = FALSE]),
+    numeric(nrow(mat))
+  )
+  rownames(collapsed) <- rownames(mat)
+  colnames(collapsed) <- collapsed_celllines
+  collapsed
+}
+
+collapse_metadata_by_cellline <- function(metadata) {
+  sample_groups <- split(colnames(dsmz_vst_post), cell_line_key)
+  collapsed_rows <- lapply(
+    collapsed_celllines,
+    function(cell_line) {
+      rows <- metadata[match(sample_groups[[cell_line]], metadata$sample_id), , drop = FALSE]
+      template <- rows[1L, , drop = FALSE]
+      template$sample_id <- cell_line
+      template[[collapse_col]] <- cell_line
+      if ("Cell_Line" %in% colnames(template)) template$Cell_Line <- cell_line
+      template
+    }
+  )
+  collapsed <- do.call(rbind, collapsed_rows)
+  rownames(collapsed) <- NULL
+  collapsed
+}
+
+collapse_counts_by_cellline <- function(counts) {
+  collapsed <- vapply(
+    collapsed_celllines,
+    function(cell_line) rowMeans(counts[, cell_line_key == cell_line, drop = FALSE]),
+    numeric(nrow(counts))
+  )
+  rownames(collapsed) <- rownames(counts)
+  colnames(collapsed) <- collapsed_celllines
+  collapsed
+}
+
+assert_expected_replicate_groups <- function() {
+  observed_sizes <- stats::setNames(as.integer(table(cell_line_key)), names(table(cell_line_key)))
+  expected_sizes <- c(RBL_15 = 2L, RBL_20 = 2L)
+  if (!identical(observed_sizes[names(expected_sizes)], expected_sizes)) {
+    stop(sprintf(
+      "[ERROR] DSMZ replicate collapse did not match the expected biological groups: observed %s",
+      paste(sprintf("%s=%d", names(observed_sizes), observed_sizes), collapse = ", ")
+    ))
+  }
+  if (sum(observed_sizes == 1L) != 7L || length(observed_sizes) != 9L) {
+    stop(sprintf(
+      "[ERROR] DSMZ replicate collapse produced %d biological groups (%d singleton groups); expected 9 total groups with 7 singleton groups",
+      length(observed_sizes), sum(observed_sizes == 1L)
+    ))
+  }
+  invisible(observed_sizes)
+}
+
+dsmz_vst_post_collapsed <- collapse_dsmz_by_cellline(dsmz_vst_post)
+dsmz_vst_pre_collapsed <- collapse_dsmz_by_cellline(dsmz_vst)
+assert_expected_replicate_groups()
+saveRDS(dsmz_vst_pre_collapsed, outputs[["dsmz_vst_pre_bc_collapsed_cellline_rds"]])
 saveRDS(dsmz_vst_post_collapsed, outputs[["dsmz_vst_post_bc_collapsed_cellline_rds"]])
+if (!identical(colnames(dsmz_vst_pre_collapsed), colnames(dsmz_vst_post_collapsed))) {
+  stop("[ERROR] Pre- and post-ComBat-seq collapsed DSMZ VST objects differ in group ordering")
+}
 cat(sprintf("[INFO] DSMZ post-BC libraries: %d; collapsed cell lines: %d\n", ncol(dsmz_vst_post), ncol(dsmz_vst_post_collapsed)))
 if (as.integer(params[["expected_collapsed_dsmz"]]) > 0L &&
     ncol(dsmz_vst_post_collapsed) != as.integer(params[["expected_collapsed_dsmz"]])) {
@@ -247,23 +309,98 @@ if (as.integer(params[["expected_collapsed_dsmz"]]) > 0L &&
 }
 
 # Plots. Titles and subtitles follow the same pattern as BRCA and NBL so the
-# three cohorts read identically; the underlying computations are unchanged.
-plot_labels_pre <- merged$batch[colnames(joint_vst_pre)]
-plot_labels_post <- merged$batch[colnames(joint_vst_post)]
+# three cohorts read identically. The standalone qualitative figures reuse the
+# same ordered pre-correction top3000 manifest before and after correction.
+#
+# The embeddings are drawn over the replicate-collapsed DSMZ block, so one point
+# is one cell line rather than one sequencing library. Every matrix written above
+# is untouched: this collapse exists only for the four embedding figures, and the
+# saved joint VST objects still carry all libraries.
+embedding_pre <- cbind(tumour_vst, dsmz_vst_pre_collapsed)
+embedding_post <- cbind(tumour_vst_post, dsmz_vst_post_collapsed)
+plot_labels_pre <- c(
+  rep(params[["tumour_label"]], ncol(tumour_vst)),
+  rep(params[["dsmz_label"]], ncol(dsmz_vst_pre_collapsed))
+)
+plot_labels_post <- c(
+  rep(params[["tumour_label"]], ncol(tumour_vst_post)),
+  rep(params[["dsmz_label"]], ncol(dsmz_vst_post_collapsed))
+)
 embedding_subtitle <- sprintf(
-  "%s patient tumours and %s DSMZ cell-line profiles",
-  figure_count(sum(plot_labels_pre == params[["tumour_label"]])),
-  figure_count(sum(plot_labels_pre == params[["dsmz_label"]]))
+  "%s patient tumours and %s DSMZ cell-line groups",
+  figure_count(ncol(tumour_vst)),
+  figure_count(ncol(dsmz_vst_pre_collapsed))
+)
+if (ncol(tumour_vst) != 68L) {
+  stop(sprintf("[ERROR] RBL plotting path has %d tumour profiles; expected 68 purity-retained tumours", ncol(tumour_vst)))
+}
+if (ncol(dsmz_vst_pre_collapsed) != 9L || ncol(dsmz_vst_post_collapsed) != 9L) {
+  stop(sprintf(
+    "[ERROR] RBL plotting path has %d pre-BC and %d post-BC DSMZ biological groups; expected 9 at both stages",
+    ncol(dsmz_vst_pre_collapsed), ncol(dsmz_vst_post_collapsed)
+  ))
+}
+qc_feature_spaces <- build_feature_spaces(embedding_pre, embedding_post, params[["qc_top_genes"]])
+qc_ids <- qc_feature_spaces$spaces$top3000$ids
+qc_stage_pca <- list(
+  before = compute_stage_pca(embedding_pre, qc_ids),
+  after = compute_stage_pca(embedding_post, qc_ids)
+)
+embedding_footer <- paste(
+  qc_feature_spaces$spaces$top3000$label,
+  " | PCA center=TRUE scale.=FALSE",
+  sprintf(" | UMAP seed=%d metric=cosine n_neighbors=%d min_dist=%.1f",
+          params[["seed"]], min(20L, ncol(embedding_pre) - 1L), 0.3)
+)
+umap_pre_embedding <- compute_feature_space_umap(
+  embedding_pre, qc_ids, params[["seed"]], snakemake@threads,
+  context = "pca_umap_qualitative_pre"
+)
+umap_post_embedding <- compute_feature_space_umap(
+  embedding_post, qc_ids, params[["seed"]], snakemake@threads,
+  context = "pca_umap_qualitative_post"
 )
 
-make_pca_plot(joint_vst_pre, plot_labels_pre, "RBL profiles before ComBat-seq", outputs[["pca_pre_pdf"]], center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
-make_pca_plot(joint_vst_post, plot_labels_post, "RBL profiles after ComBat-seq", outputs[["pca_post_pdf"]], center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
-make_umap(joint_vst_pre, "RBL profiles before ComBat-seq", outputs[["umap_pre_pdf"]], plot_labels_pre, center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
-make_umap(joint_vst_post, "RBL profiles after ComBat-seq", outputs[["umap_post_pdf"]], plot_labels_post, center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
+plot_embedding_figure(
+  list(list(embedding = qc_stage_pca$before)),
+  plot_labels_pre,
+  outputs[["pca_pre_pdf"]],
+  overall_title = "RBL profiles before ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "numeric"
+)
+plot_embedding_figure(
+  list(list(embedding = qc_stage_pca$after)),
+  plot_labels_post,
+  outputs[["pca_post_pdf"]],
+  overall_title = "RBL profiles after ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "numeric"
+)
+plot_embedding_figure(
+  list(list(embedding = umap_pre_embedding)),
+  plot_labels_pre,
+  outputs[["umap_pre_pdf"]],
+  overall_title = "RBL profiles before ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "bare"
+)
+plot_embedding_figure(
+  list(list(embedding = umap_post_embedding)),
+  plot_labels_post,
+  outputs[["umap_post_pdf"]],
+  overall_title = "RBL profiles after ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "bare"
+)
 
 # QC outputs tracked by Snakemake.
 plot_mean_sd(tumour_vst_post, "RBL tumours: post-correction", outputs[["tumour_qc_pdf"]])
-plot_mean_sd(dsmz_vst_post, "DSMZ RBL cell lines: post-correction", outputs[["dsmz_qc_pdf"]])
+plot_mean_sd(dsmz_vst_post_collapsed, "DSMZ RBL cell-line groups: post-correction", outputs[["dsmz_qc_pdf"]])
 
 # Additional dispersion diagnostics.
 plot_dispersion(
@@ -273,10 +410,26 @@ plot_dispersion(
   outputs[["tumour_dispersion_pdf"]],
   max_genes = 10000L
 )
+dsmz_counts_collapsed <- collapse_counts_by_cellline(merged$dsmz_counts)
+dsmz_metadata_collapsed <- collapse_metadata_by_cellline(dsmz_filtered$metadata)
+dsmz_coldata_collapsed <- data.frame(
+  dataset = rep(params[["dsmz_label"]], length(collapsed_celllines)),
+  specimen_type = rep("cell_line", length(collapsed_celllines)),
+  cohort = rep("DSMZ", length(collapsed_celllines)),
+  cell_line = collapsed_celllines,
+  subtype = rep(NA_character_, length(collapsed_celllines)),
+  row.names = collapsed_celllines,
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+stopifnot(
+  identical(colnames(dsmz_counts_collapsed), rownames(dsmz_coldata_collapsed)),
+  identical(colnames(dsmz_counts_collapsed), dsmz_metadata_collapsed$sample_id)
+)
 plot_dispersion(
-  merged$dsmz_counts,
-  coldata[colnames(merged$dsmz_counts), , drop = FALSE],
-  "DSMZ RBL cell lines: raw-count dispersion",
+  dsmz_counts_collapsed,
+  dsmz_coldata_collapsed,
+  "DSMZ RBL cell-line groups: raw-count dispersion",
   outputs[["dsmz_dispersion_pdf"]],
   max_genes = 10000L
 )
@@ -304,8 +457,16 @@ if ("provenance_tsv" %in% names(outputs)) {
       "dsmz_raw_count_sha256",
       "batch_correction_method",
       "normalisation_method",
+      "plotting_population",
+      "pca_center_scale_policy",
+      "paired_feature_space_qc",
+      "umap_seed",
+      "umap_metric",
+      "umap_n_neighbors",
+      "umap_min_dist",
       "tumour_samples",
       "dsmz_samples",
+      "collapsed_dsmz_groups",
       "shared_genes",
       "joint_vst_post_bc_sha256"
     ),
@@ -327,8 +488,16 @@ if ("provenance_tsv" %in% names(outputs)) {
       sha256_file(inputs[["dsmz_count_matrix"]]),
       "sva::ComBat_seq on raw joint counts",
       "DESeq2::vst",
+      "68 purity-retained tumours + 9 DSMZ biological groups for standalone PCA/UMAP figures; 68 tumours + 11 DSMZ libraries preserved in the joint matrices",
+      "prcomp(t(vst_matrix[feature_ids, , drop = FALSE]), center = TRUE, scale. = FALSE)",
+      "top3000 selected once from the pre-ComBat-seq collapsed plotting VST matrix and reused unchanged before and after correction for standalone PCA/UMAP QC",
+      params[["seed"]],
+      "cosine",
+      min(20L, ncol(embedding_pre) - 1L),
+      0.3,
       ncol(merged$tumour_counts),
       ncol(merged$dsmz_counts),
+      ncol(dsmz_vst_post_collapsed),
       nrow(merged$Xc_raw),
       sha256_file(outputs[["joint_vst_post_bc_rds"]])
     ),

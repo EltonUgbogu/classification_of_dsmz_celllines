@@ -208,7 +208,8 @@ saveRDS(dsmz_vst_post, outputs[["dsmz_vst_post_bc_rds"]])
 ## ---------------------------------------------------------------------------
 
 # Plots. Titles and subtitles follow the same pattern as BRCA and RBL so the
-# three cohorts read identically; the underlying computations are unchanged.
+# three cohorts read identically. The standalone qualitative figures reuse the
+# same ordered pre-correction top3000 manifest before and after correction.
 plot_labels_pre <- merged$batch[colnames(joint_vst_pre)]
 plot_labels_post <- merged$batch[colnames(joint_vst_post)]
 embedding_subtitle <- sprintf(
@@ -216,11 +217,63 @@ embedding_subtitle <- sprintf(
   figure_count(sum(plot_labels_pre == params[["tumour_label"]])),
   figure_count(sum(plot_labels_pre == params[["dsmz_label"]]))
 )
+qc_feature_spaces <- build_feature_spaces(joint_vst_pre, joint_vst_post, params[["qc_top_genes"]])
+qc_ids <- qc_feature_spaces$spaces$top3000$ids
+qc_stage_pca <- list(
+  before = compute_stage_pca(joint_vst_pre, qc_ids),
+  after = compute_stage_pca(joint_vst_post, qc_ids)
+)
+embedding_footer <- paste(
+  qc_feature_spaces$spaces$top3000$label,
+  " | PCA center=TRUE scale.=FALSE",
+  sprintf(" | UMAP seed=%d metric=cosine n_neighbors=%d min_dist=%.1f",
+          params[["seed"]], min(20L, ncol(joint_vst_pre) - 1L), 0.3)
+)
+umap_pre_embedding <- compute_feature_space_umap(
+  joint_vst_pre, qc_ids, params[["seed"]], snakemake@threads,
+  context = "pca_umap_qualitative_pre"
+)
+umap_post_embedding <- compute_feature_space_umap(
+  joint_vst_post, qc_ids, params[["seed"]], snakemake@threads,
+  context = "pca_umap_qualitative_post"
+)
 
-make_pca_plot(joint_vst_pre, plot_labels_pre, "NBL profiles before ComBat-seq", outputs[["pca_pre_pdf"]], center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
-make_pca_plot(joint_vst_post, plot_labels_post, "NBL profiles after ComBat-seq", outputs[["pca_post_pdf"]], center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
-make_umap(joint_vst_pre, "NBL profiles before ComBat-seq", outputs[["umap_pre_pdf"]], plot_labels_pre, center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
-make_umap(joint_vst_post, "NBL profiles after ComBat-seq", outputs[["umap_post_pdf"]], plot_labels_post, center = TRUE, scale = FALSE, subtitle = embedding_subtitle)
+plot_embedding_figure(
+  list(list(embedding = qc_stage_pca$before)),
+  plot_labels_pre,
+  outputs[["pca_pre_pdf"]],
+  overall_title = "NBL profiles before ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "numeric"
+)
+plot_embedding_figure(
+  list(list(embedding = qc_stage_pca$after)),
+  plot_labels_post,
+  outputs[["pca_post_pdf"]],
+  overall_title = "NBL profiles after ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "numeric"
+)
+plot_embedding_figure(
+  list(list(embedding = umap_pre_embedding)),
+  plot_labels_pre,
+  outputs[["umap_pre_pdf"]],
+  overall_title = "NBL profiles before ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "bare"
+)
+plot_embedding_figure(
+  list(list(embedding = umap_post_embedding)),
+  plot_labels_post,
+  outputs[["umap_post_pdf"]],
+  overall_title = "NBL profiles after ComBat-seq",
+  overall_subtitle = embedding_subtitle,
+  footer = embedding_footer,
+  scale_style = "bare"
+)
 
 # QC outputs tracked by Snakemake.
 plot_mean_sd(tumour_vst_post, "NBL tumours: post-correction", outputs[["tumour_qc_pdf"]])
@@ -265,6 +318,12 @@ if ("provenance_tsv" %in% names(outputs)) {
       "dsmz_raw_count_sha256",
       "batch_correction_method",
       "normalisation_method",
+      "pca_center_scale_policy",
+      "paired_feature_space_qc",
+      "umap_seed",
+      "umap_metric",
+      "umap_n_neighbors",
+      "umap_min_dist",
       "tumour_samples",
       "dsmz_samples",
       "shared_genes",
@@ -288,6 +347,12 @@ if ("provenance_tsv" %in% names(outputs)) {
       sha256_file(inputs[["dsmz_rds"]]),
       "sva::ComBat_seq on raw joint counts",
       "DESeq2::vst",
+      "prcomp(t(vst_matrix[feature_ids, , drop = FALSE]), center = TRUE, scale. = FALSE)",
+      "top3000 selected once from the pre-ComBat-seq joint VST matrix and reused unchanged before and after correction for standalone PCA/UMAP QC",
+      params[["seed"]],
+      "cosine",
+      min(20L, ncol(joint_vst_pre) - 1L),
+      0.3,
       ncol(merged$tumour_counts),
       ncol(merged$dsmz_counts),
       nrow(merged$Xc_raw),
