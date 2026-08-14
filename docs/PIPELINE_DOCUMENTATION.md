@@ -453,7 +453,8 @@ clustering-method set \(\mathcal{A}_r\):
 \[
 p_{\mathrm{consensus}}(i,t\mid r)
 =
-rac{1}{|\mathcal{A}_r|}
+
+rac{1}{|\mathcal{A}_r|}
 \sum_{a\in\mathcal{A}_r}
 \mathbf{1}
 \left[
@@ -466,7 +467,7 @@ The numerator is the number of eligible clustering formulations in which tumour
 \(t\) belongs to the adaptive tumour neighbourhood of cell line \(i\).
 
 `p_consensus` is a recurrence fraction across the configured clustering
-formulations. 
+formulations.
 
 ### 6.5 Biological Replicate Pooling and Thresholding
 
@@ -476,7 +477,8 @@ measurements. The pooled tumour-wise fraction is:
 \[
 ar p_{s,t,r}
 =
-rac{1}{|U_s|}
+
+rac{1}{|U_s|}
 \sum_{u\in U_s}
 p_{\mathrm{consensus}}(u,t\mid r)
 \]
@@ -571,7 +573,8 @@ Then:
 \[
 J_r(i,j)
 =
-rac{
+
+rac{
 \sum_t b_{i,t,r}b_{j,t,r}
 }{
 \sum_t
@@ -585,7 +588,8 @@ Equivalently:
 \[
 J_r(i,j)
 =
-rac{|N_{i,r}\cap N_{j,r}|}
+
+rac{|N_{i,r}\cap N_{j,r}|}
 {|N_{i,r}\cup N_{j,r}|}
 \]
 
@@ -684,7 +688,8 @@ The edge-recurrence fraction is:
 \[
 f_M(e)
 =
-rac{a_M(e)}{|\mathcal{R}|}
+
+rac{a_M(e)}{|\mathcal{R}|}
 \]
 
 Pearson-derived and Jaccard-derived representation-specific graphs are processed
@@ -698,7 +703,8 @@ For \(|\mathcal{R}|\) active representations, the majority threshold is:
 m
 =
 \left\lfloor
-rac{|\mathcal{R}|}{2}
+
+rac{|\mathcal{R}|}{2}
 
 ight
 floor
@@ -1153,70 +1159,70 @@ The following points were validated on the regenerated outputs (2026-08-14):
 
 ## 14. Glossary
 
-**Active-tumour union:**  
+**Active-tumour union:**
 The pair-specific set of patient tumours selected by at least one of two cell
 lines after the `p_consensus` threshold is applied.
 
-**Biological cell line:**  
+**Biological cell line:**
 A unique cell-line identity after profile-level replicates are combined where
 applicable.
 
-**Consensus clustering:**  
+**Consensus clustering:**
 Resampling-based clustering implemented with ConsensusClusterPlus.
 
-**Edge-recurrence count:**  
+**Edge-recurrence count:**
 The number of active feature-distance representations in which a specific
 cell-line edge is threshold-selected.
 
-**Edge-recurrence fraction:**  
+**Edge-recurrence fraction:**
 The edge-recurrence count divided by the number of active feature-distance
 representations.
 
-**Feature-distance representation:**  
+**Feature-distance representation:**
 A transcriptomic representation defined by a feature-selection method and a
 dissimilarity measure.
 
-**HC/k-means clustering:**  
+**HC/k-means clustering:**
 The workflow branch containing hierarchical clustering and k-means applied in
 expression or PCA-reduced spaces. The term describes the algorithms in that
 branch and does not imply a distinct biological class of clustering.
 
-**HVG residual variance:**  
+**HVG residual variance:**
 A feature-ranking statistic based on residual variation after accounting for the
 mean–variance relationship.
 
-**Jaccard similarity:**  
+**Jaccard similarity:**
 Intersection divided by union after threshold-restricted continuous
 `p_consensus` fractions are converted to binary patient-tumour membership.
 
-**PAM50:**  
+**PAM50:**
 A breast-cancer-specific 50-gene expression signature used for molecular subtype
 annotation.
 
-**Patient-referenced cell-line graph:**  
+**Patient-referenced cell-line graph:**
 A graph whose nodes are biological cell lines and whose edges are selected from
 cell-line similarity values derived from patient tumour-neighbourhood profiles.
 
-**Pearson correlation distance:**  
+**Pearson correlation distance:**
 The dissimilarity \(1-
 ho\), where \(
 ho\) is the Pearson correlation
 coefficient across selected genes.
 
-**`p_consensus`:**  
+**`p_consensus`:**
 A tumour-wise recurrence fraction describing how often a particular
 cell-line–tumour neighbourhood relationship occurs across the configured
 clustering formulations within a fixed feature-distance representation.
 
-**Threshold-restricted continuous `p_consensus` profile:**  
+**Threshold-restricted continuous `p_consensus` profile:**
 The biological-cell-line mean-pooled tumour-wise `p_consensus` profile after
 values below the production threshold are set to zero while qualifying values
 remain continuous.
 
-**Tumour neighbourhood:**  
+**Tumour neighbourhood:**
 The adaptive set of patient tumours associated with a cell line under a
 particular feature-distance representation and clustering formulation.
 
-**VST (Variance-Stabilising Transformation):**  
+**VST (Variance-Stabilising Transformation):**
 A transformation of count data that reduces the dependence of variance on mean
 expression level.
