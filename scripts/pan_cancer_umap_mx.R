@@ -90,6 +90,16 @@ abs_from_root <- function(p) {
   file.path(pipe_root, p)
 }
 
+resolve_mx_gene_list_path <- function(cfg) {
+  mx_topn <- as.integer(cfg$feature_selection$method_topn$MX %||% 500L)
+  file.path(
+    abs_from_root(cfg$paths$unsup_root),
+    "feature_selection_unsupervised",
+    "feature_sets",
+    sprintf("genes_top%d_MX.txt", mx_topn)
+  )
+}
+
 # Create output directory
 outdir <- abs_from_root(opt$outdir)
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
@@ -143,17 +153,7 @@ cat("[INFO] Creating joint MX list...\n")
 mx_lists <- list()
 for (prof in profiles) {
   cfg <- profile_configs[[prof]]
-  mx_path <- cfg$features$mx_final_gene_list
-  if (is.null(mx_path)) {
-    # Try to construct from pattern
-    mx_path <- file.path(
-      abs_from_root(cfg$paths$unsup_root),
-      "feature_selection_unsupervised",
-      sprintf("%s_MX_genes_top500.txt", toupper(cfg$analysis$cancer_type %||% toupper(prof)))
-    )
-  } else {
-    mx_path <- abs_from_root(mx_path)
-  }
+  mx_path <- resolve_mx_gene_list_path(cfg)
 
   if (file.exists(mx_path)) {
     mx_list <- read_lines(mx_path) %>% trimws() %>% .[nzchar(.)]
@@ -538,4 +538,3 @@ dev.off()
 cat(sprintf("  Saved: %s\n", plot_path))
 
 cat("[INFO] Pan-cancer UMAP complete!\n")
-

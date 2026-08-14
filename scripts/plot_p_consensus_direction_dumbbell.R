@@ -217,7 +217,7 @@ p <- ggplot(plot_tbl, aes(x = value_pct, y = feature)) +
     drop = FALSE
   ) +
   labs(
-    x = "Mean consensus-supported neighbourhood fraction (%)",
+    x = "Mean p-consensus fraction across tumour-neighbourhood pairs (%)",
     y = "Feature set"
   ) +
   theme_bw(base_size = 11) +

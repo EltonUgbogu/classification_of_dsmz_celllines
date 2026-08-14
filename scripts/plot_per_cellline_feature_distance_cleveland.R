@@ -302,7 +302,7 @@ if (nrow(thin_cell_lines) > 0) {
 # Cell-line ordering and per-cell-line range calculation
 # ------------------------------------------------------------------------------
 
-# Cell lines are ordered by their strongest consensus-supported fraction, then by
+# Cell lines are ordered by their largest p-consensus fraction, then by
 # the number of directions passing the threshold. The grey range segment spans
 # the minimum and maximum fraction observed across all feature-selection methods
 # and both distance metrics for the same cell line.
@@ -484,12 +484,12 @@ p <- ggplot(plot_tbl, aes(x = x_plot, y = y_plot)) +
   ) +
   scale_alpha_identity() +
   labs(
-    title = "Consensus-supported neighbourhood fraction across feature\u2013distance representations",
+    title = "P-consensus fraction across feature\u2013distance representations",
     subtitle = subtitle_text,
     x = x_lab,
     y = "Cell line",
     caption = paste0(
-      "Grey bar: range of the consensus-supported neighbourhood fraction across all feature-selection methods ",
+      "Grey bar: range of the p-consensus fraction across all feature-selection methods ",
       "and both distance metrics for that cell line. Larger, black-outlined point: winning feature\u2013distance ",
       "representation for that cell line. Small deterministic offsets separate overlapping points."
     )
