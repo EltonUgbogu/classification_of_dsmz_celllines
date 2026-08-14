@@ -1,273 +1,336 @@
 #!/usr/bin/env Rscript
 
-args <- commandArgs(trailingOnly = TRUE)
+# Validate prepared graph-defined DESeq2 inputs before any DESeq2 model fitting.
+# Unit of analysis: prepared count sample and resolved biological cell-line
+# identity. The validator checks interface contracts only and writes numerical
+# count metrics separately from PASS/FAIL checks.
 
-parse_args <- function(x) {
-  out <- list()
-  i <- 1L
-  while (i <= length(x)) {
-    key <- x[[i]]
-    if (!startsWith(key, "--")) {
-      stop("Unexpected positional argument: ", key, call. = FALSE)
-    }
-    key <- sub("^--", "", key)
-    if (i == length(x) || startsWith(x[[i + 1L]], "--")) {
-      out[[key]] <- TRUE
-      i <- i + 1L
-    } else {
-      out[[key]] <- x[[i + 1L]]
-      i <- i + 2L
-    }
-  }
-  out
-}
+suppressPackageStartupMessages({
+  library(optparse)
+  library(data.table)
+})
 
-opts <- parse_args(args)
-`%||%` <- function(x, y) if (is.null(x) || length(x) == 0L || is.na(x) || identical(x, "")) y else x
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0L || is.na(x)) y else x
 
-required <- c(
-  "cohort", "counts", "metadata", "isolate_list", "anchor_list",
-  "anchor_components", "components_list", "node_stats", "anchor_audit",
-  "sample_id_col", "cell_line_col", "component_col", "output"
-)
-missing_args <- setdiff(required, names(opts))
-if (length(missing_args)) {
-  stop("Missing required arguments: ", paste(missing_args, collapse = ", "), call. = FALSE)
-}
-
-cohort <- opts$cohort
-sample_id_col <- opts$sample_id_col
-cell_line_col <- opts$cell_line_col
-component_col <- opts$component_col
-expected_samples <- suppressWarnings(as.integer(opts$expected_samples %||% NA_character_))
-
-checks <- data.frame(
-  cohort = character(),
-  check = character(),
-  status = character(),
-  detail = character(),
-  stringsAsFactors = FALSE
+option_list <- list(
+  make_option("--cohort", type = "character"),
+  make_option("--counts", type = "character"),
+  make_option("--metadata", type = "character"),
+  make_option("--isolate_list", type = "character"),
+  make_option("--anchor_list", type = "character"),
+  make_option("--anchor_components", type = "character"),
+  make_option("--components_list", type = "character"),
+  make_option("--node_stats", type = "character"),
+  make_option("--anchor_audit", type = "character"),
+  make_option("--provenance", type = "character"),
+  make_option("--sample_id_col", type = "character", default = "sample_id"),
+  make_option("--cell_line_col", type = "character", default = "cell_line"),
+  make_option("--component_col", type = "character", default = "component"),
+  make_option("--expected_samples", type = "character", default = ""),
+  make_option("--cell_line_verification_mode", type = "character", default = "source_population_declaration"),
+  make_option("--cell_line_verification_column", type = "character", default = ""),
+  make_option("--accepted_cell_line_values", type = "character", default = "Cell Line"),
+  make_option("--output", type = "character"),
+  make_option("--metrics_output", type = "character")
 )
 
-add_check <- function(name, ok, detail) {
-  checks[nrow(checks) + 1L, ] <<- list(
-    cohort = cohort,
-    check = name,
-    status = if (isTRUE(ok)) "PASS" else "FAIL",
-    detail = as.character(detail)
-  )
-}
+opts <- parse_args(OptionParser(option_list = option_list))
 
-normalise_id <- function(x) {
-  x <- as.character(x)
-  x <- trimws(x)
-  x[!is.na(x) & nzchar(x)]
-}
+checks <- data.frame(check = character(), status = character(), details = character(), stringsAsFactors = FALSE)
+metrics <- data.frame(metric = character(), value = character(), stringsAsFactors = FALSE)
 
-set_detail <- function(a, b, label_a = "staged", label_b = "current") {
-  miss <- setdiff(a, b)
-  extra <- setdiff(b, a)
-  paste0(
-    label_a, "_only=", if (length(miss)) paste(miss, collapse = ",") else "none",
-    "; ", label_b, "_only=", if (length(extra)) paste(extra, collapse = ",") else "none"
-  )
-}
-
-read_csv_list <- function(path) {
-  txt <- if (file.exists(path)) paste(readLines(path, warn = FALSE), collapse = ",") else ""
-  normalise_id(unlist(strsplit(txt, ",", fixed = TRUE), use.names = FALSE))
-}
-
-read_text_list <- function(path) {
-  normalise_id(readLines(path, warn = FALSE))
-}
-
-truthy <- function(x) {
-  tolower(trimws(as.character(x))) %in% c("true", "t", "1", "yes", "y")
-}
-
-file_paths <- c(
-  counts = opts$counts,
-  metadata = opts$metadata,
-  isolate_list = opts$isolate_list,
-  anchor_list = opts$anchor_list,
-  anchor_components = opts$anchor_components,
-  components_list = opts$components_list,
-  node_stats = opts$node_stats,
-  anchor_audit = opts$anchor_audit
-)
-for (nm in names(file_paths)) {
-  add_check(paste0(nm, "_exists"), file.exists(file_paths[[nm]]), file_paths[[nm]])
-}
-
-counts_df <- NULL
-metadata <- NULL
-node_stats <- NULL
-anchor_audit <- NULL
-
-if (file.exists(opts$counts)) {
-  counts_df <- tryCatch(
-    read.delim(opts$counts, check.names = FALSE, stringsAsFactors = FALSE),
-    error = function(e) e
-  )
-  add_check("counts_readable", !inherits(counts_df, "error"), if (inherits(counts_df, "error")) counts_df$message else opts$counts)
-}
-
-if (file.exists(opts$metadata)) {
-  metadata <- tryCatch(
-    read.delim(opts$metadata, check.names = FALSE, stringsAsFactors = FALSE),
-    error = function(e) e
-  )
-  add_check("metadata_readable", !inherits(metadata, "error"), if (inherits(metadata, "error")) metadata$message else opts$metadata)
-}
-
-if (file.exists(opts$node_stats)) {
-  node_stats <- tryCatch(
-    read.delim(opts$node_stats, check.names = FALSE, stringsAsFactors = FALSE),
-    error = function(e) e
-  )
-  add_check("node_stats_readable", !inherits(node_stats, "error"), if (inherits(node_stats, "error")) node_stats$message else opts$node_stats)
-}
-
-if (file.exists(opts$anchor_audit)) {
-  anchor_audit <- tryCatch(
-    read.delim(opts$anchor_audit, check.names = FALSE, stringsAsFactors = FALSE),
-    error = function(e) e
-  )
-  add_check("anchor_audit_readable", !inherits(anchor_audit, "error"), if (inherits(anchor_audit, "error")) anchor_audit$message else opts$anchor_audit)
-}
-
-sample_ids <- character()
-if (is.data.frame(counts_df)) {
-  add_check("counts_has_gene_identifier_column", ncol(counts_df) >= 2L, paste("columns", ncol(counts_df)))
-  genes <- normalise_id(counts_df[[1L]])
-  add_check("gene_identifiers_present", length(genes) == nrow(counts_df), paste("genes", length(genes), "rows", nrow(counts_df)))
-  add_check("gene_identifiers_unique", !anyDuplicated(genes), paste("duplicates", sum(duplicated(genes))))
-  sample_ids <- colnames(counts_df)[-1L]
-  numeric_counts <- suppressWarnings(as.matrix(data.frame(lapply(counts_df[-1L], as.numeric), check.names = FALSE)))
-  na_count <- sum(is.na(numeric_counts))
-  finite_count <- sum(is.finite(numeric_counts))
-  total_count <- length(numeric_counts)
-  negative_count <- sum(numeric_counts < 0, na.rm = TRUE)
-  fractional_count <- sum(abs(numeric_counts - round(numeric_counts)) > 1e-8, na.rm = TRUE)
-  rng <- range(numeric_counts, na.rm = TRUE)
-  if (!all(is.finite(rng))) {
-    rng <- c(NA_real_, NA_real_)
-  }
-  add_check("counts_orientation_genes_x_samples", length(sample_ids) > 0L && nrow(counts_df) > length(sample_ids),
-            paste("genes", nrow(counts_df), "samples", length(sample_ids)))
-  if (!is.na(expected_samples)) {
-    add_check("counts_expected_sample_count", length(sample_ids) == expected_samples,
-              paste("observed", length(sample_ids), "expected", expected_samples))
-  }
-  add_check("counts_no_missing_values", na_count == 0L, paste("NA_values", na_count))
-  add_check("counts_no_nonfinite_values", finite_count == total_count, paste("finite", finite_count, "total", total_count))
-  add_check("counts_no_negative_values", negative_count == 0L, paste("negative_values", negative_count))
-  add_check("counts_integer_like", fractional_count == 0L, paste("fractional_values", fractional_count))
-  add_check("counts_value_range", TRUE, paste(rng, collapse = " to "))
-}
-
-if (is.data.frame(metadata)) {
-  metadata_cols <- colnames(metadata)
-  add_check("metadata_has_sample_id_col", sample_id_col %in% metadata_cols, sample_id_col)
-  add_check("metadata_has_cell_line_col", cell_line_col %in% metadata_cols, cell_line_col)
-  add_check("metadata_has_component_col", component_col %in% metadata_cols, component_col)
-  add_check("metadata_has_is_isolate_col", "is_isolate" %in% metadata_cols, "is_isolate")
-  if (sample_id_col %in% metadata_cols && length(sample_ids)) {
-    meta_samples <- normalise_id(metadata[[sample_id_col]])
-    add_check("sample_ids_match_metadata", setequal(sample_ids, meta_samples),
-              set_detail(sample_ids, meta_samples, "counts", "metadata"))
-  }
-}
-
-if (is.data.frame(metadata) && is.data.frame(node_stats) &&
-    all(c(cell_line_col, component_col, "is_isolate") %in% colnames(metadata)) &&
-    all(c("cell_line", "component", "is_isolate") %in% colnames(node_stats))) {
-  meta_map <- metadata[, c(cell_line_col, component_col, "is_isolate"), drop = FALSE]
-  colnames(meta_map) <- c("cell_line", "component", "is_isolate")
-  meta_map$cell_line <- as.character(meta_map$cell_line)
-  meta_map$component <- as.character(meta_map$component)
-  meta_map$is_isolate_norm <- truthy(meta_map$is_isolate)
-  node_map <- node_stats[, c("cell_line", "component", "is_isolate"), drop = FALSE]
-  node_map$cell_line <- as.character(node_map$cell_line)
-  node_map$component <- as.character(node_map$component)
-  node_map$is_isolate_norm <- truthy(node_map$is_isolate)
-  merged <- merge(meta_map, node_map, by = "cell_line", all.x = TRUE, suffixes = c("_metadata", "_node"))
-  unmapped <- merged$cell_line[is.na(merged$component_node)]
-  component_mismatch <- merged$cell_line[!is.na(merged$component_node) & merged$component_metadata != merged$component_node]
-  isolate_mismatch <- merged$cell_line[!is.na(merged$is_isolate_norm_node) & merged$is_isolate_norm_metadata != merged$is_isolate_norm_node]
-  add_check("metadata_cell_lines_map_to_current_graph", length(unmapped) == 0L,
-            if (length(unmapped)) paste(unique(unmapped), collapse = ",") else "all metadata cell lines found")
-  add_check("metadata_components_match_current_graph", length(component_mismatch) == 0L,
-            if (length(component_mismatch)) paste(unique(component_mismatch), collapse = ",") else "metadata components current")
-  add_check("metadata_isolate_flags_match_current_graph", length(isolate_mismatch) == 0L,
-            if (length(isolate_mismatch)) paste(unique(isolate_mismatch), collapse = ",") else "metadata isolate flags current")
-}
-
-if (file.exists(opts$isolate_list) && is.data.frame(node_stats) &&
-    all(c("cell_line", "is_isolate") %in% colnames(node_stats))) {
-  staged_isolates <- sort(unique(read_csv_list(opts$isolate_list)))
-  current_isolates <- sort(unique(normalise_id(node_stats$cell_line[truthy(node_stats$is_isolate)])))
-  add_check("isolate_list_matches_current_graph", setequal(staged_isolates, current_isolates),
-            set_detail(staged_isolates, current_isolates, "staged", "current"))
-}
-
-if (file.exists(opts$components_list) && is.data.frame(node_stats) && component_col %in% colnames(node_stats)) {
-  staged_components <- sort(unique(read_text_list(opts$components_list)))
-  current_components_raw <- suppressWarnings(as.integer(as.character(node_stats[[component_col]])))
-  tab <- table(current_components_raw[!is.na(current_components_raw) & current_components_raw >= 0L])
-  current_components <- sort(names(tab[tab >= 2L]))
-  add_check("components_list_matches_current_graph", setequal(staged_components, current_components),
-            set_detail(staged_components, current_components, "staged", "current"))
-}
-
-if (file.exists(opts$anchor_list) && file.exists(opts$anchor_components) && is.data.frame(anchor_audit)) {
-  staged_anchors <- sort(unique(read_csv_list(opts$anchor_list)))
-  staged_anchor_comp <- tryCatch(
-    read.delim(opts$anchor_components, check.names = FALSE, stringsAsFactors = FALSE),
-    error = function(e) e
-  )
-  add_check("anchor_components_readable", !inherits(staged_anchor_comp, "error"),
-            if (inherits(staged_anchor_comp, "error")) staged_anchor_comp$message else opts$anchor_components)
-  selected <- rep(FALSE, nrow(anchor_audit))
-  if ("anchor_selected" %in% colnames(anchor_audit)) {
-    selected <- truthy(anchor_audit$anchor_selected)
-  } else {
-    if ("most_connected_selected" %in% colnames(anchor_audit)) {
-      selected <- selected | truthy(anchor_audit$most_connected_selected)
-    }
-    if ("canonical_bridge_selected" %in% colnames(anchor_audit)) {
-      selected <- selected | truthy(anchor_audit$canonical_bridge_selected)
-    }
-  }
-  if (all(c("node_id", "component_id") %in% colnames(anchor_audit))) {
-    current_anchor_comp <- unique(data.frame(
-      anchor = as.character(anchor_audit$node_id[selected]),
-      component = as.character(anchor_audit$component_id[selected]),
+add_check <- function(name, ok, details) {
+  checks <<- rbind(
+    checks,
+    data.frame(
+      check = name,
+      status = if (isTRUE(ok)) "PASS" else "FAIL",
+      details = as.character(details %||% ""),
       stringsAsFactors = FALSE
-    ))
-    current_anchors <- sort(unique(normalise_id(current_anchor_comp$anchor)))
-    add_check("anchor_list_matches_current_graph", setequal(staged_anchors, current_anchors),
-              set_detail(staged_anchors, current_anchors, "staged", "current"))
-    if (is.data.frame(staged_anchor_comp) && all(c("anchor", "component") %in% colnames(staged_anchor_comp))) {
-      staged_pairs <- sort(unique(paste(as.character(staged_anchor_comp$anchor), as.character(staged_anchor_comp$component), sep = "::")))
-      current_pairs <- sort(unique(paste(current_anchor_comp$anchor, current_anchor_comp$component, sep = "::")))
-      add_check("anchor_components_match_current_graph", setequal(staged_pairs, current_pairs),
-                set_detail(staged_pairs, current_pairs, "staged", "current"))
-    } else if (is.data.frame(staged_anchor_comp)) {
-      add_check("anchor_components_has_required_columns", FALSE, paste(colnames(staged_anchor_comp), collapse = ","))
-    }
-  } else {
-    add_check("anchor_audit_has_required_columns", FALSE, paste(colnames(anchor_audit), collapse = ","))
+    )
+  )
+}
+
+add_metric <- function(name, value) {
+  metrics <<- rbind(
+    metrics,
+    data.frame(metric = name, value = as.character(value), stringsAsFactors = FALSE)
+  )
+}
+
+canonicalise_cell_line_identifier <- function(value) {
+  value <- toupper(trimws(as.character(value)))
+  gsub("[^A-Z0-9]+", "", value)
+}
+
+truthy <- function(value) {
+  toupper(trimws(as.character(value))) %in% c("TRUE", "T", "1", "YES", "Y")
+}
+
+read_required_table <- function(path, label) {
+  if (is.null(path) || !file.exists(path)) {
+    add_check(paste0(label, "_exists"), FALSE, path %||% "")
+    return(NULL)
+  }
+  table <- tryCatch(
+    fread(path, sep = "\t", data.table = FALSE, check.names = FALSE),
+    error = function(error) error
+  )
+  add_check(paste0(label, "_readable"), !inherits(table, "error"),
+            if (inherits(table, "error")) table$message else path)
+  if (inherits(table, "error")) NULL else table
+}
+
+read_text_list <- function(path, sep = "\n") {
+  if (!file.exists(path)) return(character(0))
+  text <- paste(readLines(path, warn = FALSE), collapse = sep)
+  values <- unique(trimws(unlist(strsplit(text, "[,\n\r]+"))))
+  values[nzchar(values)]
+}
+
+require_columns <- function(table, columns, check_name) {
+  missing <- setdiff(columns, names(table))
+  add_check(check_name, length(missing) == 0L,
+            if (length(missing)) paste(missing, collapse = ",") else paste(columns, collapse = ","))
+  length(missing) == 0L
+}
+
+set_detail <- function(left, right, left_name, right_name) {
+  paste0(
+    "missing_from_", left_name, "=",
+    paste(setdiff(right, left), collapse = ","),
+    "; missing_from_", right_name, "=",
+    paste(setdiff(left, right), collapse = ",")
+  )
+}
+
+counts <- read_required_table(opts$counts, "counts")
+metadata <- read_required_table(opts$metadata, "metadata")
+node_stats <- read_required_table(opts$node_stats, "node_stats")
+anchor_audit <- read_required_table(opts$anchor_audit, "anchor_audit")
+provenance <- read_required_table(opts$provenance, "preparation_provenance")
+
+count_sample_ids <- character()
+if (is.data.frame(counts)) {
+  add_check("counts_has_one_gene_identifier_column", ncol(counts) >= 2L && names(counts)[1L] == "gene_id",
+            paste(names(counts)[seq_len(min(ncol(counts), 4L))], collapse = ","))
+  if (ncol(counts) >= 2L) {
+    count_sample_ids <- names(counts)[-1L]
+    add_check("count_sample_identifiers_present",
+              all(!is.na(count_sample_ids)) && all(nzchar(trimws(count_sample_ids))),
+              paste(length(count_sample_ids), "count sample columns"))
+    add_check("count_sample_identifiers_unique",
+              anyDuplicated(count_sample_ids) == 0L,
+              paste("duplicates", paste(unique(count_sample_ids[duplicated(count_sample_ids)]), collapse = ",")))
+    gene_ids <- as.character(counts[[1L]])
+    add_check("gene_identifiers_present",
+              all(!is.na(gene_ids)) && all(nzchar(trimws(gene_ids))),
+              paste("genes", length(gene_ids)))
+    add_check("gene_identifiers_unique",
+              anyDuplicated(gene_ids) == 0L,
+              paste("duplicates", sum(duplicated(gene_ids))))
+    count_matrix <- as.matrix(counts[, -1L, drop = FALSE])
+    suppressWarnings(storage.mode(count_matrix) <- "numeric")
+    add_check("counts_numeric", !any(is.na(count_matrix)), "all count columns coercible to numeric")
+    add_check("counts_finite", all(is.finite(count_matrix)), "finite count values")
+    add_check("counts_non_negative", all(count_matrix >= 0), "non-negative count values")
+    add_check("counts_integer_valued", all(abs(count_matrix - round(count_matrix)) <= 1e-8),
+              "integer-valued count values")
+    add_metric("minimum_count", suppressWarnings(min(count_matrix, na.rm = TRUE)))
+    add_metric("maximum_count", suppressWarnings(max(count_matrix, na.rm = TRUE)))
+    add_metric("number_of_genes", nrow(counts))
+    add_metric("number_of_samples", length(count_sample_ids))
   }
 }
 
-dir.create(dirname(opts$output), showWarnings = FALSE, recursive = TRUE)
-write.table(checks, opts$output, sep = "\t", quote = FALSE, row.names = FALSE)
-
-failures <- checks[checks$status != "PASS", , drop = FALSE]
-if (nrow(failures)) {
-  message("Staged DESeq2 validation completed with ", nrow(failures), " failed check(s): ", opts$output)
-} else {
-  message("Staged DESeq2 validation passed: ", opts$output)
+metadata_sample_ids <- character()
+if (is.data.frame(metadata)) {
+  if (require_columns(metadata, c(opts$sample_id_col, opts$cell_line_col, opts$component_col, "is_isolate"),
+                      "metadata_has_required_columns")) {
+    metadata_sample_ids <- trimws(as.character(metadata[[opts$sample_id_col]]))
+    add_check("metadata_sample_identifiers_present",
+              all(!is.na(metadata_sample_ids)) && all(nzchar(metadata_sample_ids)),
+              paste(length(metadata_sample_ids), "metadata samples"))
+    add_check("metadata_sample_identifiers_unique",
+              anyDuplicated(metadata_sample_ids) == 0L,
+              paste("duplicates", paste(unique(metadata_sample_ids[duplicated(metadata_sample_ids)]), collapse = ",")))
+    if (length(count_sample_ids) > 0L && anyDuplicated(count_sample_ids) == 0L &&
+        anyDuplicated(metadata_sample_ids) == 0L) {
+      add_check("count_metadata_sample_sets_equal",
+                setequal(count_sample_ids, metadata_sample_ids),
+                set_detail(count_sample_ids, metadata_sample_ids, "counts", "metadata"))
+    }
+    if (nzchar(opts$expected_samples)) {
+      expected_samples <- suppressWarnings(as.integer(opts$expected_samples))
+      add_check("counts_expected_sample_count",
+                !is.na(expected_samples) && length(count_sample_ids) == expected_samples,
+                paste("observed", length(count_sample_ids), "expected", expected_samples))
+    }
+  }
 }
+
+node_map <- NULL
+if (is.data.frame(node_stats) &&
+    require_columns(node_stats, c("cell_line", "component", "is_isolate"), "node_stats_has_required_columns")) {
+  graph_cell_lines <- trimws(as.character(node_stats$cell_line))
+  node_map <- unique(data.frame(
+    cell_line = graph_cell_lines,
+    component = trimws(as.character(node_stats$component)),
+    is_isolate = truthy(node_stats$is_isolate),
+    stringsAsFactors = FALSE
+  ))
+  conflicts <- aggregate(
+    paste(component, is_isolate, sep = "::") ~ cell_line,
+    node_map,
+    function(values) length(unique(values))
+  )
+  names(conflicts) <- c("cell_line", "n_assignments")
+  add_check("graph_mapping_unique_component_and_isolate_status",
+            all(conflicts$n_assignments == 1L),
+            paste(conflicts$cell_line[conflicts$n_assignments > 1L], collapse = ","))
+}
+
+if (is.data.frame(metadata) && !is.null(node_map) &&
+    all(c(opts$cell_line_col, opts$component_col, "is_isolate") %in% names(metadata))) {
+  metadata_cell_lines <- trimws(as.character(metadata[[opts$cell_line_col]]))
+  graph_cell_lines <- trimws(as.character(node_map$cell_line))
+  metadata_canonical <- canonicalise_cell_line_identifier(metadata_cell_lines)
+  graph_canonical <- canonicalise_cell_line_identifier(graph_cell_lines)
+  add_check("graph_cell_lines_missing_from_staged_metadata",
+            length(setdiff(unique(graph_canonical), unique(metadata_canonical))) == 0L,
+            paste(setdiff(unique(graph_canonical), unique(metadata_canonical)), collapse = ","))
+  add_check("staged_metadata_cell_lines_missing_from_graph",
+            length(setdiff(unique(metadata_canonical), unique(graph_canonical))) == 0L,
+            paste(setdiff(unique(metadata_canonical), unique(graph_canonical)), collapse = ","))
+
+  metadata_map <- unique(data.frame(
+    cell_line = metadata_cell_lines,
+    component = trimws(as.character(metadata[[opts$component_col]])),
+    is_isolate = truthy(metadata$is_isolate),
+    stringsAsFactors = FALSE
+  ))
+  merged <- merge(metadata_map, node_map, by = "cell_line", all.x = TRUE, suffixes = c("_metadata", "_graph"))
+  add_check("metadata_cell_lines_map_to_current_graph",
+            !any(is.na(merged$component_graph)),
+            paste(unique(merged$cell_line[is.na(merged$component_graph)]), collapse = ","))
+  add_check("metadata_components_match_current_graph",
+            all(merged$component_metadata == merged$component_graph, na.rm = TRUE),
+            paste(unique(merged$cell_line[merged$component_metadata != merged$component_graph]), collapse = ","))
+  add_check("metadata_isolate_flags_match_current_graph",
+            all(merged$is_isolate_metadata == merged$is_isolate_graph, na.rm = TRUE),
+            paste(unique(merged$cell_line[merged$is_isolate_metadata != merged$is_isolate_graph]), collapse = ","))
+
+  component_cell_lines <- unique(
+    node_map[
+      !node_map$is_isolate & !node_map$component %in% c("", "NA", "-1"),
+      c("component", "cell_line")
+    ]
+  )
+  if (nrow(component_cell_lines) == 0L) {
+    eligible_components <- character(0)
+  } else {
+    component_counts <- aggregate(
+      cell_line ~ component,
+      component_cell_lines,
+      function(values) length(unique(values))
+    )
+    names(component_counts) <- c("component", "n_cell_lines")
+    eligible_components <- sort(component_counts$component[component_counts$n_cell_lines >= 2L])
+  }
+  staged_components <- sort(read_text_list(opts$components_list))
+  add_check("component_eligibility_uses_unique_biological_cell_lines",
+            setequal(staged_components, eligible_components),
+            set_detail(staged_components, eligible_components, "staged_components", "graph_eligible_components"))
+}
+
+if (is.data.frame(provenance) && require_columns(provenance, c("field", "value"), "provenance_has_required_columns")) {
+  provenance_values <- setNames(as.character(provenance$value), as.character(provenance$field))
+  add_check("raw_count_source_kind_declared",
+            identical(provenance_values[["source_count_kind"]], "raw_gene_level_counts"),
+            provenance_values[["source_count_kind"]] %||% "")
+  add_check("cell_line_only_provenance_established",
+            identical(provenance_values[["sample_population"]], "cell_line_only"),
+            provenance_values[["sample_population"]] %||% "")
+  add_check("value_transformation_subset_and_reorder_only",
+            identical(provenance_values[["value_transformation"]], "subset_and_reorder_only"),
+            provenance_values[["value_transformation"]] %||% "")
+  add_check("normalisation_not_applied",
+            identical(provenance_values[["normalisation_applied"]], "FALSE"),
+            provenance_values[["normalisation_applied"]] %||% "")
+  add_check("aggregation_not_applied",
+            identical(provenance_values[["aggregation_applied"]], "FALSE"),
+            provenance_values[["aggregation_applied"]] %||% "")
+  add_check("value_preservation_check_passed",
+            identical(provenance_values[["value_preservation_check"]], "prepared_values_identical_to_selected_source_values"),
+            provenance_values[["value_preservation_check"]] %||% "")
+}
+
+if (opts$cell_line_verification_mode == "metadata_column" && is.data.frame(metadata)) {
+  verification_column <- opts$cell_line_verification_column
+  accepted_values <- trimws(unlist(strsplit(opts$accepted_cell_line_values, ",")))
+  if (require_columns(metadata, verification_column, "metadata_has_cell_line_verification_column")) {
+    observed <- trimws(as.character(metadata[[verification_column]]))
+    add_check("metadata_cell_line_verification_values_accepted",
+              all(observed %in% accepted_values),
+              paste(unique(observed[!(observed %in% accepted_values)]), collapse = ","))
+  }
+}
+
+staged_isolates <- read_text_list(opts$isolate_list, sep = ",")
+staged_anchors <- read_text_list(opts$anchor_list, sep = ",")
+has_graph_derived_contrasts <- length(staged_isolates) > 0L || length(staged_anchors) > 0L
+add_check("graph_derived_contrasts_nonempty",
+          has_graph_derived_contrasts,
+          if (has_graph_derived_contrasts) {
+            paste("n_isolates", length(staged_isolates), "n_anchors", length(staged_anchors))
+          } else {
+            "No isolate or anchor contrasts were derived for this cancer type. This is a methodological state requiring review."
+          })
+
+if (is.data.frame(metadata) && opts$cell_line_col %in% names(metadata)) {
+  prepared_cell_lines <- unique(trimws(as.character(metadata[[opts$cell_line_col]])))
+  add_check("isolate_list_members_present_in_prepared_metadata",
+            all(staged_isolates %in% prepared_cell_lines),
+            paste(setdiff(staged_isolates, prepared_cell_lines), collapse = ","))
+  add_check("anchor_list_members_present_in_prepared_metadata",
+            all(staged_anchors %in% prepared_cell_lines),
+            paste(setdiff(staged_anchors, prepared_cell_lines), collapse = ","))
+}
+
+if (length(staged_anchors) > 0L && is.data.frame(anchor_audit) && !is.null(node_map)) {
+  anchor_components <- read_required_table(opts$anchor_components, "anchor_components")
+  if (is.data.frame(anchor_components) &&
+      require_columns(anchor_components, c("anchor", "component"), "anchor_components_has_required_columns") &&
+      require_columns(anchor_audit, c("node_id", "component_id", "anchor_selected"), "anchor_audit_has_required_columns")) {
+    anchor_components$anchor <- trimws(as.character(anchor_components$anchor))
+    anchor_components$component <- trimws(as.character(anchor_components$component))
+    selected_audit <- anchor_audit[truthy(anchor_audit$anchor_selected), , drop = FALSE]
+    selected_audit$node_id <- trimws(as.character(selected_audit$node_id))
+    selected_audit$component_id <- trimws(as.character(selected_audit$component_id))
+    add_check("anchor_list_matches_current_anchor_audit",
+              setequal(staged_anchors, selected_audit$node_id),
+              set_detail(staged_anchors, selected_audit$node_id, "staged_anchor_list", "selected_anchor_audit"))
+    merged_anchor <- merge(anchor_components, selected_audit, by.x = "anchor", by.y = "node_id", all.x = TRUE)
+    add_check("anchor_component_membership_matches_graph_statistics",
+              all(merged_anchor$component == merged_anchor$component_id, na.rm = TRUE),
+              paste(merged_anchor$anchor[merged_anchor$component != merged_anchor$component_id], collapse = ","))
+  }
+}
+
+fwrite(checks, opts$output, sep = "\t")
+fwrite(metrics, opts$metrics_output, sep = "\t")
+
+failures <- checks[checks$status == "FAIL", , drop = FALSE]
+if (nrow(failures) > 0L) {
+  apply(
+    failures,
+    1,
+    function(row) {
+      message("[VALIDATION FAIL] ", row[["check"]], ": ", row[["details"]])
+    }
+  )
+  message(sprintf("[VALIDATION FAIL] %d failed checks", nrow(failures)))
+  quit(save = "no", status = 1L)
+}
+
+message(sprintf("[DESeq2 validation] PASS cohort=%s checks=%d", opts$cohort, nrow(checks)))

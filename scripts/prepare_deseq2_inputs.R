@@ -1,263 +1,359 @@
 #!/usr/bin/env Rscript
 
-# ============================================================
-# Prepare DESeq2 inputs: extract counts and metadata per disease
-# ============================================================
-#
-# This script:
-# 1) Reads an explicitly configured disease-specific DSMZ raw-count object
-# 2) Filters to disease-specific cell lines (from node stats)
-# 3) Creates metadata with sample_id, cell_line columns
-# 4) Writes counts TSV and metadata TSV for DESeq2
-#
-# Usage:
-# Rscript scripts/prepare_deseq2_inputs.R \
-#   --profile brca \
-#   --dsmz_counts data/brca/dsmz_brca_counts.rds \
-#   --dsmz_meta data/dsmz/DSMZ_metadata.csv \
-#   --node_stats results/unsupervised/brca/tumour_neighbourhoods/final_consensus_all/plots/patient_referenced_resolved_cell_line_neighbourhood_graph_node_stats.tsv \
-#   --outdir results/unsupervised/brca/deseq2_inputs
-#
-# ============================================================
+# Prepare graph-defined, cancer-type-specific DESeq2 inputs.
+# Unit of analysis: source count profile mapped to one resolved-graph biological
+# cell line. Transformation: source counts + source metadata + analytical graph
+# node statistics -> prepared count matrix, component-annotated metadata, sample
+# mapping, and raw-count provenance.
 
 suppressPackageStartupMessages({
   library(optparse)
   library(data.table)
-  library(dplyr)
-  library(readr)
 })
 
-# -----------------------------------------------------------------------------
-# Cell Line Canonicalization Function
-# -----------------------------------------------------------------------------
-# This function normalizes cell line names by:
-#   - Converting to uppercase
-#   - Removing all non-alphanumeric characters (underscores, hyphens, spaces, etc.)
-#
-# This handles naming inconsistencies like:
-#   - LAN_5, LAN-5, LAN5 → all become LAN5
-#   - CHP_126, CHP-126, CHP126 → all become CHP126
-#
-# Parameters:
-#   x: Character vector of cell line names
-#
-# Returns:
-#   Character vector of canonicalized names
-
-canon_cl <- function(x) {
-  x <- toupper(as.character(x))
-  x <- gsub("[^A-Z0-9]", "", x)   # remove underscores, hyphens, spaces, etc.
-  x
-}
-
-opt_list <- list(
-  make_option("--profile", type="character", help="Profile name: brca, nbl, or rbl"),
-  make_option("--dsmz_counts", type="character", help="Required path to a validated disease-specific DSMZ raw-count RDS/TSV"),
-  make_option("--dsmz_meta", type="character", default="data/dsmz/DSMZ_metadata.csv", help="Path to DSMZ metadata CSV"),
-  make_option("--node_stats", type="character", help="Path to node stats TSV with cell_line column"),
-  make_option("--outdir", type="character", help="Output directory for counts.tsv and metadata.tsv")
+option_list <- list(
+  make_option("--profile", type = "character"),
+  make_option("--dsmz_counts", type = "character"),
+  make_option("--dsmz_meta", type = "character"),
+  make_option("--node_stats", type = "character"),
+  make_option("--outdir", type = "character"),
+  make_option("--source_count_kind", type = "character", default = "raw_gene_level_counts"),
+  make_option("--source_sample_id_col", type = "character", default = "sample_id"),
+  make_option("--source_cell_line_col", type = "character", default = "cell_line"),
+  make_option("--sample_population", type = "character", default = "cell_line_only"),
+  make_option("--cell_line_verification_mode", type = "character", default = "source_population_declaration"),
+  make_option("--cell_line_verification_column", type = "character", default = ""),
+  make_option("--accepted_cell_line_values", type = "character", default = "Cell Line"),
+  make_option("--declared_population", type = "character", default = "cell_line_only")
 )
 
-opt <- parse_args(OptionParser(option_list = opt_list))
-if (is.null(opt$dsmz_counts) || !nzchar(opt$dsmz_counts)) {
-  stop("--dsmz_counts is required; configure a validated disease-specific DSMZ raw-count input")
+opt <- parse_args(OptionParser(option_list = option_list))
+
+required_options <- c("profile", "dsmz_counts", "dsmz_meta", "node_stats", "outdir")
+for (option_name in required_options) {
+  value <- opt[[option_name]]
+  if (is.null(value) || is.na(value) || !nzchar(trimws(value))) {
+    stop(sprintf("[DESeq2 preparation] --%s is required", option_name), call. = FALSE)
+  }
+}
+if (!identical(opt$source_count_kind, "raw_gene_level_counts")) {
+  stop("[DESeq2 preparation] source_count_kind must be raw_gene_level_counts for DESeq2 Wald inference",
+       call. = FALSE)
 }
 
-DSMZ_RAW_COUNT_ERROR <- paste(
-  "Configured DSMZ input is not a raw integer count matrix.",
-  "Do not use transformed VST/log expression for batch-correction input."
-)
+dir.create(opt$outdir, recursive = TRUE, showWarnings = FALSE)
 
-stop_invalid_dsmz_counts <- function(detail) {
-  stop(sprintf("%s %s", DSMZ_RAW_COUNT_ERROR, detail), call. = FALSE)
+canonicalise_cell_line_identifier <- function(value) {
+  value <- toupper(trimws(as.character(value)))
+  gsub("[^A-Z0-9]+", "", value)
 }
 
-read_dsmz_count_matrix <- function(path) {
-  if (!file.exists(path)) {
-    stop_invalid_dsmz_counts(sprintf("Configured file does not exist: %s.", path))
+require_columns <- function(table, columns, table_name) {
+  missing <- setdiff(columns, names(table))
+  if (length(missing) > 0L) {
+    stop(sprintf(
+      "[DESeq2 preparation] %s is missing required column(s): %s",
+      table_name,
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
   }
-  ext <- tolower(tools::file_ext(path))
-  obj <- tryCatch(
-    if (ext == "rds") {
-      readRDS(path)
-    } else if (ext %in% c("tsv", "txt")) {
-      utils::read.delim(path, check.names = FALSE, stringsAsFactors = FALSE)
-    } else {
-      stop("unsupported extension")
-    },
-    error = function(e) stop_invalid_dsmz_counts(sprintf(
-      "Could not read %s: %s.",
-      path,
-      conditionMessage(e)
-    ))
-  )
-  if (!(is.matrix(obj) || is.data.frame(obj))) {
-    stop_invalid_dsmz_counts("Expected matrix/data.frame-like input.")
-  }
-
-  if (is.data.frame(obj) && "gene_id" %in% colnames(obj)) {
-    gene_ids <- as.character(obj$gene_id)
-    count_df <- obj[, setdiff(colnames(obj), "gene_id"), drop = FALSE]
-  } else if (
-    is.data.frame(obj) &&
-    all(c("Ensembl_ID", "gene_name") %in% colnames(obj))
-  ) {
-    gene_ids <- if ("Ensembl_ID_with_version" %in% colnames(obj)) {
-      as.character(obj$Ensembl_ID_with_version)
-    } else {
-      as.character(obj$Ensembl_ID)
-    }
-    annotation <- c("Ensembl_ID", "gene_name", "Ensembl_ID_with_version")
-    count_df <- obj[, setdiff(colnames(obj), annotation), drop = FALSE]
-  } else {
-    gene_ids <- rownames(obj)
-    count_df <- as.data.frame(obj, check.names = FALSE)
-  }
-
-  if (
-    is.null(gene_ids) ||
-    anyNA(gene_ids) ||
-    any(!nzchar(gene_ids)) ||
-    anyDuplicated(gene_ids) ||
-    anyDuplicated(colnames(count_df))
-  ) {
-    stop_invalid_dsmz_counts("Missing or duplicated gene/sample identifiers were detected.")
-  }
-  if (!ncol(count_df) || !all(vapply(count_df, is.numeric, logical(1)))) {
-    stop_invalid_dsmz_counts("All sample columns must be numeric.")
-  }
-  counts <- as.matrix(count_df)
-  rownames(counts) <- gene_ids
-  storage.mode(counts) <- "double"
-  if (anyNA(counts) || any(!is.finite(counts))) {
-    stop_invalid_dsmz_counts("NA or non-finite values were detected.")
-  }
-  if (any(counts < 0)) stop_invalid_dsmz_counts("Negative values were detected.")
-  if (any(abs(counts - round(counts)) > 1e-8)) {
-    stop_invalid_dsmz_counts("Non-integer values were detected.")
-  }
-  counts
 }
 
-# Read node stats to get cell lines for this disease
-node_stats <- read_tsv(opt$node_stats, show_col_types = FALSE)
-target_cell_lines <- unique(node_stats$cell_line)
-target_canon <- canon_cl(target_cell_lines)
-message(sprintf("[INFO] Found %d cell lines for %s", length(target_cell_lines), opt$profile))
-
-# Read validated disease-specific DSMZ counts.
-counts_mat <- read_dsmz_count_matrix(opt$dsmz_counts)
-counts_df <- as.data.frame(counts_mat, check.names = FALSE)
-counts_df <- data.frame(gene_id = rownames(counts_mat), counts_df, check.names = FALSE)
-message(sprintf("[INFO] DSMZ counts: %d genes, %d samples", nrow(counts_df), ncol(counts_df) - 1))
-
-# Read DSMZ metadata
-meta_df <- read_csv(opt$dsmz_meta, show_col_types = FALSE)
-message(sprintf("[INFO] DSMZ metadata: %d rows", nrow(meta_df)))
-
-# Normalize cell line names in metadata (handle variations like CHP-126 vs CHP_126)
-# The metadata has both Cell_Line and DSMZ_Cell_line_norm columns
-# We create both a "clean" version (preferring normalized) and canonical versions
-meta_df <- meta_df %>%
-  mutate(
-    cell_line_clean = ifelse(!is.na(DSMZ_Cell_line_norm) & DSMZ_Cell_line_norm != "", 
-                             DSMZ_Cell_line_norm, 
-                             Cell_Line),
-    cell_line_canon = canon_cl(cell_line_clean),
-    Cell_Line_canon = canon_cl(Cell_Line)
-  )
-
-# Find matching samples using canonicalized names
-# This handles naming inconsistencies like LAN_5 vs LAN5 vs LAN-5
-matched_samples <- character()
-matched_cell_lines <- character()
-
-for (i in seq_along(target_cell_lines)) {
-  cl <- target_cell_lines[i]
-  cl_can <- target_canon[i]
-  
-  # Special case: if cl directly matches a sample column, use it (RBL case)
-  if (cl %in% colnames(counts_df)) {
-    matched_samples <- c(matched_samples, cl)
-    matched_cell_lines <- c(matched_cell_lines, cl)
-    next
-  }
-  
-  # Try matching via metadata sample_name (direct match)
-  if (cl %in% meta_df$sample_name) {
-    if (cl %in% colnames(counts_df)) {
-      matched_samples <- c(matched_samples, cl)
-      matched_cell_lines <- c(matched_cell_lines, cl)
-      next
-    }
-  }
-  
-  # Match by canonicalized cell line name
-  # This handles LAN_5 → LAN5, CHP_126 → CHP126, etc.
-  meta_matches <- meta_df %>%
-    filter(cell_line_canon == cl_can | Cell_Line_canon == cl_can)
-  
-  if (nrow(meta_matches) > 0) {
-    # Retain all count-bearing libraries for the biological cell-line group.
-    # This keeps RBL_15 and RBL_20 replicate profiles under one grouped focal identity.
-    sample_names <- unique(meta_matches$sample_name[!is.na(meta_matches$sample_name) & meta_matches$sample_name != ""])
-    for (sn in sample_names) {
-      if (sn %in% colnames(counts_df)) {
-        matched_samples <- c(matched_samples, sn)
-        matched_cell_lines <- c(matched_cell_lines, cl)  # Keep node-stats label as cell_line
+read_count_source <- function(path) {
+  if (grepl("\\.rds$", path, ignore.case = TRUE)) {
+    object <- readRDS(path)
+    if (is.matrix(object)) {
+      table <- as.data.frame(object, check.names = FALSE)
+      table <- data.frame(gene_id = rownames(object), table, check.names = FALSE)
+    } else if (is.data.frame(object)) {
+      table <- as.data.frame(object, check.names = FALSE)
+      if (!("gene_id" %in% names(table)) && !is.null(rownames(table))) {
+        table <- data.frame(gene_id = rownames(table), table, check.names = FALSE)
       }
+    } else {
+      stop("[DESeq2 preparation] Count RDS must contain a matrix or data.frame", call. = FALSE)
     }
+  } else {
+    table <- fread(path, sep = "\t", data.table = FALSE, check.names = FALSE)
+  }
+  if (!("gene_id" %in% names(table))) {
+    names(table)[1L] <- "gene_id"
+  }
+  table
+}
+
+sha256_file <- function(path) {
+  commands <- list(c("sha256sum", path), c("shasum", "-a", "256", path))
+  for (command in commands) {
+    result <- tryCatch(
+      system2(command[[1L]], command[-1L], stdout = TRUE, stderr = FALSE),
+      error = function(error) character(0)
+    )
+    if (length(result) > 0L && nzchar(result[[1L]])) {
+      return(strsplit(result[[1L]], "[[:space:]]+")[[1L]][[1L]])
+    }
+  }
+  ""
+}
+
+counts_source <- read_count_source(opt$dsmz_counts)
+metadata_source <- fread(opt$dsmz_meta, sep = "\t", data.table = FALSE, check.names = FALSE)
+node_stats <- fread(opt$node_stats, sep = "\t", data.table = FALSE, check.names = FALSE)
+
+require_columns(counts_source, "gene_id", "source count matrix")
+require_columns(metadata_source, c(opt$source_sample_id_col, opt$source_cell_line_col), "source metadata")
+require_columns(node_stats, c("cell_line", "component", "is_isolate"), "resolved graph node statistics")
+
+gene_ids <- as.character(counts_source$gene_id)
+if (any(is.na(gene_ids)) || any(!nzchar(trimws(gene_ids)))) {
+  stop("[DESeq2 preparation] Source count matrix contains missing or empty gene identifiers", call. = FALSE)
+}
+if (anyDuplicated(gene_ids)) {
+  stop("[DESeq2 preparation] Source count matrix contains duplicate gene identifiers", call. = FALSE)
+}
+count_sample_ids <- names(counts_source)[names(counts_source) != "gene_id"]
+if (length(count_sample_ids) == 0L) {
+  stop("[DESeq2 preparation] Source count matrix contains no sample columns", call. = FALSE)
+}
+if (any(is.na(count_sample_ids)) || any(!nzchar(trimws(count_sample_ids)))) {
+  stop("[DESeq2 preparation] Count sample identifiers are missing or empty", call. = FALSE)
+}
+if (anyDuplicated(count_sample_ids)) {
+  stop("[DESeq2 preparation] Count sample identifiers are not unique", call. = FALSE)
+}
+
+count_values <- as.matrix(counts_source[, count_sample_ids, drop = FALSE])
+suppressWarnings(storage.mode(count_values) <- "numeric")
+if (any(is.na(count_values))) {
+  stop("[DESeq2 preparation] Source count matrix contains NA values", call. = FALSE)
+}
+if (any(!is.finite(count_values))) {
+  stop("[DESeq2 preparation] Source count matrix contains non-finite values", call. = FALSE)
+}
+if (any(count_values < 0)) {
+  stop("[DESeq2 preparation] Source count matrix contains negative values", call. = FALSE)
+}
+if (any(abs(count_values - round(count_values)) > 1e-8)) {
+  stop("[DESeq2 preparation] Source count matrix contains non-integer values", call. = FALSE)
+}
+
+metadata_source[[opt$source_sample_id_col]] <- trimws(as.character(metadata_source[[opt$source_sample_id_col]]))
+metadata_source[[opt$source_cell_line_col]] <- trimws(as.character(metadata_source[[opt$source_cell_line_col]]))
+if (any(is.na(metadata_source[[opt$source_sample_id_col]])) ||
+    any(!nzchar(metadata_source[[opt$source_sample_id_col]]))) {
+  stop("[DESeq2 preparation] Source metadata sample identifiers are missing or empty", call. = FALSE)
+}
+if (any(is.na(metadata_source[[opt$source_cell_line_col]])) ||
+    any(!nzchar(metadata_source[[opt$source_cell_line_col]]))) {
+  stop("[DESeq2 preparation] Source metadata biological cell-line identifiers are missing or empty", call. = FALSE)
+}
+count_bearing_metadata <- metadata_source[metadata_source[[opt$source_sample_id_col]] %in% count_sample_ids, , drop = FALSE]
+if (anyDuplicated(count_bearing_metadata[[opt$source_sample_id_col]])) {
+  duplicated_ids <- unique(count_bearing_metadata[[opt$source_sample_id_col]][duplicated(count_bearing_metadata[[opt$source_sample_id_col]])])
+  stop("[DESeq2 preparation] Source metadata has duplicate count-bearing sample identifiers: ",
+       paste(duplicated_ids, collapse = ", "), call. = FALSE)
+}
+
+graph_cell_lines <- sort(unique(trimws(as.character(node_stats$cell_line))))
+graph_cell_lines <- graph_cell_lines[nzchar(graph_cell_lines)]
+if (length(graph_cell_lines) == 0L) {
+  stop("[DESeq2 preparation] Resolved graph node statistics contain no cell-line identifiers", call. = FALSE)
+}
+graph_canonical <- canonicalise_cell_line_identifier(graph_cell_lines)
+if (anyDuplicated(graph_canonical)) {
+  collision_table <- split(graph_cell_lines, graph_canonical)
+  collisions <- collision_table[vapply(collision_table, function(ids) length(unique(ids)) > 1L, logical(1))]
+  stop("[DESeq2 preparation] Canonical graph cell-line identifiers collide: ",
+       paste(vapply(collisions, paste, character(1), collapse = "|"), collapse = "; "),
+       call. = FALSE)
+}
+graph_id_by_canonical <- setNames(graph_cell_lines, graph_canonical)
+
+metadata_source$source_sample_id_for_matching <- metadata_source[[opt$source_sample_id_col]]
+metadata_source$source_cell_line_for_matching <- metadata_source[[opt$source_cell_line_col]]
+metadata_source$source_cell_line_canonical <- canonicalise_cell_line_identifier(
+  metadata_source$source_cell_line_for_matching
+)
+
+mapping_rows <- list()
+for (target_cell_line in graph_cell_lines) {
+  target_canonical <- canonicalise_cell_line_identifier(target_cell_line)
+  candidate_samples <- character(0)
+  candidate_sources <- character(0)
+
+  exact_count_matches <- count_sample_ids[count_sample_ids == target_cell_line]
+  if (length(exact_count_matches) > 0L) {
+    candidate_samples <- c(candidate_samples, exact_count_matches)
+    candidate_sources <- c(candidate_sources, rep("exact_count_column", length(exact_count_matches)))
+  }
+
+  exact_metadata_matches <- metadata_source$source_sample_id_for_matching[
+    metadata_source$source_sample_id_for_matching == target_cell_line &
+      metadata_source$source_sample_id_for_matching %in% count_sample_ids
+  ]
+  if (length(exact_metadata_matches) > 0L) {
+    candidate_samples <- c(candidate_samples, exact_metadata_matches)
+    candidate_sources <- c(candidate_sources, rep("exact_metadata_sample", length(exact_metadata_matches)))
+  }
+
+  metadata_cell_line_matches <- metadata_source$source_sample_id_for_matching[
+    metadata_source$source_cell_line_canonical == target_canonical &
+      metadata_source$source_sample_id_for_matching %in% count_sample_ids
+  ]
+  if (length(metadata_cell_line_matches) > 0L) {
+    candidate_samples <- c(candidate_samples, metadata_cell_line_matches)
+    candidate_sources <- c(candidate_sources, rep("metadata_cell_line_identifier", length(metadata_cell_line_matches)))
+  }
+
+  if (length(candidate_samples) > 0L) {
+    candidate_table <- unique(data.frame(
+      count_sample_id = candidate_samples,
+      biological_cell_line = target_cell_line,
+      mapping_evidence = candidate_sources,
+      stringsAsFactors = FALSE
+    ))
+    mapping_rows[[target_cell_line]] <- candidate_table
   }
 }
 
-# Deduplicate matched samples (keep first mapping)
-keep_idx <- !duplicated(matched_samples)
-matched_samples <- matched_samples[keep_idx]
-matched_cell_lines <- matched_cell_lines[keep_idx]
+if (length(mapping_rows) == 0L) {
+  stop("[DESeq2 preparation] No resolved graph cell lines mapped to count-bearing source samples", call. = FALSE)
+}
+sample_mapping <- unique(rbindlist(mapping_rows, use.names = TRUE))
+same_pair <- unique(sample_mapping[, c("count_sample_id", "biological_cell_line")])
+conflicts <- split(same_pair$biological_cell_line, same_pair$count_sample_id)
+conflicts <- conflicts[vapply(conflicts, function(values) length(unique(values)) > 1L, logical(1))]
+if (length(conflicts) > 0L) {
+  details <- paste(
+    sprintf("%s -> %s", names(conflicts), vapply(conflicts, paste, character(1), collapse = ",")),
+    collapse = "; "
+  )
+  stop("[DESeq2 preparation] Count sample maps to multiple biological cell-line targets: ",
+       details, call. = FALSE)
+}
+sample_mapping <- same_pair[order(same_pair$biological_cell_line, same_pair$count_sample_id), , drop = FALSE]
+names(sample_mapping) <- c("sample_id", "cell_line")
 
-message(sprintf("[INFO] Matched %d samples for %d target cell lines",
-                length(matched_samples), length(target_cell_lines)))
-
-# Report unmatched cell lines for debugging
-unmatched <- target_cell_lines[!(target_cell_lines %in% matched_cell_lines)]
-if (length(unmatched) > 0) {
-  message("[WARN] Unmatched cell lines from node stats:")
-  message(paste("  ", unmatched, collapse = "\n"))
-  message("[WARN] These may not exist in DSMZ metadata/counts, or have naming mismatches")
+unmatched_graph_cell_lines <- setdiff(graph_cell_lines, unique(sample_mapping$cell_line))
+if (length(unmatched_graph_cell_lines) > 0L) {
+  stop("[DESeq2 preparation] Resolved graph cell lines lacking count-bearing samples: ",
+       paste(unmatched_graph_cell_lines, collapse = ", "), call. = FALSE)
 }
 
-if (length(matched_samples) == 0) {
-  stop("No samples matched! Check cell line name mappings.")
+metadata_join <- metadata_source[match(sample_mapping$sample_id, metadata_source[[opt$source_sample_id_col]]), , drop = FALSE]
+if (nrow(metadata_join) != nrow(sample_mapping) ||
+    any(is.na(metadata_join[[opt$source_sample_id_col]]))) {
+  stop("[DESeq2 preparation] Metadata join failed to return exactly one row per prepared sample", call. = FALSE)
+}
+if (anyDuplicated(sample_mapping$sample_id)) {
+  stop("[DESeq2 preparation] Prepared sample identifiers are duplicated after metadata join", call. = FALSE)
 }
 
-# Filter counts to matched samples
-counts_subset <- counts_df[, c("gene_id", matched_samples), drop = FALSE]
+verification_mode <- opt$cell_line_verification_mode
+accepted_values <- trimws(unlist(strsplit(opt$accepted_cell_line_values, ",")))
+accepted_values <- accepted_values[nzchar(accepted_values)]
+if (verification_mode == "metadata_column") {
+  verification_column <- opt$cell_line_verification_column
+  require_columns(metadata_join, verification_column, "source metadata for cell-line verification")
+  observed_values <- trimws(as.character(metadata_join[[verification_column]]))
+  rejected <- observed_values[!(observed_values %in% accepted_values)]
+  if (length(rejected) > 0L) {
+    stop("[DESeq2 preparation] Non-cell-line samples selected by metadata_column verification: ",
+         paste(unique(rejected), collapse = ", "), call. = FALSE)
+  }
+  sample_population <- "cell_line_only"
+} else if (verification_mode == "source_population_declaration") {
+  if (opt$declared_population != "cell_line_only") {
+    stop("[DESeq2 preparation] Source population declaration is not cell_line_only", call. = FALSE)
+  }
+  sample_population <- "cell_line_only"
+} else {
+  stop("[DESeq2 preparation] Unknown cell-line verification mode: ", verification_mode, call. = FALSE)
+}
 
-# Create metadata for matched samples
-meta_subset <- data.frame(
-  sample_id = matched_samples,
-  cell_line = matched_cell_lines,
+node_map <- unique(node_stats[, c("cell_line", "component", "is_isolate", "degree", "betweenness"), drop = FALSE])
+if (anyDuplicated(node_map$cell_line)) {
+  stop("[DESeq2 preparation] Graph node statistics have duplicate cell-line rows", call. = FALSE)
+}
+source_graph_annotation_columns <- c("component", "is_isolate", "degree", "betweenness")
+metadata_join_extra <- metadata_join[
+  ,
+  setdiff(names(metadata_join), c(names(sample_mapping), source_graph_annotation_columns)),
+  drop = FALSE
+]
+prepared_metadata <- cbind(sample_mapping, metadata_join_extra, stringsAsFactors = FALSE)
+prepared_metadata <- merge(
+  prepared_metadata,
+  node_map,
+  by = "cell_line",
+  all.x = TRUE,
+  sort = FALSE
+)
+prepared_metadata <- prepared_metadata[match(sample_mapping$sample_id, prepared_metadata$sample_id), , drop = FALSE]
+if (any(is.na(prepared_metadata$component)) || any(is.na(prepared_metadata$is_isolate))) {
+  missing_components <- prepared_metadata$cell_line[is.na(prepared_metadata$component) | is.na(prepared_metadata$is_isolate)]
+  stop("[DESeq2 preparation] Component/isolate graph annotations missing after join: ",
+       paste(unique(missing_components), collapse = ", "), call. = FALSE)
+}
+
+prepared_cell_lines <- sort(unique(prepared_metadata$cell_line))
+if (!setequal(prepared_cell_lines, graph_cell_lines)) {
+  stop("[DESeq2 preparation] Prepared biological cell-line set does not exactly equal resolved graph cell-line set; missing_from_prepared=",
+       paste(setdiff(graph_cell_lines, prepared_cell_lines), collapse = ","),
+       "; extra_in_prepared=", paste(setdiff(prepared_cell_lines, graph_cell_lines), collapse = ","),
+       call. = FALSE)
+}
+
+prepared_counts <- counts_source[, c("gene_id", sample_mapping$sample_id), drop = FALSE]
+source_slice <- counts_source[, c("gene_id", sample_mapping$sample_id), drop = FALSE]
+if (!identical(prepared_counts, source_slice)) {
+  stop("[DESeq2 preparation] Prepared count values do not exactly equal selected source count values", call. = FALSE)
+}
+
+fwrite(prepared_counts, file.path(opt$outdir, "counts.tsv"), sep = "\t")
+fwrite(prepared_metadata, file.path(opt$outdir, "metadata.tsv"), sep = "\t")
+fwrite(prepared_metadata, file.path(opt$outdir, "metadata_with_components.tsv"), sep = "\t")
+fwrite(sample_mapping, file.path(opt$outdir, "sample_mapping.tsv"), sep = "\t")
+
+provenance <- data.frame(
+  field = c(
+    "source_counts_path",
+    "source_metadata_path",
+    "source_count_kind",
+    "sample_population",
+    "cell_line_verification_mode",
+    "cell_line_verification_column",
+    "accepted_cell_line_values",
+    "value_transformation",
+    "normalisation_applied",
+    "aggregation_applied",
+    "value_preservation_check",
+    "source_counts_sha256",
+    "source_metadata_sha256"
+  ),
+  value = c(
+    opt$dsmz_counts,
+    opt$dsmz_meta,
+    opt$source_count_kind,
+    sample_population,
+    verification_mode,
+    opt$cell_line_verification_column,
+    paste(accepted_values, collapse = ";"),
+    "subset_and_reorder_only",
+    "FALSE",
+    "FALSE",
+    "prepared_values_identical_to_selected_source_values",
+    sha256_file(opt$dsmz_counts),
+    sha256_file(opt$dsmz_meta)
+  ),
   stringsAsFactors = FALSE
-) %>%
-  left_join(
-    meta_df %>% select(sample_name, Cell_Line, Disease, Project_id),
-    by = c("sample_id" = "sample_name")
-  ) %>%
-  mutate(cell_line_display = dplyr::coalesce(as.character(Cell_Line), cell_line)) %>%
-  select(sample_id, cell_line, cell_line_display, everything())
+)
+fwrite(provenance, file.path(opt$outdir, "input_provenance.tsv"), sep = "\t")
 
-# Write outputs
-dir.create(opt$outdir, showWarnings = FALSE, recursive = TRUE)
-
-# Write counts TSV (gene_id as first column, then samples)
-counts_out <- counts_subset[, c("gene_id", matched_samples), drop = FALSE]
-
-write_tsv(counts_out, file.path(opt$outdir, "counts.tsv"))
-message(sprintf("[OK] Wrote counts: %s", file.path(opt$outdir, "counts.tsv")))
-
-# Write metadata TSV
-write_tsv(meta_subset, file.path(opt$outdir, "metadata.tsv"))
-message(sprintf("[OK] Wrote metadata: %s", file.path(opt$outdir, "metadata.tsv")))
-
-message(sprintf("[DONE] Prepared inputs for %s: %d samples, %d genes", 
-                opt$profile, length(matched_samples), nrow(counts_out)))
+message(sprintf(
+  "[DESeq2 preparation] PASS profile=%s samples=%d biological_cell_lines=%d genes=%d",
+  opt$profile,
+  nrow(sample_mapping),
+  length(prepared_cell_lines),
+  nrow(prepared_counts)
+))
