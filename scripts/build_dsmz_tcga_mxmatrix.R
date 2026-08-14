@@ -31,7 +31,13 @@ profile <- opt$profile %||% Sys.getenv("SNAKEMAKE_PROFILE", "default")
 cfg <- read_profiled_config(opt$config, profile)
 
 vst_path   <- cfg$paths$vst_joint_rds
-mx_path    <- cfg$features$mx_final_gene_list
+mx_topn    <- as.integer(cfg$feature_selection$method_topn$MX %||% 500L)
+mx_path    <- file.path(
+  cfg$paths$unsup_root,
+  "feature_selection_unsupervised",
+  "feature_sets",
+  sprintf("genes_top%d_MX.txt", mx_topn)
+)
 dsmz_meta_path <- cfg$paths$dsmz_meta_csv
 out_path   <- cfg$paths$tumour_nh_expr_mx
 input_root <- cfg$paths$tumour_nh_input_root

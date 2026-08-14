@@ -456,26 +456,7 @@ edge_file_for_direction <- function(root, direction) {
   }
 }
 
-# Discover available directions from actual edge files (more robust than config)
-# This ensures we use all available directions, not just those in config
-discovered_directions <- character()
-if (dir.exists(tumour_nh_root)) {
-  subdirs <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
-  for (subdir in subdirs) {
-    edge_file <- edge_file_for_direction(tumour_nh_root, subdir)
-    if (file.exists(edge_file)) {
-      discovered_directions <- c(discovered_directions, subdir)
-    }
-  }
-}
-
-# Use discovered directions if available, otherwise fall back to config directions
-if (length(discovered_directions) > 0) {
-  directions <- discovered_directions
-  cat("Discovered", length(directions), "directions from edge files\n")
-} else {
-  cat("No directions discovered from edge files, using config directions\n")
-}
+cat("Using configured directions for neighbour resolution:", length(directions), "\n")
 
 edges_list <- list()
 for (d in directions) {
@@ -503,9 +484,11 @@ if (profile == "multicohort_cancer") {
 # cell lines according to aggregate consensus metrics. Selection criteria
 # (in order of priority):
 #
-#   1. frac_ge_thr:       Fraction of solutions meeting quality threshold
-#   2. median_p_consensus: Median consensus probability across solutions
-#   3. mean_p_consensus:   Mean consensus probability (tiebreaker)
+#   1. frac_ge_thr:        Fraction of cell-line tumour-neighbourhood pairs
+#                          meeting the declared threshold
+#   2. median_p_consensus: Median p-consensus fraction across cell-line
+#                          tumour-neighbourhood pairs
+#   3. mean_p_consensus:   Mean p-consensus fraction (tiebreaker)
 #
 # The direction may be:
 #   - Manually specified via --best_overall_dir (highest priority)

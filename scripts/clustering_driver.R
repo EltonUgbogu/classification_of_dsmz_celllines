@@ -7,8 +7,8 @@
 #
 # Uses:
 #   - config$paths$vst_joint_rds
-#   - config$features$pam50_gene_list
-#   - config$features$mx_final_gene_list
+#   - resources/pam50_ensembl_ids.txt
+#   - {unsup_root}/feature_selection_unsupervised/feature_sets/genes_top{N}_MX.txt
 #   - config$clustering$k_grid
 #
 # Produces (inside --outdir):
@@ -65,6 +65,7 @@ cat("outdir:      ", opt$outdir,      "\n\n")
 # Load config using profiled config loader (merges defaults + profile)
 profile <- opt$profile %||% Sys.getenv("SNAKEMAKE_PROFILE", "default")
 cfg <- read_profiled_config(opt$config, profile)
+pipe_root <- normalizePath(file.path(dirname(opt$config), ".."))
 
 vst_path <- cfg$paths$vst_joint_rds %||% stop("paths$vst_joint_rds missing")
 vst_mat <- readRDS(vst_path)  # genes x samples (ENSG with possible version suffixes)
@@ -77,19 +78,23 @@ rownames(vst_mat) <- rn
 feature_set <- match.arg(opt$feature_set, c("pam50", "MX"))
 distance    <- match.arg(opt$distance, c("euclidean", "correlation"))
 
-# PAM50: prefer Ensembl list if provided (matches vst_joint_rds rownames)
-pam50_ens_file <- cfg$features$pam50_ensembl_gene_list
-if (!is.null(pam50_ens_file) && file.exists(pam50_ens_file)) {
-  pam50_genes <- readr::read_lines(pam50_ens_file)
-} else {
-  pam50_sym_file <- cfg$features$pam50_gene_list %||% stop("features$pam50_gene_list missing")
-  pam50_genes <- readr::read_lines(pam50_sym_file)
+# PAM50 uses the pinned Ensembl gene list shipped with the repository.
+pam50_ens_file <- file.path(pipe_root, "resources", "pam50_ensembl_ids.txt")
+if (!file.exists(pam50_ens_file)) {
+  stop("PAM50 Ensembl gene list missing: ", pam50_ens_file)
 }
+pam50_genes <- readr::read_lines(pam50_ens_file)
 
 # --- MX list only if needed ---
 mx_genes <- NULL
 if (feature_set == "MX") {
-  mx_file <- cfg$features$mx_final_gene_list %||% stop("features$mx_final_gene_list missing")
+  mx_topn <- as.integer(cfg$feature_selection$method_topn$MX %||% 500L)
+  mx_file <- file.path(
+    cfg$paths$unsup_root,
+    "feature_selection_unsupervised",
+    "feature_sets",
+    sprintf("genes_top%d_MX.txt", mx_topn)
+  )
   if (!file.exists(mx_file)) {
     stop("MX file missing for feature_set = 'MX': ", mx_file)
   }

@@ -1,7 +1,9 @@
 #!/usr/bin/env Rscript
 # agnostic_clustering_utils.R
-# Shared helpers for 12-way agnostic clustering
-# (PCA/raw × HC/k-means × cell/tumour/integrated)
+# Shared helpers for the 12-way HC/k-means clustering branch
+# (PCA-reduced/expression space × HC/k-means × cell/tumour/joint).
+# "agnostic" in file and function names is the retained internal
+# compatibility identifier for this HC/k-means clustering branch.
 
 suppressPackageStartupMessages({
   library(cluster)
@@ -157,10 +159,16 @@ hc_optimal <- function(X,
   set.seed(seed)
 
   if (dist_method == "correlation") {
-    info("Distance: 1 - Pearson correlation")
+    # Ward.D2 requires a Euclidean-compatible dissimilarity. The chord
+    # distance sqrt(2 * (1 - r)) is the exact Euclidean distance between
+    # centred, unit-norm sample vectors, so Ward.D2 on it is well defined.
+    # This matches the correlation-geometry transform (centre + unit norm +
+    # Euclidean) used by the ConsensusClusterPlus branch; the raw 1 - r
+    # dissimilarity is not a Euclidean metric and is not used with Ward.
+    info("Distance: chord sqrt(2 * (1 - Pearson r)) for Ward.D2 compatibility")
     cm <- cor(t(X), method = "pearson", use = "pairwise.complete.obs")
     cm[!is.finite(cm)] <- 0
-    d <- as.dist(1 - cm)
+    d <- as.dist(sqrt(pmax(2 * (1 - cm), 0)))
   } else {
     info("Distance: %s", dist_method)
     d <- dist(X, method = dist_method)
@@ -253,7 +261,7 @@ run_agnostic_clustering <- function(kind,
                                     cell_label       = "CELL",
                                     tumour_label     = "TUMOUR") {
   dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
-  info("==== Running agnostic clustering: %s ====", kind)
+  info("==== Running HC/k-means clustering: %s ====", kind)
 
   # 1) Build sample matrix
   built <- build_sample_matrix(

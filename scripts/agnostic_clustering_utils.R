@@ -2,9 +2,10 @@
 # =============================================================================
 # agnostic_clustering_utils.R
 #
-# This module provides the shared statistical infrastructure underpinning a
-# 12-way agnostic clustering framework. The 12 configurations arise from the
-# full factorial combination of three design axes:
+# This module provides the shared statistical infrastructure underpinning the
+# 12-way HC/k-means clustering branch ("agnostic" in file and function names is
+# the retained internal compatibility identifier for this branch). The 12
+# configurations arise from the full factorial combination of three design axes:
 #
 #   • Feature space  : PCA-reduced scores  ×  raw expression values
 #   • Algorithm      : Hierarchical clustering (HC)  ×  k-means
@@ -323,14 +324,17 @@ hc_optimal <- function(X,
   set.seed(seed)
 
   if (dist_method == "correlation") {
-    # Dissimilarity as 1 − Pearson correlation: pairwise, so operating on
-    # the transposed matrix (genes as observation axes, samples as variables)
-    # would be incorrect — t(X) gives samples × PCs, so cor(t(X)) computes
-    # sample-by-sample correlations as intended.
-    info("Distance: 1 - Pearson correlation")
+    # Pairwise sample correlations: t(X) gives samples as variables, so
+    # cor(t(X)) computes sample-by-sample correlations as intended.
+    # Ward.D2 requires a Euclidean-compatible dissimilarity, so the chord
+    # distance sqrt(2 * (1 - r)) — the exact Euclidean distance between
+    # centred, unit-norm sample vectors — is used instead of the raw
+    # (non-Euclidean) 1 - r dissimilarity. This matches the
+    # correlation-geometry transform of the ConsensusClusterPlus branch.
+    info("Distance: chord sqrt(2 * (1 - Pearson r)) for Ward.D2 compatibility")
     cm <- cor(t(X), method = "pearson", use = "pairwise.complete.obs")
     cm[!is.finite(cm)] <- 0
-    d  <- as.dist(1 - cm)
+    d  <- as.dist(sqrt(pmax(2 * (1 - cm), 0)))
   } else {
     info("Distance: %s", dist_method)
     d <- dist(X, method = dist_method)
@@ -489,7 +493,7 @@ run_agnostic_clustering <- function(kind,
                                     tumour_label     = "TUMOUR") {
 
   dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
-  info("==== Running agnostic clustering: %s ====", kind)
+  info("==== Running HC/k-means clustering: %s ====", kind)
 
   # ------------------------------------------------------------------
   # Step 1: Data ingestion and sample matrix construction.

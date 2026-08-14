@@ -4,10 +4,11 @@
 # ==============================================================================
 #
 # PURPOSE:
-# This script constructs a similarity network among DSMZ cell lines based on
-# the overlap of their tumour neighbourhood profiles. The underlying principle
-# is that cell lines which consistently associate with similar tumours
-# across multiple clustering methods likely share biological characteristics.
+# This script constructs a patient-referenced cell-line similarity graph for
+# each feature-distance representation. Each biological cell line is
+# represented by its tumour-wise p_consensus profile, with replicate profiles
+# mean-pooled where applicable. Pairwise cell-line similarity is the Pearson
+# correlation between these tumour-wise profiles.
 #
 # BIOLOGICAL RATIONALE:
 # If two cell lines have highly correlated p_consensus vectors, they tend to
@@ -290,8 +291,8 @@ if (!is.null(opt$meta_tsv) && nzchar(opt$meta_tsv)) {
 #   - Values = p_consensus(c, t)
 #
 # This matrix representation allows each cell line to be treated as a vector
-# in "tumour space", where the coordinates are the consensus probabilities
-# with each tumour.
+# in "tumour space", where the coordinates are the corresponding
+# p_consensus fractions for each tumour.
 
 # Apply mode constraint and disease filtering
 cp <- consensus_pairs
@@ -446,7 +447,7 @@ p_hist <- ggplot(sim_long, aes(x = similarity)) +
   theme_minimal(base_size = 14) +
   labs(
     title    = sprintf("Distribution of cell-line similarity (%s)", direction),
-    subtitle = "Pearson correlation of tumour neighbourhood p_consensus(c, t)",
+    subtitle = "Pearson correlation of tumour-wise p_consensus profiles",
     x = "Similarity (Pearson r)",
     y = "Number of cell-line pairs"
   ) +

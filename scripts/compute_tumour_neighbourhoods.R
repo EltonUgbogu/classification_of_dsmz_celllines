@@ -8,9 +8,11 @@
 # PURPOSE:
 # This script computes tumour neighbourhoods for each cell line in an integrated
 # expression matrix. For each DSMZ cell line, the pipeline identifies the most
-# similar tumour samples (non-DSMZ cohort) based on expression distance, enabling
-# biological interpretation of cell line-tumour relationships within the context
-# of consensus clustering results.
+# similar tumour samples (non-DSMZ cohort) based on expression distance, one
+# neighbourhood per eligible clustering formulation. Eligible formulations are
+# the configured JOINT cell-line + tumour outputs of the HC/k-means clustering
+# branch (AGN_*) and of ConsensusClusterPlus (CCP_*); cell-only and tumour-only
+# clustering outputs never contribute.
 #
 # USAGE:
 # Rscript comp_tumour_neighbourhoods.R \
@@ -97,8 +99,10 @@ if (file.exists(lib_config_path)) {
       cfg <- list(
         paths = c(defaults$paths %||% list(), profcfg$paths %||% list()),
         analysis = c(defaults$analysis %||% list(), profcfg$analysis %||% list()),
-        features = c(defaults$features %||% list(), profcfg$features %||% list()),
-        tumour_neighbourhoods = c(defaults$tumour_neighbourhoods %||% list(), profcfg$tumour_neighbourhoods %||% list())
+        feature_selection = c(defaults$feature_selection %||% list(), profcfg$feature_selection %||% list()),
+        marker_postprocessing = defaults$marker_postprocessing %||% list(),
+        tumour_neighbourhoods = c(defaults$tumour_neighbourhoods %||% list(), profcfg$tumour_neighbourhoods %||% list()),
+        patient_referenced_graph = c(defaults$patient_referenced_graph %||% list(), profcfg$patient_referenced_graph %||% list())
       )
     } else {
       cfg <- defaults
@@ -207,11 +211,11 @@ resolve_feature_from_direction <- function(direction) {
 }
 
 resolve_feature_gene_list_path <- function(feature, cfg, unsup_root) {
-  pan_feature_name <- cfg$features$pan_cancer_feature_set_name %||% "PanCancerFeatureSet"
-  pan_feature_file <- cfg$features$pan_cancer_feature_set_gene_list %||% NULL
+  pan_feature_name <- "PanCancerFeatureSet"
+  pan_feature_file <- cfg$marker_postprocessing$pan_cancer$final_features_clean %||% NULL
   if (identical(feature, pan_feature_name)) {
     if (is.null(pan_feature_file) || !nzchar(pan_feature_file)) {
-      stop("Feature '", feature, "' requires cfg$features$pan_cancer_feature_set_gene_list.")
+      stop("Feature '", feature, "' requires defaults.marker_postprocessing.pan_cancer.final_features_clean.")
     }
     return(abs_from_root(pan_feature_file))
   }
@@ -280,16 +284,22 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
   } else {
     read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE)
   }
-  if (!sample_id_col %in% colnames(meta)) {
-    if ("sample_id" %in% colnames(meta)) {
-      cat("[WARN] sample_id_col '", sample_id_col,
-          "' not found; using metadata column 'sample_id'.\n", sep = "")
-      sample_id_col <- "sample_id"
-    } else {
-      stop("sample_id_col '", sample_id_col, "' not found in metadata columns: ",
-           paste(colnames(meta), collapse = ", "))
-    }
+  # Resolve the sample-identifier column from the configured name plus the
+  # column conventions used by the configured metadata files ('sample_id' in
+  # staged TSVs, 'sample_name' in data/dsmz/DSMZ_metadata.csv).
+  sample_id_candidates <- unique(c(sample_id_col, "sample_id", "sample_name"))
+  sample_id_hit <- sample_id_candidates[sample_id_candidates %in% colnames(meta)][1]
+  if (is.na(sample_id_hit)) {
+    stop("None of the candidate sample-identifier columns (",
+         paste(sample_id_candidates, collapse = ", "),
+         ") found in metadata columns: ",
+         paste(colnames(meta), collapse = ", "))
   }
+  if (!identical(sample_id_hit, sample_id_col)) {
+    cat("[WARN] sample_id_col '", sample_id_col,
+        "' not found; using metadata column '", sample_id_hit, "'.\n", sep = "")
+  }
+  sample_id_col <- sample_id_hit
 
   derive_cell_line_from_sample_id <- function(x) {
     y <- gsub("^NG[-_][0-9]+_", "", x)
@@ -298,8 +308,16 @@ build_joint_inputs_from_config <- function(cfg, direction, unsup_root) {
     y
   }
 
-  if (cell_col %in% colnames(meta)) {
-    mapping_raw <- setNames(as.character(meta[[cell_col]]), as.character(meta[[sample_id_col]]))
+  # Resolve the cell-line label column analogously ('DSMZ_Cell_line_norm' is
+  # the normalised label column of data/dsmz/DSMZ_metadata.csv).
+  cell_col_candidates <- unique(c(cell_col, "cell_line", "DSMZ_Cell_line_norm", "Cell_Line"))
+  cell_col_hit <- cell_col_candidates[cell_col_candidates %in% colnames(meta)][1]
+  if (!is.na(cell_col_hit)) {
+    if (!identical(cell_col_hit, cell_col)) {
+      cat("[WARN] raw_cell_line_col '", cell_col,
+          "' not found; using metadata column '", cell_col_hit, "'.\n", sep = "")
+    }
+    mapping_raw <- setNames(as.character(meta[[cell_col_hit]]), as.character(meta[[sample_id_col]]))
   } else {
     cat("[WARN] raw_cell_line_col '", cell_col,
         "' not found; deriving DSMZ cell-line labels from sample_id.\n", sep = "")
@@ -369,6 +387,31 @@ unsup_root <- if (!is.null(unsup_root_expr) && nzchar(unsup_root_expr)) {
 }
 
 cat("[INFO] Using unsup_root:", unsup_root, "\n")
+
+adaptive_k_cfg <- cfg$tumour_neighbourhoods$adaptive_k
+if (is.null(adaptive_k_cfg)) {
+  stop("Missing required config section: tumour_neighbourhoods.adaptive_k")
+}
+required_adaptive_k_keys <- c("fraction", "minimum", "maximum")
+missing_adaptive_k_keys <- required_adaptive_k_keys[!required_adaptive_k_keys %in% names(adaptive_k_cfg)]
+if (length(missing_adaptive_k_keys) > 0) {
+  stop(
+    "Missing required tumour_neighbourhoods.adaptive_k key(s): ",
+    paste(missing_adaptive_k_keys, collapse = ", ")
+  )
+}
+top_frac <- as.numeric(adaptive_k_cfg$fraction)
+top_n_min <- as.integer(adaptive_k_cfg$minimum)
+top_n_max <- as.integer(adaptive_k_cfg$maximum)
+if (!is.finite(top_frac) || top_frac <= 0 || top_frac > 1) {
+  stop("tumour_neighbourhoods.adaptive_k.fraction must satisfy 0 < fraction <= 1.")
+}
+if (!is.finite(top_n_min) || top_n_min < 1) {
+  stop("tumour_neighbourhoods.adaptive_k.minimum must be a positive integer.")
+}
+if (!is.finite(top_n_max) || top_n_max < top_n_min) {
+  stop("tumour_neighbourhoods.adaptive_k.maximum must be >= tumour_neighbourhoods.adaptive_k.minimum.")
+}
 
 # Extract feature method from direction (everything before last _euc/_corr).
 direction_feature <- sub("_(euc|corr)$", "", direction)
@@ -773,6 +816,18 @@ names(cell_line_canonical) <- current_ids
 cell_line_display <- ifelse(dsmz_mask, cell_line_canonical, current_ids)
 names(cell_line_display) <- current_ids
 
+# Canonical-label lookup for collapsed cluster inputs. Some configured cell
+# VST matrices are collapsed to cell-line level (e.g. the RBL profile), so
+# upstream cluster vectors carry canonical cell-line labels rather than
+# technical profile IDs. Map each normalised canonical label to every DSMZ
+# profile carrying it, so a label-keyed cluster assignment can be expanded to
+# all replicate profiles of that cell line.
+dsmz_profile_ids <- current_ids[dsmz_mask]
+canonical_to_profiles <- split(
+  dsmz_profile_ids,
+  normalize_id(unname(cell_line_canonical[dsmz_profile_ids]))
+)
+
 cat("[INFO] DSMZ replicate profiles retained with canonical cell-line labels.\n")
 cat("[INFO] Total samples after profile-level normalisation: ", nrow(expr_mat),
     " ( ", sum(dataset_vec == "DSMZ"), " DSMZ )\n", sep = "")
@@ -783,13 +838,46 @@ print(head(data.frame(
 ), 6))
 
 # ------------------------------------------------------------------------------
-# SECTION 16: CLUSTERING METHOD DISCOVERY
+# SECTION 16: CONFIGURED CLUSTERING METHOD RESOLUTION
 # ------------------------------------------------------------------------------
-# The pipeline dynamically discovers available clustering results rather than
-# relying on hardcoded paths. The get_nh_methods() function enumerates actual
-# pipeline outputs, ensuring robustness to changes in upstream processing.
+# The contributing clustering formulations are configuration-driven. The
+# catalogue in get_nh_methods() maps each known method identifier (JOINT
+# HC/k-means clustering: AGN_*; JOINT ConsensusClusterPlus: CCP_*) to its
+# cluster RDS path. The exact set that must contribute to this direction is
+# declared in patient_referenced_graph.clustering_methods_by_distance, keyed
+# by the direction's distance component. Neither the method set nor the
+# p_consensus denominator is ever inferred from files present on disk:
+# declared identifiers unknown to the catalogue and declared methods whose
+# cluster RDS is missing both raise explicit errors.
 
-methods <- get_nh_methods(unsup_root = unsup_root, direction = direction)
+catalogue <- get_nh_methods(unsup_root = unsup_root, direction = direction)
+
+distance_key <- sub("^.*_(euc|corr)$", "\\1", direction)
+declared_methods_by_distance <- cfg$patient_referenced_graph$clustering_methods_by_distance
+if (is.null(declared_methods_by_distance)) {
+  stop("Missing required config section: patient_referenced_graph.clustering_methods_by_distance")
+}
+declared_methods <- as.character(declared_methods_by_distance[[distance_key]])
+if (length(declared_methods) == 0L) {
+  stop("No declared clustering methods for distance key: ", distance_key)
+}
+if (anyDuplicated(declared_methods) > 0L) {
+  stop("Duplicate declared clustering method identifiers for distance key '",
+       distance_key, "': ",
+       paste(unique(declared_methods[duplicated(declared_methods)]), collapse = ", "))
+}
+
+unknown_declared <- setdiff(declared_methods, catalogue$method_id)
+if (length(unknown_declared) > 0L) {
+  stop("Declared clustering method(s) not present in the eligible JOINT method ",
+       "catalogue for direction=", direction, ": ",
+       paste(unknown_declared, collapse = ", "),
+       "\nEligible catalogue identifiers: ",
+       paste(catalogue$method_id, collapse = ", "))
+}
+
+methods <- catalogue %>%
+  dplyr::filter(method_id %in% declared_methods)
 
 cluster_family_raw <- opt$`cluster-family`
 if (is.null(cluster_family_raw) || !nzchar(cluster_family_raw)) {
@@ -802,28 +890,33 @@ if (!cluster_family %in% c("hc", "km")) {
 }
 methods <- methods %>%
   dplyr::filter(grepl(paste0("^(AGN|CCP)_", toupper(cluster_family), "_"), method_id))
-cat(sprintf("[INFO] Filtered to --cluster-family='%s': %d method(s) remain\n",
-            cluster_family, nrow(methods)))
+cat(sprintf("[INFO] Declared methods for distance '%s': %d; --cluster-family='%s': %d method(s) in this pass\n",
+            distance_key, length(declared_methods), cluster_family, nrow(methods)))
 if (nrow(methods) == 0) {
-  stop("No methods matched --cluster-family='", cluster_family,
+  stop("No declared methods matched --cluster-family='", cluster_family,
        "' for direction=", direction,
-       ".\nExpected patterns: AGN_", toupper(cluster_family), "_* and CCP_",
-       toupper(cluster_family), "_*",
-       "\nCheck clustering outputs under: ", unsup_root)
+       ".\nDeclared methods: ", paste(declared_methods, collapse = ", "),
+       "\nExpected patterns: AGN_", toupper(cluster_family), "_* and CCP_",
+       toupper(cluster_family), "_*")
 }
 
 cat("\n[INFO] Methods to process:\n")
 print(methods)
 
-# Filter to only methods with existing cluster files.
-methods_exist <- methods %>% dplyr::filter(exists)
-
-if (nrow(methods_exist) == 0) {
-  stop("FATAL: No cluster RDS found for direction=", direction,
-       "\nChecked:\n", paste(methods$path, collapse = "\n"))
+# Every declared method in this family must have its cluster RDS on disk;
+# a missing file is an upstream failure and must not silently shrink the
+# contributing method set.
+missing_files <- methods %>% dplyr::filter(!exists)
+if (nrow(missing_files) > 0) {
+  stop("FATAL: Cluster RDS missing for declared clustering method(s) of direction=",
+       direction, ":\n",
+       paste(sprintf("  %s -> %s", missing_files$method_id, missing_files$path),
+             collapse = "\n"),
+       "\nRun the upstream clustering rules (agnostic_cluster_* / consensus_cluster_ccp) first.")
 }
+methods_exist <- methods
 
-cat(sprintf("\n[INFO] %d/%d methods available (existing files)\n",
+cat(sprintf("\n[INFO] %d/%d declared methods in this family verified on disk\n",
             nrow(methods_exist), nrow(methods)))
 
 # ------------------------------------------------------------------------------
@@ -850,11 +943,11 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   # STEP 1: CLUSTER FILE VALIDATION AND LOADING
   # --------------------------------------------------------------------------
   
-  # Guard clause: skip if cluster file does not exist.
+  # Guard clause: a declared method's cluster file must exist; a file that
+  # disappears between validation and processing is an explicit error, never
+  # a silent reduction of the contributing method set.
   if (!file.exists(path)) {
-    message("[WARN] Cluster file not found for method ", method_id, ": ", path,
-            " — skipping.")
-    return(NULL)
+    stop("Cluster file not found for declared method ", method_id, ": ", path)
   }
 
   # Load the cluster object and validate its structure.
@@ -892,6 +985,30 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
     names(cluster_vec) <- mapped_raw
     mode <- "raw"
     n_best <- n_raw
+  }
+
+  # Third matching mode: canonical cell-line labels. When the configured cell
+  # VST matrix is collapsed to cell-line level, cluster names are canonical
+  # labels (e.g. "RBL_13") with no technical-ID counterpart. Expand each
+  # label-matched assignment to every DSMZ profile carrying that canonical
+  # label; entries that match technically above are never touched.
+  unmapped <- is.na(names(cluster_vec)) | !nzchar(names(cluster_vec))
+  if (any(unmapped)) {
+    label_hit <- unmapped & nm_norm %in% names(canonical_to_profiles)
+    if (any(label_hit)) {
+      expanded <- unlist(lapply(which(label_hit), function(i) {
+        profs <- canonical_to_profiles[[nm_norm[i]]]
+        setNames(rep(cluster_vec[[i]], length(profs)), profs)
+      }))
+      cluster_vec <- c(cluster_vec[!unmapped], expanded)
+      n_best <- n_best + length(expanded)
+      mode <- paste0(mode, "+canonical")
+      cat("[INFO] Canonical-label expansion for ", method_id, ": ",
+          sum(label_hit), " collapsed cell-line label(s) -> ",
+          length(expanded), " profile assignment(s)\n", sep = "")
+    } else {
+      cluster_vec <- cluster_vec[!unmapped]
+    }
   }
 
   # Drop entries that could not be mapped
@@ -1010,9 +1127,9 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
     emb_mat   = expr_mat_subset,
     cluster_m = cluster_vec,
     dataset   = dataset_vec_subset,
-    top_frac  = 0.10,
-    top_n_min = 30,
-    top_n_max = 200,
+    top_frac  = top_frac,
+    top_n_min = top_n_min,
+    top_n_max = top_n_max,
     method_id = method_id,
     distance  = dist_type
   )
@@ -1108,11 +1225,12 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
 all_results <- vector("list", nrow(methods_exist))
 names(all_results) <- methods_exist$method_id
 
-# Initialise counters for execution summary.
+# Initialise counter for execution summary.
 n_success <- 0
-n_skipped <- 0
 
-# Execute neighbourhood computation for each method.
+# Execute neighbourhood computation for each declared method; any failure
+# inside run_single_neighbourhood() stops the script (fail-fast, no silent
+# reduction of the contributing method set).
 for (i in seq_len(nrow(methods_exist))) {
   m <- methods_exist[i, ]
   result <- run_single_neighbourhood(
@@ -1120,35 +1238,23 @@ for (i in seq_len(nrow(methods_exist))) {
     method_id = m$method_id,
     outdir    = m$outdir
   )
-  
-  # Track execution outcomes.
-  if (is.null(result)) {
-    n_skipped <- n_skipped + 1
-  } else {
-    all_results[[m$method_id]] <- result
-    n_success <- n_success + 1
-  }
+  all_results[[m$method_id]] <- result
+  n_success <- n_success + 1
 }
-
-# Remove NULL entries from results list (failed methods).
-# The Filter() function with Negate(is.null) retains only non-NULL elements.
-all_results <- Filter(Negate(is.null), all_results)
 
 # ------------------------------------------------------------------------------
 # SECTION 19: EXECUTION SUMMARY
 # ------------------------------------------------------------------------------
-# A final summary reports the number of methods attempted, successful, and
-# skipped, providing a quick overview of pipeline execution status.
+# A final summary reports the number of declared methods processed in this
+# cluster-family pass.
 
 cat("\n============================================================\n")
 cat("SUMMARY:\n")
-cat(sprintf("  Methods attempted: %d\n", nrow(methods_exist)))
+cat(sprintf("  Declared methods processed: %d\n", nrow(methods_exist)))
 cat(sprintf("  Successful: %d\n", n_success))
-cat(sprintf("  Skipped (missing files): %d\n", n_skipped))
 
-# Fail if no methods completed successfully.
-if (n_success == 0) {
-  stop("FATAL: No clustering methods completed successfully. Check cluster file paths.")
+if (n_success != nrow(methods_exist)) {
+  stop("FATAL: Not every declared clustering method completed successfully.")
 }
 
-cat("\nAll available methods completed.\n")
+cat("\nAll declared methods completed.\n")

@@ -358,9 +358,10 @@ if (file.exists(lib_config_path)) {
         paths = c(defaults$paths %||% list(), profcfg$paths %||% list()),
         methods = defaults$methods %||% list(),
         analysis = c(defaults$analysis %||% list(), profcfg$analysis %||% list()),
-        features = c(defaults$features %||% list(), profcfg$features %||% list()),
         agnostic_clustering = defaults$agnostic_clustering %||% list(),
         clustering = defaults$clustering %||% list(),
+        feature_selection = c(defaults$feature_selection %||% list(), profcfg$feature_selection %||% list()),
+        marker_postprocessing = defaults$marker_postprocessing %||% list(),
         tumour_neighbourhoods = c(defaults$tumour_neighbourhoods %||% list(), 
                                   profcfg$tumour_neighbourhoods %||% list())
       )

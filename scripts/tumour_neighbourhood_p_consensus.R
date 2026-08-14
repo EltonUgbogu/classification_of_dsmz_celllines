@@ -8,12 +8,22 @@
 #
 # SCRIPT OVERVIEW
 # ---------------
-# This script aggregates tumour neighbourhood assignments across multiple
-# clustering methods to compute the consensus probability p_consensus(c, t)
-# for each cell line-tumour pair. The p_consensus metric quantifies the
-# robustness of the relationship between a cancer cell line (c) and a
-# primary tumour sample (t) by measuring the proportion of clustering
-# analyses that place them in the same molecular cluster.
+# This script aggregates tumour-neighbourhood assignments across clustering
+# formulations. For each cell line-tumour pair within a fixed feature-distance
+# representation r, p_consensus is the tumour-wise recurrence fraction
+#
+#   p_consensus(i, t | r) = (1 / |A_r|) * sum over a in A_r of I[t in N_{i,r,a}]
+#
+# where A_r is the exact configured set of eligible clustering formulations
+# for r (patient_referenced_graph.clustering_methods_by_distance) and
+# N_{i,r,a} is the tumour neighbourhood of cell line i under formulation a.
+# Eligible formulations are the JOINT cell-line + tumour outputs of the
+# HC/k-means clustering branch (AGN_*) and of ConsensusClusterPlus (CCP_*):
+# 8 formulations for Euclidean directions, 4 for correlation directions.
+# p_consensus is a recurrence fraction across the configured clustering
+# formulations, not a probability and not an aggregate of statistically
+# independent votes; it quantifies clustering-formulation recurrence for the
+# corresponding cell line-tumour relationship.
 #
 # BIOLOGICAL CONTEXT
 # ------------------
@@ -41,15 +51,20 @@
 #
 # CONSENSUS SOLUTION
 # ------------------
-# The p_consensus metric resolves this ambiguity by aggregating results
-# across multiple clustering configurations. For a cell line c and tumour t:
+# The p_consensus recurrence fraction resolves this ambiguity by aggregating
+# neighbourhood membership across the configured clustering formulations.
+# For a cell line c and tumour t:
 #
-#   p_consensus(c, t) = (number of methods placing t in c's neighbourhood) /
-#                       (total number of clustering methods evaluated)
+#   p_consensus(c, t) = (number of configured formulations placing t in c's
+#                        neighbourhood) /
+#                       (number of configured eligible formulations)
 #
-# This value ranges from 0 (no methods agree) to 1 (all methods agree).
-# High p_consensus indicates a robust relationship that persists regardless
-# of analytical choices, while low values suggest method-dependent associations.
+# The denominator is the exact configured formulation count for the
+# direction's distance component; it is never inferred from files present on
+# disk. The value ranges from 0 (recurring in no formulation) to 1 (recurring
+# in every configured formulation). High p_consensus indicates a relationship
+# that recurs across formulations, while low values indicate
+# formulation-dependent associations.
 #
 # INTERPRETATION GUIDELINES
 # -------------------------
@@ -540,7 +555,7 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
   # ---------------------------------------------------------------------------
   # P_CONSENSUS COMPUTATION
   # ---------------------------------------------------------------------------
-  # Aggregate across methods to compute the consensus probability.
+  # Aggregate across methods to compute the p-consensus fraction.
   
   consensus_pairs <- all_long %>%
     filter(in_top) %>%
@@ -569,13 +584,24 @@ if (!is.null(opt$ccp_hc_rds) && !is.null(opt$ccp_kmeans_rds)) {
 # ==============================================================================
 # SECTION 5: PER-DISEASE MODE - METHOD DISCOVERY
 # ==============================================================================
-# In per-disease mode, the script discovers available clustering methods by
-# scanning the directory structure for pre-computed neighbourhood tables.
-# This dynamic discovery approach ensures that all available methods contribute
-# to the consensus calculation without requiring explicit configuration.
+# In per-disease mode, the script validates discovered neighbourhood tables
+# against the declared clustering methods for the distance component of the
+# active representation. This prevents stale files from silently changing the
+# clustering-method denominator used in p_consensus.
 #
 # The expected directory structure is:
 #   {unsup_root}/tumour_neighbourhoods/{direction}/{method_id}/Top_m_long_*.csv
+
+distance_key <- sub("^.*_(euc|corr)$", "\\1", direction)
+declared_methods_by_distance <- cfg$patient_referenced_graph$clustering_methods_by_distance
+if (is.null(declared_methods_by_distance)) {
+  stop("Missing required config section: patient_referenced_graph.clustering_methods_by_distance")
+}
+declared_methods <- declared_methods_by_distance[[distance_key]]
+if (is.null(declared_methods) || length(declared_methods) == 0L) {
+  stop("No declared clustering methods for distance key: ", distance_key)
+}
+declared_methods <- as.character(declared_methods)
 
 # List all method subdirectories.
 method_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = FALSE)
@@ -612,14 +638,53 @@ methods_tbl <- methods_tbl %>%
   dplyr::mutate(exists = file.exists(path)) %>%
   dplyr::filter(exists)
 
-n_methods_total <- nrow(methods_tbl)
-cat("[INFO] Number of clustering methods contributing to p_consensus: ",
-    n_methods_total, "\n", sep = "")
-
-if (n_methods_total == 0) {
-  stop("FATAL: No Top_m_long_*.csv files found in ", base_dir,
-       "\nExpected files under: ", base_dir, "/*/Top_m_long_*.csv")
+discovered_methods <- sort(unique(methods_tbl$method_id))
+missing_declared_methods <- setdiff(declared_methods, discovered_methods)
+unexpected_discovered_methods <- setdiff(discovered_methods, declared_methods)
+if (length(missing_declared_methods) > 0L || length(unexpected_discovered_methods) > 0L) {
+  stop(
+    "Declared clustering methods do not match discovered neighbourhood tables for ", direction,
+    "\nMissing declared methods: ", paste(missing_declared_methods, collapse = ", "),
+    "\nUnexpected discovered methods: ", paste(unexpected_discovered_methods, collapse = ", ")
+  )
 }
+
+# Each declared clustering formulation must contribute exactly one
+# neighbourhood table, named Top_m_long_<method_id>.csv. Extra or misnamed
+# files inside a method directory would double-count a formulation, so they
+# raise an explicit error rather than inflating the recurrence numerator.
+file_counts <- table(methods_tbl$method_id)
+overcounted <- names(file_counts)[file_counts > 1L]
+if (length(overcounted) > 0L) {
+  stop(
+    "More than one Top_m_long_*.csv found for clustering method(s): ",
+    paste(overcounted, collapse = ", "),
+    "\nEach formulation must contribute exactly once; remove stale files under ",
+    base_dir
+  )
+}
+misnamed <- methods_tbl %>%
+  dplyr::filter(file != sprintf("Top_m_long_%s.csv", method_id))
+if (nrow(misnamed) > 0L) {
+  stop(
+    "Neighbourhood table filename does not match its method directory:\n",
+    paste(sprintf("  %s/%s", misnamed$subdir, misnamed$file), collapse = "\n"),
+    "\nExpected Top_m_long_<method_id>.csv in each method directory."
+  )
+}
+
+methods_tbl <- methods_tbl %>%
+  dplyr::mutate(method_id = factor(method_id, levels = declared_methods, ordered = TRUE)) %>%
+  dplyr::arrange(method_id) %>%
+  dplyr::mutate(method_id = as.character(method_id))
+
+# The p_consensus denominator |A_r| is the exact configured formulation count.
+# After the checks above, one table exists per declared formulation, so this
+# equals nrow(methods_tbl); the stopifnot guards that invariant.
+n_methods_total <- length(declared_methods)
+stopifnot(n_methods_total == nrow(methods_tbl))
+cat("[INFO] Configured clustering formulations contributing to p_consensus (|A_r|): ",
+    n_methods_total, "\n", sep = "")
 
 cat("[INFO] Methods discovered:\n")
 print(methods_tbl %>% dplyr::select(method_id, subdir, file))
@@ -712,14 +777,16 @@ all_long %>%
 # ==============================================================================
 # SECTION 7: P_CONSENSUS COMPUTATION
 # ==============================================================================
-# The p_consensus metric is computed as the proportion of clustering methods
-# that identify a given tumour as being in a cell line's neighbourhood.
+# p_consensus is the tumour-wise recurrence fraction across the configured
+# eligible clustering formulations.
 #
 # FORMULA:
-#   p_consensus(c, t) = |{methods where t in Top_m(c)}| / |{all methods}|
+#   p_consensus(i, t | r) = (1 / |A_r|) * sum over a in A_r of I[t in N_{i,r,a}]
 #
-# where Top_m(c) denotes the set of top-m tumour neighbours for cell line c
-# in a given clustering analysis.
+# where A_r is the exact configured formulation set for representation r
+# (n_methods_total = |A_r|) and N_{i,r,a} is the adaptive tumour neighbourhood
+# of cell line i under formulation a. The n_methods column below is the raw
+# recurrence count; dividing by |A_r| yields the reported p_consensus.
 
 consensus_pairs <- all_long %>%
   filter(in_top) %>%                           # Consider only neighbourhood members
