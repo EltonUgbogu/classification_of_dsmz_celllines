@@ -12,17 +12,18 @@ The repository is maintained as a code-focused workflow repository. Raw sequenci
 
 - **Feature-distance representation:** a selected gene set, expression space, and distance or similarity metric considered together as one representation.
 - **Tumour neighbourhood:** the adaptive set of retained patient tumour samples assigned near a focal cell-line profile within a feature-distance representation.
-- **p-consensus tumour-neighbourhood support:** the fraction of available tumour-neighbourhood clustering outputs within a fixed feature-distance representation that support assignment of a tumour sample to a focal cell-line neighbourhood.
-- **Patient-referenced graph:** a cell-line graph constructed from shared patient-tumour neighbourhoods across feature-selection and distance representations. It reduces high-dimensional tumour–cell-line expression proximity to a graph representation, enabling graph-based comparison, resolved-neighbour analysis, and computationally tractable model prioritisation.
-- **Multi-representation consensus network:** the primary cross-representation graph layer, which retains an edge when it is supported in at least `m = max(2, floor(|R| / 2) + 1)` configured feature-distance representations. A separate union-supported network retains every edge observed in at least one representation as a sensitivity view.
-- **Resolved graph:** a patient-referenced cell-line graph with resolved edge set `E_resolved`. For each focal cell-line profile `v`, retained incident edges are defined by the intersection of global-best and local-best incident edge support:
+- **p-consensus fraction:** the tumour-wise recurrence fraction, within a fixed feature-distance representation, of the configured eligible clustering formulations in which a tumour sample occurs in the adaptive neighbourhood of a focal cell-line profile. Eligible formulations are the JOINT cell-line + tumour outputs of HC/k-means clustering and of ConsensusClusterPlus: 8 formulations for Euclidean directions and 4 for correlation directions, declared in `patient_referenced_graph.clustering_methods_by_distance`.
+- **HC/k-means clustering:** hierarchical clustering and k-means applied to each feature-distance representation in either expression space or PCA-reduced space (internal identifiers `AGN_*`, rules `agnostic_cluster_*`, outputs under `agnostic_clustering/`). A clustering formulation parallel to ConsensusClusterPlus consensus clustering; the two meet at the p-consensus stage via their method-specific tumour neighbourhoods.
+- **Patient-referenced cell-line similarity graph:** a weighted, undirected graph constructed separately for each feature-distance representation from Pearson correlation between tumour-wise p-consensus profiles. It reduces tumour-mediated cell-line similarity to a graph representation for graph-based comparison and resolved-neighbour analysis.
+- **Multi-representation consensus network:** the primary cross-representation graph layer, which selects an edge when it recurs in at least `m = max(2, floor(|R| / 2) + 1)` configured feature-distance representations. A separate union network includes every edge observed in at least one representation as a sensitivity view.
+- **Resolved graph:** a patient-referenced cell-line graph with resolved edge set `E_resolved`. For each focal cell-line profile `v`, retained incident edges are defined by the intersection of the global-best and local-best incident edge sets:
 
   ```text
   E_resolved(v) = E_G(v) ∩ E_L(v)
   ```
 - **Resolved neighbour:** a cell-line profile connected to a focal cell-line profile in the resolved graph.
-- **Global-best representation:** the cohort-level feature–distance representation with the strongest overall `p_consensus` tumour-neighbourhood support across the configured cell-line profiles.
-- **Local-best representation set:** the one or more feature–distance representations with the strongest `p_consensus` tumour-neighbourhood support for an individual cell-line profile.
+- **Global-best representation:** the cohort-level feature–distance representation with the largest overall fraction of `p_consensus` values meeting the declared threshold across the configured cell-line profiles.
+- **Local-best representation set:** the one or more feature–distance representations with the largest fraction of `p_consensus` values meeting the declared threshold for an individual cell-line profile.
 - **Component anchor:** a profile selected from a non-isolate resolved component through highest-degree or highest unnormalised-betweenness criteria.
 - **Marker-evidence stratum:** the graph-derived evidence category used during marker aggregation: anchor-associated or isolate-associated marker evidence.
 - **Pan-cancer feature panel:** the graph-informed marker-derived feature set used for pan-cancer cell-line similarity analysis and reciprocal tumour--cell-line ranking.
@@ -32,7 +33,7 @@ The repository is maintained as a code-focused workflow repository. Raw sequenci
 
 Cancer cell lines are widely used as laboratory models; however, selecting a cell line by cancer-type label alone does not establish how well its transcriptome represents patient tumours. Patient tumours and cell-line profiles can vary substantially within the same cancer type, and this variation can affect which models appear most representative.
 
-This workflow evaluates DSMZ cell-line profiles in a patient-referenced expression space. It constructs unsupervised feature–distance representations and quantifies patient-referenced tumour-neighbourhood proximity between DSMZ cell-line profiles and retained tumour samples across those representations. Resolved-graph construction then retains cell-line adjacencies supported by both cohort-level and cell-line-specific representation criteria, while graph-derived marker contrasts connect resolved graph structure to pan-cancer feature construction.
+This workflow evaluates DSMZ cell-line profiles in a patient-referenced expression space. It constructs unsupervised feature–distance representations and quantifies patient-referenced tumour-neighbourhood proximity between DSMZ cell-line profiles and retained tumour samples across those representations. Resolved-graph construction then selects cell-line adjacencies that satisfy both cohort-level and cell-line-specific representation criteria, while graph-derived marker contrasts connect resolved graph structure to pan-cancer feature construction.
 
 Reciprocal ranking provides label-free DSMZ model ranking within a cohort-informed, graph-derived marker feature space. Cancer-type labels are not used to compute tumour–cell-line similarity scores or rank orderings; BRCA, NBL, and RBL annotations are applied afterwards to evaluate post hoc cancer-type annotation concordance.
 
@@ -45,24 +46,25 @@ The workflow performs the following stages:
 3. Join only purity-retained raw tumour counts with raw DSMZ counts, harmonise genes, apply ComBat-seq, and generate joint DESeq2 variance-stabilised matrices.
 4. Derive profile-specific unsupervised feature-selection gene lists from joint VST expression using variance/HVG, MAD/MeanAbsDev, entropy, PCA-loading, and Spearman-, MX-, and WGCNA-derived connectivity criteria.
 5. Combine feature sets, expression spaces, and distance or similarity metrics into feature-distance representations.
-6. Infer adaptive patient tumour neighbourhoods for focal cell-line profiles.
-7. Aggregate p-consensus tumour-neighbourhood support within each representation.
-8. Construct representation-specific patient-referenced cell-line graphs.
-9. Construct a majority-threshold multi-representation consensus network and a union-supported sensitivity network.
-10. Resolve cell-line neighbours by intersecting the global-best neighbour set with the pooled neighbour support from the cell-line-specific tied local-best representation set, then render retained adjacencies as undirected edges.
-11. Identify graph-derived isolate and anchor profiles for differential-expression analysis.
-12. Run DESeq2 isolate and anchor contrasts using cancer-type-specific cell-line count matrices.
-13. Aggregate contrast-level marker evidence into pan-cancer feature panel.
-14. Perform reciprocal tumour--cell-line ranking in the configured pan-cancer feature space.
-15. Construct the pan-cancer cell-line-only \(k\)-nearest-neighbour similarity network.
-16. Compute Louvain and Leiden community assignments and evaluate both algorithms across configured resolution sweeps.
-17. Construct and evaluate functional-enrichment query and background sets for marker interpretation.
+6. Apply the eligible clustering formulations to each representation: HC/k-means clustering (hierarchical clustering and k-means in expression space and PCA-reduced space) and ConsensusClusterPlus consensus clustering, each producing a JOINT cell-line + tumour cluster assignment.
+7. Infer adaptive patient tumour neighbourhoods for focal cell-line profiles, one neighbourhood per eligible clustering formulation.
+8. Aggregate the tumour-wise p-consensus recurrence fraction across the configured formulation set within each representation (Euclidean directions: 8 formulations; correlation directions: 4).
+9. Construct representation-specific patient-referenced cell-line graphs.
+10. Construct a majority-threshold multi-representation consensus network and a union sensitivity network.
+11. Resolve cell-line neighbours by intersecting the global-best neighbour set with the pooled local-best neighbour set for the cell-line-specific tied representations, then render retained adjacencies as undirected edges.
+12. Identify graph-derived isolate and anchor profiles for differential-expression analysis.
+13. Run DESeq2 isolate and anchor contrasts using cancer-type-specific cell-line count matrices.
+14. Aggregate contrast-level marker evidence into pan-cancer feature panel.
+15. Perform reciprocal tumour--cell-line ranking in the configured pan-cancer feature space.
+16. Construct the pan-cancer cell-line-only \(k\)-nearest-neighbour similarity network.
+17. Compute Louvain and Leiden community assignments and evaluate both algorithms across configured resolution sweeps.
+18. Construct and evaluate functional-enrichment query and background sets for marker interpretation.
 
 ## Current analytical design
 
 ### Patient-referenced graph resolution
 
-Tumour-neighbourhood evidence is calculated separately within each feature-distance representation. Strong within-representation p-consensus evidence is used to construct representation-specific cell-line graphs. The primary multi-representation consensus network retains edges supported by the configured majority threshold across the representations, using \(m = \max(2, \lfloor |R|/2 \rfloor + 1)\). The union-supported sensitivity network instead retains every edge observed in at least one representation.
+Tumour-neighbourhood assignments are calculated separately within each feature-distance representation, once per configured clustering formulation (HC/k-means clustering and ConsensusClusterPlus, JOINT outputs only), and the p-consensus fraction records each pair's recurrence across that formulation set. The representation-specific patient-referenced cell-line similarity graph is then constructed from Pearson correlation between tumour-wise p-consensus profiles. The primary multi-representation consensus network selects edges recurring in at least the configured majority threshold across representations, using \(m = \max(2, \lfloor |R|/2 \rfloor + 1)\). The union network instead includes every edge observed in at least one representation.
 
 Let \(E_r\) denote the undirected edge set of representation \(r\). The global-best representation \(g\) maximises cohort-level `frac_ge_thr`; the resolver orders ties by median `p_consensus` and, when supplied as a distinct field, mean `p_consensus`. Its focal edge set is \(E_G(v) = \{\{v,u\} \in E_g\}\). For each focal cell-line profile \(v\), the local-best set \(L(v)\) contains every representation tied for its highest per-cell-line `frac_ge_thr`, and its pooled local edge set is \(E_L(v) = \bigcup_{r \in L(v)} \{\{v,u\} \in E_r\}\). The resolver retains \(E_G(v) \cap E_L(v)\). The final graph takes the union of these retained focal sets over all \(v\) and renders each retained pair as one undirected edge.
 
@@ -267,15 +269,15 @@ When the required real inputs are available, the workflow can generate:
 - tumour-purity-filtered patient sample sets;
 - unsupervised feature-selection outputs;
 - feature-distance representation outputs;
-- patient tumour-neighbourhood and p-consensus support tables;
+- patient tumour-neighbourhood and p-consensus fraction tables;
 - representation-specific patient-referenced graphs;
-- majority-threshold consensus-network and union-supported sensitivity-network outputs;
+- majority-threshold consensus-network and union-network outputs;
 - resolved cell-line neighbours and node summaries;
 - graph-derived DESeq2 marker tables;
 - pan-cancer feature-panel tables;
 - reciprocal tumour--cell-line ranking metrics;
 - pan-cancer cell-line similarity-network outputs;
-- Louvain and Leiden community and sensitivity summaries;
+- Louvain and Leiden community and sensitivity reports;
 - functional-enrichment query, background, result, and plotting tables;
 - selected figures, manifests, and run reports.
 
@@ -303,13 +305,13 @@ Full-analysis releases should provide checksums and manifests alongside the corr
 
 ### Patient tumour neighbourhoods and graph outputs
 
-Patient tumour-neighbourhood support describes how consistently retained tumour samples are assigned near a focal cell-line profile within the configured representations. Patient-referenced edges and resolved neighbours show shared tumour-neighbourhood evidence under the selected thresholds and representation rules.
+The p-consensus fraction describes how consistently retained tumour samples are assigned near a focal cell-line profile within the configured representations. Patient-referenced edges and resolved neighbours reflect threshold-selected tumour-mediated cell-line similarity under the declared representation rules.
 
 An isolate is therefore a profile without a retained resolved cell-line neighbour. It may still show strong similarity to patient tumours in ranking analyses.
 
 ### Reciprocal tumour--cell-line ranking
 
-Reciprocal ranking provides **relative transcriptomic model prioritisation** among the configured candidate cell-line profiles and retained patient tumour samples. A favourable rank supports prioritisation within that analysis space; it is not a universal declaration that the model is suitable for every biological question.
+Reciprocal ranking provides **relative transcriptomic model prioritisation** among the configured candidate cell-line profiles and retained patient tumour samples. A favourable rank is consistent with prioritisation within that analysis space; it is not a universal declaration that the model is suitable for every biological question.
 
 Post hoc cancer-type annotation-concordance metrics describe whether highly ranked tumour--cell-line relationships share the annotated cancer type after the label-free and graph-informed stages. They are evaluation measures, not training objectives.
 
@@ -329,7 +331,7 @@ The workflow provides computational transcriptomic model prioritisation. Its res
 
 - Expression-space proximity is affected by RNA-seq source effects, library-preparation differences, count processing, normalisation, batch correction, and systematic differences between patient tumour and DSMZ cell-line samples.
 
-- The inferred patient-referenced graph depends on the configured feature-selection components, expression transformation, distance or similarity metric, `p_consensus` threshold, and cross-representation support rule. These choices may affect graph topology, resolved-neighbour status, isolate/anchor assignment, and final rank ordering.
+- The inferred patient-referenced graph depends on the configured feature-selection components, expression transformation, distance or similarity metric, the tumour-wise `p_consensus` fractions, and the cross-representation edge-recurrence rule. These choices may affect graph topology, resolved-neighbour status, isolate or anchor assignment, and final rank ordering.
 
 - Tumour–cell-line ranking was performed in a graph-derived pan-cancer marker feature space constructed from recurrent and empirically retained isolate- and anchor-associated DESeq2 markers, rather than across the full transcriptome. This reduces, but does not remove, high-dimensional nearest-neighbour instability and distance-concentration effects; rankings should therefore be interpreted cautiously when the highest-ranked DSMZ models have similar Spearman similarity scores.
 

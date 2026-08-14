@@ -103,7 +103,8 @@ if (file.exists(lib_config_path)) {
       cfg <- list(
         paths = c(defaults$paths %||% list(), profcfg$paths %||% list()),
         analysis = c(defaults$analysis %||% list(), profcfg$analysis %||% list()),
-        features = c(defaults$features %||% list(), profcfg$features %||% list()),
+        feature_selection = c(defaults$feature_selection %||% list(), profcfg$feature_selection %||% list()),
+        marker_postprocessing = defaults$marker_postprocessing %||% list(),
         tumour_neighbourhoods = c(defaults$tumour_neighbourhoods %||% list(), profcfg$tumour_neighbourhoods %||% list())
       )
     } else {
@@ -210,6 +211,14 @@ resolve_feature_from_direction <- function(direction) {
 # Returns the path to the top-N gene list for a feature method.
 # Path pattern: {unsup_root}/feature_selection_unsupervised/feature_sets/genes_top{N}_{feature}.txt
 resolve_feature_gene_list_path <- function(feature, cfg, unsup_root) {
+  if (identical(feature, "PanCancerFeatureSet")) {
+    pan_feature_file <- cfg$marker_postprocessing$pan_cancer$final_features_clean %||% NULL
+    if (is.null(pan_feature_file) || !nzchar(pan_feature_file)) {
+      stop("Feature '", feature, "' requires defaults.marker_postprocessing.pan_cancer.final_features_clean.")
+    }
+    return(abs_from_root(pan_feature_file))
+  }
+
   topn_map <- cfg$feature_selection$method_topn %||% list()
   topn <- topn_map[[feature]]
   if (is.null(topn)) {

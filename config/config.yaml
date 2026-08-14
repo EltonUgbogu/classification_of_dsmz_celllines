@@ -8,11 +8,6 @@ study_design:
 external_inputs:
   retained_source_contrasts: ""
 
-# Backward-compatibility switches for older explicit target commands. These do
-# not define the conceptual analysis identity of any profile.
-compatibility:
-  allow_legacy_multicohort_pan_cancer_targets: true
-
 # Configures validation parameters for permutation, random-baseline, and shortlist checks.
 validation:
   shortlist_n: 10
@@ -29,6 +24,52 @@ defaults:
   # Configures candidate cluster counts evaluated by clustering rules.
   clustering:
     k_grid: [2, 3, 4, 5, 6, 7, 8]
+  tumour_neighbourhoods:
+    adaptive_k:
+      fraction: 0.10
+      minimum: 30
+      maximum: 200
+  patient_referenced_graph:
+    p_consensus_threshold: 0.70
+    similarity_quantile: 0.90
+    similarity_metrics:
+      - pearson
+      - jaccard
+    primary_similarity_metric: pearson
+    # Exact clustering formulations contributing to tumour-neighbourhood
+    # construction and the p_consensus recurrence fraction, per distance
+    # component of the feature-distance representation.
+    #
+    # Identifier scheme (must match tumour_neighbourhoods/<direction>/<method_id>/
+    # output directory names exactly):
+    #   AGN_*  = HC/k-means clustering branch (hierarchical clustering and
+    #            k-means applied to each feature-distance representation in
+    #            expression space or PCA-reduced space). "AGN" is the retained
+    #            internal compatibility identifier for this branch.
+    #   CCP_*  = ConsensusClusterPlus resampling-based consensus clustering.
+    #
+    # Only JOINT cell-line + tumour formulations (*_cell_tumour) are eligible;
+    # cell-only and tumour-only clustering outputs never contribute.
+    # k-means formulations are declared for Euclidean directions only, since
+    # k-means minimises Euclidean inertia and is undefined under correlation
+    # distance. The p_consensus denominator equals the length of the declared
+    # list for the direction's distance component (corr: 4, euc: 8); it is
+    # never inferred from files present on disk.
+    clustering_methods_by_distance:
+      corr:
+        - AGN_HC_expr_cell_tumour
+        - AGN_HC_pca_cell_tumour
+        - CCP_HC_expr_cell_tumour
+        - CCP_HC_pca_cell_tumour
+      euc:
+        - AGN_HC_expr_cell_tumour
+        - AGN_HC_pca_cell_tumour
+        - AGN_KM_expr_cell_tumour
+        - AGN_KM_pca_cell_tumour
+        - CCP_HC_expr_cell_tumour
+        - CCP_HC_pca_cell_tumour
+        - CCP_KM_expr_cell_tumour
+        - CCP_KM_pca_cell_tumour
   feature_selection:
     # Sets method-specific feature-selection cutoffs for candidate and refined gene sets.
     method_topn:
@@ -210,7 +251,6 @@ defaults:
 # Profile-specific feature-distance directions are configured under profiles.multicohort_cancer.
 multicohort_cancer:
   outdir: results/unsupervised/multicohort_cancer
-  helper_annotation_direction: Entropy_corr
   profiles:
     - brca
     - nbl
@@ -768,12 +808,6 @@ profiles:
         - HVG_corr
         - PanCancerFeatureSet_euc
         - PanCancerFeatureSet_corr
-    features:
-      mx_joint_scores_tsv: results/unsupervised/multicohort_cancer/feature_selection_unsupervised/mx_joint_scores.tsv
-      mx_final_gene_list: results/unsupervised/multicohort_cancer/feature_selection_unsupervised/mx_final_gene_list.txt
-      pan_cancer_feature_set_name: PanCancerFeatureSet
-      pan_cancer_feature_set_gene_list: results/unsupervised/pan_cancer/feature_space/pan_cancer_features_clean.txt
-
   # ---------------------------------------------------------------------------
   # pan_cancer is the marker-derived pan-cancer analysis/output profile.
   # It is not a raw cohort; default targets route to results/unsupervised/pan_cancer.
@@ -858,10 +892,6 @@ profiles:
       additional_summary_directions:
         - pam50_euc
         - pam50_corr
-    features:
-      mx_joint_scores_tsv: results/unsupervised/brca/feature_selection_unsupervised/mx_joint_scores.tsv
-      mx_final_gene_list: results/unsupervised/brca/feature_selection_unsupervised/mx_final_gene_list.txt
-
   # ---------------------------------------------------------------------------
   # nbl uses the full unsupervised feature-selection grid.
   # ---------------------------------------------------------------------------
@@ -909,10 +939,6 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
-    features:
-      mx_joint_scores_tsv: results/unsupervised/nbl/feature_selection_unsupervised/mx_joint_scores.tsv
-      mx_final_gene_list: results/unsupervised/nbl/feature_selection_unsupervised/mx_final_gene_list.txt
-
   # ---------------------------------------------------------------------------
   # rbl uses the full unsupervised feature-selection grid.
   # ---------------------------------------------------------------------------
@@ -960,10 +986,6 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
-    features:
-      mx_joint_scores_tsv: results/unsupervised/rbl/feature_selection_unsupervised/mx_joint_scores.tsv
-      mx_final_gene_list: results/unsupervised/rbl/feature_selection_unsupervised/mx_final_gene_list.txt
-
   # ---------------------------------------------------------------------------
   # heme uses the full unsupervised feature-selection grid.
   # ---------------------------------------------------------------------------
@@ -1011,10 +1033,6 @@ profiles:
         - kTotal_corr
         - HVG_euc
         - HVG_corr
-    features:
-      mx_joint_scores_tsv: results/unsupervised/heme/feature_selection_unsupervised/mx_joint_scores.tsv
-      mx_final_gene_list: results/unsupervised/heme/feature_selection_unsupervised/mx_final_gene_list.txt
-
 # Preserves shared helper-function paths used by the Snakefile.
 paths:
   tumour_nh_base_functions: R/base_functions

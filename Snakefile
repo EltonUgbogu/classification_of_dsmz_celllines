@@ -250,21 +250,10 @@ def graph_layout_value(plot_key, param_key):
 # Stage role: materialises output namespaces and shared constants used across method stages.
 # These constants translate profile configuration into the paths and method labels used by later rules.
 
-# Multicohort benchmark flag that disables PCA pre-processing steps across all
-# profiles to ensure comparability when merging cross-cancer datasets.
 MULTICOHORT_CFG = config.get("multicohort_cancer", {})
-MULTICOHORT_HELPER_ANNOTATION_DIRECTION = MULTICOHORT_CFG.get(
-    "helper_annotation_direction",
-    "Entropy_corr",
-)
 IS_MULTICOHORT_PROFILE = profile_name == "multicohort_cancer"
 IS_PAN_CANCER_PROFILE = profile_name == "pan_cancer"
-ALLOW_LEGACY_MULTICOHORT_PAN_CANCER_ROUTING = bool(
-    config.get("compatibility", {}).get("allow_legacy_multicohort_pan_cancer_targets", True)
-)
-DECLARE_PAN_CANCER_RULES = IS_PAN_CANCER_PROFILE or (
-    IS_MULTICOHORT_PROFILE and ALLOW_LEGACY_MULTICOHORT_PAN_CANCER_ROUTING
-)
+DECLARE_PAN_CANCER_RULES = IS_PAN_CANCER_PROFILE
 MULTICOHORT_OUTDIR = os.path.normpath(
     MULTICOHORT_CFG.get(
         "outdir",
@@ -290,28 +279,26 @@ vprint(f"[Snakefile] DISABLE_PCA_EVERYWHERE = {DISABLE_PCA_EVERYWHERE}")
 # =============================================================================
 # Stage role: defines feature-distance representations and validates direction naming before DAG construction.
 # Resolves the list of feature selection methods and distance metrics from config,
-# with sensible defaults if neither feature_sets nor features keys are present.
-FEATURE_METHODS = cfg.get("feature_sets", {}).get(
-    "methods",
-    cfg.get("features", {}).get(
-        "methods", ["Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG"]
-    ),
-)
+# with sensible defaults if feature_sets is omitted.
+FEATURE_METHODS = cfg.get(
+    "feature_sets",
+    {},
+).get("methods", ["Variance", "MedianAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG"])
 DISTANCES = cfg.get("feature_sets", {}).get("distances", ["euc", "corr"])
 
 # Per-method top-N gene counts.
-# Defaults: Variance/MAD/MeanAbsDev/Entropy/PCA → 3000; Spearman/MX/kTotal → 500.
+# Defaults: Variance/MedianAD/MeanAbsDev/Entropy/PCA → 3000; Spearman/MX/kTotal → 500.
 # Override per-method in config under feature_selection.method_topn.<method>.
 _TOPN_DEFAULTS = {
-    "Variance":   3000,
-    "MAD":        3000,
-    "MeanAbsDev": 3000,
-    "Entropy":    3000,
-    "PCA":        3000,
-    "Spearman":   500,
-    "MX":         500,
-    "kTotal":     500,
-    "HVG":        3000,
+    "Variance":     3000,
+    "MedianAD":     3000,
+    "MeanAbsDev":   3000,
+    "Entropy":      3000,
+    "PCA":          3000,
+    "Spearman":     500,
+    "MX":           500,
+    "kTotal":       500,
+    "HVG":          3000,
 }
 _topn_cfg = cfg.get("feature_selection", {}).get("method_topn", {})
 METHOD_TOPN = {m: int(_topn_cfg.get(m, _TOPN_DEFAULTS.get(m, 500))) for m in FEATURE_METHODS}
@@ -544,7 +531,7 @@ if profile_name in ("brca", "nbl", "rbl"):
     # Rule: split_profile_joint_vst
     # Method role: data-preparation rule that separates a profile joint VST object by sample type.
     # Flow: joint profile VST matrix -> cell-line and tumour VST matrices.
-    # Provides input for agnostic clustering and tumour-neighbourhood input construction.
+    # Provides input for HC/k-means clustering and tumour-neighbourhood input construction.
     rule split_profile_joint_vst:
         input:
             joint = VST_JOINT,
@@ -579,7 +566,7 @@ FEATURELIST_FILES   = [
     if m != "MX"
 ]
 
-# Defines relative and absolute roots for agnostic clustering outputs.
+# Defines relative and absolute roots for HC/k-means clustering outputs.
 FEATURE_METHOD_OUTDIR_REL = os.path.join(UNSUP_REL, "feature_selection_unsupervised", "featuresets")
 FEATURE_METHOD_OUTDIR     = os.path.join(UNSUP,     "feature_selection_unsupervised", "featuresets")
 
@@ -599,7 +586,7 @@ FEATURE_METHOD_OUTDIR     = os.path.join(UNSUP,     "feature_selection_unsupervi
 rule feature_selection_unsupervised:
     """
     Selects the top N genes from the joint VST expression matrix using multiple
-    statistical methods (Variance, MAD, Entropy, PCA loadings, MX, HVG, etc.).
+    statistical methods (Variance, MedianAD, Entropy, PCA loadings, MX, HVG, etc.).
     Each method produces an independent ranked gene list that defines one
     feature direction propagated through all clustering rules that consume feature directions.
     The MX gene list is declared explicitly as mx_list so later rules
@@ -638,11 +625,11 @@ rule feature_selection_unsupervised:
 
 
 # =============================================================================
-# AGNOSTIC CLUSTERING INPUT CONSTRUCTION / CONFIGURATION
+# HC/K-MEANS CLUSTERING INPUT CONSTRUCTION / CONFIGURATION
 # =============================================================================
 # Stage role: maps each feature-distance representation to filtered expression inputs and clustering parameters.
 
-# Resolves agnostic clustering output root.
+# Resolves the HC/k-means clustering output root.
 # Config override (agnostic_cluster_root) must be a relative path; if absent,
 # the default is derived from the profile-scoped UNSUP_REL directory.
 _agn_cfg_raw = cfg["paths"].get("agnostic_cluster_root")
@@ -654,7 +641,7 @@ AGN_ROOT     = AGN_ROOT_REL                  # Backwards-compatibility alias.
 AGN_ROOT_ABS = os.path.join(PIPE_ROOT, AGN_ROOT_REL) if not os.path.isabs(AGN_ROOT_REL) else AGN_ROOT_REL
 AGN_BASE_FUN = abspath(cfg["paths"].get("agnostic_base_functions_dir", cfg["paths"].get("base_functions_dir", os.path.join(UNSUP, "base_functions"))))
 
-# Reads agnostic clustering hyperparameters from config with sensible defaults.
+# Reads HC/k-means clustering hyperparameters from config with sensible defaults.
 AGN_CFG      = cfg.get("agnostic_clustering", {})
 AGN_N_PCS    = AGN_CFG.get("n_pcs", 20)
 AGN_MAX_K_HC = AGN_CFG.get("max_k_hc", 8)
@@ -675,8 +662,13 @@ AGN_EUC_PATTERN       = "|".join(map(re.escape, AGN_EUC_DIRECTIONS)) if AGN_EUC_
 CONS_DIRECTION_PATTERN = "|".join(map(re.escape, CONS_DIRECTIONS))
 CONS_EUC_DIRECTIONS    = [d for d in CONS_DIRECTIONS if d.endswith("_euc")]
 CONS_EUC_PATTERN       = "|".join(map(re.escape, CONS_EUC_DIRECTIONS)) if CONS_EUC_DIRECTIONS else r"a^"
-PAN_CANCER_FEATURE_SET_NAME = cfg.get("features", {}).get("pan_cancer_feature_set_name", "PanCancerFeatureSet")
-PAN_CANCER_FEATURE_SET_GENE_LIST = cfg.get("features", {}).get("pan_cancer_feature_set_gene_list")
+PAN_CANCER_FEATURE_SET_NAME = "PanCancerFeatureSet"
+PAN_CANCER_FEATURE_SET_GENE_LIST = (
+    config.get("defaults", {})
+    .get("marker_postprocessing", {})
+    .get("pan_cancer", {})
+    .get("final_features_clean")
+)
 EXTERNAL_GENE_LIST_FEATURES = {PAN_CANCER_FEATURE_SET_NAME} if PAN_CANCER_FEATURE_SET_GENE_LIST else set()
 
 
@@ -721,6 +713,13 @@ if DISABLE_PCA_EVERYWHERE:
     KM_KINDS = [k for k in KM_KINDS if not k.startswith("pca_")]
     vprint(f"[Snakefile] Filtered PCA kinds: HC_KINDS={HC_KINDS}, KM_KINDS={KM_KINDS}")
 
+# JOINT cell-line + tumour HC/k-means clustering kinds. These are the only
+# HC/k-means outputs eligible for tumour-neighbourhood construction and the
+# p_consensus recurrence fraction; cell-only and tumour-only kinds never
+# contribute. Derived from HC_KINDS/KM_KINDS so the PCA filter above applies.
+AGN_HC_JOINT_KINDS = [k for k in HC_KINDS if k.endswith("_cell_tumour")]
+AGN_KM_JOINT_KINDS = [k for k in KM_KINDS if k.endswith("_cell_tumour")]
+
 
 # Method helper: extracts the feature component from a feature-distance representation name.
 def dir_to_feature(direction):
@@ -750,7 +749,9 @@ def dir_to_gene_list(direction):
     if feature in EXTERNAL_GENE_LIST_FEATURES:
         # External feature-set directions reuse a fixed gene list rather than
         # a feature_selection_unsupervised output.
-        return cfgabs("features", "pan_cancer_feature_set_gene_list")
+        if os.path.isabs(PAN_CANCER_FEATURE_SET_GENE_LIST):
+            return PAN_CANCER_FEATURE_SET_GENE_LIST
+        return os.path.join(PIPE_ROOT, PAN_CANCER_FEATURE_SET_GENE_LIST)
     elif feature in FEATURE_METHODS:
         # Feature-set directions: filename encodes the method-specific top-N.
         # Uses FEATURESETS_DIR_REL to match the producer rule output.
@@ -843,9 +844,16 @@ def agn_outdir_dir(direction, kind):
 
 
 # =============================================================================
-# AGNOSTIC CLUSTERING
+# HC/K-MEANS CLUSTERING
 # =============================================================================
-# Stage role: runs explicit clustering families for each configured feature-distance representation.
+# Stage role: applies hierarchical clustering and k-means to each configured
+# feature-distance representation in expression space and PCA-reduced space.
+# JOINT (cell-line + tumour) outputs feed tumour-neighbourhood construction and
+# the p_consensus recurrence fraction alongside the parallel ConsensusClusterPlus
+# formulations; cell-only and tumour-only outputs never contribute to p_consensus.
+# Internal identifiers (rule names agnostic_cluster_*, AGN_* variables, and the
+# agnostic_clustering/ output namespace) are retained for compatibility and refer
+# to this HC/k-means clustering branch.
 
 # -----------------------------------------------------------------------------
 # RULE: agnostic_cluster_build_inputs
@@ -857,7 +865,7 @@ rule agnostic_cluster_build_inputs:
     """
     Subsets the cell line and tumour VST expression matrices to the gene list
     defined by the given direction, producing filtered RDS objects used as
-    input to all agnostic clustering rules for that direction.
+    input to all HC/k-means clustering rules for that direction.
     """
     input:
         cell   = CELL_VST,
@@ -893,8 +901,9 @@ rule agnostic_cluster_pca_hc_cell:
     """
     Applies PCA dimensionality reduction followed by hierarchical clustering
     to the cell line expression matrix. Optimal k is selected by silhouette
-    or gap statistic within [2, max_k]. Produces a cluster assignment RDS
-    consumed by tumour-neighbourhood and consensus rules.
+    or gap statistic within [2, max_k]. Produces a cell-only cluster assignment
+    RDS; cell-only outputs never feed tumour-neighbourhood construction or
+    p_consensus, which consume JOINT cell-line + tumour outputs only.
     """
     input:
         cell = os.path.join(AGN_ROOT_REL, "{direction}", "inputs", "cell_expr.rds")
@@ -1418,14 +1427,16 @@ rule agnostic_cluster_kmeans_joint:
         '''
 
 # Rule: agnostic_cluster_all
-# Method role: collector target that requires all agnostic clustering outputs for configured directions.
+# Method role: collector target that requires all HC/k-means clustering outputs for configured directions.
 # Flow: expected clustering output paths -> Snakemake dependency aggregation only.
 # Stage output: provides a target marker without running a new analysis.
 rule agnostic_cluster_all:
     """
-    Convenience aggregation rule that collects all HC and k-means cluster outputs
-    across every direction. Allows the full Stage 1 suite to be run independently
-    via 'snakemake agnostic_cluster_all' without proceeding to consensus.
+    Convenience aggregation rule that collects all HC/k-means cluster outputs
+    across every direction. Allows the full HC/k-means clustering suite to be
+    run independently via 'snakemake agnostic_cluster_all'. The JOINT
+    cell-line + tumour outputs are also required inputs of the
+    tumour-neighbourhood rules, which pull them on demand.
     """
     input:
         expand(os.path.join(AGN_ROOT_REL, "{direction}", "{kind}", "{kind}_clusters_optimal.rds"), direction=AGN_DIRECTIONS, kind=HC_KINDS),
@@ -1472,8 +1483,11 @@ def kind_to_alg(kind):
 # RULE: consensus_cluster_ccp
 #
 # Method role: computes resampling-based consensus clustering for one representation.
-# Flow: agnostic clustering outputs plus the feature list -> consensus-clustering assignment.
-# Consensus clustering evaluates grouping stability across related clustering runs.
+# Flow: profile VST matrices plus the feature list -> consensus-clustering assignment.
+# Consensus clustering evaluates grouping stability across resampled clustering runs.
+# It is a parallel clustering formulation: it does NOT consume HC/k-means
+# clustering outputs; the two branches meet at the p_consensus stage via their
+# method-specific tumour neighbourhoods.
 # -----------------------------------------------------------------------------
 rule consensus_cluster_ccp:
     """
@@ -1576,18 +1590,28 @@ def nh_consensus_dependency(direction):
 
 # Rule: tumour_nh_hc
 # Method role: analysis rule that runs tumour-neighbourhood scoring from hierarchical-clustering evidence.
-# Flow: representation-specific consensus inputs -> neighbourhood QC, UMAP, and p-consensus tables.
+# Flow: representation-specific JOINT HC/k-means and consensus-clustering inputs -> neighbourhood QC, UMAP, and p-consensus tables.
 # Feeds within-representation p-consensus and patient-referenced graph construction.
 rule tumour_nh_hc:
     """
     Computes per-cell-line tumour neighbourhoods for all configured directions
-    using hierarchical-clustering outputs and profile-configured expression inputs.
+    using hierarchical-clustering outputs from BOTH clustering formulations —
+    the HC/k-means clustering branch (JOINT AGN outputs) and ConsensusClusterPlus
+    (JOINT CCP outputs) — with profile-configured expression inputs. Only JOINT
+    cell-line + tumour clustering outputs feed neighbourhood construction.
     """
     input:
         cfg_file    = CFGFILE_ABS,
         cluster_rds = lambda wc: expand(
             os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
             kind=CONS_HC_KINDS
+        ),
+        # JOINT HC/k-means clustering outputs (HC family). Declaring them here
+        # connects the AGN_* clustering branch to tumour-neighbourhood
+        # generation so its formulations contribute to p_consensus.
+        agn_cluster_rds = lambda wc: expand(
+            os.path.join(AGN_ROOT_REL, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+            kind=AGN_HC_JOINT_KINDS
         )
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"))
@@ -1619,7 +1643,9 @@ rule tumour_nh_hc:
 rule tumour_nh_km:
     """
     k-means neighbourhood pass for all configured Euclidean feature-distance
-    representations using profile-configured expression inputs.
+    representations using profile-configured expression inputs. Consumes BOTH
+    clustering formulations of the k-means family: the HC/k-means clustering
+    branch (JOINT AGN outputs) and ConsensusClusterPlus (JOINT CCP outputs).
     """
     input:
         hc_done     = os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_done"),
@@ -1627,6 +1653,11 @@ rule tumour_nh_km:
         cluster_rds = lambda wc: expand(
             os.path.join(CONS_ROOT, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
             kind=CONS_KM_KINDS
+        ),
+        # JOINT HC/k-means clustering outputs (k-means family, Euclidean only).
+        agn_cluster_rds = lambda wc: expand(
+            os.path.join(AGN_ROOT_REL, wc.direction, "{kind}", "{kind}_clusters_optimal.rds"),
+            kind=AGN_KM_JOINT_KINDS
         )
     output:
         done = touch(os.path.join(TUMOUR_NH_ROOT, "{direction}", ".tumour_neighbourhoods_km_done"))
@@ -1661,9 +1692,14 @@ rule tumour_nh_km:
 # Provides input for cross-representation p-consensus aggregation.
 rule tumour_nh_consensus:
     """
-    Within-representation p-consensus aggregation for every configured direction.
-    Euclidean directions depend on the KM sentinel so HC and KM neighbourhood
-    files are present; correlation directions depend on HC only.
+    Within-representation p_consensus for every configured direction:
+    the tumour-wise recurrence fraction of each cell line-tumour pair across
+    the exact configured set of eligible clustering formulations
+    (patient_referenced_graph.clustering_methods_by_distance). Eligible
+    formulations are the JOINT HC/k-means and ConsensusClusterPlus outputs:
+    8 for Euclidean directions, 4 for correlation directions. Euclidean
+    directions depend on the KM sentinel so HC and KM neighbourhood files are
+    present; correlation directions depend on HC only.
     """
     input:
         done = lambda wc: nh_consensus_dependency(wc.direction)
@@ -2193,6 +2229,311 @@ COMMUNITY_STABILITY_TARGETS = COMMUNITY_STABILITY_OUTPUTS if COMMUNITY_STABILITY
 STUDY_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, config.get("study_design", {}).get("outputs_dirname", "study_design"))
 VALIDATION_OUTPUT_DIR_REL = os.path.join(UNSUP_REL, "validation")
 
+# =============================================================================
+# PARALLEL PEARSON–JACCARD GRAPH COMPARISON
+# =============================================================================
+# Stage role: builds metric-specific patient-referenced graphs in parallel from a shared thresholded pairwise active-tumour-union preprocessing step.
+
+PATIENT_REFERENCED_GRAPH_CFG = cfg.get("patient_referenced_graph")
+if not isinstance(PATIENT_REFERENCED_GRAPH_CFG, dict):
+    raise ValueError("Missing required config section: patient_referenced_graph")
+
+def require_patient_referenced_scalar(key, *, lower=None, upper=None, inclusive_upper=True):
+    if key not in PATIENT_REFERENCED_GRAPH_CFG:
+        raise ValueError(f"Missing required patient_referenced_graph key: {key}")
+    value = PATIENT_REFERENCED_GRAPH_CFG[key]
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"patient_referenced_graph.{key} must be numeric")
+    value = float(value)
+    if lower is not None and not (value > lower):
+        raise ValueError(f"patient_referenced_graph.{key} must be > {lower}")
+    if upper is not None:
+        if inclusive_upper and not (value <= upper):
+            raise ValueError(f"patient_referenced_graph.{key} must be <= {upper}")
+        if not inclusive_upper and not (value < upper):
+            raise ValueError(f"patient_referenced_graph.{key} must be < {upper}")
+    return value
+
+PATIENT_REFERENCED_P_CONSENSUS_THRESHOLD = require_patient_referenced_scalar(
+    "p_consensus_threshold", lower=0, upper=1, inclusive_upper=True
+)
+PATIENT_REFERENCED_SIMILARITY_QUANTILE = require_patient_referenced_scalar(
+    "similarity_quantile", lower=0, upper=1, inclusive_upper=False
+)
+if "similarity_metrics" not in PATIENT_REFERENCED_GRAPH_CFG:
+    raise ValueError("Missing required patient_referenced_graph key: similarity_metrics")
+PATIENT_REFERENCED_SIMILARITY_METRICS = PATIENT_REFERENCED_GRAPH_CFG["similarity_metrics"]
+if not isinstance(PATIENT_REFERENCED_SIMILARITY_METRICS, list) or not PATIENT_REFERENCED_SIMILARITY_METRICS:
+    raise ValueError("patient_referenced_graph.similarity_metrics must be a non-empty list")
+if "primary_similarity_metric" not in PATIENT_REFERENCED_GRAPH_CFG:
+    raise ValueError("Missing required patient_referenced_graph key: primary_similarity_metric")
+PATIENT_REFERENCED_PRIMARY_SIMILARITY_METRIC = PATIENT_REFERENCED_GRAPH_CFG["primary_similarity_metric"]
+if PATIENT_REFERENCED_PRIMARY_SIMILARITY_METRIC not in PATIENT_REFERENCED_SIMILARITY_METRICS:
+    raise ValueError(
+        "patient_referenced_graph.primary_similarity_metric must be present in "
+        "patient_referenced_graph.similarity_metrics"
+    )
+PATIENT_REFERENCED_SIMILARITY_METRIC_PATTERN = "|".join(map(re.escape, PATIENT_REFERENCED_SIMILARITY_METRICS))
+PATIENT_REFERENCED_SIMILARITY_ROOT = os.path.join(UNSUP_REL, "patient_referenced_similarity_metrics")
+PATIENT_REFERENCED_SIMILARITY_ROOT_ABS = os.path.join(UNSUP, "patient_referenced_similarity_metrics")
+PATIENT_REFERENCED_SIMILARITY_ALL_DIR = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "final_consensus_all")
+PATIENT_REFERENCED_SIMILARITY_ALL_DIR_ABS = os.path.join(UNSUP, "patient_referenced_similarity_metrics", "final_consensus_all")
+PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "comparisons")
+PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR_ABS = os.path.join(UNSUP, "patient_referenced_similarity_metrics", "comparisons")
+
+def patient_referenced_metric_final_consensus_dir(metric, direction):
+    return os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, metric, direction, "final_consensus")
+
+def patient_referenced_metric_final_consensus_dir_abs(metric, direction):
+    return os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT_ABS, metric, direction, "final_consensus")
+
+def patient_referenced_metric_final_dir(metric):
+    return os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, metric)
+
+def patient_referenced_metric_final_dir_abs(metric):
+    return os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR_ABS, metric)
+
+rule cell_line_similarity_graph_metric:
+    """
+    Builds a metric-specific patient-referenced graph branch for each active
+    feature-distance representation. Pearson correlates threshold-restricted
+    p-consensus fractions over the pairwise active-tumour union. Jaccard
+    measures binary overlap over the same pairwise active-tumour union.
+    """
+    input:
+        consensus_rds = lambda wc: nh_final_consensus_rds(wc.direction)
+    output:
+        sim_pairs_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "{metric}", "{direction}", "final_consensus", "cell_line_similarity_pairs_{direction}.tsv"),
+        edges_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "{metric}", "{direction}", "final_consensus", "cell_line_similarity_graph_edges_{direction}.tsv"),
+        nodes_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "{metric}", "{direction}", "final_consensus", "cell_line_similarity_graph_node_summary_{direction}.tsv"),
+        provenance_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "{metric}", "{direction}", "final_consensus", "cell_line_similarity_graph_provenance_{direction}.tsv"),
+        selected_tumours_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "{metric}", "{direction}", "final_consensus", "cell_line_similarity_selected_tumours_{direction}.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "compute_cell_line_similarity_metric.R"),
+        config = os.path.join(BASE, "config", "config.yaml"),
+        out_base = lambda wc: patient_referenced_metric_final_consensus_dir_abs(wc.metric, wc.direction),
+        similarity_metric = lambda wc: wc.metric,
+        consensus_threshold = lambda wc: PATIENT_REFERENCED_P_CONSENSUS_THRESHOLD,
+        similarity_quantile = lambda wc: PATIENT_REFERENCED_SIMILARITY_QUANTILE
+    log: os.path.join(LOGROOT, "cell_line_similarity_graph_metric_{metric}_{direction}.log")
+    conda: CONDA_ENV_R
+    wildcard_constraints:
+        direction=AGN_DIRECTION_PATTERN,
+        metric=PATIENT_REFERENCED_SIMILARITY_METRIC_PATTERN
+    shell:
+        r'''
+        mkdir -p {params.out_base}
+        Rscript {params.script} \
+          --config {params.config} \
+          --profile "{profile_name}" \
+          --direction {wildcards.direction} \
+          --out_base {params.out_base} \
+          --similarity_metric {params.similarity_metric} \
+          --consensus_threshold {params.consensus_threshold} \
+          --similarity_quantile {params.similarity_quantile} \
+          > {log} 2>&1
+        '''
+
+rule resolve_dsmz_graph_neighbours_metric:
+    """
+    Re-runs the existing resolved-neighbour procedure on the metric-specific
+    representation graphs so Pearson and Jaccard remain directly comparable.
+    """
+    input:
+        cfg_file = CFGFILE_ABS,
+        winners_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_winners_by_frac_ge_thr.tsv"),
+        dir_summary_tsv = os.path.join(P_CONS_ALL_DIR, "p_consensus_direction_summary.tsv"),
+        graph_edges = lambda wc: expand(
+            os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, wc.metric, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        resolved_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "{metric}", "resolved_dsmz_neighbours.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "resolve_dsmz_graph_neighbours.R"),
+        config = os.path.join(BASE, "config", "config.yaml"),
+        graph_root = lambda wc: os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT_ABS, wc.metric)
+    log: os.path.join(LOGROOT, "resolve_dsmz_graph_neighbours_metric_{metric}.log")
+    conda: CONDA_ENV_R
+    wildcard_constraints:
+        metric=PATIENT_REFERENCED_SIMILARITY_METRIC_PATTERN
+    shell:
+        r'''
+        mkdir -p $(dirname {output.resolved_tsv})
+        Rscript {params.script} \
+          --config {params.config} \
+          --profile "{profile_name}" \
+          --winners_tsv {input.winners_tsv} \
+          --direction_summary_tsv {input.dir_summary_tsv} \
+          --graph_root {params.graph_root} \
+          --output_tsv {output.resolved_tsv} \
+          > {log} 2>&1
+        test -s {output.resolved_tsv} || (echo "ERROR: missing {output.resolved_tsv}" >&2; exit 1)
+        '''
+
+rule build_multi_representation_majority_threshold_consensus_network_metric:
+    input:
+        node_universe = P_CONS_SHORTNAMES_TSV,
+        graph_edges = lambda wc: expand(
+            os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, wc.metric, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        edges = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "{metric}", "multi_representation_majority_threshold_edges.tsv"),
+        edge_support = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "{metric}", "multi_representation_majority_threshold_edge_support.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
+        tumour_nh_dir = lambda wc: os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT_ABS, wc.metric),
+        directions = ",".join(CONS_DIRECTIONS),
+        min_support = SIMILARITY_CONSENSUS_MIN_SUPPORT,
+        cohort = profile_name
+    log: os.path.join(LOGROOT, "build_multi_representation_majority_threshold_consensus_network_metric_{metric}.log")
+    conda: CONDA_ENV_PY
+    wildcard_constraints:
+        metric=PATIENT_REFERENCED_SIMILARITY_METRIC_PATTERN
+    shell:
+        r'''
+        mkdir -p $(dirname {output.edges})
+        python {params.script} \
+          --tumour_nh_dir {params.tumour_nh_dir} \
+          --out_edges {output.edges} \
+          --out_support {output.edge_support} \
+          --mode majority_threshold \
+          --cohort {params.cohort} \
+          --min_support {params.min_support} \
+          --directions {params.directions} \
+          --name_map {input.node_universe} \
+          --node_universe {input.node_universe} \
+          --require_short \
+          > {log} 2>&1
+        '''
+
+rule build_multi_representation_union_supported_edges_network_metric:
+    input:
+        node_universe = P_CONS_SHORTNAMES_TSV,
+        graph_edges = lambda wc: expand(
+            os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, wc.metric, "{direction}", "final_consensus",
+                         "cell_line_similarity_graph_edges_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        edges = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "{metric}", "multi_representation_union_edges.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "build_consensus_from_direction_edgefiles.py"),
+        tumour_nh_dir = lambda wc: os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT_ABS, wc.metric),
+        directions = ",".join(CONS_DIRECTIONS),
+        cohort = profile_name
+    log: os.path.join(LOGROOT, "build_multi_representation_union_supported_edges_network_metric_{metric}.log")
+    conda: CONDA_ENV_PY
+    wildcard_constraints:
+        metric=PATIENT_REFERENCED_SIMILARITY_METRIC_PATTERN
+    shell:
+        r'''
+        mkdir -p $(dirname {output.edges})
+        python {params.script} \
+          --tumour_nh_dir {params.tumour_nh_dir} \
+          --out_edges {output.edges} \
+          --mode union_supported_edges \
+          --cohort {params.cohort} \
+          --min_support 1 \
+          --directions {params.directions} \
+          --name_map {input.node_universe} \
+          --node_universe {input.node_universe} \
+          --require_short \
+          > {log} 2>&1
+        '''
+
+rule audit_clustering_method_consensus_resolution:
+    input:
+        consensus_tsvs = expand(
+            os.path.join(TUMOUR_NH_ROOT, "{direction}", "final_consensus",
+                         "Final_consensus_tumour_neighbourhoods_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        )
+    output:
+        audit_tsv = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "clustering_method_consensus_resolution.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "audit_clustering_method_consensus_resolution.py"),
+        config = os.path.join(BASE, "config", "config.yaml"),
+        directions = ",".join(CONS_DIRECTIONS)
+    log: os.path.join(LOGROOT, "audit_clustering_method_consensus_resolution.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR_ABS}
+        python {params.script} \
+          --config {params.config} \
+          --profile "{profile_name}" \
+          --directions {params.directions} \
+          --out_tsv {output.audit_tsv} \
+          > {log} 2>&1
+        '''
+
+rule compare_patient_referenced_similarity_metrics:
+    input:
+        pearson_pairs = expand(
+            os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "pearson", "{direction}", "final_consensus",
+                         "cell_line_similarity_pairs_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        ),
+        jaccard_pairs = expand(
+            os.path.join(PATIENT_REFERENCED_SIMILARITY_ROOT, "jaccard", "{direction}", "final_consensus",
+                         "cell_line_similarity_pairs_{direction}.tsv"),
+            direction=CONS_DIRECTIONS
+        ),
+        pearson_resolved = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "pearson", "resolved_dsmz_neighbours.tsv"),
+        jaccard_resolved = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "jaccard", "resolved_dsmz_neighbours.tsv"),
+        pearson_majority = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "pearson", "multi_representation_majority_threshold_edges.tsv"),
+        jaccard_majority = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "jaccard", "multi_representation_majority_threshold_edges.tsv"),
+        pearson_union = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "pearson", "multi_representation_union_edges.tsv"),
+        jaccard_union = os.path.join(PATIENT_REFERENCED_SIMILARITY_ALL_DIR, "jaccard", "multi_representation_union_edges.tsv"),
+        consensus_resolution = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "clustering_method_consensus_resolution.tsv")
+    output:
+        representation_graphs = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_representation_graphs.tsv"),
+        pairwise_similarity = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_pairwise_similarity.tsv"),
+        edge_agreement = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_edge_agreement.tsv"),
+        resolved_graph = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_resolved_graph_comparison.tsv"),
+        resolved_neighbours = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_resolved_neighbours.tsv"),
+        provenance = os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "similarity_graph_provenance.tsv")
+    params:
+        script = os.path.join(BASE, "scripts", "compare_patient_referenced_similarity_metrics.py"),
+        metric_root = PATIENT_REFERENCED_SIMILARITY_ROOT_ABS,
+        directions = ",".join(CONS_DIRECTIONS)
+    log: os.path.join(LOGROOT, "compare_patient_referenced_similarity_metrics.log")
+    conda: CONDA_ENV_PY
+    shell:
+        r'''
+        mkdir -p {PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR_ABS}
+        python {params.script} \
+          --metric_root {params.metric_root} \
+          --directions {params.directions} \
+          --resolved_pearson {input.pearson_resolved} \
+          --resolved_jaccard {input.jaccard_resolved} \
+          --majority_pearson {input.pearson_majority} \
+          --majority_jaccard {input.jaccard_majority} \
+          --union_pearson {input.pearson_union} \
+          --union_jaccard {input.jaccard_union} \
+          --out_representation {output.representation_graphs} \
+          --out_pairwise {output.pairwise_similarity} \
+          --out_edge_agreement {output.edge_agreement} \
+          --out_resolved_graph {output.resolved_graph} \
+          --out_resolved_neighbours {output.resolved_neighbours} \
+          --out_provenance {output.provenance} \
+          > {log} 2>&1
+        '''
+
+rule patient_referenced_similarity_metric_comparison:
+    input:
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_representation_graphs.tsv"),
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_pairwise_similarity.tsv"),
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_edge_agreement.tsv"),
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_resolved_graph_comparison.tsv"),
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "pearson_vs_jaccard_resolved_neighbours.tsv"),
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "similarity_graph_provenance.tsv"),
+        os.path.join(PATIENT_REFERENCED_SIMILARITY_COMPARE_DIR, "clustering_method_consensus_resolution.tsv")
+
 # Rule: summarize_p_consensus_all
 # Method role: aggregates p-consensus outputs across configured feature-distance representations.
 # Flow: per-direction p-consensus RDS files -> ranking, winner, weight, and cross-direction metric tables.
@@ -2219,7 +2560,7 @@ rule summarize_p_consensus_all:
     params:
         script = os.path.join(BASE, "scripts", "summarize_p_consensus_all.R"),
         config = os.path.join(BASE, "config", "config.yaml"),
-        threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
+        threshold = lambda wc: PATIENT_REFERENCED_P_CONSENSUS_THRESHOLD
     log: os.path.join(LOGROOT, "summarize_p_consensus_all.log")
     conda: CONDA_ENV_R
     shell:
@@ -2234,8 +2575,8 @@ rule summarize_p_consensus_all:
 
 
 # Rule: plot_per_cellline_feature_distance_cleveland
-# Method role: final plotting rule for per-cell-line representation support.
-# Flow: p-consensus support tables -> Cleveland-style PDF/PNG diagnostic plot.
+# Method role: final plotting rule for per-cell-line representation comparison.
+# Flow: p-consensus fraction tables -> Cleveland-style PDF/PNG plot.
 # Purpose: reporting visualisation only; it does not alter analysis targets.
 rule plot_per_cellline_feature_distance_cleveland:
     input:
@@ -2248,7 +2589,7 @@ rule plot_per_cellline_feature_distance_cleveland:
     params:
         script = os.path.join(BASE, "scripts", "plot_per_cellline_feature_distance_cleveland.R"),
         disease_label = P_CONS_DISEASE_LABEL,
-        threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
+        threshold = lambda wc: PATIENT_REFERENCED_P_CONSENSUS_THRESHOLD
     log: os.path.join(LOGROOT, "plot_per_cellline_feature_distance_cleveland.log")
     conda: CONDA_ENV_R_BASE
     shell:
@@ -2284,7 +2625,7 @@ rule plot_p_consensus_direction_comparison_dumbbell:
     params:
         script = os.path.join(BASE, "scripts", "plot_p_consensus_direction_dumbbell.R"),
         out_prefix = P_CONS_DIRECTION_DUMBBELL_PREFIX,
-        threshold = lambda wc: cfg.get("tumour_neighbourhoods", {}).get("p_consensus_threshold", 0.7)
+        threshold = lambda wc: PATIENT_REFERENCED_P_CONSENSUS_THRESHOLD
     log: os.path.join(LOGROOT, "plot_p_consensus_direction_comparison_dumbbell.log")
     conda: CONDA_ENV_R_BASE
     shell:
@@ -2303,11 +2644,11 @@ rule plot_p_consensus_direction_comparison_dumbbell:
 # =============================================================================
 # GRAPH-BASED NEIGHBOUR RESOLUTION
 # =============================================================================
-# Stage role: resolves stable cell-line neighbours from patient-referenced support and best-direction evidence.
+# Stage role: resolves stable cell-line neighbours from patient-referenced graph evidence and best-direction evidence.
 
 # Rule: resolve_dsmz_graph_neighbours
-# Method role: graph-resolution rule that resolves stable cell-line neighbours using patient-referenced support.
-# Flow: p-consensus support tables and per-direction graph edges -> resolved-neighbour table and audit sidecars.
+# Method role: graph-resolution rule that resolves stable cell-line neighbours using patient-referenced graph evidence.
+# Flow: p-consensus fraction tables and per-direction graph edges -> resolved-neighbour table and audit sidecars.
 # Required by final graph plotting, validation, DESeq2 grouping, and support-network construction.
 rule resolve_dsmz_graph_neighbours:
     """
@@ -3340,7 +3681,7 @@ rule materialize_study_design:
 
 # Rule: model_selection_summary
 # Method role: validation rule evaluating selected representations and model-selection evidence.
-# Flow: p-consensus support tables and graph annotations -> model-selection table, plot, and notes.
+# Flow: p-consensus fraction tables and graph annotations -> model-selection table, plot, and notes.
 # Used by: diagnostic reporting; it does not choose new workflow targets.
 rule model_selection_summary:
     input:
@@ -3605,12 +3946,6 @@ rule compute_multicohort_cancer_communities:
     params:
         script        = os.path.join(BASE, "scripts",
                             "compute_and_plot_multicohort_cancer_communities.R"),
-        helper_annots = os.path.join(
-            TUMOUR_NH_ROOT, MULTICOHORT_HELPER_ANNOTATION_DIRECTION, "final_consensus",
-            "cell_line_similarity_graph_node_annotations_{}.tsv".format(
-                MULTICOHORT_HELPER_ANNOTATION_DIRECTION
-            )
-        ),
         seed          = 42,
     log: os.path.join(LOGROOT, "compute_multicohort_cancer_communities.log")
     conda: CONDA_ENV_R
@@ -3624,7 +3959,6 @@ rule compute_multicohort_cancer_communities:
           --anchor-audit            {input.anchor_audit} \
           --shortnames              {input.shortnames} \
           --metadata                {input.metadata} \
-          --helper-node-annotations {params.helper_annots} \
           --out-communities         {output.communities} \
           --out-community-summary   {output.community_summary} \
           --out-modularity          {output.modularity} \
@@ -4426,9 +4760,7 @@ FUNCTIONAL_ENRICHMENT_CONTRAST_SUPPORT_HEATMAP_PDF = os.path.join(
 
 MARKER_POST_CFG = config.get("defaults", {}).get("marker_postprocessing", {})
 # Boundary note: pan_cancer is the first-class profile for marker-derived
-# pan-cancer outputs. The multicohort_cancer profile may still declare these
-# rules for explicit-target backward compatibility, but those targets are no
-# longer part of the multicohort default target list.
+# pan-cancer outputs. These rules are declared only for the pan_cancer profile.
 MARKER_POST_ENABLED = bool(MARKER_POST_CFG.get("enabled", False)) and DECLARE_PAN_CANCER_RULES
 
 if MARKER_POST_ENABLED:
@@ -6441,7 +6773,11 @@ def build_pipeline_targets():
             P_CONS_RESOLVED_EDGES_TSV,
             P_CONS_RESOLVED_NODE_STATS_TSV,
             P_CONS_ANCHOR_AUDIT_TSV,
-            P_CONS_RESOLVED_NODE_LABELS_TSV,
+            # P_CONS_RESOLVED_NODE_LABELS_TSV is produced by the
+            # multicohort-only inspection rule and is already included for
+            # that profile via PAN_CANCER_GRAPH_INSPECTION_TARGETS below;
+            # listing it unconditionally breaks DAG construction for cohort
+            # profiles, which have no producing rule.
             P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".pdf",
             P_CONS_PER_CELLLINE_FEATURE_DISTANCE_PREFIX + ".png",
             P_CONS_MULTI_REP_MAJORITY_PREFIX + ".pdf",

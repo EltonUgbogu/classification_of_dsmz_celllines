@@ -1,527 +1,1222 @@
-# =============================================================================
-# UNSUPERVISED CLUSTERING AND TUMOUR NEIGHBOURHOOD ANALYSIS PIPELINE
-# =============================================================================
-#
-# SUMMARY
-#
-# This document provides comprehensive documentation of a computational
-# bioinformatics pipeline designed to investigate transcriptomic relationships between
-# primary tumour samples and cancer cell line models. The pipeline addresses the
-# fundamental question of whether established cancer cell lines faithfully recapitulate
-# the molecular characteristics of their tissues of origin.
-#
-# -----------------------------------------------------------------------------
-# TABLE OF CONTENTS
-#
-# 1. Scientific Background and Rationale
-# 2. Pipeline Architecture Overview
-# 3. Data Sources and Inputs
-# 4. Feature Selection Methodology
-# 5. Clustering Approaches
-# 6. Tumour Neighbourhood Analysis
-# 7. Cell Line Similarity Networks
-# 8. Biological Characterisation
-# 9. Pan-Cancer Integration
-# 10. Key Output Files and Interpretation
-# 11. Configuration System
-# 12. Reproducibility Considerations
-#
-# -----------------------------------------------------------------------------
-# 1. SCIENTIFIC BACKGROUND AND RATIONALE
-#
-# 1.1 The Cell Line Model Problem
-#
-# Cancer cell lines have served as the primary in vitro models for cancer research
-# and drug development for over half a century. However, prolonged culture may
-# lead to genetic drift, causing cell lines to accumulate alterations that
-# distinguish them from their tissues of origin. This divergence raises concerns
-# about the translational relevance of findings derived from cell line studies.
-#
-# 1.2 Research Objectives
-#
-# The pipeline addresses several key questions:
-#
-# 1. Which cell lines most faithfully represent primary tumour transcriptomic
-#    profiles within each cancer type?
-#
-# 2. Are there cell lines that have diverged significantly from any known
-#    tumour molecular state?
-#
-# 3. Can cell lines be grouped into functionally related communities based
-#    on their shared tumour neighbourhood characteristics?
-#
-# 4. How robust are cell line-tumour relationships across different
-#    analytical methodologies?
-#
-# 1.3 The Tumour Neighbourhood Concept
-#
-# For each cell line, the pipeline computes a "tumour neighbourhood" consisting
-# of primary tumour samples that exhibit similar gene expression profiles. The
-# size and composition of this neighbourhood provides a quantitative measure
-# of cell line representativeness. Cell lines with large neighbourhoods spanning
-# many patients are considered highly representative, while those with small
-# or empty neighbourhoods may have limited utility as disease models.
-#
-# -----------------------------------------------------------------------------
-# 2. PIPELINE ARCHITECTURE OVERVIEW
-#
-# 2.1 Layered Design
-#
-# The pipeline is organised into sequential analytical layers:
-#
-# Layer 0: Data Preprocessing and Feature Selection
-# - Variance-stabilised transformation (VST) of RNA-seq count data
-# - Multi-method highly variable gene (HVG) identification
-# - Optional PAM50 molecular subtype gene signature extraction
-#
-# Layer 1: Agnostic Clustering
-# - Hierarchical clustering with Ward linkage
-# - K-means clustering across k=2 to k=8
-# - Both PCA-reduced and full expression space approaches
-# - Three sample views: cell-only, tumour-only, joint
-#
-# Layer 2: Consensus Clustering
-# - ConsensusClusterPlus-based stability assessment
-# - Bootstrap resampling for robustness evaluation
-# - Optimal cluster number determination
-#
-# Layer 3: Tumour Neighbourhood Computation
-# - Per-cell-line similarity scoring against all tumours
-# - p_consensus calculation across parameter combinations
-# - Cross-direction winner determination
-#
-# Layer 4: Similarity Network Analysis
-# - DSMZ cell line similarity graph construction
-# - Louvain and Leiden community detection
-# - Component characterisation
-#
-# Layer 5: Biological Interpretation
-# - Differential expression analysis (DESeq2)
-# - Representativeness scoring
-#
-# Layer 6: Pan-Cancer Integration
-# - Cross-disease comparative analysis
-# - Disease-aware visualisation
-#
-# 2.2 Multi-Direction Ensemble Strategy
-#
-# A central innovation of this pipeline is the systematic evaluation of multiple
-# "directions" - combinations of feature selection methods and distance metrics.
-# This ensemble approach distinguishes robust biological findings from
-# method-specific artefacts.
-#
-# The pipeline evaluates 8 feature selection methods:
-# - Variance: Standard variance across samples
-# - MAD: Median Absolute Deviation (robust to outliers)
-# - MeanAbsDev: Mean Absolute Deviation
-# - Entropy: Information-theoretic measure of distribution complexity
-# - PCA: Principal component loadings
-# - Spearman: Rank correlation-based selection
-# - MX: Maximum expression-based selection
-# - kTotal: Network connectivity-based selection
-#
-# Combined with 2 distance metrics:
-# - Euclidean: Appropriate for VST-transformed data
-# - Correlation: Captures relative expression patterns
-#
-# This yields 16 direction combinations per cancer type (plus optional PAM50
-# directions for breast cancer).
-#
-# -----------------------------------------------------------------------------
-# 3. DATA SOURCES AND INPUTS
-#
-# 3.1 Tumour Data: 
-#
-# The pipeline utilises RNA-seq expression profiles from TCGA,and GEO (Gene Expression Omnibus)
-# the largest publicly available cancer genomics resource. The following cohorts are
-# supported:
-#
-# - BRCA: Breast invasive carcinoma (n approximately 1100 samples)
-# - NBL: Neuroblastoma (available through TARGET)
-# - RBL: Retinoblastoma
-#
-# 3.2 Cell Line Data: DSMZ Collection
-#
-# The Leibniz Institute DSMZ maintains one of the world's largest collections
-# of authenticated human and animal cell lines. Expression profiles are
-# processed identically to Patient Tumour data to enable direct comparison.
-#
-# 3.3 Input File Requirements
-#
-# The pipeline requires:
-#
-# 1. vst_joint_rds: Combined VST-normalised expression matrix containing
-#    both tumour and cell line samples (genes x samples)
-#
-# 2. cell_vst_rds: Cell line-only expression matrix
-#
-# 3. tumour_vst_rds: Tumour-only expression matrix
-#
-# 4. dsmz_meta_csv: Cell line metadata including disease type, tissue
-#    of origin, and authentication status
-#
-# 5. PAM50 gene list (optional, breast cancer only): 50-gene signature
-#    for molecular subtyping
-#
-# -----------------------------------------------------------------------------
-# 4. FEATURE SELECTION METHODOLOGY
-#
-# 4.1 Rationale for Feature Selection
-#
-# With approximately 20,000 protein-coding genes in the human genome,
-# dimensionality reduction through feature selection is essential for:
-#
-# 1. Removing uninformative genes (housekeeping, low expression)
-# 2. Reducing computational burden
-# 3. Improving signal-to-noise ratio
-# 4. Focusing on biologically variable genes
-#
-# 4.2 Variance-Based Methods
-#
-# Variance: The simplest approach computes the variance of each gene's
-# expression across all samples. Genes with high variance are likely to
-# capture meaningful biological differences, though this metric can be
-# dominated by highly expressed genes.
-#
-# MAD (Median Absolute Deviation): A robust alternative to variance that
-# is less sensitive to outliers:
-#
-#     MAD(x) = median(|x - median(x)|)
-#
-# This metric is preferred when samples may contain technical artefacts or
-# extreme biological outliers.
-#
-# 4.3 Information-Theoretic Methods
-#
-# Entropy: Quantifies the complexity of a gene's expression distribution
-# using Shannon entropy. Genes with bimodal or multimodal distributions
-# (characteristic of regulatory switches) receive high entropy scores.
-#
-# 4.4 Dimensionality Reduction Methods
-#
-# PCA Loadings: Principal Component Analysis identifies linear combinations
-# of genes that capture maximal variance. Genes with high loadings on the
-# dominant principal components are selected.
-#
-# 4.5 The Top-500 Gene Strategy
-#
-# After applying each method, the pipeline retains the top 500 genes by rank.
-# This number represents an empirical balance between capturing biological
-# signal and avoiding noise from lowly-expressed or invariant genes.
-#
-# -----------------------------------------------------------------------------
-# 5. CLUSTERING APPROACHES
-#
-# 5.1 Hierarchical Clustering
-#
-# Hierarchical clustering constructs a dendrogram representing sample
-# relationships through iterative merging of clusters. The pipeline employs
-# Ward's minimum variance method, which minimises within-cluster variance
-# at each merge step.
-#
-# Key Parameters:
-# - Distance metric: Euclidean or correlation-based
-# - Linkage method: Ward
-# - Number of clusters (k): Evaluated from k=2 to k=8
-#
-# Advantages:
-# - Produces interpretable dendrograms
-# - No need to pre-specify k
-# - Reveals hierarchical structure
-#
-# 5.2 K-Means Clustering
-#
-# K-means partitioning assigns samples to k clusters by minimising the
-# sum of squared distances to cluster centroids. The algorithm iterates
-# between:
-#
-# 1. Assignment step: Assign each sample to nearest centroid
-# 2. Update step: Recompute centroids as cluster means
-#
-# Note: K-means requires Euclidean distance and is therefore only
-# applied to "_euc" directions.
-#
-# 5.3 PCA-Reduced vs. Direct Clustering
-#
-# The pipeline evaluates both approaches:
-#
-# PCA-Reduced: Expression data is first projected onto the top 20
-# principal components before clustering. This:
-# - Reduces noise by discarding low-variance components
-# - Improves computational efficiency
-# - May lose gene-level interpretability
-#
-# Direct: Clustering is performed on the full (filtered) expression
-# matrix, preserving gene-level information but potentially including noise.
-#
-# 5.4 Sample Views
-#
-# Three clustering configurations are evaluated:
-#
-# 1. Cell-only: Clusters cell lines independently to identify intrinsic
-#    groupings
-#
-# 2. Tumour-only: Clusters tumours independently to identify molecular
-#    subtypes
-#
-# 3. Joint (cell_tumour): Clusters cell lines and tumours together to
-#    assess integration
-#
-# -----------------------------------------------------------------------------
-# 6. TUMOUR NEIGHBOURHOOD ANALYSIS
-#
-# 6.1 Core Algorithm
-#
-# For each cell line, the tumour neighbourhood is computed as follows:
-#
-# 1. Identify which tumour samples cluster together with the cell line
-#    across multiple clustering parameter combinations
-#
-# 2. Count the frequency with which each tumour appears in the same
-#    cluster as the cell line
-#
-# 3. Retain tumours exceeding a frequency threshold as neighbourhood
-#    members
-#
-# 6.2 The p_consensus Metric
-#
-# The p_consensus value quantifies the proportion of clustering analyses
-# in which a tumour-cell line relationship is observed:
-#
-#     p_consensus = (number of analyses where tumour T clusters with cell line C) /
-#                   (total number of analyses)
-#
-# High p_consensus (e.g., >0.7) indicates robust relationships that persist
-# across methodological choices.
-#
-# 6.3 Winner Determination
-#
-# After computing p_consensus across all directions, the pipeline identifies
-# the "winning" direction - the combination of feature selection and distance
-# metric that produces the most robust tumour neighbourhoods. Selection
-# criteria include:
-#
-# 1. Fraction of cell lines with p_consensus > threshold
-# 2. Concordance across directions
-# 3. PCA-derived composite scoring
-#
-# -----------------------------------------------------------------------------
-# 7. CELL LINE SIMILARITY NETWORKS
-#
-# 7.1 Graph Construction
-#
-# Cell lines sharing similar tumour neighbourhoods may represent related
-# biology. The pipeline constructs similarity networks where:
-#
-# - Nodes: Individual cell lines
-# - Edges: Weighted by tumour neighbourhood overlap (Jaccard similarity)
-#
-#     Jaccard(A,B) = |TN_A intersection TN_B| / |TN_A union TN_B|
-#
-# where TN denotes tumour neighbourhood.
-#
-# 7.2 Community Detection
-#
-# Louvain Algorithm: A greedy modularity optimisation algorithm that
-# iteratively merges nodes into communities to maximise:
-#
-#     Q = (1/2m) sum_ij [A_ij - (k_i * k_j)/(2m)] delta(c_i, c_j)
-#
-# where Q is modularity, A is the adjacency matrix, and c denotes community
-# assignment.
-#
-# Leiden Algorithm: An improved variant that guarantees well-connected
-# communities and addresses the resolution limit of Louvain.
-#
-# 7.3 Biological Interpretation
-#
-# Cell line communities identified through network analysis may correspond to:
-# - Shared tissue of origin
-# - Common driver mutations
-# - Similar drug sensitivity profiles
-#
-# -----------------------------------------------------------------------------
-# 8. BIOLOGICAL CHARACTERISATION
-#
-# 8.1 Differential Expression Analysis
-#
-# Using DESeq2, the pipeline identifies genes differentially expressed
-# between:
-#
-# 1. Tumour clusters identified by consensus clustering
-# 2. Cell line communities identified by network analysis
-#
-# DESeq2 employs a negative binomial generalised linear model:
-#
-#     K_ij ~ NB(mu_ij, alpha_j)
-#     log2(mu_ij) = beta_j0 + beta_j1 * x_i + ...
-#
-# 8.2 Functional Enrichment
-#
-# Marker gene lists are submitted to enrichment analysis using:
-#
-# - Gene Ontology (GO): Biological Process, Molecular Function,
-#   Cellular Component
-#
-# - Pathway databases: KEGG, Reactome
-#
-# Enrichment significance is assessed using hypergeometric tests with
-# Benjamini-Hochberg correction for multiple testing.
-#
-# 8.3 Representativeness Scoring
-#
-# A composite representativeness score is computed for each cell line:
-#
-#     Score = p_consensus * specificity_weight
-#
-# where specificity weights reward cell lines with focused (cluster-specific)
-# neighbourhoods versus diffuse (pan-cluster) neighbourhoods.
-#
-# -----------------------------------------------------------------------------
-# 9. PAN-CANCER INTEGRATION
-#
-# 9.1 Rationale
-#
-# Pan-cancer analysis extends the single-disease framework to identify:
-#
-# 1. Cell lines that model biology common to multiple cancer types
-# 2. Disease-specific versus shared transcriptomic programmes
-# 3. Cross-disease cell line relationships
-#
-# 9.2 Joint Feature Space
-#
-# Expression matrices from multiple disease cohorts are merged, and
-# joint feature selection is performed. This ensures that comparisons
-# occur in a unified analytical space.
-#
-# 9.3 Disease-Aware Visualisation
-#
-# UMAP projections and network visualisations are annotated with
-# disease type, enabling assessment of disease-specific clustering
-# versus cross-disease integration.
-#
-# -----------------------------------------------------------------------------
-# 10. KEY OUTPUT FILES AND INTERPRETATION
-#
-# 10.1 Tumour Neighbourhood Results
-#
-# Final_consensus_tumour_neighbourhoods_{direction}.tsv
-# - Columns: cell_line, tumour_id, p_consensus
-# - Interpretation: Higher p_consensus indicates stronger cell line-tumour
-#   relationship
-#
-# p_consensus_best_cell_lines_ranked.tsv
-# - Cell lines ranked by overall representativeness
-# - Top-ranked lines are the best tumour models
-#
-# 10.2 Similarity Network Results
-#
-# DSMZ_DSMZ_graph_edges_{direction}.tsv
-# - Network edge list with similarity weights
-# - For import into network visualisation software
-#
-# DSMZ_DSMZ_Louvain_vs_Leiden_community_table_{direction}.tsv
-# - Community assignments for each cell line
-# - Comparison of Louvain and Leiden results
-#
-# 10.3 Characterisation Results
-#
-# cell_line_characterisation.tsv
-# - Per-cell-line summary including cluster assignment and p_consensus
-# - Primary reference for cell line selection
-#
-# cluster_DE_markers.rds
-# - Differential expression results for tumour clusters
-# - R data object for downstream analysis
-#
-# -----------------------------------------------------------------------------
-# 11. CONFIGURATION SYSTEM
-#
-# 11.1 Profile-Based Configuration
-#
-# The pipeline uses YAML configuration files organised by disease profile:
-#
-# profiles:
-#   brca:
-#     analysis:
-#       cancer_type: "BRCA"
-#       use_pam50: true
-#     paths:
-#       vst_joint_rds: "preprocessing_and_quality_control/brca/results/batch_corr_and_normalisation/purity_filtered_preprocess/joint_vst_purity_filtered_post_bc.rds"
-#   nbl:
-#     analysis:
-#       cancer_type: "NBL"
-#       use_pam50: false
-#     paths:
-#       vst_joint_rds: "data/nbl/vst_joint.rds"
-#
-# 11.2 Default Inheritance
-#
-# Profile-specific settings override defaults through deep merging,
-# allowing compact profile definitions that inherit common parameters.
-#
-# -----------------------------------------------------------------------------
-# 12. REPRODUCIBILITY CONSIDERATIONS
-#
-# 12.1 Random Seeds
-#
-# All stochastic algorithms (k-means, UMAP) use fixed random seeds
-# (default: 42) specified in the configuration file.
-#
-# 12.2 Environment Management
-#
-# Conda environment YAML files specify exact package versions:
-#
-# - tcga-r-env.yaml: R packages for clustering and differential expression
-# - tumour_nh_qc.yaml: UMAP and visualisation tools
-# - python-graph-env.yaml: Network analysis packages
-#
-# 12.3 Logging
-#
-# Comprehensive logs are written to profile-specific directories:
-#
-#     logs/{profile_name}/{rule_name}.log
-#
-# Logs capture all stdout/stderr from analysis scripts for debugging
-# and audit purposes.
-#
-# -----------------------------------------------------------------------------
-# APPENDIX: GLOSSARY OF KEY TERMS
-#
-# Agnostic Clustering: Unsupervised clustering without reference to
-# known biological labels.
-#
-# Consensus Clustering: Stability assessment through repeated clustering
-# of resampled data.
-#
-# Direction: A specific combination of feature selection method and
-# distance metric.
-#
-# HVG (Highly Variable Genes): Genes with high expression variability
-# across samples.
-#
-# p_consensus: Proportion of analyses supporting a specific cell line-
-# tumour relationship.
-#
-# PAM50: 50-gene signature for breast cancer molecular subtyping.
-#
-# Tumour Neighbourhood: Set of primary tumours transcriptomically similar
-# to a given cell line.
-#
-# VST (Variance Stabilising Transformation): Normalisation method that
-# stabilises variance across the expression range.
-#
-# -----------------------------------------------------------------------------
-# CITATION AND REFERENCES
-#
-# This pipeline integrates methodology from:
-#
-# 1. Love MI, Huber W, Anders S. (2014). Moderated estimation of fold
-#    change and dispersion for RNA-seq data with DESeq2. Genome Biology.
-#
-# 2. Wilkerson MD, Hayes DN. (2010). ConsensusClusterPlus: a class discovery
-#    tool with confidence assessments and item tracking. Bioinformatics.
-#
-# 3. Parker JS, et al. (2009). Supervised risk predictor of breast cancer
-#    based on intrinsic subtypes. Journal of Clinical Oncology.
-#
+# Unsupervised Clustering and Patient-Referenced Tumour Neighbourhood Pipeline
+
+## Overview
+
+This document describes the computational pipeline used to quantify transcriptomic
+relationships between patient tumour samples and cancer cell lines. The workflow
+combines multiple feature-selection strategies, Euclidean and Pearson-correlation
+dissimilarities, clustering formulations, adaptive tumour neighbourhoods,
+tumour-wise `p_consensus` recurrence, patient-referenced cell-line graphs,
+multi-representation graph resolution, graph-derived marker contrasts, pan-cancer
+marker aggregation, and functional enrichment analysis.
+
+The patient-referenced graph stage evaluates two similarity definitions in
+parallel:
+
+1. Pearson correlation of threshold-restricted continuous `p_consensus` fractions
+   over the pairwise active-tumour union.
+2. Jaccard similarity derived from the same threshold-restricted continuous
+   `p_consensus` fractions after conversion to binary tumour membership.
+
+Both definitions use the production `p_consensus` threshold of 0.70 and a
+representation-specific similarity quantile of 0.90. Tumours unselected by both
+cell lines do not contribute to either pairwise similarity calculation.
+
+> **Implementation status (2026-08-14):** the tumour-neighbourhood and
+> `p_consensus` path consumes BOTH eligible clustering formulations — the
+> HC/k-means clustering branch (`AGN_*`) and ConsensusClusterPlus (`CCP_*`) —
+> using JOINT cell-line–tumour outputs only. The contributing formulation set
+> is declared in `patient_referenced_graph.clustering_methods_by_distance`
+> and validated exactly at run time: Euclidean representations use
+> `n_methods = 8`, correlation representations `n_methods = 4`. The
+> `p_consensus` denominator is the configured formulation count, never
+> inferred from directories present on disk; missing or unexpected
+> formulations are explicit errors.
+
+## Table of Contents
+
+1. Scientific Background and Objectives
+2. Pipeline Architecture
+3. Data Sources and Inputs
+4. Feature Selection
+5. Dissimilarity Measures and Clustering
+6. Adaptive Tumour Neighbourhoods and `p_consensus`
+7. Patient-Referenced Cell-Line Graphs
+8. Multi-Representation Graph Resolution
+9. Marker Analysis
+10. Multicohort and Pan-Cancer Analysis
+11. Key Output Files
+12. Configuration
+13. Reproducibility and Validation
+14. Glossary
+
+---
+
+## 1. Scientific Background and Objectives
+
+### 1.1 Patient-Referenced Cell-Line Analysis
+
+Cancer cell lines are widely used experimental models. Prolonged culture and
+adaptation can produce transcriptomic states that differ from those observed in
+patient tumours. The pipeline therefore evaluates cell lines relative to patient
+tumour expression profiles rather than assuming that a labelled cancer type alone
+establishes transcriptomic proximity.
+
+### 1.2 Main Objectives
+
+The pipeline asks:
+
+1. Which patient tumours are transcriptomically close to each cell line under
+   different feature-distance representations?
+2. Which cell-line–tumour neighbourhood relationships recur across clustering
+   formulations within a fixed representation?
+3. Which cell-line relationships recur across multiple feature-distance
+   representations?
+4. Which cell lines become isolates or central nodes after graph resolution?
+5. How sensitive is the patient-referenced graph to the definition of
+   cell-line similarity?
+6. Which genes distinguish graph-defined cell-line roles, and which biological
+   programmes are represented by the resulting pan-cancer marker panel?
+
+### 1.3 Tumour-Neighbourhood Concept
+
+For a given feature-distance representation and clustering formulation, each cell
+line is associated with an adaptive neighbourhood of patient tumours. Candidate
+tumours are identified from the relevant joint clustering solution and ranked by
+their dissimilarity to the cell line.
+
+The neighbourhood is therefore a method-defined set of nearby patient tumours. Its
+size is governed by the adaptive neighbourhood rule and should not be interpreted
+as a stand-alone measure of how representative a cell line is.
+
+Recurrence of a specific cell-line–tumour relationship across clustering
+formulations is quantified by the `p_consensus` fraction.
+
+---
+
+## 2. Pipeline Architecture
+
+The analysis is organised into the following layers.
+
+### Layer 1: Data Preprocessing and Feature Selection
+
+- Batch correction and variance-stabilising transformation (VST)
+- Purity filtering of patient tumour profiles
+- Six feature-ranking methods, each selecting a top-3,000 gene set
+- Three connectivity-based methods, each selecting a top-500 gene set
+
+### Layer 2: Feature-Distance Representations
+
+- Nine feature-selection methods
+- Euclidean distance
+- Pearson correlation distance
+- Eighteen cancer-specific feature-distance representations
+
+### Layer 3: Clustering
+
+- HC/k-means clustering in expression and PCA-reduced spaces
+- ConsensusClusterPlus clustering in expression and PCA-reduced spaces
+- Cell-only, tumour-only, and joint cell-line–tumour sample scopes where implemented
+- Only joint cell-line–tumour clustering solutions are eligible to define
+  cell-line tumour neighbourhoods
+
+### Layer 4: Adaptive Tumour-Neighbourhood Computation
+
+- Candidate tumours are obtained from the relevant joint clustering solution
+- Candidate tumours are ranked by tumour–cell-line dissimilarity
+- Adaptive top-k tumour neighbourhoods are constructed
+- `p_consensus` is calculated tumour-wise within each feature-distance representation
+
+The two clustering formulations of Layer 3 are parallel branches: neither
+consumes the other's outputs, and their method-specific cell-line tumour
+neighbourhoods are brought together at the `p_consensus` stage.
+
+```text
+                Feature-distance representation
+                           ↓
+                  clustering formulations
+                    ↙             ↘
+             HC / k-means      Consensus
+              clustering       clustering
+                    ↘             ↙
+             method-specific cell-line
+                tumour neighbourhoods
+                           ↓
+                 p_consensus fraction
+```
+
+### Layer 5: Representation-Specific Patient-Referenced Graphs
+
+- Profile-level `p_consensus` fractions are mean-pooled for biological replicates
+- A threshold of `p_consensus >= 0.70` defines the threshold-restricted continuous
+  tumour-association profile
+- Pearson and Jaccard cell-line similarity are calculated independently
+- A representation- and metric-specific 90th-percentile threshold selects graph edges
+
+### Layer 6: Multi-Representation Graph Resolution
+
+- Edge recurrence is evaluated across active feature-distance representations
+- A majority recurrence threshold is derived from the number of active
+  representations
+- Graph-resolved neighbour sets are obtained through the global–local neighbour
+  intersection
+
+### Layer 7: Marker Prioritisation and Functional Analysis
+
+- Graph-defined isolate and anchor contrasts
+- Differential expression analysis with DESeq2
+- Marker selection under declared statistical and expression criteria
+- Pan-cancer marker aggregation
+- Functional enrichment analysis
+
+### Layer 8: Multicohort and Pan-Cancer Analysis
+
+- Cancer-type annotation of multicohort UMAP and graph visualisations
+- Pan-cancer marker-derived analyses
+- Qualitative examination of multicohort transcriptomic organisation
+
+### 2.1 Feature-Distance Representation Strategy
+
+A central feature of this pipeline is the systematic evaluation of multiple
+feature-distance representations, defined by combinations of feature-selection
+methods and dissimilarity measures. This allows transcriptomic similarity to be
+evaluated across several representations of tumour–cell-line relationships.
+
+The standard cancer-specific grid contains:
+
+- 9 feature-selection methods
+- 2 dissimilarity measures
+
+This yields 18 feature-distance representations per cancer type, subject to
+profile-specific configuration.
+
+PAM50 is breast-cancer-specific and is treated separately from the generic
+cancer-specific feature-distance grid.
+
+---
+
+## 3. Data Sources and Inputs
+
+### 3.1 Patient Tumour Cohorts
+
+Current patient tumour profiles include:
+
+- **Breast cancer:** TCGA-BRCA
+- **Neuroblastoma:** TARGET and additional public neuroblastoma cohorts
+- **Retinoblastoma:** public retinoblastoma cohorts
+
+The current purity-filtered joint VST matrices contain:
+
+- **Breast cancer:** 773 patient tumours + 29 cell-line profiles
+- **Neuroblastoma:** 235 patient tumours + 18 cell-line profiles
+- **Retinoblastoma:** 68 patient tumours + 9 cell-line profiles
+
+For retinoblastoma, profile-level replicates are combined to 9 biological cell
+lines before patient-referenced graph construction.
+
+### 3.2 Cell-Line Inputs
+
+The analysed cell lines are obtained from DSMZ. The pipeline uses cell-line
+expression profiles and metadata alongside patient tumour data.
+
+Expression preprocessing is designed to place tumour and cell-line profiles in a
+common VST expression coordinate system for the patient-referenced analyses.
+
+### 3.3 Required Inputs
+
+Profile-specific inputs include:
+
+1. Joint tumour–cell-line VST expression matrix
+2. Tumour-only VST expression matrix where required
+3. Cell-line-only VST expression matrix where required
+4. Cell-line metadata
+5. Study-design and source metadata
+6. Direction-specific gene lists
+7. Cell-line-only raw integer count matrices for DESeq2 marker analysis
+8. PAM50 gene list where breast-cancer-specific annotation is required
+
+Clustering and graph construction use VST expression data. DESeq2 marker analysis
+uses raw integer counts rather than VST values.
+
+---
+
+## 4. Feature Selection
+
+### 4.1 Six Top-3,000 Feature-Ranking Methods
+
+Six methods each select a top-3,000 gene set:
+
+- **Variance:** ranks genes by variance across samples
+- **HVG residual variance:** ranks genes by residual variation after accounting
+  for the mean–variance relationship
+- **Median absolute deviation (MAD):** ranks genes by median-based dispersion
+- **Mean absolute deviation (MeanAbsDev):** ranks genes by mean absolute dispersion
+- **Shannon entropy:** ranks genes by diversity of expression values across samples
+- **PCA loadings:** ranks genes by their contribution to leading principal components
+
+These methods do not all estimate the same statistical property. They provide
+alternative feature rankings based on dispersion, expression-value diversity, or
+contribution to multivariate variation.
+
+For entropy, a high score indicates a broader distribution of observations across
+the discretised expression states. Entropy does not specifically identify
+bimodality or multimodality.
+
+### 4.2 Three Top-500 Connectivity-Based Methods
+
+The union of the six top-3,000 gene lists defines the candidate feature set for
+three connectivity-based rankings:
+
+- **Spearman connectivity:** mean absolute Spearman correlation
+- **MX score:** Spearman connectivity weighted by scaled variance
+- **WGCNA kTotal:** total unsigned, soft-thresholded connectivity
+
+Each method selects its top 500 genes.
+
+Conceptually:
+
+```text
+Spearman connectivity:
+K_S(g) = mean_h |rho_S(g,h)|
+
+MX score:
+MX(g) = K_S(g) * scaled_variance(g)
+
+WGCNA kTotal:
+a_gh = |cor(g,h)|^beta
+kTotal(g) = sum_h a_gh
+```
+
+### 4.3 Feature-Distance Representations
+
+Each selected gene set defines a sample representation. Crossing the nine
+feature-selection methods with the two dissimilarity measures gives:
+
+```text
+9 feature-selection methods × 2 dissimilarity measures = 18 representations
+```
+
+The two dissimilarity measures are:
+
+- Euclidean distance
+- Pearson correlation distance
+
+---
+
+## 5. Dissimilarity Measures and Clustering
+
+### 5.1 Euclidean Distance
+
+For two samples \(x\) and \(y\) in a selected \(p\)-gene expression space:
+
+\[
+d_E(x,y)
+=
+\sqrt{\sum_{g=1}^{p}(x_g-y_g)^2}
+\]
+
+Euclidean distance measures absolute separation in the selected VST expression
+coordinates.
+
+### 5.2 Pearson Correlation Distance
+
+\[
+d_{\mathrm{corr}}(x,y)
+=
+1-
+ho(x,y)
+\]
+
+where \(
+ho(x,y)\) is the Pearson correlation coefficient across the selected
+genes.
+
+Pearson correlation distance measures disagreement in relative expression
+patterns. It is invariant to additive shifts and positive rescaling of an entire
+sample profile.
+
+`1 - Pearson correlation` is a dissimilarity measure and is not generally a
+mathematical metric.
+
+### 5.3 HC/K-Means Clustering
+
+The workflow contains a single-run HC/k-means branch applied separately to
+configured feature-distance representations.
+
+It includes:
+
+- hierarchical clustering in expression space
+- hierarchical clustering in PCA-reduced space
+- k-means in expression space for Euclidean representations
+- k-means in PCA-reduced space for Euclidean representations
+
+The branch is evaluated over:
+
+- cell-line-only profiles
+- tumour-only profiles
+- joint cell-line–tumour profiles
+
+Only joint cell-line–tumour clustering solutions can directly define
+cell-line tumour neighbourhoods.
+
+The hierarchical-clustering \(k\) grid is evaluated from \(k=2\) to \(k=8\)
+where applicable. K-means is restricted to Euclidean representations.
+
+Hierarchical clustering uses Ward.D2. Ward.D2 is Euclidean in its standard
+formulation, so correlation-distance HC uses an explicitly Euclidean-compatible
+construction: the chord distance `sqrt(2 * (1 - r))`, which is the exact
+Euclidean distance between centred, unit-norm sample vectors. This matches the
+correlation-geometry transform (centre + unit norm + Euclidean distance) applied
+by the ConsensusClusterPlus branch, so both branches operate on the same
+correlation geometry and both are eligible tumour-neighbourhood formulations.
+
+### 5.4 Expression-Space and PCA-Space Clustering
+
+Two input spaces are evaluated:
+
+- **Expression space:** clustering is applied to the selected-gene expression
+  coordinates
+- **PCA-reduced space:** clustering is applied after projection onto the
+  configured leading principal components
+
+PCA provides a lower-dimensional coordinate system derived from the selected
+expression matrix. It should not be interpreted as automatically removing
+biological or technical noise.
+
+### 5.5 ConsensusClusterPlus Clustering
+
+ConsensusClusterPlus provides a separate resampling-based clustering stage. Its
+joint cell-line–tumour formulations contribute to tumour-neighbourhood
+construction alongside the HC/k-means formulations:
+
+For correlation representations:
+
+- `CCP_HC_expr_cell_tumour`
+- `CCP_HC_pca_cell_tumour`
+
+For Euclidean representations:
+
+- `CCP_HC_expr_cell_tumour`
+- `CCP_HC_pca_cell_tumour`
+- `CCP_KM_expr_cell_tumour`
+- `CCP_KM_pca_cell_tumour`
+
+ConsensusClusterPlus does not consume the HC/k-means branch outputs. The two
+branches operate as separate clustering formulations over the relevant
+representation.
+
+## 6. Adaptive Tumour Neighbourhoods and `p_consensus`
+
+### 6.1 Candidate Tumour Set
+
+For cell line \(i\), feature-distance representation \(r\), and clustering
+formulation \(a\), candidate tumours are obtained from the relevant joint
+cell-line–tumour clustering solution.
+
+The candidate tumours are then ranked by tumour–cell-line dissimilarity within
+representation \(r\).
+
+### 6.2 Adaptive Neighbourhood Size
+
+If \(n_i\) is the number of candidate tumours for cell line \(i\), the adaptive
+neighbourhood size is:
+
+\[
+k_i
+=
+\min\left(
+200,\;
+\max\left(30,\left\lceil0.10n_i
+ight
+ceil
+ight),\;
+n_i
+
+ight)
+\]
+
+Thus the neighbourhood:
+
+- scales with 10% of the candidate set
+- has a target minimum of 30 tumours when at least 30 candidates are available
+- is capped at 200 tumours
+- never exceeds the available candidate count
+
+The method-specific tumour neighbourhood is denoted
+\(\mathcal{N}_{i,r,a}\).
+
+### 6.3 Tumour-Wise `p_consensus` Fraction
+
+For cell line \(i\), tumour \(t\), representation \(r\), and configured
+clustering-method set \(\mathcal{A}_r\):
+
+\[
+p_{\mathrm{consensus}}(i,t\mid r)
+=
+rac{1}{|\mathcal{A}_r|}
+\sum_{a\in\mathcal{A}_r}
+\mathbf{1}
+\left[
+t\in\mathcal{N}_{i,r,a}
+
+ight]
+\]
+
+The numerator is the number of eligible clustering formulations in which tumour
+\(t\) belongs to the adaptive tumour neighbourhood of cell line \(i\).
+
+`p_consensus` is a recurrence fraction across the configured clustering
+formulations. 
+
+### 6.5 Biological Replicate Pooling and Thresholding
+
+For biological cell line \(s\), let \(U_s\) be its set of profile-level
+measurements. The pooled tumour-wise fraction is:
+
+\[
+ar p_{s,t,r}
+=
+rac{1}{|U_s|}
+\sum_{u\in U_s}
+p_{\mathrm{consensus}}(u,t\mid r)
+\]
+
+The patient-referenced graph uses the production threshold:
+
+\[
+	heta=0.70
+\]
+
+and defines the threshold-restricted continuous profile:
+
+\[
+z_{s,t,r}
+=
+egin{cases}
+ar p_{s,t,r}, & ar p_{s,t,r}\ge	heta\
+0, & 	ext{otherwise}
+\end{cases}
+\]
+
+Both Pearson and Jaccard graph definitions begin from this same
+threshold-restricted continuous profile.
+
+---
+
+## 7. Patient-Referenced Cell-Line Graphs
+
+### 7.1 Pairwise Active-Tumour Union
+
+For biological cell lines \(i\) and \(j\) in representation \(r\), define:
+
+\[
+A_{ij,r}
+=
+\left\{
+t:
+z_{i,t,r}>0
+\;\lor\;
+z_{j,t,r}>0
+
+ight\}
+\]
+
+This is the pairwise active-tumour union.
+
+For each tumour:
+
+- positive for both cell lines: included
+- positive for only one cell line: included as disagreement
+- zero for both cell lines: excluded
+
+Joint zeros therefore do not contribute evidence of cell-line similarity.
+
+### 7.2 Pearson Similarity
+
+Pearson uses the threshold-restricted continuous `p_consensus` fractions over
+the pairwise active-tumour union:
+
+\[
+S^{(P)}_r(i,j)
+=
+\operatorname{cor}_{t\in A_{ij,r}}
+\left(
+z_{i,t,r},
+z_{j,t,r}
+
+ight)
+\]
+
+It quantifies linear concordance between the two threshold-restricted tumour
+association profiles among tumours selected by at least one of the two cell
+lines.
+
+Pearson similarity is undefined when the restricted vectors do not permit a
+valid correlation, including zero-variance cases. Undefined similarities are
+recorded and excluded from graph-threshold estimation.
+
+### 7.3 Jaccard Similarity
+
+Jaccard starts from the same threshold-restricted continuous profile and converts
+it to binary tumour membership:
+
+\[
+b_{i,t,r}
+=
+\mathbf{1}[z_{i,t,r}>0]
+\]
+
+Then:
+
+\[
+J_r(i,j)
+=
+rac{
+\sum_t b_{i,t,r}b_{j,t,r}
+}{
+\sum_t
+\mathbf{1}
+[b_{i,t,r}=1\lor b_{j,t,r}=1]
+}
+\]
+
+Equivalently:
+
+\[
+J_r(i,j)
+=
+rac{|N_{i,r}\cap N_{j,r}|}
+{|N_{i,r}\cup N_{j,r}|}
+\]
+
+where \(N_{i,r}\) is the set of tumours selected for cell line \(i\) after the
+0.70 threshold.
+
+Jaccard therefore measures agreement in binary tumour membership. Qualifying
+continuous values such as 0.75 and 1.00 both become binary membership value 1.
+
+If neither cell line selects any tumour, the union is empty and Jaccard is
+undefined (`NA`).
+
+### 7.4 Representation-Specific Graph Threshold
+
+For metric \(M\in\{\mathrm{Pearson},\mathrm{Jaccard}\}\), collect all defined
+non-self unordered cell-line-pair similarities in representation \(r\):
+
+\[
+\mathcal{S}_{r,M}
+=
+\left\{
+S_{r,M}(i,j):
+i<j,\;
+S_{r,M}(i,j)	ext{ defined}
+
+ight\}
+\]
+
+The production edge threshold is:
+
+\[
+	au_{r,M}
+=
+Q_{0.90}(\mathcal{S}_{r,M})
+\]
+
+An undirected edge is selected when:
+
+\[
+\{i,j\}\in E_{r,M}
+\iff
+S_{r,M}(i,j)\ge	au_{r,M}
+\]
+
+The 0.90 quantile is computed separately for every metric and representation.
+The Pearson threshold is not reused for Jaccard.
+
+The `>=` edge rule includes all ties at the percentile threshold. The selected
+edge fraction can therefore exceed 10%, especially for discrete Jaccard
+similarities.
+
+### 7.5 Representation-Specific Graph
+
+For each representation and similarity metric:
+
+\[
+G_{r,M}
+=
+(S,E_{r,M})
+\]
+
+where \(S\) is the set of biological cell lines and \(E_{r,M}\) is the
+threshold-selected edge set.
+
+The graph is a patient-referenced cell-line similarity graph. Its edges encode
+similarity derived from tumour-neighbourhood recurrence profiles and should not
+be interpreted as direct biological interactions.
+
+### 7.6 Community Structure
+
+Community detection can be applied to graph outputs to describe groups of nodes
+with relatively dense internal connectivity.
+
+Community assignments describe graph structure under the selected graph
+definition. They are not assumed to correspond to predefined biological classes,
+common driver mutations, or drug-response classes unless independent evidence is
+provided.
+
+---
+
+## 8. Multi-Representation Graph Resolution
+
+### 8.1 Edge Recurrence Across Representations
+
+For a fixed similarity metric \(M\) and unordered cell-line edge \(e\):
+
+\[
+a_M(e)
+=
+\sum_{r\in\mathcal{R}}
+\mathbf{1}[e\in E_{r,M}]
+\]
+
+The edge-recurrence fraction is:
+
+\[
+f_M(e)
+=
+rac{a_M(e)}{|\mathcal{R}|}
+\]
+
+Pearson-derived and Jaccard-derived representation-specific graphs are processed
+independently. Their edge-recurrence counts are not pooled.
+
+### 8.2 Majority Recurrence Threshold
+
+For \(|\mathcal{R}|\) active representations, the majority threshold is:
+
+\[
+m
+=
+\left\lfloor
+rac{|\mathcal{R}|}{2}
+
+ight
+floor
++1
+\]
+
+This threshold is derived from the number of active representations rather than
+being independently fixed for each cancer type.
+
+### 8.3 Global–Local Neighbour Intersection
+
+The graph-resolution procedure operates independently for each similarity
+metric.
+
+For cell line \(i\):
+
+\[
+N_{\mathrm{global}}(i)
+=
+N_{r^*}(i)
+\]
+
+\[
+N_{\mathrm{local}}(i)
+=
+igcup_{r\in T_i}
+N_r(i)
+\]
+
+\[
+N_{\mathrm{final}}(i)
+=
+N_{\mathrm{global}}(i)
+\cap
+N_{\mathrm{local}}(i)
+\]
+
+where \(r^*\) is the selected global representation and \(T_i\) is the relevant
+local representation set for cell line \(i\).
+
+The resolved graph is defined by the resulting graph-resolved neighbour sets. It
+should not be described as simple pruning of the edge-recurrence network.
+
+### 8.4 Isolates and Central Nodes
+
+A graph isolate is a biological cell line with degree zero in the final resolved
+graph.
+
+Isolation means that no neighbour is selected by the graph-resolution rule. It
+does not mean that the cell line has no transcriptomic proximity to any patient
+tumour.
+
+Central graph roles are described using graph quantities such as:
+
+- degree
+- betweenness centrality
+- connected-component membership
+
+Anchor candidates are drawn from highest-degree and highest-betweenness nodes
+within connected components.
+
+---
+
+## 9. Marker Analysis
+
+### 9.1 Graph-Derived Cell-Line Contrasts
+
+Graph-defined cell-line roles provide the focal and reference groups used for
+marker analysis.
+
+The primary contrast classes include:
+
+- isolate-based contrasts
+- anchor-based contrasts
+
+These are cell-line contrasts. They are not tumour-cluster versus cell-line
+community contrasts.
+
+### 9.2 Differential Expression Analysis
+
+DESeq2 is applied to cell-line-only raw integer counts.
+
+For gene \(j\) in sample \(i\):
+
+\[
+K_{ij}
+\sim
+\mathrm{NB}(\mu_{ij},lpha_j)
+\]
+
+with:
+
+\[
+\log(\mu_{ij})
+=
+\log(s_i)
++
+eta_{j0}
++
+eta_{j1}x_i
+\]
+
+where:
+
+- \(s_i\) is the sample-specific size factor
+- \(lpha_j\) is the gene-specific dispersion parameter
+- \(x_i\) encodes the two-group graph-derived contrast
+
+Reported log-fold changes are expressed on the \(\log_2\) scale.
+
+### 9.3 Marker Selection
+
+Genes passing the declared differential-expression and expression filters are
+selected for marker analysis.
+
+Selection uses quantities including:
+
+- adjusted \(p\)-value
+- absolute log2 fold change
+- base expression requirements
+- test-sample expression requirements
+- recurrence across graph-derived contrasts
+
+The exact criteria differ between isolate- and anchor-based contrasts and are
+defined by the marker-analysis configuration and scripts.
+
+---
+
+## 10. Multicohort and Pan-Cancer Analysis
+
+### 10.1 Pan-Cancer Marker Aggregation
+
+Cancer-specific marker evidence is aggregated across breast cancer,
+neuroblastoma, and retinoblastoma to construct the pan-cancer marker panel.
+
+For cancer type \(c\), marker-source class \(s\), contrast \(j\), and gene \(g\),
+let \(M_{c,s,j}\) denote the marker list passing the declared filters.
+
+Within-cancer recurrence is:
+
+\[
+r_{c,s}(g)
+=
+\sum_j
+\mathbf{1}
+[g\in M_{c,s,j}]
+\]
+
+Genes recurring across multiple contrasts are distinguished from non-recurrent
+candidates. Candidate genes are evaluated using the declared statistical,
+fold-change, and expression criteria before construction of the final marker
+panel.
+
+The pan-cancer marker panel is therefore constructed from cancer-specific
+DESeq2 marker evidence. It is not produced by merging all cohort matrices and
+performing a new joint feature-selection step.
+
+### 10.2 Functional Enrichment Analysis
+
+Functional over-representation analysis is applied to the pan-cancer marker
+panel using g:Profiler and an eligible background gene set.
+
+The analysis evaluates biological processes and pathways represented among the
+selected marker genes. Multiple-testing correction is applied using the
+configured g:Profiler procedure.
+
+### 10.3 Multicohort Visualisation
+
+Multicohort UMAP and graph visualisations can be annotated by cancer type to
+examine the organisation of cell-line and tumour profiles across cohorts.
+
+UMAP is used for qualitative visual interpretation. Distances and apparent
+clusters in the two-dimensional embedding are not treated as quantitative
+evidence of discrete biological classes.
+
+---
+
+## 11. Key Output Files
+
+### 11.1 Tumour-Neighbourhood Outputs
+
+`Final_consensus_tumour_neighbourhoods_{direction}.tsv`
+
+- contains cell-line–tumour neighbourhood records
+- contains the corresponding `p_consensus` fraction
+- records tumour-wise recurrence across the contributing clustering formulations
+
+Interpretation:
+
+A higher `p_consensus` means that the same cell-line–tumour neighbourhood
+relationship occurs in a larger fraction of the configured clustering
+formulations for that feature-distance representation.
+
+### 11.2 Representation-Specific Patient-Referenced Graph Outputs
+
+`cell_line_similarity_pairs_{direction}.tsv`
+
+- pairwise cell-line similarities derived from threshold-restricted
+  `p_consensus` profiles
+
+`cell_line_similarity_graph_edges_{direction}.tsv`
+
+- threshold-selected edges for the representation-specific patient-referenced
+  graph
+
+`cell_line_similarity_graph_node_summary_{direction}.tsv`
+
+- node-level graph quantities for the representation-specific graph
+
+`cell_line_similarity_undefined_pairs_{direction}.tsv`
+
+- pairs with undefined similarity values
+- reason for the undefined similarity where recorded
+
+### 11.3 Graph-Resolution and Metric-Evaluation Outputs
+
+Current metric-evaluation outputs include:
+
+- `pearson_vs_jaccard_representation_graphs.tsv`
+- `pearson_vs_jaccard_pairwise_similarity.tsv`
+- `pearson_vs_jaccard_edge_agreement.tsv`
+- `pearson_vs_jaccard_resolved_graph_comparison.tsv`
+- `pearson_vs_jaccard_resolved_neighbours.tsv`
+- `similarity_graph_provenance.tsv`
+- `clustering_method_consensus_resolution.tsv`
+
+These files report representation-specific graph structure, edge agreement,
+resolved-neighbour agreement, graph provenance, and clustering-method
+composition.
+
+### 11.4 Marker and Functional-Analysis Outputs
+
+The marker-analysis stage produces:
+
+- DESeq2 results for graph-derived cell-line contrasts
+- marker lists passing the declared filters
+- cancer-specific marker recurrence results
+- pan-cancer marker-panel outputs
+- functional enrichment results for the marker panel
+
+Exact filenames are defined by the active marker-analysis rules and should not be
+replaced by legacy tumour-cluster or representativeness-scoring filenames.
+
+---
+
+## 12. Configuration
+
+### 12.1 Profile-Based Configuration
+
+The workflow uses YAML configuration with shared defaults and cancer-specific
+profile sections.
+
+Profile-specific values override inherited defaults through deep merging.
+
+### 12.2 Feature-Distance Representations
+
+Active cancer-specific directions are defined through configuration rather than
+by scanning whatever output directories happen to exist.
+
+The standard feature-selection grid contains:
+
+- Variance
+- HVG residual variance
+- MAD
+- MeanAbsDev
+- Entropy
+- PCA loadings
+- Spearman connectivity
+- MX score
+- WGCNA kTotal
+
+crossed with:
+
+- Euclidean distance
+- Pearson correlation distance
+
+### 12.3 Patient-Referenced Graph Parameters
+
+Production graph parameters are:
+
+```yaml
+patient_referenced_graph:
+  p_consensus_threshold: 0.70
+  similarity_quantile: 0.90
+  similarity_metrics:
+    - pearson
+    - jaccard
+```
+
+Values such as 0.75 for the `p_consensus` threshold and 0.85 for the similarity
+quantile were used only in configuration-perturbation tests and are not
+production choices.
+
+### 12.4 Clustering-Method Configuration
+
+`patient_referenced_graph.clustering_methods_by_distance` declares the exact
+clustering formulations contributing to the tumour-neighbourhood recurrence
+calculation. `AGN_*` identifies the HC/k-means clustering branch (retained
+internal compatibility identifier); `CCP_*` identifies ConsensusClusterPlus.
+Identifiers match the `tumour_neighbourhoods/<direction>/<method_id>/` output
+directories exactly.
+
+Correlation (`n_methods = 4`):
+
+```text
+AGN_HC_expr_cell_tumour
+AGN_HC_pca_cell_tumour
+CCP_HC_expr_cell_tumour
+CCP_HC_pca_cell_tumour
+```
+
+Euclidean (`n_methods = 8`):
+
+```text
+AGN_HC_expr_cell_tumour
+AGN_HC_pca_cell_tumour
+AGN_KM_expr_cell_tumour
+AGN_KM_pca_cell_tumour
+CCP_HC_expr_cell_tumour
+CCP_HC_pca_cell_tumour
+CCP_KM_expr_cell_tumour
+CCP_KM_pca_cell_tumour
+```
+
+The `p_consensus` denominator is determined from these exact configured method
+identities, never inferred from directories present on disk. Declared methods
+whose outputs are missing, and discovered outputs that are not declared, both
+raise explicit errors (`scripts/compute_tumour_neighbourhoods.R`,
+`scripts/tumour_neighbourhood_p_consensus.R`). k-means formulations are
+declared for Euclidean directions only, since k-means minimises Euclidean
+inertia and is undefined under correlation distance.
+
+### 12.5 Adaptive-Neighbourhood Configuration
+
+The methodological values are:
+
+```text
+fraction = 0.10
+minimum = 30
+maximum = 200
+```
+
+A previous implementation audit found that these values were still hard-coded at
+an active call site despite corresponding configuration entries. This wiring
+should be revalidated after the current refactor. Documentation should describe
+the configuration as the execution source only after that check passes.
+
+---
+
+## 13. Reproducibility and Validation
+
+### 13.1 Random Seeds
+
+Stochastic procedures use fixed random seeds where applicable. Seed values are
+defined through configuration or analysis scripts.
+
+### 13.2 Environment Management
+
+Conda environments define software dependencies for the pipeline stages,
+including:
+
+- R-based transcriptomic and clustering analysis
+- tumour-neighbourhood analysis
+- Python-based graph analysis
+- visualisation procedures
+
+### 13.3 Logging
+
+Pipeline rules write execution logs to rule- and profile-specific locations.
+Logs record standard output, error output, and workflow failures needed for
+reproducibility and debugging.
+
+### 13.4 Graph Provenance
+
+Metric-specific graph provenance should record at minimum:
+
+- cancer profile
+- feature-distance representation
+- similarity metric
+- `p_consensus` threshold
+- similarity quantile
+- computed similarity threshold
+- number and identities of contributing clustering formulations
+- number of candidate cell-line pairs
+- number of defined and undefined similarities
+- number of pairs above the threshold
+- number of pairs tied at the threshold
+- selected edge count
+- selected edge fraction
+- graph density
+
+Pairwise similarity outputs should also record:
+
+- `n_pairwise_active_tumours`
+- shared selected-tumour count
+- selected-tumour count for each cell line
+- `undefined_similarity_reason`
+
+### 13.5 Undefined Similarities
+
+Undefined Pearson and Jaccard values are excluded from the similarity-quantile
+population and cannot become graph edges.
+
+For Pearson, a small pairwise active-tumour count and zero-variance restricted
+vectors require explicit audit.
+
+For Jaccard, an empty active-tumour union is recorded as undefined (`NA`).
+
+### 13.6 Percentile Ties
+
+The graph rule uses:
+
+```text
+similarity >= computed_similarity_threshold
+```
+
+All pairs tied at the configured percentile threshold are therefore selected.
+The graph is not an exact top-10%-of-pairs graph.
+
+### 13.7 Current Implementation Checks
+
+The following points were validated on the regenerated outputs (2026-08-14):
+
+1. Joint HC/k-means clustering outputs are connected to tumour-neighbourhood
+   generation and `p_consensus`: the `tumour_nh_hc` / `tumour_nh_km` rules
+   declare the JOINT `AGN_*` cluster files as inputs alongside the `CCP_*`
+   files, and both branches produce method-specific neighbourhood tables.
+2. `n_methods = 4` for correlation and `n_methods = 8` for Euclidean
+   representations, confirmed for every configured representation by
+   `scripts/audit_clustering_method_consensus_resolution.py`
+   (`method_file_validation = exact_match` for all directions).
+3. Cell-only and tumour-only clustering outputs never contribute: only
+   `*_cell_tumour` identifiers are declarable, and undeclared method
+   directories raise explicit errors.
+4. The exact configured clustering-method identities are validated against
+   realised inputs at both the neighbourhood-generation and `p_consensus`
+   stages.
+5. Missing declared formulations and unexpected discovered formulations are
+   explicit errors (verified by fault-injection runs).
+6. Adaptive-neighbourhood configuration wiring is unchanged
+   (`adaptive_k`: fraction 0.10, minimum 30, maximum 200) and revalidated by
+   the regenerated runs.
+7. Ward.D2 compatibility for correlation-distance HC is established by the
+   chord-distance construction `sqrt(2 * (1 - r))` (Section 5.3), matching
+   the ConsensusClusterPlus correlation-geometry transform.
+8. `tests/test_p_consensus_recurrence_fraction.py` reconstructs every
+   `p_consensus` value of a Euclidean and a correlation representation
+   directly from the method-specific tumour memberships
+   (`recurrence / n_methods == p_consensus`, all pairs).
+
+---
+
+## 14. Glossary
+
+**Active-tumour union:**  
+The pair-specific set of patient tumours selected by at least one of two cell
+lines after the `p_consensus` threshold is applied.
+
+**Biological cell line:**  
+A unique cell-line identity after profile-level replicates are combined where
+applicable.
+
+**Consensus clustering:**  
+Resampling-based clustering implemented with ConsensusClusterPlus.
+
+**Edge-recurrence count:**  
+The number of active feature-distance representations in which a specific
+cell-line edge is threshold-selected.
+
+**Edge-recurrence fraction:**  
+The edge-recurrence count divided by the number of active feature-distance
+representations.
+
+**Feature-distance representation:**  
+A transcriptomic representation defined by a feature-selection method and a
+dissimilarity measure.
+
+**HC/k-means clustering:**  
+The workflow branch containing hierarchical clustering and k-means applied in
+expression or PCA-reduced spaces. The term describes the algorithms in that
+branch and does not imply a distinct biological class of clustering.
+
+**HVG residual variance:**  
+A feature-ranking statistic based on residual variation after accounting for the
+mean–variance relationship.
+
+**Jaccard similarity:**  
+Intersection divided by union after threshold-restricted continuous
+`p_consensus` fractions are converted to binary patient-tumour membership.
+
+**PAM50:**  
+A breast-cancer-specific 50-gene expression signature used for molecular subtype
+annotation.
+
+**Patient-referenced cell-line graph:**  
+A graph whose nodes are biological cell lines and whose edges are selected from
+cell-line similarity values derived from patient tumour-neighbourhood profiles.
+
+**Pearson correlation distance:**  
+The dissimilarity \(1-
+ho\), where \(
+ho\) is the Pearson correlation
+coefficient across selected genes.
+
+**`p_consensus`:**  
+A tumour-wise recurrence fraction describing how often a particular
+cell-line–tumour neighbourhood relationship occurs across the configured
+clustering formulations within a fixed feature-distance representation.
+
+**Threshold-restricted continuous `p_consensus` profile:**  
+The biological-cell-line mean-pooled tumour-wise `p_consensus` profile after
+values below the production threshold are set to zero while qualifying values
+remain continuous.
+
+**Tumour neighbourhood:**  
+The adaptive set of patient tumours associated with a cell line under a
+particular feature-distance representation and clustering formulation.
+
+**VST (Variance-Stabilising Transformation):**  
+A transformation of count data that reduces the dependence of variance on mean
+expression level.

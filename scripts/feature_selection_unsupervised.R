@@ -4,39 +4,44 @@
 # =============================================================================
 #
 # PURPOSE:
-# This script performs unsupervised feature selection to identify highly
-# variable genes (HVGs) from a joint VST-normalised expression matrix.
-# The goal is to select genes that represent the most biological variation
-# across samples, which are subsequently used for downstream clustering
-# and dimensionality reduction analyses.
+# This script performs unsupervised, multi-method feature selection from a
+# joint VST-normalised expression matrix. The selected genes define alternative
+# reduced expression spaces for downstream clustering, tumour-neighbourhood
+# analysis, similarity estimation and consensus graph construction.
+#
+# The script does not treat any single statistic as the only definition of an
+# informative gene. Instead, it generates multiple method-specific gene lists
+# that capture complementary properties of the expression matrix.
 #
 # APPROACH:
-# Rather than relying on a single feature selection method (which may be
-# biased toward certain data characteristics), this script employs an
-# ensemble strategy that combines multiple complementary methods:
+# The workflow has two feature-selection tiers:
 #
-#   1. Variance - Genes with highest expression variability
-#   2. MAD (Median Absolute Deviation) - Robust variability measure
-#   3. Mean Absolute Deviation - Alternative dispersion metric
-#   4. Entropy - Genes with complex expression distributions
-#   5. PCA Loadings - Genes driving principal components
-#   6. Spearman Connectivity - Correlation-based network hubness
-#   7. MX Score - Combined connectivity × variance metric
-#   8. WGCNA kTotal - Weighted network connectivity (hub genes)
+#   1. First-pass selection criteria
+#      These methods each retain a broad top-N gene list, usually 3,000 genes.
+#      They score genes using dispersion, mean-variance adjusted variability,
+#      distributional complexity, or contribution to leading multivariate axes:
 #
-# The final gene set is selected using an "MX Score" that combines
-# Spearman connectivity with variance, prioritising genes that are both
-# highly variable AND well-connected in the co-expression network.
+#        - Variance
+#        - HVG / mean-variance trend-adjusted variance
+#        - Median Absolute Deviation (MAD)
+#        - Mean Absolute Deviation (MeanAbsDev)
+#        - Shannon entropy
+#        - PCA loading score
 #
-# WHY ENSEMBLE FEATURE SELECTION?
-# Different methods characterise different aspects of gene importance:
-#   - Variance/MAD: Identify genes with high expression spread
-#   - Entropy: Capture genes with complex, multi-modal distributions
-#   - PCA: Find genes explaining major axes of variation
-#   - Network methods: Identify hub genes central to regulatory networks
+#   2. Connectivity-based criteria
+#      These methods operate on the union of the first-pass selected genes.
+#      They retain smaller feature sets, usually 500 genes, by scoring genes
+#      according to co-expression centrality and, for MX, centrality combined
+#      with scaled variance:
 #
-# By combining methods, the script reduces the risk of missing important
-# genes that only one method would detect.
+#        - Spearman mean absolute connectivity
+#        - MX score: Spearman connectivity × scaled variance
+#        - WGCNA kTotal
+#
+# Each selected gene list is written separately and used downstream as a
+# method-specific representation. This allows later consensus steps to favour
+# tumour-cell-line relationships that remain stable across several definitions
+# of gene informativeness.
 #
 # INPUTS:
 #   --config   : Path to config.yaml containing paths and parameters
@@ -227,13 +232,19 @@ run_unsupervised_feature_selection <- function(
   # ---------------------------------------------------------------------------
   # FUNCTION: run_unsupervised_feature_selection
   # ---------------------------------------------------------------------------
-  # This function performs multi-method unsupervised feature selection to
-  # identify the most informative genes for downstream analysis.
+  # This function implements a two-tier feature-selection workflow:
   #
-  # The function implements a two-stage selection process:
-  #   Stage 1: Each of 5 methods selects its top_n_method genes (default: 3000)
-  #   Stage 2: The union of candidates is refined using network-based methods
-  #            to produce a final set of final_top genes (default: 500)
+  #   Tier 1: Six first-pass criteria each select a broad top-N list.
+  #           These criteria measure different properties of single-gene
+  #           expression behaviour or multivariate contribution.
+  #
+  #   Tier 2: Three connectivity-based criteria are computed on the union of the
+  #           first-pass gene lists. These criteria rank genes by co-expression
+  #           centrality, or by centrality combined with scaled variance.
+  #
+  # The canonical outputs preserve each method-specific gene list separately.
+  # Downstream rules treat these lists as alternative representations rather than
+  # merging them into one final gene list.
   #
   # PARAMETERS:
   # -----------
@@ -402,7 +413,7 @@ run_unsupervised_feature_selection <- function(
   # ---------------------------------------------------------------------------
   # HELPER: Save UpSet plot with explanatory legend
   # ---------------------------------------------------------------------------
-  # UpSet plots are superior to Venn diagrams for visualising intersections
+  # UpSet plots are useful for visualising intersections
   # between more than 3 sets. This function creates an UpSet plot with an
 
   # additional legend panel explaining what each method measures.
@@ -481,18 +492,23 @@ run_unsupervised_feature_selection <- function(
   }
   
   # ===========================================================================
-# SECTION 3: INDIVIDUAL FEATURE SELECTION METHODS (METHODS 1-5)
-# ===========================================================================
-# Each method characterises different aspects of gene variability:
-  #   - Some methods are sensitive to outliers (variance)
-  #   - Some methods are robust to outliers (MAD)
-#   - Some methods describe distributional complexity (entropy)
-#   - Some methods summarise multivariate structure (PCA)
+  # SECTION 3: FIRST-PASS FEATURE SELECTION CRITERIA
+  # ===========================================================================
+  # These six criteria each score genes before any gene-gene connectivity is
+  # calculated. They are grouped here by pipeline role rather than by one shared
+  # statistical property:
   #
-  # By using multiple methods, the script ensures that genes important for
-  # different reasons are all considered as candidates.
+  #   - Variance, MAD and MeanAbsDev describe expression spread using different
+  #     deviation measures.
+  #   - HVG scores variance relative to the mean-variance trend.
+  #   - Entropy scores the shape and occupancy of each gene's expression
+  #     distribution after binning.
+  #   - PCA loadings score contribution to the leading multivariate axes.
+  #
+  # The union of these six top-N lists becomes the candidate pool for the
+  # connectivity-based criteria.
   
-  if (!quiet) message("[INFO] Running 5 feature selection methods...")
+  if (!quiet) message("[INFO] Running six first-pass feature selection criteria...")
 
   take_top_names <- function(scores, n) {
     genes <- names(sort(scores, decreasing = TRUE))
@@ -729,22 +745,29 @@ run_unsupervised_feature_selection <- function(
   if (length(all_candidates) == 0) {
     stop("No candidate genes remain after filtering to expression matrix rownames.")
   }
+  # The connectivity-based criteria are computed on the union of the first-pass
+  # selected genes. This is intentionally permissive: a gene selected by any one
+  # first-pass criterion remains eligible for connectivity scoring.
+  #
+  # This is a union, not an intersection, and it is not limited to variance-selected
+  # genes. The union preserves method-specific candidates before the smaller
+  # connectivity-based lists are derived.
   if (!quiet) message("[INFO] Union of candidates: ", length(all_candidates), " genes")
   
   # ===========================================================================
-  # SECTION 5: NETWORK-BASED REFINEMENT (METHODS 6-7)
+  # SECTION 5: CONNECTIVITY-BASED FEATURE SELECTION CRITERIA
   # ===========================================================================
-  # The candidate pool is refined using network-based methods that consider
-  # gene-gene relationships, not just individual gene properties.
+  # These criteria operate on the first-pass candidate union. Unlike the
+  # first-pass criteria, they use gene-gene relationships within the candidate
+  # pool.
   #
-  # RATIONALE:
-  # A gene might have high variance but be uncorrelated with other genes
-  # (potentially noise). Conversely, a "hub" gene highly correlated with
-  # many others is likely to be biologically important (e.g., a transcription
-  # factor regulating many targets).
+  # In this script, a hub gene means a co-expression-central gene: a gene with
+  # high total or average absolute connectivity to other candidate genes. This is
+  # a network-position measure, not evidence that the gene is a causal regulator.
   #
-  # Network-based methods identify these hub genes by computing correlations
-  # between all pairs of genes.
+  # Spearman connectivity ranks genes by mean absolute rank correlation to the
+  # candidate pool. MX combines this connectivity with scaled variance. WGCNA
+  # kTotal ranks genes by total unsigned soft-thresholded network connectivity.
   
   # ---------------------------------------------------------------------------
   # METHOD 6: SPEARMAN CONNECTIVITY
