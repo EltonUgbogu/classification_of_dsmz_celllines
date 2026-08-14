@@ -35,7 +35,7 @@ Cancer cell lines are widely used as laboratory models; however, selecting a cel
 
 This workflow evaluates DSMZ cell-line profiles in a patient-referenced expression space. It constructs unsupervised feature–distance representations and quantifies patient-referenced tumour-neighbourhood proximity between DSMZ cell-line profiles and retained tumour samples across those representations. Resolved-graph construction then selects cell-line adjacencies that satisfy both cohort-level and cell-line-specific representation criteria, while graph-derived marker contrasts connect resolved graph structure to pan-cancer feature construction.
 
-Reciprocal ranking provides label-free DSMZ model ranking within a cohort-informed, graph-derived marker feature space. Cancer-type labels are not used to compute tumour–cell-line similarity scores or rank orderings; BRCA, NBL, and RBL annotations are applied afterwards to evaluate post hoc cancer-type annotation concordance.
+Reciprocal ranking provides DSMZ model ranking performed without using cancer-type labels within a cohort-informed, graph-derived marker feature space. Cancer-type labels are not used to compute tumour–cell-line similarity scores or rank orderings; BRCA, NBL, and RBL annotations are applied afterwards to evaluate post hoc cancer-type annotation concordance.
 
 ## Workflow overview
 
@@ -313,7 +313,7 @@ An isolate is therefore a profile without a retained resolved cell-line neighbou
 
 Reciprocal ranking provides **relative transcriptomic model prioritisation** among the configured candidate cell-line profiles and retained patient tumour samples. A favourable rank is consistent with prioritisation within that analysis space; it is not a universal declaration that the model is suitable for every biological question.
 
-Post hoc cancer-type annotation-concordance metrics describe whether highly ranked tumour--cell-line relationships share the annotated cancer type after the label-free and graph-informed stages. They are evaluation measures, not training objectives.
+Post hoc cancer-type annotation-concordance metrics describe whether highly ranked tumour--cell-line relationships share the annotated cancer type after the graph-informed ranking stage. They are evaluation measures, not training objectives.
 
 ### Pan-cancer cell-line network
 
