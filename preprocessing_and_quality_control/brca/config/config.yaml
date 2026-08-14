@@ -31,7 +31,7 @@ profiles:
       # Observed from the tumour-only raw-count-derived purity recomputation.
       expected_retained_tumour_samples: 773
       threads: 4
-      output_dir: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction"
+      output_dir: "preprocessing_and_quality_control/brca/results/tumour_purity_analysis"
 
     batch_correction_and_normalisation:
       enabled: true

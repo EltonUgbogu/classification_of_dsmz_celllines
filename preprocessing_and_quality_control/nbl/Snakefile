@@ -307,14 +307,11 @@ EXPECTED_DSMZ_PROFILES = int(config.get("expected_dsmz_profiles", 18))
 NBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/nbl_ensembl_to_hgnc.tsv"
 NBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/nbl_count_matrix_verified_{EXPECTED_NBL_SAMPLES}.ok"
 PURITY_GENE_MAP = repo_config_path(config.get("gene_map_tsv", "resources/ensembl_to_symbol.tsv"))
-VERIFIED_PURITY_SCORES = repo_config_path(config["verified_purity_scores"])
-VERIFIED_PURITY_SCRIPT = repo_config_path(config["verified_purity_script"])
-VERIFIED_PURITY_LOG = repo_config_path(config["verified_purity_log"])
 
 NBL_PURITY_DIR = repo_config_path(
     config.get(
         "purity_output_dir",
-        "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction",
+        "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis",
     )
 )
 
@@ -908,9 +905,6 @@ rule nbl_tumour_purity_analysis:
         raw_tumour_counts = COUNT_MATRIX,
         tumour_metadata = COUNT_META,
         gene_map = PURITY_GENE_MAP,
-        reference_scores = VERIFIED_PURITY_SCORES,
-        reference_script = VERIFIED_PURITY_SCRIPT,
-        reference_log = VERIFIED_PURITY_LOG,
         shared_figure_module = SHARED_FIGURE_MODULE,
         count_validation = NBL_COUNT_VERIFY,
     output:
@@ -933,7 +927,7 @@ rule nbl_tumour_purity_analysis:
         expected_eligible_samples = EXPECTED_NBL_SAMPLES,
         expected_retained_samples = EXPECTED_RETAINED_TUMOURS,
         primary_sample_type = "",
-        score_policy = "reuse_verified",
+        score_policy = "compute",
         rule_name = "nbl_tumour_purity_analysis",
         config_path = "preprocessing_and_quality_control/nbl/config/config.yaml",
     threads:

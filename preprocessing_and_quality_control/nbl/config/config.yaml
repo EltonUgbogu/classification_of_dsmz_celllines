@@ -30,13 +30,11 @@ expected_samples:
   total: 273
 
 purity_threshold: 0.7
-purity_output_dir: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction"
+purity_output_dir: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis"
 purity_method: "ESTIMATE/tidyestimate"
-# The verified tumour-only scores were generated with this cohort-specific map.
+# The active tumour-only purity stage recomputes scores from raw tumour counts
+# using this cohort-specific Ensembl-to-HGNC map.
 gene_map_tsv: "data/nbl/count_data/nbl_ensembl_to_hgnc.tsv"
-verified_purity_scores: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/nbl_estimate_scores.csv"
-verified_purity_script: "preprocessing_and_quality_control/nbl/tumour_purity_analysis/nbl_tumour_purity_analysis.R"
-verified_purity_log: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/nbl_purity_pipeline_20260727_011111.log"
 expected_retained_tumour_samples: 235
 expected_dsmz_profiles: 18
 purity_threads: 4

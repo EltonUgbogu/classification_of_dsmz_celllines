@@ -323,14 +323,11 @@ EXPECTED_DSMZ_PROFILES = int(config.get("expected_dsmz_profiles", 11))
 RBL_ENSEMBL_TO_HGNC = f"{DATA_ROOT}/count_data/rbl_ensembl_to_hgnc.tsv"
 RBL_COUNT_VERIFY = f"{DATA_ROOT}/count_data/rbl_count_matrix_verified_{EXPECTED_RBL_SAMPLES}.ok"
 PURITY_GENE_MAP = repo_config_path(config.get("gene_map_tsv", "resources/ensembl_to_symbol.tsv"))
-VERIFIED_PURITY_SCORES = repo_config_path(config["verified_purity_scores"])
-VERIFIED_PURITY_SCRIPT = repo_config_path(config["verified_purity_script"])
-VERIFIED_PURITY_LOG = repo_config_path(config["verified_purity_log"])
 
 RBL_PURITY_DIR = repo_config_path(
     config.get(
         "purity_output_dir",
-        "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction",
+        "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis",
     )
 )
 
@@ -408,6 +405,7 @@ BATCH_OUTPUT = {
     "joint_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/joint_vst_purity_filtered_post_bc.rds",
     "tumour_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/tumour_vst_purity_filtered_post_bc.rds",
     "dsmz_vst_post_bc_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_purity_filtered_post_bc.rds",
+    "dsmz_vst_pre_bc_collapsed_cellline_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_pre_bc_collapsed_cellline.rds",
     "dsmz_vst_post_bc_collapsed_cellline_rds": f"{BATCH_OUTPUT_DIR}/dsmz_vst_purity_filtered_post_bc_collapsed_cellline.rds",
     "pca_pre_pdf": f"{BATCH_OUTPUT_DIR}/pca_pre_BC.pdf",
     "pca_post_pdf": f"{BATCH_OUTPUT_DIR}/pca_post_BC.pdf",
@@ -432,6 +430,13 @@ BATCH_EFFECT_OUTPUTS = {
     "feature_manifest_top3000_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_top3000.tsv",
     "feature_manifest_protein_coding_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_protein_coding.tsv",
     "feature_manifest_full_expression_tsv": f"{BATCH_OUTPUT_DIR}/feature_manifest_full_expression.tsv",
+    "audit_legacy_batch_effect_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_batch_effect_quantification.tsv",
+    "audit_legacy_batch_effect_provenance_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_batch_effect_quantification_provenance.tsv",
+    "audit_legacy_batch_effect_run_metadata_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_batch_effect_run_metadata.tsv",
+    "audit_legacy_protein_coding_ids_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_protein_coding_gene_ids.tsv",
+    "audit_legacy_feature_manifest_top3000_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_feature_manifest_top3000.tsv",
+    "audit_legacy_feature_manifest_protein_coding_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_feature_manifest_protein_coding.tsv",
+    "audit_legacy_feature_manifest_full_expression_tsv": f"{BATCH_OUTPUT_DIR}/audit/legacy_joint_79_profile_feature_manifest_full_expression.tsv",
 }
 
 BATCH_OUTPUTS = list(BATCH_OUTPUT.values())
@@ -876,9 +881,6 @@ rule rbl_tumour_purity_analysis:
         raw_tumour_counts = COUNT_MATRIX,
         tumour_metadata = COUNT_META,
         gene_map = PURITY_GENE_MAP,
-        reference_scores = VERIFIED_PURITY_SCORES,
-        reference_script = VERIFIED_PURITY_SCRIPT,
-        reference_log = VERIFIED_PURITY_LOG,
         shared_figure_module = SHARED_FIGURE_MODULE,
         count_validation = RBL_COUNT_VERIFY,
     output:
@@ -901,7 +903,7 @@ rule rbl_tumour_purity_analysis:
         expected_eligible_samples = EXPECTED_RBL_SAMPLES,
         expected_retained_samples = EXPECTED_RETAINED_TUMOURS,
         primary_sample_type = "",
-        score_policy = "reuse_verified",
+        score_policy = "compute",
         rule_name = "rbl_tumour_purity_analysis",
         config_path = "preprocessing_and_quality_control/rbl/config/config.yaml",
     threads:
@@ -941,6 +943,7 @@ rule preprocess_integrate_rbl:
         joint_vst_post_bc_rds = BATCH_OUTPUT["joint_vst_post_bc_rds"],
         tumour_vst_post_bc_rds = BATCH_OUTPUT["tumour_vst_post_bc_rds"],
         dsmz_vst_post_bc_rds = BATCH_OUTPUT["dsmz_vst_post_bc_rds"],
+        dsmz_vst_pre_bc_collapsed_cellline_rds = BATCH_OUTPUT["dsmz_vst_pre_bc_collapsed_cellline_rds"],
         dsmz_vst_post_bc_collapsed_cellline_rds = BATCH_OUTPUT["dsmz_vst_post_bc_collapsed_cellline_rds"],
         pca_pre_pdf = BATCH_OUTPUT["pca_pre_pdf"],
         pca_post_pdf = BATCH_OUTPUT["pca_post_pdf"],
@@ -986,6 +989,11 @@ rule rbl_batch_effect_quantification:
     input:
         joint_vst_pre_bc_rds = BATCH_OUTPUT["joint_vst_pre_bc_rds"],
         joint_vst_post_bc_rds = BATCH_OUTPUT["joint_vst_post_bc_rds"],
+        tumour_vst_pre_bc_rds = BATCH_OUTPUT["tumour_vst_rds"],
+        tumour_vst_post_bc_rds = BATCH_OUTPUT["tumour_vst_post_bc_rds"],
+        dsmz_vst_pre_bc_collapsed_cellline_rds = BATCH_OUTPUT["dsmz_vst_pre_bc_collapsed_cellline_rds"],
+        dsmz_vst_post_bc_collapsed_cellline_rds = BATCH_OUTPUT["dsmz_vst_post_bc_collapsed_cellline_rds"],
+        retained_tumour_ids_tsv = RBL_PURITY_OUTPUTS["retained_samples"],
         coldata_tsv = BATCH_OUTPUT["coldata_tsv"],
         gene_annotation_gtf = GENE_ANNOTATION_GTF,
         shared_figure_module = SHARED_FIGURE_MODULE,
@@ -1009,6 +1017,10 @@ rule rbl_batch_effect_quantification:
         tumour_source_column = BATCH_CONFIG.get("tumour_source_column", "cohort"),
         tumour_label = BATCH_CONFIG.get("tumour_label", "RBL_TUMOUR"),
         dsmz_label = BATCH_CONFIG.get("dsmz_label", "DSMZ_RBL"),
+        expected_tumours = EXPECTED_RETAINED_TUMOURS,
+        expected_collapsed_dsmz = int(config.get("expected_dsmz_biological_profiles", 9)),
+        final_matrix_validation_path = FINAL_VALIDATION["report"],
+        include_tumour_source_analysis = False,
         gene_annotation_release = BATCH_CONFIG.get(
             "gene_annotation_release", "GENCODE v44 (basic, GRCh38)"
         ),

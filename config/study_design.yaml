@@ -75,10 +75,10 @@ cohorts:
       samples_before: 830
       samples_retained: 773
       samples_excluded: 57
-      scoring_expression: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/tumour_only_purity_scoring_expression.rds"
-      retained_manifest: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/retained_samples.tsv"
-      excluded_manifest: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
-      retained_raw_counts: "preprocessing_and_quality_control/brca/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
+      scoring_expression: "preprocessing_and_quality_control/brca/results/tumour_purity_analysis/tumour_only_purity_scoring_expression.rds"
+      retained_manifest: "preprocessing_and_quality_control/brca/results/tumour_purity_analysis/retained_samples.tsv"
+      excluded_manifest: "preprocessing_and_quality_control/brca/results/tumour_purity_analysis/excluded_samples.tsv"
+      retained_raw_counts: "preprocessing_and_quality_control/brca/results/tumour_purity_analysis/retained_raw_tumour_counts.rds"
     tumour_selection:
       policy: "Primary tumour sample type followed by configured tumour-purity filtering"
       primary_sample_type: "01"
@@ -107,10 +107,10 @@ cohorts:
       samples_before: 273
       samples_retained: 235
       samples_excluded: 38
-      scoring_expression: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/tumour_only_purity_scoring_expression.rds"
-      retained_manifest: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/retained_samples.tsv"
-      excluded_manifest: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
-      retained_raw_counts: "preprocessing_and_quality_control/nbl/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
+      scoring_expression: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/tumour_only_purity_scoring_expression.rds"
+      retained_manifest: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/retained_samples.tsv"
+      excluded_manifest: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/excluded_samples.tsv"
+      retained_raw_counts: "preprocessing_and_quality_control/nbl/results/tumour_purity_analysis/retained_raw_tumour_counts.rds"
     cell_line_panel: "DSMZ"
     runtime_labels:
       - label: "cohort"
@@ -139,10 +139,10 @@ cohorts:
       samples_before: 69
       samples_retained: 68
       samples_excluded: 1
-      scoring_expression: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/tumour_only_purity_scoring_expression.rds"
-      retained_manifest: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/retained_samples.tsv"
-      excluded_manifest: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/excluded_samples.tsv"
-      retained_raw_counts: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction/retained_raw_tumour_counts.rds"
+      scoring_expression: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/tumour_only_purity_scoring_expression.rds"
+      retained_manifest: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/retained_samples.tsv"
+      excluded_manifest: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/excluded_samples.tsv"
+      retained_raw_counts: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/retained_raw_tumour_counts.rds"
     cell_line_panel: "DSMZ"
     runtime_labels: []
 

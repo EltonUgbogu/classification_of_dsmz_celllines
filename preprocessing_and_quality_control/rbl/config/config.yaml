@@ -15,13 +15,11 @@ expected_samples:
   total: 69
 
 purity_threshold: 0.7
-purity_output_dir: "preprocessing_and_quality_control/rbl/results/tumour_purity_before_batch_correction"
+purity_output_dir: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis"
 purity_method: "ESTIMATE/tidyestimate"
-# The verified tumour-only scores were generated with this cohort-specific map.
+# The active tumour-only purity stage recomputes scores from raw tumour counts
+# using this cohort-specific Ensembl-to-HGNC map.
 gene_map_tsv: "data/rbl/count_data/rbl_ensembl_to_hgnc.tsv"
-verified_purity_scores: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/rbl_estimate_scores.csv"
-verified_purity_script: "preprocessing_and_quality_control/rbl/tumour_purity_analysis/rbl_tumour_purity_analysis.R"
-verified_purity_log: "preprocessing_and_quality_control/rbl/results/tumour_purity_analysis/rbl_purity_pipeline_20260622_030351.log"
 expected_retained_tumour_samples: 68
 expected_dsmz_profiles: 11
 expected_dsmz_biological_profiles: 9
