@@ -542,7 +542,7 @@ parse_dsmz_id <- function(x) {
   }
   
   ng   <- hit[2]
-  cell <- hit[3]  # Cell line (disease-agnostic: RBL_15, CAL_120, etc.)
+  cell <- hit[3]  # Cell line (disease-independent: RBL_15, CAL_120, etc.)
   lib  <- hit[4]
   lane <- hit[5]
   rep  <- hit[6]
@@ -646,7 +646,7 @@ cat("[INFO] Detected ", n_dsmz, " DSMZ samples in expr_mat via mapping\n", sep =
 
 # Assign dataset labels using vectorised conditional assignment.
 # The ifelse() function evaluates element-wise, returning "DSMZ" for TRUE
-# positions and "TUMOUR" for FALSE positions (cohort-agnostic).
+# positions and "TUMOUR" for FALSE positions (cohort-independent).
 dataset_vec <- ifelse(dsmz_mask, "DSMZ", "TUMOUR")
 names(dataset_vec) <- current_ids
 
@@ -920,7 +920,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   matched_dsmz <- sum(dsmz_mask[current_ids %in% matched_ids])
   cat("[INFO] Matched DSMZ samples: ", matched_dsmz, " / ", sum(dsmz_mask), "\n", sep = "")
 
-  # Log DSMZ sample names for verification (cohort-agnostic: use dataset_vec, not pattern matching).
+  # Log DSMZ sample names for verification (cohort-independent: use dataset_vec, not pattern matching).
   # Note: cluster_vec names are collapsed IDs, so we need to check against current_ids dataset_vec
   matched_ids_in_clusters <- intersect(names(cluster_vec), current_ids)
   dsmz_names_in_clusters <- matched_ids_in_clusters[dataset_vec[matched_ids_in_clusters] == "DSMZ"]
@@ -954,7 +954,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   missing_in_expr <- setdiff(names(cluster_vec), current_ids)
   if (length(missing_in_expr) > 0) {
     # Identify potential DSMZ samples by checking if they match canonical cell line names
-    # (cohort-agnostic: uses mapping-based detection, not pattern matching)
+    # (cohort-independent: uses mapping-based detection, not pattern matching)
     missing_norm <- normalize_id(missing_in_expr)
     potential_dsmz <- missing_in_expr[missing_norm %in% normalize_id(cell_line_names_raw)]
     cat("[WARNING] ", length(missing_in_expr),

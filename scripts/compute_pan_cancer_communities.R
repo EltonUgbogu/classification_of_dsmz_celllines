@@ -723,7 +723,7 @@ cat("  Saved: ", opt$out, "\n\n", sep = "")
 # =============================================================================
 # STEP 5: VALIDATION TABLES
 # =============================================================================
-# This section generates diagnostic tables for assessing community detection
+# This section generates inspection tables for assessing community detection
 # quality and biological coherence. These validation outputs enable quality
 # control and inform interpretation of downstream analyses.
 # -----------------------------------------------------------------------------

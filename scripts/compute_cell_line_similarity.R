@@ -7,8 +7,10 @@
 # This script constructs a patient-referenced cell-line similarity graph for
 # each feature-distance representation. Each biological cell line is
 # represented by its tumour-wise p_consensus profile, with replicate profiles
-# mean-pooled where applicable. Pairwise cell-line similarity is the Pearson
-# correlation between these tumour-wise profiles.
+# mean-pooled where applicable. Pairwise cell-line similarity is computed with
+# the configured primary similarity metric
+# (patient_referenced_graph.primary_similarity_metric) between these
+# tumour-wise profiles.
 #
 # BIOLOGICAL RATIONALE:
 # If two cell lines have highly correlated p_consensus vectors, they tend to
@@ -17,7 +19,7 @@
 # or share functional properties.
 
 # OUTPUTS:
-# - Similarity matrix (Pearson correlation of p_consensus profiles)
+# - Similarity matrix (configured-metric correlation of p_consensus profiles)
 # - Graph with edges connecting similar cell lines
 # - Community detection results (Louvain and Leiden algorithms)
 # - visualisations
@@ -65,13 +67,83 @@ option_list <- list(
               help = "Threshold for flagging cross-disease edges (overrides percentile threshold if set)"),
   make_option("--pan_outdir", type = "character", default = NULL,
               help = "Pan-cancer output directory (PAN_OUTDIR). If set, write outputs under <pan_outdir>/graphs/cell_line_similarity/<mode>/<direction>/"),
+  make_option("--seed", type = "integer", default = 42,
+              help = "Random seed for reproducible graph layouts [default %default]"),
   make_option("--name_map", type = "character", default = NULL,
               help = "Path to TSV mapping file with columns: long_id, short_id (for canonicalizing cell line IDs)"),
   make_option("--require_short", action = "store_true", default = FALSE,
-              help = "Fail if long IDs remain after mapping (ensures all IDs are canonicalized)")
+              help = "Fail if long IDs remain after mapping (ensures all IDs are canonicalized)"),
+  # The three scientific parameters below are configuration-owned and are
+  # transmitted by the workflow. They deliberately have no defaults here: a
+  # default would be a second owner able to drift from config.yaml.
+  make_option("--similarity_metric", type = "character", default = NULL,
+              help = paste("Similarity metric for the primary patient-referenced",
+                           "graph branch; supplied by the workflow from",
+                           "patient_referenced_graph.primary_similarity_metric")),
+  make_option("--similarity_quantile", type = "double", default = NULL,
+              help = paste("Quantile of the pairwise similarity distribution used",
+                           "as the graph edge threshold; supplied by the workflow",
+                           "from patient_referenced_graph.similarity_quantile")),
+  make_option("--consensus_threshold", type = "double", default = NULL,
+              help = paste("p-consensus fraction threshold used by this stage's",
+                           "reporting; supplied by the workflow from",
+                           "patient_referenced_graph.p_consensus_threshold")),
+  make_option("--provenance_tsv", type = "character", default = NULL,
+              help = "Path for the graph-construction provenance record")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
+
+# ------------------------------------------------------------------------------
+# CONFIGURATION-OWNED SCIENTIFIC PARAMETERS
+# ------------------------------------------------------------------------------
+# The similarity metric, the graph edge-threshold quantile and the p-consensus
+# fraction threshold are scientific choices declared in config.yaml under
+# patient_referenced_graph and passed in explicitly by the workflow. Each is
+# required: an absent or invalid value fails here rather than falling back to a
+# value embedded in this script.
+
+# Metrics this implementation can compute. This is a dispatch table, not a
+# declaration of which metric is active: the active metric comes from
+# configuration via --similarity_metric.
+SUPPORTED_SIMILARITY_METRICS <- c("pearson")
+
+similarity_metric <- opt$similarity_metric
+if (is.null(similarity_metric) || !nzchar(similarity_metric)) {
+  stop(
+    "--similarity_metric is required; the workflow passes ",
+    "patient_referenced_graph.primary_similarity_metric."
+  )
+}
+if (!similarity_metric %in% SUPPORTED_SIMILARITY_METRICS) {
+  stop(
+    "Unsupported --similarity_metric '", similarity_metric, "' for the primary ",
+    "graph branch. This implementation computes: ",
+    paste(SUPPORTED_SIMILARITY_METRICS, collapse = ", "),
+    ". Metric-specific branches are built by ",
+    "compute_cell_line_similarity_metric.R."
+  )
+}
+
+similarity_quantile <- opt$similarity_quantile
+if (is.null(similarity_quantile) || !is.finite(similarity_quantile) ||
+    similarity_quantile <= 0 || similarity_quantile >= 1) {
+  stop(
+    "--similarity_quantile is required and must satisfy 0 < q < 1; the workflow ",
+    "passes patient_referenced_graph.similarity_quantile. Got: ",
+    if (is.null(opt$similarity_quantile)) "<missing>" else opt$similarity_quantile
+  )
+}
+
+consensus_threshold <- opt$consensus_threshold
+if (is.null(consensus_threshold) || !is.finite(consensus_threshold) ||
+    consensus_threshold <= 0 || consensus_threshold > 1) {
+  stop(
+    "--consensus_threshold is required and must satisfy 0 < t <= 1; the workflow ",
+    "passes patient_referenced_graph.p_consensus_threshold. Got: ",
+    if (is.null(opt$consensus_threshold)) "<missing>" else opt$consensus_threshold
+  )
+}
 
 # Load config using profiled config loader (merges defaults + profile)
 config_dir <- dirname(normalizePath(opt$config))
@@ -364,8 +436,9 @@ print(dim(mat))
 # ------------------------------------------------------------------------------
 # SECTION 2: COMPUTE CELL LINE SIMILARITY
 # ------------------------------------------------------------------------------
-# Similarity between two cell lines is defined as the Pearson correlation of
-# their p_consensus vectors across all Tumours.
+# Similarity between two cell lines is defined as the correlation of their
+# p_consensus vectors across all Tumours, under the configured primary
+# similarity metric.
 #
 # INTERPRETATION:
 #   r ≈ 1:  Cell lines have very similar tumour neighbourhood profiles
@@ -376,7 +449,7 @@ print(dim(mat))
 # t(mat) transposes the matrix so that cor() computes correlations between
 # rows (cell lines) rather than columns (tumours).
 
-sim_mat <- cor(t(mat), method = "pearson", use = "pairwise.complete.obs")
+sim_mat <- cor(t(mat), method = similarity_metric, use = "pairwise.complete.obs")
 
 cat("\nSimilarity matrix dimensions (cell line x cell line):\n")
 print(dim(sim_mat))
@@ -409,9 +482,11 @@ cat("Saved cell-line similarity pairs to:\n  ", out_tsv_long, "\n")
 # SECTION 3B: DATA-DRIVEN EDGE THRESHOLD
 # ------------------------------------------------------------------------------
 # Rather than using an arbitrary threshold for graph edges, a data-driven
-# approach selects the 90th percentile of similarity values. This ensures
-# that only the strongest associations are represented as edges, while
-# adapting to the specific distribution of the data.
+# approach selects a quantile of the observed similarity distribution. This
+# retains only the strongest associations while adapting to the specific
+# distribution of the data. The quantile itself is a scientific choice owned by
+# configuration (patient_referenced_graph.similarity_quantile) and passed in;
+# it is not embedded here.
 
 cat("\n=== Cell-line similarity summary ===\n")
 print(summary(sim_long$similarity))
@@ -419,12 +494,45 @@ print(summary(sim_long$similarity))
 cat("\nTop 10 highest cell-line similarities:\n")
 sim_long %>% arrange(desc(similarity)) %>% slice(1:10) %>% print()
 
-cat("\nCount of pairs by threshold (0.7):\n")
-sim_long %>% mutate(ge_0.7 = similarity >= 0.7) %>% count(ge_0.7) %>% print()
+cat(sprintf("\nCount of pairs at or above the configured p-consensus threshold (%.2f):\n",
+            consensus_threshold))
+sim_long %>%
+  mutate(ge_threshold = similarity >= consensus_threshold) %>%
+  count(ge_threshold) %>%
+  print()
 
 # quantile() computes the specified percentile of the distribution
-edge_threshold <- quantile(sim_long$similarity, 0.9, na.rm = TRUE)
-cat("\nData-driven edge threshold (90th percentile):", edge_threshold, "\n")
+edge_threshold <- quantile(sim_long$similarity, similarity_quantile, na.rm = TRUE)
+cat(sprintf("\nData-driven edge threshold (quantile %.4f): %s\n",
+            similarity_quantile, format(edge_threshold)))
+
+# ------------------------------------------------------------------------------
+# SECTION 3C: GRAPH-CONSTRUCTION PROVENANCE
+# ------------------------------------------------------------------------------
+# The configuration-owned parameters that determined this representation's graph
+# are recorded alongside the graph itself, so the applied metric, quantile and
+# resulting edge threshold are auditable from the outputs.
+
+if (!is.null(opt$provenance_tsv) && nzchar(opt$provenance_tsv)) {
+  dir.create(dirname(opt$provenance_tsv), recursive = TRUE, showWarnings = FALSE)
+  readr::write_tsv(
+    tibble::tibble(
+      profile = if (is.null(opt$profile)) NA_character_ else opt$profile,
+      direction = direction,
+      similarity_metric = similarity_metric,
+      similarity_definition = sprintf(
+        "%s correlation of tumour-wise p_consensus profiles", similarity_metric
+      ),
+      similarity_quantile = similarity_quantile,
+      computed_similarity_threshold = as.numeric(edge_threshold),
+      p_consensus_threshold = consensus_threshold,
+      n_cell_lines = nrow(mat),
+      n_candidate_pairs = nrow(sim_long)
+    ),
+    opt$provenance_tsv
+  )
+  cat("Graph provenance written to:\n  ", opt$provenance_tsv, "\n")
+}
 
 # ------------------------------------------------------------------------------
 # SECTION 4: SIMILARITY DISTRIBUTION HISTOGRAM
@@ -447,8 +555,9 @@ p_hist <- ggplot(sim_long, aes(x = similarity)) +
   theme_minimal(base_size = 14) +
   labs(
     title    = sprintf("Distribution of cell-line similarity (%s)", direction),
-    subtitle = "Pearson correlation of tumour-wise p_consensus profiles",
-    x = "Similarity (Pearson r)",
+    subtitle = sprintf("%s correlation of tumour-wise p_consensus profiles",
+                       similarity_metric),
+    x = sprintf("Similarity (%s r)", similarity_metric),
     y = "Number of cell-line pairs"
   ) +
   theme(plot.title = element_text(face = "bold"), panel.grid.minor = element_blank())
@@ -469,17 +578,21 @@ scatter_pdf <- file.path(plot_dir, sprintf("Fig_DSMZ_p_consensus_cell_scatter_%s
 per_cell <- cp %>%
   group_by(cell_line) %>%
   summarise(
-    max_p_consensus = max(p_consensus, na.rm = TRUE),
-    n_tumours       = n(),
-    frac_ge_0_7     = mean(p_consensus >= 0.7, na.rm = TRUE),
-    .groups         = "drop"
+    max_p_consensus  = max(p_consensus, na.rm = TRUE),
+    n_tumours        = n(),
+    # Threshold-aware name: the fraction is computed against the configured
+    # p-consensus fraction threshold, so the column must not encode a value.
+    frac_ge_threshold = mean(p_consensus >= consensus_threshold, na.rm = TRUE),
+    .groups          = "drop"
   ) %>%
-  mutate(strong_anchor = max_p_consensus >= 0.7)
+  mutate(strong_anchor = max_p_consensus >= consensus_threshold)
 
 cat("\nCell-line anchoring summary:\n")
 print(per_cell %>% arrange(desc(max_p_consensus)))
 
-p_scatter <- ggplot(per_cell, aes(x = max_p_consensus, y = frac_ge_0_7)) +
+threshold_label <- format(consensus_threshold, trim = TRUE, scientific = FALSE)
+
+p_scatter <- ggplot(per_cell, aes(x = max_p_consensus, y = frac_ge_threshold)) +
   geom_point(aes(size = n_tumours, colour = strong_anchor), alpha = 0.9) +
   # geom_label_repel() adds labels that automatically avoid overlapping
   geom_label_repel(
@@ -487,16 +600,19 @@ p_scatter <- ggplot(per_cell, aes(x = max_p_consensus, y = frac_ge_0_7)) +
     label.padding = grid::unit(0.15, "lines"), fill = "white", alpha = 0.9,
     max.overlaps = Inf, box.padding = 0.4, point.padding = 0.25
   ) +
-  # Reference lines at 0.7 threshold
-  geom_vline(xintercept = 0.7, linetype = "dashed", colour = "grey40") +
-  geom_hline(yintercept = 0.7, linetype = "dashed", colour = "grey40") +
+  # Reference lines at the configured p-consensus fraction threshold
+  geom_vline(xintercept = consensus_threshold, linetype = "dashed", colour = "grey40") +
+  geom_hline(yintercept = consensus_threshold, linetype = "dashed", colour = "grey40") +
   scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) +
   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1),
                      labels = scales::percent_format(accuracy = 1)) +
   scale_colour_manual(
     name = "Max p_consensus",
     values = c(`FALSE` = "red3", `TRUE` = "#2c7bb6"),
-    labels = c(`FALSE` = "< 0.7", `TRUE` = ">= 0.7")
+    labels = setNames(
+      c(paste0("< ", threshold_label), paste0(">= ", threshold_label)),
+      c("FALSE", "TRUE")
+    )
   ) +
   scale_size_continuous(name = "Number of tumour neighbours", range = c(3, 7)) +
   theme_minimal(base_size = 14) +
@@ -504,7 +620,10 @@ p_scatter <- ggplot(per_cell, aes(x = max_p_consensus, y = frac_ge_0_7)) +
         plot.title = element_text(face = "bold")) +
   labs(
     title = sprintf("Anchoring strength of DSMZ cancer cell lines (%s)", direction),
-    subtitle = "x: max p_consensus(c,t); y: fraction of tumour neighbours with p_consensus >= 0.7",
+    subtitle = sprintf(
+      "x: max p_consensus(c,t); y: fraction of tumour neighbours with p_consensus >= %s",
+      threshold_label
+    ),
     x = "Max p_consensus per cell line",
     y = "Tumour neighbours with strong consensus (%)"
   )
@@ -733,7 +852,7 @@ if (nrow(graph_edges) == 0) {
     pdf(path, width = 8, height = 6)
     plot.new()
     text(0.5, 0.6, title, cex = 1.2, font = 2)
-    text(0.5, 0.4, sprintf("No edges (Pearson r >= %.3f)", edge_threshold), cex = 0.9)
+    text(0.5, 0.4, sprintf("No edges (%s r >= %.3f)", similarity_metric, edge_threshold), cex = 0.9)
     dev.off()
   }
 
@@ -1019,16 +1138,17 @@ n_nodes <- igraph::gorder(ig)
 n_edges <- igraph::gsize(ig)
 n_iso   <- sum(node_summary$degree == 0)
 subtitle_txt <- sprintf(
-  "Edges: Pearson r >= %.3f (90th pct). Nodes=%d, edges=%d, isolates=%d (%.1f%%).",
-  edge_threshold, n_nodes, n_edges, n_iso, 100 * n_iso / n_nodes
+  "Edges: %s r >= %.3f (quantile %.4f). Nodes=%d, edges=%d, isolates=%d (%.1f%%).",
+  similarity_metric, edge_threshold, similarity_quantile,
+  n_nodes, n_edges, n_iso, 100 * n_iso / n_nodes
 )
 
 graph_leiden_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_Leiden_%s.pdf", direction))
 graph_louvain_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_Louvain_%s.pdf", direction))
 graph_minimal_pdf <- file.path(plot_dir, sprintf("Fig_cell_line_similarity_graph_minimal_%s.pdf", direction))
 
-# Set seed for reproducible layout
-set.seed(123)
+# Set seed for reproducible layout.
+set.seed(opt$seed)
 
 # --------------------------------------------------------------------------
 # LEIDEN-COLOURED GRAPH

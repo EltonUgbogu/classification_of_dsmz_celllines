@@ -17,13 +17,38 @@ validation:
 
 # Defines shared defaults inherited by cohort profile sections unless overridden.
 defaults:
-  # Locates shared R helper functions used by tumour-neighbourhood and agnostic clustering rules.
+  # Locates shared R helper functions used by the tumour-neighbourhood and
+  # HC/k-means clustering rules.
   paths:
     tumour_nh_base_functions: R/base_functions
-    agnostic_base_functions_dir: R
-  # Configures candidate cluster counts evaluated by clustering rules.
+    # Legacy key name retained to avoid path churn; it locates helper code only
+    # and carries no scientific meaning.
+    hclust_kmeans_base_functions_dir: R
+  # Configures candidate cluster counts evaluated by the ConsensusClusterPlus
+  # clustering formulations. The HC/k-means clustering formulations declare
+  # their own k range under the hclust_kmeans section below;
+  # the two are kept separate because ConsensusClusterPlus evaluates an explicit
+  # grid while HC/k-means searches a bounded interval.
   clustering:
     k_grid: [2, 3, 4, 5, 6, 7, 8]
+  # Parameters of the HC/k-means clustering stage.
+  #
+  # hclust_kmeans holds the hyperparameters of the HC/k-means clustering
+  # formulations: hierarchical clustering and k-means applied to each
+  # feature-distance representation in expression space or PCA-reduced space.
+  #
+  # Every key here is required: the workflow fails at parse time if one is
+  # missing, so these scientific parameters cannot silently fall back to values
+  # embedded in orchestration or implementation code.
+  #   n_pcs    - principal components retained for PCA-reduced clustering
+  #   max_k_hc - largest k evaluated by hierarchical clustering
+  #   k_min    - smallest k evaluated by k-means
+  #   k_max    - largest k evaluated by k-means
+  hclust_kmeans:
+    n_pcs: 20
+    max_k_hc: 8
+    k_min: 2
+    k_max: 8
   tumour_neighbourhoods:
     adaptive_k:
       fraction: 0.10
@@ -42,10 +67,9 @@ defaults:
     #
     # Identifier scheme (must match tumour_neighbourhoods/<direction>/<method_id>/
     # output directory names exactly):
-    #   AGN_*  = HC/k-means clustering branch (hierarchical clustering and
-    #            k-means applied to each feature-distance representation in
-    #            expression space or PCA-reduced space). "AGN" is the retained
-    #            internal compatibility identifier for this branch.
+    #   HCLUST_* / KMEANS_*  = HC/k-means clustering formulations: hierarchical
+    #            clustering and k-means applied to each feature-distance
+    #            representation in expression space or PCA-reduced space.
     #   CCP_*  = ConsensusClusterPlus resampling-based consensus clustering.
     #
     # Only JOINT cell-line + tumour formulations (*_cell_tumour) are eligible;
@@ -57,19 +81,19 @@ defaults:
     # never inferred from files present on disk.
     clustering_methods_by_distance:
       corr:
-        - AGN_HC_expr_cell_tumour
-        - AGN_HC_pca_cell_tumour
-        - CCP_HC_expr_cell_tumour
-        - CCP_HC_pca_cell_tumour
+        - HCLUST_expr_cell_tumour
+        - HCLUST_pca_cell_tumour
+        - CCP_HCLUST_expr_cell_tumour
+        - CCP_HCLUST_pca_cell_tumour
       euc:
-        - AGN_HC_expr_cell_tumour
-        - AGN_HC_pca_cell_tumour
-        - AGN_KM_expr_cell_tumour
-        - AGN_KM_pca_cell_tumour
-        - CCP_HC_expr_cell_tumour
-        - CCP_HC_pca_cell_tumour
-        - CCP_KM_expr_cell_tumour
-        - CCP_KM_pca_cell_tumour
+        - HCLUST_expr_cell_tumour
+        - HCLUST_pca_cell_tumour
+        - KMEANS_expr_cell_tumour
+        - KMEANS_pca_cell_tumour
+        - CCP_HCLUST_expr_cell_tumour
+        - CCP_HCLUST_pca_cell_tumour
+        - CCP_KMEANS_expr_cell_tumour
+        - CCP_KMEANS_pca_cell_tumour
   feature_selection:
     # Sets method-specific feature-selection cutoffs for candidate and refined gene sets.
     method_topn:
@@ -136,14 +160,14 @@ defaults:
       brca: results/unsupervised/brca/deseq2_inputs/metadata_with_components.tsv
       nbl: results/unsupervised/nbl/deseq2_inputs/metadata_with_components.tsv
       rbl: results/unsupervised/rbl/deseq2_inputs/metadata_with_components.tsv
-  # Configures community detection as a diagnostic stability analysis against resolved graph components.
+  # Configures community detection as a stability assessment against resolved graph components.
   community_stability:
     enabled: true
     enabled_profiles:
       - brca
       - nbl
       - rbl
-    scope: cell_line_graph_stability_diagnostic
+    scope: cell_line_graph_stability_assessment
     interpretation: "Leiden/Louvain community detection is used only as an auxiliary cross-direction cell-line graph co-assignment stability check against final resolved graph components."
   # Configures canonical graph-derived functional enrichment.
   functional_enrichment:
@@ -1036,7 +1060,7 @@ profiles:
 # Preserves shared helper-function paths used by the Snakefile.
 paths:
   tumour_nh_base_functions: R/base_functions
-  agnostic_base_functions_dir: R
+  hclust_kmeans_base_functions_dir: R
 
 # ---------------------------------------------------------------------------
 # Configures the cell-line-only pan-cancer similarity network.
@@ -1045,7 +1069,7 @@ paths:
 pan_cancer_cell_line_similarity:
   # Uses the marker-derived cell-line-only expression object as the network input.
   expr_rds: results/unsupervised/pan_cancer/inputs/pan_cancer_feature_expr_cell_lines_only.rds
-  # Routes cell-line-only network sidecars and diagnostic plot outputs.
+  # Routes cell-line-only network sidecars and plot outputs.
   output_dir: results/unsupervised/pan_cancer/cell_line_similarity
   # Computes Spearman correlations before constructing the k-nearest-neighbour graph.
   correlation: spearman

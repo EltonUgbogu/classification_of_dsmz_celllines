@@ -10,6 +10,15 @@ spec = importlib.util.spec_from_file_location("build_pan_cancer_features", MODUL
 pcf = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pcf)
 
+# The empirical acceptance quantiles are configuration-owned
+# (marker_postprocessing.pan_cancer.empirical_quantile_thresholds) and reach the
+# implementation as arguments. The module no longer carries copies of them, so
+# these tests supply the same values configuration currently declares as an
+# explicit fixture rather than importing constants back out of the module.
+ADJUSTED_P_VALUE_QUANTILE = 0.25
+ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE = 0.75
+EXPRESSION_QUANTILE = 0.50
+
 
 def evidence_row(
     gene_id,
@@ -77,9 +86,9 @@ def test_empirical_threshold_boundaries_and_candidate_acceptance():
     )
     pool, thresholds = pcf.empirical_quantile_threshold_calculation(
         pool,
-        pcf.ADJUSTED_P_VALUE_QUANTILE,
-        pcf.ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
-        pcf.EXPRESSION_QUANTILE,
+        ADJUSTED_P_VALUE_QUANTILE,
+        ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
+        EXPRESSION_QUANTILE,
     )
     pool = pcf.evaluate_candidate_acceptance(pool)
     threshold = thresholds.iloc[0]
@@ -106,9 +115,9 @@ def test_recurrent_row_is_retained_without_candidate_flags():
     pool = pcf.candidate_pool_construction(pcf.recurrence_classification(recurrent))
     pool, thresholds = pcf.empirical_quantile_threshold_calculation(
         pool,
-        pcf.ADJUSTED_P_VALUE_QUANTILE,
-        pcf.ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
-        pcf.EXPRESSION_QUANTILE,
+        ADJUSTED_P_VALUE_QUANTILE,
+        ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
+        EXPRESSION_QUANTILE,
     )
     assert thresholds.empty
     pool = pcf.effect_direction_consistency_classification(pool)
@@ -133,9 +142,9 @@ def test_cross_context_dedup_preserves_provenance_and_priority():
     pool = pcf.candidate_pool_construction(pcf.recurrence_classification(pd.DataFrame(rows)))
     pool, _ = pcf.empirical_quantile_threshold_calculation(
         pool,
-        pcf.ADJUSTED_P_VALUE_QUANTILE,
-        pcf.ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
-        pcf.EXPRESSION_QUANTILE,
+        ADJUSTED_P_VALUE_QUANTILE,
+        ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
+        EXPRESSION_QUANTILE,
     )
     pool = pcf.effect_direction_consistency_classification(pool)
     pool = pcf.evaluate_candidate_acceptance(pool)
@@ -163,9 +172,9 @@ def test_non_empty_candidate_context_has_single_finite_threshold_row():
     )
     _, thresholds = pcf.empirical_quantile_threshold_calculation(
         pool,
-        pcf.ADJUSTED_P_VALUE_QUANTILE,
-        pcf.ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
-        pcf.EXPRESSION_QUANTILE,
+        ADJUSTED_P_VALUE_QUANTILE,
+        ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE,
+        EXPRESSION_QUANTILE,
     )
     assert len(thresholds) == 1
     assert thresholds[[

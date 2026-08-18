@@ -26,9 +26,11 @@ import pandas as pd
 METHOD_NAME = "graph_derived_pan_cancer_feature_selection_v1_revised"
 DEFAULT_AUDIT_OUTPUT_PREFIX = "ranked_marker_source_panel"
 RECURRENCE_MIN_COUNT = 2
-ADJUSTED_P_VALUE_QUANTILE = 0.25
-ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE = 0.75
-EXPRESSION_QUANTILE = 0.50
+# The three empirical acceptance quantiles are configuration-owned
+# (marker_postprocessing.pan_cancer.empirical_quantile_thresholds) and arrive on
+# the command line. They are deliberately not restated as module constants: the
+# former constants both duplicated the configured values and rejected any run
+# whose configuration differed from them, which made configuration inert.
 MARKER_EVIDENCE_STRATUM_ORDER = ("anchor_associated", "isolate_associated")
 CANDIDATE_POOL_ORDER = {
     "recurrent": 1,
@@ -1259,6 +1261,9 @@ def selected_pan_cancer_panel_export(
         family_summary,
         duplicate_gene_count,
         removed_ribo_mt,
+        adjusted_p_value_quantile=args.adjusted_p_value_quantile,
+        absolute_shrunken_log2fc_quantile=args.absolute_shrunken_log2fc_quantile,
+        expression_quantile=args.expression_quantile,
     ).to_csv(outdir / "pan_cancer_feature_build_summary.tsv", sep="\t", index=False)
     write_run_manifest(outdir, manifest_paths, manifest_tables, audit_output_prefix)
     write_active_directory_manifest(outdir, audit_output_prefix)
@@ -1537,6 +1542,12 @@ def build_summary_table(
     family_summary: pd.DataFrame,
     duplicate_gene_count: int,
     removed_ribo_mt: set[str],
+    *,
+    # Recorded in the build summary so the configured acceptance quantiles are
+    # auditable from the outputs.
+    adjusted_p_value_quantile: float,
+    absolute_shrunken_log2fc_quantile: float,
+    expression_quantile: float,
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
 
@@ -1551,9 +1562,9 @@ def build_summary_table(
     accepted_singleton = singleton[singleton["passes_candidate_acceptance"] == True]
     accepted_non_recurrent = non_recurrent[non_recurrent["passes_candidate_acceptance"] == True]
     add("recurrence_min_count", RECURRENCE_MIN_COUNT)
-    add("adjusted_p_value_quantile", ADJUSTED_P_VALUE_QUANTILE)
-    add("absolute_shrunken_log2fc_quantile", ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE)
-    add("expression_quantile", EXPRESSION_QUANTILE)
+    add("adjusted_p_value_quantile", adjusted_p_value_quantile)
+    add("absolute_shrunken_log2fc_quantile", absolute_shrunken_log2fc_quantile)
+    add("expression_quantile", expression_quantile)
     add("final_unique_gene_count", int(features["gene_id"].nunique()))
     add("recurrent_selected_rows", int((selected_evidence_rows["selection_basis"] == "recurrent").sum()))
     add("unique_recurrent_genes", int(recurrent["gene_id"].nunique()))
@@ -1739,12 +1750,17 @@ def main() -> None:
     args = parser.parse_args()
     if args.method != METHOD_NAME:
         sys.exit(f"[ERROR] --method must be {METHOD_NAME}")
-    if args.adjusted_p_value_quantile != ADJUSTED_P_VALUE_QUANTILE:
-        sys.exit(f"[ERROR] --adjusted-p-value-quantile must be {ADJUSTED_P_VALUE_QUANTILE}")
-    if args.absolute_shrunken_log2fc_quantile != ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE:
-        sys.exit(f"[ERROR] --absolute-shrunken-log2fc-quantile must be {ABSOLUTE_SHRUNKEN_LOG2FC_QUANTILE}")
-    if args.expression_quantile != EXPRESSION_QUANTILE:
-        sys.exit(f"[ERROR] --expression-quantile must be {EXPRESSION_QUANTILE}")
+    # The configured quantiles are validated for admissibility, not for equality
+    # with a value embedded here: configuration owns them, so changing
+    # marker_postprocessing.pan_cancer.empirical_quantile_thresholds must change
+    # what this stage computes.
+    for _flag, _value in (
+        ("--adjusted-p-value-quantile", args.adjusted_p_value_quantile),
+        ("--absolute-shrunken-log2fc-quantile", args.absolute_shrunken_log2fc_quantile),
+        ("--expression-quantile", args.expression_quantile),
+    ):
+        if not (0.0 < _value < 1.0):
+            sys.exit(f"[ERROR] {_flag} must satisfy 0 < q < 1; got {_value}")
     if not args.audit_output_prefix or not re.match(r"^[A-Za-z0-9_.-]+$", args.audit_output_prefix):
         sys.exit("[ERROR] --audit-output-prefix must be a non-empty file-name prefix")
     build_graph_derived_pan_cancer_feature_panel(args)

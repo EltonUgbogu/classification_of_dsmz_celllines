@@ -34,10 +34,19 @@
 #
 # USAGE
 # -----
-# Rscript resolve_dsmz_graph_neighbors.R \
+# Rscript resolve_dsmz_graph_neighbours.R \
 #     --config config/config.yaml \
 #     --profile brca \
-#     --winners_tsv results/unsupervised/tumour_neighbourhoods/final_consensus_all/p_consensus_winners_by_frac_ge_thr.tsv
+#     --winners_tsv .../p_consensus_winners_by_frac_ge_thr.tsv \
+#     --direction_summary_tsv .../p_consensus_direction_summary.tsv \
+#     --graph_root .../tumour_neighbourhoods \
+#     --directions Variance_euc,Variance_corr,... \
+#     --output_tsv .../resolved_dsmz_neighbours.tsv \
+#     --validation_tsv .../resolved_graph_input_validation.tsv
+#
+# --graph_root, --directions and --output_tsv are supplied by the workflow. The
+# resolution-eligible representation set is a configuration declaration; this
+# script validates it against the graph products on disk but never derives it.
 #
 # DEPENDENCIES
 # ------------
@@ -117,18 +126,20 @@ if (file.exists(lib_config_path)) {
 # -----------------------------------------------------------------------------
 # The script accepts the following arguments:
 #
-# Required:
+# Required (supplied by the workflow):
 #   --winners_tsv        Path to per-cell-line best direction results
+#   --graph_root         Root directory of the per-representation graph products
+#   --directions         Comma-separated resolution-eligible representations
+#   --output_tsv         Resolved-neighbour output path
 #
 # Configuration:
 #   --config             Path to config.yaml (default: config/config.yaml)
 #   --profile            Profile name (brca, nbl, rbl, or multicohort_cancer)
 #
-# Optional overrides:
+# Optional:
 #   --direction_summary_tsv   Path to direction summary for global best selection
 #   --best_overall_dir        Manual override for global best direction
-#   --graph_root              Custom graph root directory
-#   --output_tsv              Custom output path
+#   --validation_tsv          Resolved-graph input validation report path
 
 option_list <- list(
   make_option("--config", type = "character", default = "config/config.yaml",
@@ -146,10 +157,23 @@ option_list <- list(
               help = "Optional: Manually specify best overall direction (overrides direction_summary_tsv)."),
 
   make_option("--graph_root", type = "character", default = NULL,
-              help = "Custom graph root directory. For pan-cancer typically: results/.../graphs/cell_line_similarity/within"),
+              help = paste("Root directory holding the per-representation graph",
+                           "edge files. Required: the workflow constructs it.")),
+
+  make_option("--directions", type = "character", default = NULL,
+              help = paste("Comma-separated resolution-eligible feature-distance",
+                           "representations. Required: the workflow derives them",
+                           "from the effective configuration and passes them",
+                           "explicitly. This script never reconstructs the",
+                           "representation universe.")),
 
   make_option("--output_tsv", type = "character", default = NULL,
-              help = "Output TSV path")
+              help = "Output TSV path"),
+
+  make_option("--validation_tsv", type = "character", default = NULL,
+              help = paste("Path for the resolved-graph input validation report",
+                           "recording expected, observed, missing and unexpected",
+                           "representations"))
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -192,93 +216,52 @@ resolve_path_if_needed <- function(p, config_path) {
 # Tumour Neighbourhood Root Resolution
 # -----------------------------------------------------------------------------
 # The graph root directory contains the DSMZ–DSMZ similarity graph edge files.
-# Resolution follows this precedence:
-#
-#   1. Explicit --graph_root argument (highest priority)
-#   2. Profile-specific default paths:
-#      - multicohort_cancer: {outdir}/graphs/cell_line_similarity/within
-#      - Other profiles: {unsup_root}/tumour_neighbourhoods
-#
-# The script validates that the resolved directory exists before proceeding.
+# It is constructed by orchestration and passed with --graph_root: the primary
+# branch passes the profile's tumour_neighbourhoods root and the metric-specific
+# branch passes the corresponding metric root. There is deliberately no
+# script-side default, so no run can silently read a different (for example, an
+# older) graph location than the one whose products the workflow declared.
 
-if (!is.null(opt$graph_root) && nzchar(opt$graph_root)) {
-  tumour_nh_root <- resolve_path_if_needed(opt$graph_root, opt$config)
-  if (!dir.exists(tumour_nh_root)) {
-    stop("Cannot find graph_root directory: ", opt$graph_root,
-         " (resolved to: ", tumour_nh_root, ")")
-  }
-} else {
-  if (profile == "multicohort_cancer") {
-    # Pan-cancer profile: read from dedicated multicohort_cancer config section
-    cfg_full <- yaml::read_yaml(opt$config)
-    mc_cfg <- cfg_full$multicohort_cancer %||%
-      stop("multicohort_cancer section not found in config")
-
-    outdir <- mc_cfg$outdir %||% "results/multicohort_cancer_benchmark"
-    outdir <- resolve_path_if_needed(outdir, opt$config)
-
-    tumour_nh_root <- file.path(outdir, "graphs", "cell_line_similarity", "within")
-  } else {
-    # Single-cohort profiles: use unsup_root from paths section
-    unsup_root <- cfg$paths$unsup_root %||%
-      stop("Missing paths.unsup_root in config")
-    unsup_root <- resolve_path_if_needed(unsup_root, opt$config)
-    if (!dir.exists(unsup_root)) {
-      stop("Cannot find unsup_root directory (resolved to: ", unsup_root, ")")
-    }
-    tumour_nh_root <- file.path(unsup_root, "tumour_neighbourhoods")
-  }
+if (is.null(opt$graph_root) || !nzchar(opt$graph_root)) {
+  stop(
+    "--graph_root is required. The workflow constructs the graph root for the ",
+    "branch being resolved; this script does not derive graph locations from ",
+    "configuration."
+  )
 }
-
+tumour_nh_root <- resolve_path_if_needed(opt$graph_root, opt$config)
 if (!dir.exists(tumour_nh_root)) {
-  stop("Tumour neighbourhood root not found: ", tumour_nh_root)
+  stop("Cannot find graph_root directory: ", opt$graph_root,
+       " (resolved to: ", tumour_nh_root, ")")
 }
 
 # -----------------------------------------------------------------------------
-# Direction Definitions
+# Resolution-Eligible Representation Set
 # -----------------------------------------------------------------------------
-# Directions represent combinations of feature selection methods and distance
-# metrics used to construct similarity graphs. The available directions depend
-# on the analysis profile:
-#
-# Pan-cancer:
-#   - Feature methods: Variance, MAD, MeanAbsDev, Entropy, PCA, Spearman, MX, kTotal, HVG
-#   - Distance metrics: euc, corr
-#   - Resulting directions: e.g., "Variance_euc", "MAD_corr", "HVG_euc"
-#
-# Single-cohort (brca, nbl, rbl, heme):
-#   - Directions: the 9-method × 2-distance grid declared in
-#     tumour_neighbourhoods.directions in config.yaml, e.g.:
-#     Variance_euc, Variance_corr, MAD_euc, ..., kTotal_euc, kTotal_corr,
-#     HVG_euc, HVG_corr
-#   - HVG uses top-3000 genes (LOESS mean-variance trend correction).
-#   - PAM50 directions (pam50_euc, pam50_corr) are added only when
-#     use_pam50 is enabled in the profile config.
+# The resolution-eligible feature-distance representations are a scientific
+# declaration owned by configuration and enumerated by orchestration, which
+# passes the effective set in --directions. This script does not reconstruct
+# that universe: not from configuration sections it would have to re-merge, not
+# from a built-in grid, and not from directory contents. Any of those would be a
+# second source of truth able to drift from the representation set the workflow
+# declared as expected products — the failure mode that silently reduced
+# multicohort resolution to an 18-representation universe and dropped the
+# PanCancerFeatureSet representations.
 
-if (profile == "multicohort_cancer") {
-  cfg_full <- yaml::read_yaml(opt$config)
-  mc_cfg <- cfg_full$multicohort_cancer %||%
-    stop("multicohort_cancer section not found in config")
-  feature_methods <- mc_cfg$feature_methods %||%
-    c("Variance", "MAD", "MeanAbsDev", "Entropy", "PCA", "Spearman", "MX", "kTotal", "HVG")
-  dist_metrics <- mc_cfg$dist_metrics %||%
-    c("euc", "corr")
-  directions <- paste0(rep(feature_methods, each = length(dist_metrics)), "_",
-                       rep(dist_metrics, times = length(feature_methods)))
-} else {
-  # Fall back to the tumour_neighbourhoods.directions from config; if not set,
-  # use the 9-method × 2-distance grid that all active single-cohort profiles
-  # declare (including HVG_euc / HVG_corr as of the 9-method activation).
-  directions <- cfg$tumour_neighbourhoods$directions %||%
-    c("Variance_euc", "Variance_corr",
-      "MAD_euc",      "MAD_corr",
-      "MeanAbsDev_euc", "MeanAbsDev_corr",
-      "Entropy_euc",  "Entropy_corr",
-      "PCA_euc",      "PCA_corr",
-      "Spearman_euc", "Spearman_corr",
-      "MX_euc",       "MX_corr",
-      "kTotal_euc",   "kTotal_corr",
-      "HVG_euc",      "HVG_corr")
+directions <- as.character(
+  Filter(nzchar, trimws(strsplit(opt$directions %||% "", ",")[[1]]))
+)
+if (length(directions) == 0) {
+  stop(
+    "--directions is required and must list the resolution-eligible ",
+    "feature-distance representations. The workflow derives them from the ",
+    "active profile's configured representation set and passes them ",
+    "explicitly; this script never infers them."
+  )
+}
+if (anyDuplicated(directions) > 0) {
+  stop("Duplicate representation(s) in --directions: ",
+       paste(unique(directions[duplicated(directions)]), collapse = ", "))
 }
 
 # -----------------------------------------------------------------------------
@@ -429,49 +412,118 @@ canonicalise_edge_df <- function(edges_df, direction = "") {
 }
 
 # -----------------------------------------------------------------------------
-# Edge File Loading
+# Representation Graph Products: Exact Expected-Versus-Observed Validation
 # -----------------------------------------------------------------------------
-# The script loads edge files for each direction. Edge files contain pairwise
-# similarity relationships between DSMZ cell lines.
+# Every resolution-eligible representation has exactly one graph edge file, at
+# the canonical location the producing rules declare:
 #
-# File naming conventions differ by profile:
-#   - Pan-cancer: {direction}/cell_line_similarity_graph_edges_{direction}.tsv
-#   - Single-cohort: {direction}/final_consensus/cell_line_similarity_graph_edges_{direction}.tsv
+#   {graph_root}/{representation}/final_consensus/
+#       cell_line_similarity_graph_edges_{representation}.tsv
 #
-# Missing edge files generate warnings but do not halt execution, allowing
-# partial results when some directions are unavailable.
+# There is no alternative candidate path: an older layout must not be picked up
+# silently in place of the declared product.
+#
+# The observed representation graph set must equal the expected set before any
+# neighbour resolution happens. A missing graph product is an error, never a
+# warning: resolving from a partial universe would silently change the analysis
+# — for example by dropping PanCancerFeatureSet_euc/corr and resolving over 18
+# representations while configuration declares 20.
+#
+# Representation directories present under the graph root but absent from the
+# expected set cannot enter the analysis, because only expected representations
+# are ever read. They are still recorded in the validation report so stale
+# leftovers stay visible rather than invisible.
 
 edge_file_for_direction <- function(root, direction) {
-  candidates <- c(
-    file.path(root, direction, "final_consensus",
-              paste0("cell_line_similarity_graph_edges_", direction, ".tsv")),
-    file.path(root, direction,
-              paste0("cell_line_similarity_graph_edges_", direction, ".tsv"))
-  )
-  hit <- candidates[file.exists(candidates)][1]
-  if (length(hit) == 0 || is.na(hit)) {
-    candidates[1]
-  } else {
-    hit
-  }
+  file.path(root, direction, "final_consensus",
+            paste0("cell_line_similarity_graph_edges_", direction, ".tsv"))
 }
 
-cat("Using configured directions for neighbour resolution:", length(directions), "\n")
+cat("Expected resolution-eligible representations:", length(directions), "\n")
+
+expected_files <- setNames(
+  vapply(directions, function(d) edge_file_for_direction(tumour_nh_root, d),
+         character(1)),
+  directions
+)
+observed_flag <- file.exists(expected_files)
+missing_representations <- directions[!observed_flag]
+
+observed_on_disk <- list.dirs(tumour_nh_root, full.names = FALSE, recursive = FALSE)
+observed_on_disk <- observed_on_disk[nzchar(observed_on_disk)]
+has_graph_product <- vapply(
+  observed_on_disk,
+  function(d) file.exists(edge_file_for_direction(tumour_nh_root, d)),
+  logical(1)
+)
+observed_representations <- sort(observed_on_disk[has_graph_product])
+unexpected_representations <- setdiff(observed_representations, directions)
+
+validation_report <- tibble::tibble(
+  representation = sort(unique(c(directions, observed_representations))),
+) %>%
+  mutate(
+    expected = representation %in% directions,
+    observed = representation %in% observed_representations,
+    graph_edges_path = unname(vapply(
+      representation,
+      function(d) edge_file_for_direction(tumour_nh_root, d),
+      character(1)
+    )),
+    status = dplyr::case_when(
+      expected & observed  ~ "expected_present",
+      expected & !observed ~ "expected_missing",
+      TRUE                 ~ "unexpected_present_not_consumed"
+    ),
+    graph_root = tumour_nh_root,
+    profile = profile
+  )
+
+if (!is.null(opt$validation_tsv) && nzchar(opt$validation_tsv)) {
+  dir.create(dirname(opt$validation_tsv), recursive = TRUE, showWarnings = FALSE)
+  write_tsv(validation_report, opt$validation_tsv)
+  cat("Resolved-graph input validation written to:", opt$validation_tsv, "\n")
+}
+
+if (length(unexpected_representations) > 0) {
+  cat("[WARN] Representation graph products present under the graph root but not ",
+      "declared as resolution-eligible; they are not consumed: ",
+      paste(unexpected_representations, collapse = ", "), "\n", sep = "")
+}
+
+if (length(missing_representations) > 0) {
+  stop(
+    "Missing graph product(s) for configured resolution-eligible ",
+    "representation(s): ",
+    paste(missing_representations, collapse = ", "),
+    "\nExpected paths:\n",
+    paste(unname(expected_files[missing_representations]), collapse = "\n"),
+    "\nThe configured representation set must be complete before resolved-",
+    "neighbour construction; resolution never proceeds from a partial universe."
+  )
+}
+
+# -----------------------------------------------------------------------------
+# Edge File Loading
+# -----------------------------------------------------------------------------
+# Every expected representation is present, so the loaded set equals the
+# expected set by construction.
 
 edges_list <- list()
 for (d in directions) {
-  edge_file <- edge_file_for_direction(tumour_nh_root, d)
-
-  if (file.exists(edge_file)) {
-    edges_list[[d]] <- read_tsv(edge_file, show_col_types = FALSE)
-  } else {
-    warning("Graph edge file not found: ", edge_file)
-  }
+  edges_list[[d]] <- read_tsv(unname(expected_files[[d]]), show_col_types = FALSE)
 }
 
-if (length(edges_list) == 0) {
-  stop("No graph edge files found under: ", tumour_nh_root)
+loaded_representations <- names(edges_list)
+if (!setequal(loaded_representations, directions)) {
+  stop(
+    "Internal error: loaded representation set does not equal the expected set.",
+    "\nExpected: ", paste(sort(directions), collapse = ", "),
+    "\nLoaded: ", paste(sort(loaded_representations), collapse = ", ")
+  )
 }
+cat("Loaded representation graphs:", length(edges_list), "of",
+    length(directions), "expected\n")
 
 if (profile == "multicohort_cancer") {
   edges_list <- imap(edges_list, canonicalise_edge_df)
@@ -739,34 +791,20 @@ resolved_neighbors_formatted <- resolved_neighbors %>%
 # -----------------------------------------------------------------------------
 # Output Path Resolution
 # -----------------------------------------------------------------------------
-# The output path follows the same resolution logic as input paths:
-#
-#   1. Explicit --output_tsv argument (highest priority)
-#   2. Profile-specific defaults:
-#      - multicohort_cancer: {outdir}/unsupervised/tumour_neighbourhoods/final_consensus_all/
-#      - Other: {unsup_root}/tumour_neighbourhoods/final_consensus_all/
+# The output path is constructed by orchestration and passed with --output_tsv.
+# There is no script-side default: a default would be a second owner of the
+# output location and could write to, or be read from, a path the workflow does
+# not declare as a product.
 #
 # Parent directories are created automatically if they do not exist.
 
 if (is.null(opt$output_tsv) || !nzchar(opt$output_tsv)) {
-  if (profile == "multicohort_cancer") {
-    cfg_full <- yaml::read_yaml(opt$config)
-    mc_cfg <- cfg_full$multicohort_cancer %||%
-      stop("multicohort_cancer section not found in config")
-    outdir <- mc_cfg$outdir %||% "results/multicohort_cancer_benchmark"
-    outdir <- resolve_path_if_needed(outdir, opt$config)
-    output_tsv <- file.path(outdir, "unsupervised", "tumour_neighbourhoods",
-                            "final_consensus_all", "resolved_dsmz_neighbors.tsv")
-  } else {
-    unsup_root <- cfg$paths$unsup_root %||%
-      stop("Missing paths.unsup_root in config")
-    unsup_root <- resolve_path_if_needed(unsup_root, opt$config)
-    output_tsv <- file.path(unsup_root, "tumour_neighbourhoods",
-                            "final_consensus_all", "resolved_dsmz_neighbors.tsv")
-  }
-} else {
-  output_tsv <- opt$output_tsv
+  stop(
+    "--output_tsv is required. The workflow declares the resolved-neighbour ",
+    "table as a rule output and passes its path."
+  )
 }
+output_tsv <- opt$output_tsv
 
 dir.create(dirname(output_tsv), recursive = TRUE, showWarnings = FALSE)
 

@@ -18,7 +18,7 @@
 # for r (patient_referenced_graph.clustering_methods_by_distance) and
 # N_{i,r,a} is the tumour neighbourhood of cell line i under formulation a.
 # Eligible formulations are the JOINT cell-line + tumour outputs of the
-# HC/k-means clustering branch (AGN_*) and of ConsensusClusterPlus (CCP_*):
+# HC/k-means clustering formulations (HCLUST_*, KMEANS_*) and of ConsensusClusterPlus (CCP_*):
 # 8 formulations for Euclidean directions, 4 for correlation directions.
 # p_consensus is a recurrence fraction across the configured clustering
 # formulations, not a probability and not an aggregate of statistically
@@ -68,7 +68,7 @@
 #
 # INTERPRETATION GUIDELINES
 # -------------------------
-#   p_consensus >= 0.7: Strong consensus; the cell line-tumour relationship
+#   p_consensus >= threshold: Strong consensus; the cell line-tumour relationship
 #                       is robust across the majority of analytical methods.
 #
 #   p_consensus = 1.0:  Perfect consensus; all evaluated methods agree that
@@ -182,6 +182,14 @@ option_list <- list(
   
   # --workdir: Pipeline working directory for anchoring relative paths.
   # This ensures correct file resolution regardless of invocation context.
+  # --threshold: the p-consensus fraction threshold used by the summary
+  # statistics and figures produced here. It is configuration-owned
+  # (patient_referenced_graph.p_consensus_threshold) and supplied by the
+  # workflow, so this stage reports the same threshold the patient-referenced
+  # graph stage applies.
+  make_option("--threshold", type = "double", default = NULL,
+              help = "p-consensus fraction threshold for reported summaries and figures"),
+
   make_option("--workdir", type = "character", default = ".",
               help = "Pipeline working directory [default: current directory]"),
   
@@ -324,6 +332,25 @@ if (is.null(cfg$paths$unsup_root) || !nzchar(cfg$paths$unsup_root)) {
 unsup_root <- cfg$paths$unsup_root
 unsup_root <- abs_path(unsup_root)
 base_dir   <- file.path(unsup_root, "tumour_neighbourhoods", direction)
+
+# The p-consensus fraction threshold reported by this stage's summaries and
+# figures. The workflow passes the configured value explicitly; the config is
+# read only as a fallback for direct invocation, and both resolve to the same
+# declaration (patient_referenced_graph.p_consensus_threshold). There is no
+# built-in numeric default, so summaries can never be produced against a
+# threshold that differs from the one the graph stage applies.
+p_threshold <- opt$threshold %||% cfg$patient_referenced_graph$p_consensus_threshold
+if (is.null(p_threshold)) {
+  stop(
+    "No p-consensus fraction threshold available: pass --threshold, or declare ",
+    "patient_referenced_graph.p_consensus_threshold in the configuration."
+  )
+}
+p_threshold <- as.numeric(p_threshold)
+if (!is.finite(p_threshold) || p_threshold <= 0 || p_threshold > 1) {
+  stop("p-consensus fraction threshold must satisfy 0 < threshold <= 1; got: ", p_threshold)
+}
+cat("[INFO] p-consensus fraction threshold for reported summaries: ", p_threshold, "\n", sep = "")
 
 cat("[INFO] unsup_root: ", unsup_root, "\n", sep = "")
 cat("[INFO] tumour_neighbourhoods base_dir: ", base_dir, "\n", sep = "")
@@ -768,7 +795,7 @@ all_long <- neigh_list %>%
   select(method_id, data) %>%
   unnest(data)
 
-# Diagnostic output: verify data structure.
+# Sanity output: verify data structure.
 cat("=== Sanity check: counts per method / cell line / in_top ===\n")
 all_long %>%
   count(method, cell_tech_id, in_top) %>%
@@ -865,25 +892,29 @@ consensus_pairs %>%
 consensus_pairs <- consensus_pairs %>%
   filter(!is.na(p_consensus), p_consensus >= 0, p_consensus <= 1)
 
-# Compute summary statistics for annotation.
+# Compute summary statistics for annotation. Names are threshold-aware: the
+# fraction is computed against the configured p-consensus fraction threshold, so
+# no name encodes a threshold value that configuration can change.
 n_pairs      <- nrow(consensus_pairs)
-frac_ge_0_7  <- mean(consensus_pairs$p_consensus >= 0.7)
+frac_ge_thr  <- mean(consensus_pairs$p_consensus >= p_threshold)
 frac_eq_1    <- mean(consensus_pairs$p_consensus == 1)
 
 cat("\n=== Summary of consensus strength ===\n")
 cat(sprintf("Total pairs:        %d\n", n_pairs))
-cat(sprintf("p_consensus >= 0.7 : %.1f%% (%d pairs)\n",
-            100 * frac_ge_0_7,
-            sum(consensus_pairs$p_consensus >= 0.7)))
+cat(sprintf("p_consensus >= %.2f : %.1f%% (%d pairs)\n",
+            p_threshold,
+            100 * frac_ge_thr,
+            sum(consensus_pairs$p_consensus >= p_threshold)))
 cat(sprintf("p_consensus = 1.0 : %.1f%% (%d pairs)\n",
             100 * frac_eq_1,
             sum(consensus_pairs$p_consensus == 1)))
 
 # Prepare annotation text for the plot.
 annot_text <- sprintf(
-  "Total pairs: %d\n>= 0.7: %.1f%%\n= 1.0: %.1f%%",
+  "Total pairs: %d\n>= %.2f: %.1f%%\n= 1.0: %.1f%%",
   n_pairs,
-  100 * frac_ge_0_7,
+  p_threshold,
+  100 * frac_ge_thr,
   100 * frac_eq_1
 )
 
@@ -894,7 +925,7 @@ p_hist <- ggplot(consensus_pairs, aes(x = p_consensus)) +
     binwidth = 0.05,
     colour   = "white"
   ) +
-  geom_vline(xintercept = 0.7, linetype = "dashed") +  # Threshold reference line
+  geom_vline(xintercept = p_threshold, linetype = "dashed") +  # Configured threshold reference line
   scale_x_continuous(
     limits = c(0, 1),
     breaks = seq(0, 1, by = 0.1)
@@ -946,10 +977,11 @@ cat("\nHistogram saved to:\n  ", plot_path_hist, "\n")
 #   - n_pairs: Number of tumours in the cell line's neighbourhood (across any method)
 #   - max_p: Maximum p_consensus value achieved with any tumour
 #   - median_p: Median p_consensus across all tumour neighbours
-#   - frac_ge_0_7: Fraction of neighbours with strong consensus (p >= 0.7)
+#   - frac_ge_threshold: Fraction of neighbours meeting the configured
+#                        p-consensus fraction threshold
 #
 # Cell lines with high max_p values have at least one tumour with which they
-# show robust transcriptomic similarity. Those with high frac_ge_0_7 have
+# show robust transcriptomic similarity. Those with high frac_ge_threshold have
 # broadly consistent neighbourhoods.
 
 cell_summary <- consensus_pairs %>%
@@ -958,7 +990,9 @@ cell_summary <- consensus_pairs %>%
     n_pairs      = n(),
     max_p        = max(p_consensus),
     median_p     = median(p_consensus),
-    frac_ge_0_7  = mean(p_consensus >= 0.7),
+    # Threshold-aware column name; evaluated against the configured
+    # p-consensus fraction threshold.
+    frac_ge_threshold = mean(p_consensus >= p_threshold),
     .groups      = "drop"
   ) %>%
   arrange(desc(max_p))
@@ -983,7 +1017,7 @@ cell_summary %>% head(10) %>% print()
 p_cell <- ggplot(
   cell_summary,
   aes(x = reorder(cell_line, max_p), y = max_p,
-      fill = max_p >= 0.7)
+      fill = max_p >= p_threshold)
 ) +
   geom_col(width = 0.7) +
   coord_flip() +
@@ -993,7 +1027,8 @@ p_cell <- ggplot(
   ) +
   scale_fill_manual(
     values = c("TRUE" = "#2166ac", "FALSE" = "#bdbdbd"),
-    labels = c("FALSE" = "< 0.7", "TRUE" = ">= 0.7"),
+    labels = c("FALSE" = sprintf("< %.2f", p_threshold),
+               "TRUE"  = sprintf(">= %.2f", p_threshold)),
     name   = "Max p_consensus"
   ) +
   theme_dimred(base_size = 12) +
@@ -1029,45 +1064,48 @@ cat("\nPer-cell-line summary plot saved to:\n  ", plot_path_cell, "\n")
 #   This measures whether the cell line has at least one "anchor" tumour
 #   with which it consistently clusters.
 #
-#   Y-axis (frac_ge_0_7): The proportion of neighbourhood tumours showing
+#   Y-axis (frac_ge_threshold): The proportion of neighbourhood tumours showing
 #   strong consensus. This measures the breadth of robust representation.
 #
 # INTERPRETATION:
-#   - High max_p, high frac_ge_0_7: Well-anchored cell line with broad tumour
+#   - High max_p, high frac_ge_threshold: Well-anchored cell line with broad tumour
 #     representation. These are ideal models for the represented tumour subtype.
 #
-#   - High max_p, low frac_ge_0_7: Cell line has one or few strong tumour
+#   - High max_p, low frac_ge_threshold: Cell line has one or few strong tumour
 #     matches but many weak associations. May represent a specific tumour niche.
 #
-#   - Low max_p, any frac_ge_0_7: Cell line lacks robust tumour anchors.
+#   - Low max_p, any frac_ge_threshold: Cell line lacks robust tumour anchors.
 #     May have diverged from primary tumour biology during culture.
 
+# NOTE: the two constants below select which cell lines receive a text label in
+# this figure. They are presentation-only label-selection cut-offs, not the
+# configured p-consensus fraction threshold, and are not represented in
+# config.yaml; they are left as-is pending a design decision.
 cell_summary2 <- cell_summary %>%
   mutate(
-    frac_ge_0_7 = frac_ge_0_7,
-    highlight   = (max_p >= 0.9 | frac_ge_0_7 >= 0.8)  # Label outstanding cell lines
+    highlight = (max_p >= 0.9 | frac_ge_threshold >= 0.8)  # Label outstanding cell lines
   )
 
 # Print highlighted cell lines for reference.
 cell_summary2 %>%
   filter(highlight) %>%
   arrange(desc(max_p)) %>%
-  select(cell_line, max_p, frac_ge_0_7) %>%
+  select(cell_line, max_p, frac_ge_threshold) %>%
   print(n = 30)
 
 # Create the scatter plot.
 p_scatter <- ggplot(
   cell_summary2,
-  aes(x = max_p, y = frac_ge_0_7)
+  aes(x = max_p, y = frac_ge_threshold)
 ) +
   geom_point(
-    aes(size = n_pairs, fill = max_p >= 0.7),
+    aes(size = n_pairs, fill = max_p >= p_threshold),
     shape = 21,
     colour = "black",
     alpha  = 0.8
   ) +
   geom_hline(yintercept = 0.5, linetype = "dotted") +   # Reference: 50% strong neighbours
-  geom_vline(xintercept = 0.7, linetype = "dashed") +   # Reference: strong consensus threshold
+  geom_vline(xintercept = p_threshold, linetype = "dashed") +  # Configured threshold reference
   geom_text_repel(
     data = subset(cell_summary2, highlight),
     aes(label = cell_line),
@@ -1089,7 +1127,8 @@ p_scatter <- ggplot(
   ) +
   scale_fill_manual(
     values = c("TRUE" = "#2166ac", "FALSE" = "#bdbdbd"),
-    labels = c("FALSE" = "< 0.7", "TRUE" = ">= 0.7"),
+    labels = c("FALSE" = sprintf("< %.2f", p_threshold),
+               "TRUE"  = sprintf(">= %.2f", p_threshold)),
     name   = "Max p_consensus"
   ) +
   scale_size_continuous(
@@ -1102,9 +1141,11 @@ p_scatter <- ggplot(
       "Anchoring strength of %s (%s)",
       cell_label, direction
     ),
-    subtitle = expression(
+    # bquote substitutes the configured threshold while keeping the
+    # mathematical rendering of the axis description.
+    subtitle = bquote(
       x == max~p[consensus]~" per line; " ~
-      y == "fraction of neighbours with " ~ p[consensus] >= 0.7
+      y == "fraction of neighbours with " ~ p[consensus] >= .(p_threshold)
     ),
     x = expression(max~p[consensus]),
     y = "Tumour neighbours with strong consensus (%)"
@@ -1121,5 +1162,5 @@ plot_path_scatter <- file.path(
 )
 ggsave(plot_path_scatter, p_scatter, width = 7, height = 6)
 
-cat("\nScatter plot (max_p vs frac_ge_0_7) saved to:\n  ", plot_path_scatter, "\n")
+cat("\nScatter plot (max_p vs frac_ge_threshold) saved to:\n  ", plot_path_scatter, "\n")
 cat("\n[SUCCESS] p_consensus computation finished for gene set: ", gene_set, "\n", sep = "")

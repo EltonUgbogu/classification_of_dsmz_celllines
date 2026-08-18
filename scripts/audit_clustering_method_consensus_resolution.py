@@ -6,16 +6,30 @@ from pathlib import Path
 import yaml
 
 
+def deep_merge(base, override):
+    """Recursively merge two configuration mappings.
+
+    Matches the Snakefile's deep_merge() and lib_config.R's: mappings are
+    merged key by key, everything else (scalars, sequences) is replaced by the
+    override. A shallow update() would drop sibling keys of any nested section
+    a profile touches.
+    """
+    merged = dict(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(merged.get(k), dict):
+            merged[k] = deep_merge(merged[k], v)
+        else:
+            merged[k] = v
+    return merged
+
+
 def read_profiled_config(config_path: Path, profile: str):
     cfg = yaml.safe_load(config_path.read_text())
     defaults = cfg.get("defaults", {})
     profiles = cfg.get("profiles", {})
     if profile not in profiles:
         raise SystemExit(f"Profile not found in config: {profile}")
-    merged = {}
-    merged.update(defaults)
-    merged.update(profiles[profile])
-    return cfg, merged
+    return cfg, deep_merge(defaults, profiles[profile])
 
 
 def main():
@@ -27,24 +41,23 @@ def main():
     args = ap.parse_args()
 
     config_path = Path(args.config)
-    cfg_full = yaml.safe_load(config_path.read_text())
+    cfg_full, merged = read_profiled_config(config_path, args.profile)
     profiles = cfg_full.get("profiles", {})
     prof = profiles.get(args.profile)
-    if prof is None:
-        raise SystemExit(f"Profile not found: {args.profile}")
 
     unsup_root = Path("/work/ugbogu/pipeline") / prof["paths"]["unsup_root"]
-    defaults = cfg_full.get("defaults", {})
-    graph_cfg = defaults.get("patient_referenced_graph")
+    # Read the merged configuration so a profile-level override of the graph
+    # section is honoured, rather than only the defaults block.
+    graph_cfg = merged.get("patient_referenced_graph")
     if not isinstance(graph_cfg, dict):
-        raise SystemExit("Missing required config section: defaults.patient_referenced_graph")
+        raise SystemExit("Missing required config section: patient_referenced_graph")
     if "p_consensus_threshold" not in graph_cfg:
-        raise SystemExit("Missing required config key: defaults.patient_referenced_graph.p_consensus_threshold")
+        raise SystemExit("Missing required config key: patient_referenced_graph.p_consensus_threshold")
     if "clustering_methods_by_distance" not in graph_cfg:
-        raise SystemExit("Missing required config key: defaults.patient_referenced_graph.clustering_methods_by_distance")
+        raise SystemExit("Missing required config key: patient_referenced_graph.clustering_methods_by_distance")
     threshold = float(graph_cfg["p_consensus_threshold"])
     if not (0 < threshold <= 1):
-        raise SystemExit("defaults.patient_referenced_graph.p_consensus_threshold must satisfy 0 < threshold <= 1")
+        raise SystemExit("patient_referenced_graph.p_consensus_threshold must satisfy 0 < threshold <= 1")
     methods_by_distance = graph_cfg["clustering_methods_by_distance"]
     directions = [d.strip() for d in args.directions.split(",") if d.strip()]
 

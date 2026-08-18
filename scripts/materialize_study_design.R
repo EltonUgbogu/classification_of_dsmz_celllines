@@ -13,6 +13,17 @@ option_list <- list(
   make_option("--config", type = "character", default = "config/config.yaml"),
   make_option("--study-design", type = "character", default = "config/study_design.yaml"),
   make_option("--profile", type = "character", default = NULL),
+  # Configuration-owned scientific values transmitted by the workflow. The
+  # study-design manifest documents the study; it is not a second owner of the
+  # thresholds and representation grid config.yaml already declares.
+  make_option("--p-consensus-threshold", type = "double", default = NULL,
+              help = paste("Strong-support p-consensus fraction threshold;",
+                           "supplied by the workflow from",
+                           "patient_referenced_graph.p_consensus_threshold")),
+  make_option("--directions", type = "character", default = NULL,
+              help = paste("Comma-separated feature-distance representations;",
+                           "supplied by the workflow from the active profile's",
+                           "configured representation set")),
   make_option("--out-question", type = "character"),
   make_option("--out-cohorts", type = "character"),
   make_option("--out-labels", type = "character"),
@@ -32,10 +43,36 @@ study <- yaml::read_yaml(opt$`study-design`)
 cohort <- study$cohorts[[profile]]
 if (is.null(cohort)) stop("Profile not found in study design: ", profile)
 
-feature_methods <- cfg$feature_sets$methods %||% names(raw_cfg$defaults$feature_selection$method_topn)
-distances <- cfg$feature_sets$distances %||% c("euc", "corr")
-directions <- cfg$tumour_neighbourhoods$directions %||% as.character(outer(feature_methods, distances, paste, sep = "_"))
-k_grid <- raw_cfg$defaults$clustering$k_grid %||% c(2, 3, 4, 5, 6, 7, 8)
+# The representation set and the clustering k grid are configuration-owned.
+# The representation set is enumerated by the workflow and passed explicitly;
+# the k grid is read from config.yaml and is required. Neither is reconstructed
+# from a built-in list here, which would be a second source of truth.
+directions <- as.character(
+  Filter(nzchar, trimws(strsplit(opt$directions %||% "", ",")[[1]]))
+)
+if (length(directions) == 0) {
+  stop(
+    "--directions is required and must list the profile's feature-distance ",
+    "representations; the workflow derives them from the active profile's ",
+    "configured representation set."
+  )
+}
+
+k_grid <- raw_cfg$defaults$clustering$k_grid
+if (is.null(k_grid) || length(k_grid) == 0) {
+  stop("Missing required config value: defaults.clustering.k_grid")
+}
+
+p_consensus_threshold <- opt$`p-consensus-threshold`
+if (is.null(p_consensus_threshold) || !is.finite(p_consensus_threshold) ||
+    p_consensus_threshold <= 0 || p_consensus_threshold > 1) {
+  stop(
+    "A p-consensus fraction threshold in (0, 1] must be supplied via ",
+    "--p-consensus-threshold; the workflow passes ",
+    "patient_referenced_graph.p_consensus_threshold."
+  )
+}
+
 consensus <- study$candidate_inference$consensus_metric
 ranking_fields <- paste(study$candidate_inference$final_ranking$ranking_fields %||% character(), collapse = ";")
 
@@ -90,7 +127,10 @@ infer_tbl <- tibble(direction = directions) %>%
     clustering_algorithms = paste(study$candidate_inference$clustering_algorithms %||% c("hierarchical", "kmeans"), collapse = ";"),
     k_grid = paste(k_grid, collapse = ";"),
     consensus_metric = consensus$name %||% "p_consensus",
-    strong_support_threshold = consensus$strong_support_threshold %||% 0.7,
+    # config.yaml owns this value (patient_referenced_graph.p_consensus_threshold)
+    # and the workflow transmits it; the study-design manifest no longer declares
+    # a competing copy.
+    strong_support_threshold = p_consensus_threshold,
     ranking_fields = ranking_fields
   ) %>%
   mutate(profile = profile, .before = 1)

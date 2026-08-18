@@ -117,7 +117,7 @@ suppressPackageStartupMessages({
 # (e.g., "TARGET", "TCGA", "Tumor", "Primary" -> "Tumour"; "DSMZ", "cellline" -> "Cell line").
 #
 # This ensures that plotting functions work correctly regardless of how the
-# metadata labels tumour samples and cell lines, making the pipeline cohort-agnostic.
+# metadata labels tumour samples and cell lines, making the pipeline cohort-independent.
 
 normalise_dataset_type <- function(x) {
   # normalise_dataset_type(): Standardises dataset type labels.
@@ -259,7 +259,7 @@ get_method_context <- function(
   #   TUMOUR_PAM50_CORR_clusters.rds
   #   TUMOUR-DSMZ_HVG_EUC_umap.pdf
   #
-  # The prefix is cohort-agnostic and can be overridden via config or function arguments.
+  # The prefix is cohort-independent and can be overridden via config or function arguments.
   
   # Validate that the method_id exists in configuration.
   if (is.null(cfg$methods[[method_id]])) {
@@ -267,7 +267,7 @@ get_method_context <- function(
   }
   
   # --------------------------------------------------------------------------
-  # Cohort-agnostic filename prefixes
+  # Cohort-independent filename prefixes
   # --------------------------------------------------------------------------
   # If prefixes are not supplied, fall back to config or generic defaults.
   # This keeps filenames informative without hard-coding BRCA/TCGA.

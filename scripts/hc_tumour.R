@@ -21,11 +21,11 @@ if (is.null(opt$tumour_rds))  stop("--tumour_rds is required.", call. = FALSE)
 if (is.null(opt$outdir))      stop("--outdir is required.",   call. = FALSE)
 if (is.null(opt$cluster_rds)) stop("--cluster_rds is required.", call. = FALSE)
 
-utils_path <- file.path(opt$base_dir, "agnostic_clustering_utils.R")
-if (!file.exists(utils_path)) stop("Cannot find agnostic_clustering_utils.R at: ", utils_path)
+utils_path <- file.path(opt$base_dir, "hclust_kmeans_utils.R")
+if (!file.exists(utils_path)) stop("Cannot find hclust_kmeans_utils.R at: ", utils_path)
 source(utils_path)
 
-run_agnostic_clustering(
+run_hclust_kmeans(
   kind             = "hc_tumour",
   cell_rds         = NULL,
   tumour_rds       = opt$tumour_rds,

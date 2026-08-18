@@ -45,7 +45,7 @@ write_lines <- function(lines, path) {
 }
 
 arguments <- parse_arguments()
-diagnostics <- read_tsv(require_argument(arguments, "diagnostics"))
+representation_metrics <- read_tsv(require_argument(arguments, "representation_metrics"))
 weights <- read_tsv(require_argument(arguments, "weights"))
 weighted_edges <- read_tsv(require_argument(arguments, "weighted-edges"))
 boundary_summary <- read_tsv(require_argument(arguments, "boundary-summary"))
@@ -99,9 +99,9 @@ weighting_lines <- c(
   paste0("- Representations: ", nrow(weights)),
   paste0("- Sum of representation weights: ", round(sum(as.numeric(weights$representation_weight), na.rm = TRUE), 8)),
   "",
-  "## Diagnostics",
+  "## Representation metrics",
   "",
-  paste0("- Diagnostic rows: ", nrow(diagnostics)),
+  paste0("- Metric rows: ", nrow(representation_metrics)),
   "",
   "## Scientific status",
   "",
@@ -136,7 +136,7 @@ status_lines <- c(
   "",
   "## Generated table counts",
   "",
-  paste0("- Representation diagnostics rows: ", nrow(diagnostics)),
+  paste0("- Representation metric rows: ", nrow(representation_metrics)),
   paste0("- Representation weights rows: ", nrow(weights)),
   paste0("- Weighted consensus edge rows: ", nrow(weighted_edges)),
   paste0("- Boundary summary rows: ", nrow(boundary_summary)),

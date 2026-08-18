@@ -16,7 +16,7 @@
 #   pan_cancer_cell_line_lineage_discordant_profiles.tsv
 #   pan_cancer_cell_line_leiden_resolution_sweep_assignments.tsv
 #   pan_cancer_cell_line_leiden_resolution_sweep_summary.tsv
-#   pan_cancer_cell_line_leiden_resolution_sweep_diagnostic.pdf
+#   pan_cancer_cell_line_leiden_resolution_sweep.pdf
 # =============================================================================
 
 suppressPackageStartupMessages({
@@ -49,7 +49,7 @@ option_list <- list(
   make_option("--leiden-sweep-summary-out", type="character", default="",
     help="Resolution-level Leiden sweep summary TSV path"),
   make_option("--leiden-sweep-plot-out", type="character", default="",
-    help="Optional Leiden sweep diagnostic PDF path"),
+    help="Optional Leiden sweep PDF path"),
   make_option("--expected-communities", type="integer", default=0,
     help="Expected Louvain community count; 0 = skip check (default: 0)")
 )
@@ -575,7 +575,7 @@ if (nzchar(opt[["leiden-sweep-summary-out"]])) {
 
 if (nzchar(opt[["leiden-sweep-plot-out"]])) {
   plot_sweep_summary(sweep_summary, opt[["leiden-sweep-plot-out"]])
-  cat("[OK] Leiden sweep diagnostic plot written to:",
+  cat("[OK] Leiden sweep plot written to:",
       opt[["leiden-sweep-plot-out"]], "\n")
 }
 

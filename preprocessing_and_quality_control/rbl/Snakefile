@@ -346,7 +346,7 @@ RBL_PURITY_OUTPUTS = {
     "retained_samples": f"{RBL_PURITY_DIR}/retained_samples.tsv",
     "excluded_samples": f"{RBL_PURITY_DIR}/excluded_samples.tsv",
     "retained_raw_tumour_counts": f"{RBL_PURITY_DIR}/retained_raw_tumour_counts.rds",
-    "purity_diagnostics": f"{RBL_PURITY_DIR}/purity_diagnostics.pdf",
+    "purity_distribution_and_scores": f"{RBL_PURITY_DIR}/purity_distribution_and_scores.pdf",
     "sample_retention": f"{RBL_PURITY_DIR}/sample_retention_by_cohort.pdf",
     "provenance": f"{RBL_PURITY_DIR}/purity_provenance.tsv",
     "validation_report": f"{RBL_PURITY_DIR}/purity_stage_validation.tsv",
@@ -376,7 +376,7 @@ DSMZ_SAMPLE_ID_COLUMN = CELL_LINE_CONFIG.get("dsmz_sample_id_column", "sample_na
 SHARED_FIGURE_MODULE = repo_config_path(
     "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
 )
-# Cohort-agnostic batch-effect quantification driver, shared with BRCA and NBL.
+# Cohort-independent batch-effect quantification driver, shared with BRCA and NBL.
 BATCH_EFFECT_SCRIPT = repo_config_path(
     "preprocessing_and_quality_control/scripts/R/batch_effect_quantification.R"
 )
@@ -890,7 +890,7 @@ rule rbl_tumour_purity_analysis:
         retained_samples = RBL_PURITY_OUTPUTS["retained_samples"],
         excluded_samples = RBL_PURITY_OUTPUTS["excluded_samples"],
         retained_raw_tumour_counts = RBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
-        purity_diagnostics = RBL_PURITY_OUTPUTS["purity_diagnostics"],
+        purity_distribution_and_scores = RBL_PURITY_OUTPUTS["purity_distribution_and_scores"],
         sample_retention = RBL_PURITY_OUTPUTS["sample_retention"],
         provenance = RBL_PURITY_OUTPUTS["provenance"],
         validation_report = RBL_PURITY_OUTPUTS["validation_report"],
@@ -1062,7 +1062,7 @@ rule validate_rbl_purity_filtered_joint_outputs:
         dsmz_vst_post_bc = BATCH_OUTPUT["dsmz_vst_post_bc_rds"],
         collapsed_dsmz = BATCH_OUTPUT["dsmz_vst_post_bc_collapsed_cellline_rds"],
         coldata = BATCH_OUTPUT["coldata_tsv"],
-        figure_purity = RBL_PURITY_OUTPUTS["purity_diagnostics"],
+        figure_purity = RBL_PURITY_OUTPUTS["purity_distribution_and_scores"],
         figure_retention = RBL_PURITY_OUTPUTS["sample_retention"],
         figure_pca_pre = BATCH_OUTPUT["pca_pre_pdf"],
         figure_pca_post = BATCH_OUTPUT["pca_post_pdf"],

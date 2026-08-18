@@ -6,7 +6,7 @@
 #
 # DESCRIPTION
 # -----------
-# This script performs comprehensive diagnostic analysis of tumour-to-cell-line
+# This script performs comprehensive inspection of tumour-to-cell-line
 # mapping results to identify failure modes, assess mapping confidence, and
 # validate biological coherence. The inspection outputs facilitate quality
 # control, troubleshooting, and refinement of the mapping pipeline.
@@ -40,7 +40,7 @@
 #       - Graph-derived components should capture biologically meaningful groups
 #
 #
-# DIAGNOSTIC ANALYSES PERFORMED
+# INSPECTION ANALYSES PERFORMED
 # -----------------------------
 # Incorrect Mapping Analysis:
 # For each tumour that maps to a cell line of a different cancer type, the
@@ -96,12 +96,12 @@
 #
 # 3. Graph components (--components, optional):
 #    Cell line component assignments from similarity graph analysis,
-#    enabling component-level diagnostic analyses
+#    enabling component-level inspection analyses
 #
 #
 # OUTPUT FILES
 # ------------
-# The script produces diagnostic tables and a summary report:
+# The script produces inspection tables and a summary report:
 #
 #   incorrect_mappings_analysis.tsv
 #       Detailed analysis of each incorrect mapping including top-10 breakdown.
@@ -125,7 +125,7 @@
 #       Per-lineage summary of best-match score distributions.
 #
 #   INSPECTION_SUMMARY.md
-#       Human-readable report summarising all diagnostic findings.
+#       Human-readable report summarising all inspection findings.
 #
 #
 # USAGE EXAMPLE
@@ -158,7 +158,7 @@
 #               by= argument for grouped aggregations.
 #
 #   ggplot2:    The grammar of graphics implementation in R. While primarily
-#               loaded for potential diagnostic visualisations, the current
+#               loaded for potential inspection visualisations, the current
 #               script focuses on tabular outputs. Future extensions could
 #               include confidence distribution plots and confusion matrices.
 #
@@ -189,7 +189,7 @@ suppressPackageStartupMessages({
 # Required Arguments:
 #   --summary:    Path to the tumour mapping summary file containing per-tumour
 #                 best matches and confidence metrics. This is the primary input
-#                 for most diagnostic analyses.
+#                 for most inspection analyses.
 #
 #   --rankings:   Path to the complete rankings file with top-k cell lines per
 #                 tumour. Enables analysis of ranking composition and lineage
@@ -250,7 +250,7 @@ cat("========================================\n\n")
 # =============================================================================
 # STEP 1: LOAD INPUT DATA
 # =============================================================================
-# This step loads the pre-computed mapping results required for diagnostic
+# This step loads the pre-computed mapping results required for inspection
 # analysis. The data.table fread() function provides fast reading of
 # tab-separated files with automatic type inference.
 #
@@ -322,7 +322,7 @@ cat("  Rankings: ", nrow(rankings), " entries\n", sep = "")
 #   - Rare molecular subtypes may be better represented in cell line
 #     collections of related cancer types
 #
-# Diagnostic Questions Addressed:
+# Questions Addressed:
 #   - Are incorrect mappings random or do they show systematic patterns?
 #   - Do certain tumour subtypes consistently map to specific alternative
 #     lineages?
@@ -343,7 +343,7 @@ cat("\n[2] Analysing incorrect mappings...\n")
 incorrect <- summary[is_correct == FALSE]
 cat("  Incorrect mappings: ", nrow(incorrect), "\n", sep = "")
 
-# Extract key diagnostic fields for each incorrect mapping
+# Extract key inspection fields for each incorrect mapping
 # This creates a focused data.table with the most relevant columns for
 # understanding why each mapping failed
 incorrect_analysis <- incorrect[, .(
@@ -543,7 +543,7 @@ cat("  Saved to:", low_conf_file, "\n")
 #   - Molecular subtypes within a lineage (e.g., luminal vs basal breast)
 #   - Shared biological programmes across lineages (e.g., EMT, stemness)
 #
-# Diagnostic Questions Addressed:
+# Questions Addressed:
 #
 #   Component Usage: Which components receive the most tumour mappings?
 #   Components with many mappings contain broadly representative cell lines,
@@ -739,7 +739,7 @@ cat("  Saved to:", score_file, "\n")
 # STEP 8: GENERATE SUMMARY REPORT
 # =============================================================================
 # This step produces a human-readable Markdown report that consolidates
-# all diagnostic findings for rapid assessment of mapping quality. The
+# all inspection findings for rapid assessment of mapping quality. The
 # report serves as the primary entry point for quality control review
 # and provides an overview without requiring examination of individual
 # output files.

@@ -3313,7 +3313,7 @@ def report_rendered_layout_clearance(
     """
     Report rendered display-coordinate clearances for final figure layout QC.
 
-    This is deliberately diagnostic only: it does not move artists or change
+    This is deliberately inspection-only: it does not move artists or change
     graph data. Units are display pixels plus millimetres at the figure DPI.
     """
     fig.canvas.draw()

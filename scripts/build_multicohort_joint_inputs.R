@@ -649,6 +649,8 @@ for (i in seq_len(nrow(inputs))) {
   }
 }
 
+source(file.path(opt$pipe_root, "R", "multicohort_gene_space.R"))
+
 cat("[INFO] Loading joint matrices:\n")
 print(inputs)
 
@@ -667,15 +669,24 @@ X_list <- map2(inputs$path, inputs$cancer_type, function(p, ct) {
 })
 names(X_list) <- inputs$cancer_type
 
-# Harmonize genes across all included cancers
-genes_shared <- Reduce(intersect, map(X_list, colnames))
-cat("[INFO] Shared genes across all cancers:", length(genes_shared), "\n")
-if (length(genes_shared) < 200) {
-  warning("Low shared gene count (", length(genes_shared), "). Check gene ID formats / feature sets.")
-}
-if (length(genes_shared) < 50) stop("Too few shared genes (", length(genes_shared), "). Cannot proceed.")
+# Harmonise genes across all included cancers.
+# G_common = intersection of the cohort gene sets, matched on exact gene
+# identifiers. harmonise_gene_space() rejects duplicate or blank identifiers,
+# subsets every cohort to exactly G_common, and asserts identical gene order
+# across cohorts so that concatenation can never align genes by position.
+.gene_space <- harmonise_gene_space(X_list)
+X_list      <- .gene_space$X_list
+genes_shared <- .gene_space$genes_common
 
-X_list <- map(X_list, ~ .x[, genes_shared, drop=FALSE])
+cat("[INFO] Shared genes across all cancers:", length(genes_shared), "\n")
+cat("[INFO] Common-gene-space audit:\n")
+print(.gene_space$audit, row.names = FALSE)
+
+dir.create(file.path(outdir, "inputs"), recursive = TRUE, showWarnings = FALSE)
+.gene_space_audit_path <- file.path(outdir, "inputs", "common_gene_space_audit.tsv")
+write.table(.gene_space$audit, .gene_space_audit_path,
+            sep = "\t", quote = FALSE, row.names = FALSE)
+cat("[INFO] Wrote common-gene-space audit:", .gene_space_audit_path, "\n")
 
 # Combine samples
 X_joint <- do.call(rbind, X_list)
@@ -749,9 +760,25 @@ for (fm in feature_methods) {
   }
   
   if (file.exists(gene_list_path) && file.exists(sub_rds_path) && all_coords_exist) {
-    cat("  [SKIP] Outputs exist for ", fm, ", skipping feature selection and UMAP.\n", sep="")
-    # Load existing gene list for summary
+    # A cached feature list is only reusable when every gene it names is still
+    # present in the current common gene space. Cohort matrices regenerated with
+    # different gene retention shrink G_common, which leaves earlier lists
+    # referencing absent identifiers; subsetting on those would fail.
     genes_keep <- readLines(gene_list_path)
+    .fl <- validate_feature_list(genes_keep, colnames(X_joint), basename(gene_list_path))
+    .cache_usable <- .fl$ok
+    if (!.cache_usable) {
+      cat("  [STALE] ", .fl$label, ": ", .fl$n_missing,
+          " gene(s) absent from the current common gene space; recomputing.\n", sep = "")
+      cat("          examples: ",
+          paste(utils::head(.fl$missing, 5), collapse = ", "), "\n", sep = "")
+    }
+  } else {
+    .cache_usable <- FALSE
+  }
+
+  if (.cache_usable) {
+    cat("  [SKIP] Outputs exist for ", fm, ", skipping feature selection and UMAP.\n", sep="")
     X_sub <- X_joint[, genes_keep, drop=FALSE]
   } else {
     # Compute feature scores

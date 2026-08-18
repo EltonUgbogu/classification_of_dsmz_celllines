@@ -140,7 +140,7 @@ report_lines <- c(
   "",
   "## Interpretation",
   "",
-  "The comparison is a development diagnostic. It does not validate Version 2 scientifically and does not modify Version 1 outputs.",
+  "The comparison is a development check. It does not validate Version 2 scientifically and does not modify Version 1 outputs.",
   "",
   "## Counts",
   "",

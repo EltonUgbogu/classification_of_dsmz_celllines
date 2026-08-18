@@ -402,7 +402,7 @@ plot_embedding_figure(
 plot_mean_sd(tumour_vst_post, "RBL tumours: post-correction", outputs[["tumour_qc_pdf"]])
 plot_mean_sd(dsmz_vst_post_collapsed, "DSMZ RBL cell-line groups: post-correction", outputs[["dsmz_qc_pdf"]])
 
-# Additional dispersion diagnostics.
+# Additional dispersion checks.
 plot_dispersion(
   merged$tumour_counts,
   coldata[colnames(merged$tumour_counts), , drop = FALSE],

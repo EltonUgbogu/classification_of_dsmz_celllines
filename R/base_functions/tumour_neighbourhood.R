@@ -150,9 +150,9 @@ compute_tumour_neighbourhoods <- function(
   # computes distances from each cell line to all candidate tumours.
 
   # Extract sample identifiers by dataset origin.
-  # Cohort-agnostic: tumours are defined as all non-DSMZ samples.
+  # Cohort-independent: tumours are defined as all non-DSMZ samples.
   dsmz_ids   <- names(dataset)[dataset == "DSMZ"]
-  tumour_ids <- names(dataset)[dataset != "DSMZ"]   # cohort-agnostic tumour set
+  tumour_ids <- names(dataset)[dataset != "DSMZ"]   # cohort-independent tumour set
 
   # Validate that both sample types are present.
   if (length(dsmz_ids) == 0) stop("No DSMZ samples found.")

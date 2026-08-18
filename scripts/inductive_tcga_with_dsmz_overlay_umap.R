@@ -88,7 +88,7 @@ consensus_csv <- file.path(
 )
 subtype_csv <- cfg$paths$tcga_subtype_csv
 
-# Output paths (method-aware, K-agnostic filenames)
+# Output paths (method-aware, K-independent filenames)
 out_umap_cluster <- file.path(
   results_dir,
   sprintf("%s_UMAP_OVERLAY_INDUCTIVE_SAMPLES.pdf", m_ctx$overlay_prefix)

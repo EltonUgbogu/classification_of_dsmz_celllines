@@ -6,7 +6,7 @@
 #
 # PURPOSE
 # -------
-# Generate cell-line–driven diagnostic plots from:
+# Generate cell-line–driven summary plots from:
 #   - cellline_metrics_by_tumour_cohort.tsv
 #   - cellline_metrics_overall.tsv
 #

@@ -34,11 +34,11 @@ version2:
     tumour_to_cellline_rankings:
       path: results/unsupervised/pan_cancer/tumour_mapping/tumour_to_cellline_similarity/tumour_to_cellline_group_rankings.tsv
       producing_version1_target: results/unsupervised/pan_cancer/tumour_mapping/tumour_to_cellline_similarity/tumour_to_cellline_group_rankings.tsv
-      role: Version 1 patient tumour to cell-line ranking table used as protected input for agreement diagnostics.
+      role: Version 1 patient tumour to cell-line ranking table used as protected input for agreement evaluation.
     cellline_to_tumour_rankings:
       path: results/unsupervised/pan_cancer/tumour_mapping/cellline_to_tumour_similarity/cellline_to_tumour_rankings.tsv
       producing_version1_target: results/unsupervised/pan_cancer/tumour_mapping/cellline_to_tumour_similarity/cellline_to_tumour_rankings.tsv
-      role: Version 1 cell-line to tumour ranking table used as protected input for agreement diagnostics.
+      role: Version 1 cell-line to tumour ranking table used as protected input for agreement evaluation.
     cellline_rank_summary:
       path: results/unsupervised/pan_cancer/tumour_mapping/cellline_similarity_precision_bootstrap/cellline_centred_rank_summary.tsv
       producing_version1_target: results/unsupervised/pan_cancer/tumour_mapping/cellline_similarity_precision_bootstrap/cellline_centred_rank_summary.tsv

@@ -330,7 +330,7 @@ NBL_PURITY_OUTPUTS = {
     "retained_samples": f"{NBL_PURITY_DIR}/retained_samples.tsv",
     "excluded_samples": f"{NBL_PURITY_DIR}/excluded_samples.tsv",
     "retained_raw_tumour_counts": f"{NBL_PURITY_DIR}/retained_raw_tumour_counts.rds",
-    "purity_diagnostics": f"{NBL_PURITY_DIR}/purity_diagnostics.pdf",
+    "purity_distribution_and_scores": f"{NBL_PURITY_DIR}/purity_distribution_and_scores.pdf",
     "sample_retention": f"{NBL_PURITY_DIR}/sample_retention_by_cohort.pdf",
     "provenance": f"{NBL_PURITY_DIR}/purity_provenance.tsv",
     "validation_report": f"{NBL_PURITY_DIR}/purity_stage_validation.tsv",
@@ -364,7 +364,7 @@ BATCH_ENV = f"{BATCH_MODULE_DIR}/envs/r_nbl_preprocess.yaml"
 SHARED_FIGURE_MODULE = repo_config_path(
     "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
 )
-# Cohort-agnostic batch-effect quantification driver, shared with BRCA and RBL.
+# Cohort-independent batch-effect quantification driver, shared with BRCA and RBL.
 BATCH_EFFECT_SCRIPT = repo_config_path(
     "preprocessing_and_quality_control/scripts/R/batch_effect_quantification.R"
 )
@@ -914,7 +914,7 @@ rule nbl_tumour_purity_analysis:
         retained_samples = NBL_PURITY_OUTPUTS["retained_samples"],
         excluded_samples = NBL_PURITY_OUTPUTS["excluded_samples"],
         retained_raw_tumour_counts = NBL_PURITY_OUTPUTS["retained_raw_tumour_counts"],
-        purity_diagnostics = NBL_PURITY_OUTPUTS["purity_diagnostics"],
+        purity_distribution_and_scores = NBL_PURITY_OUTPUTS["purity_distribution_and_scores"],
         sample_retention = NBL_PURITY_OUTPUTS["sample_retention"],
         provenance = NBL_PURITY_OUTPUTS["provenance"],
         validation_report = NBL_PURITY_OUTPUTS["validation_report"],
@@ -1072,7 +1072,7 @@ rule validate_nbl_purity_filtered_joint_outputs:
         tumour_vst_post_bc = BATCH_OUTPUTS["tumour_vst_post_bc_rds"],
         dsmz_vst_post_bc = BATCH_OUTPUTS["dsmz_vst_post_bc_rds"],
         coldata = BATCH_OUTPUTS["coldata_tsv"],
-        figure_purity = NBL_PURITY_OUTPUTS["purity_diagnostics"],
+        figure_purity = NBL_PURITY_OUTPUTS["purity_distribution_and_scores"],
         figure_retention = NBL_PURITY_OUTPUTS["sample_retention"],
         figure_pca_pre = BATCH_OUTPUTS["pca_pre_pdf"],
         figure_pca_post = BATCH_OUTPUTS["pca_post_pdf"],

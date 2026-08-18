@@ -73,14 +73,19 @@ FIGURE_TREND <- "#eb6834"
 ## no version of this module in the working tree defined them, so the purity
 ## rule could not run at all. They are re-created here from their call sites
 ## (colours for the retained/excluded split and the eligible/retained bars,
-## sprintf templates for the three legend entries, and the threshold rule), and
-## are drawn from the palette above so the purity figures match the rest of the
-## set. They affect presentation only -- every data output of the purity rule is
+## sprintf templates for the three legend entries, and the threshold rule).
+## They affect presentation only -- every data output of the purity rule is
 ## written before any of this is touched. If a canonical definition exists
 ## elsewhere, replace this block with it.
 ## ---------------------------------------------------------------------------
-FIGURE_RETAINED <- FIGURE_SERIES_COLOURS[[1L]]
-FIGURE_EXCLUDED <- FIGURE_SERIES_COLOURS[[2L]]
+## Retained and excluded encode a kept-versus-dropped outcome rather than a
+## series identity, so they are pinned to explicit values instead of tracking
+## the categorical palette. Retained keeps the palette blue; excluded is a
+## neutral light grey that recedes behind it. Pinning also prevents a future
+## change to FIGURE_SERIES_COLOURS -- whose first two slots carry the tumour and
+## cell-line identity in the embedding figures -- from re-colouring this split.
+FIGURE_RETAINED <- "#2A78D6"
+FIGURE_EXCLUDED <- "#D3D3D3"
 FIGURE_STAGE_BEFORE <- "#a8c4e6"
 FIGURE_STAGE_AFTER <- FIGURE_SERIES_COLOURS[[1L]]
 

@@ -167,7 +167,7 @@ make_first_match_table <- function(score_mat, sample_labels, candidate_labels,
       top1_candidate_cancer_type = top1_candidate_type,
       top1_correct_cancer_type = isTRUE(top1_candidate_type == sample_type),
       n_ranked_candidates = length(candidate_ids),
-      notes = "Cancer-type same-lineage diagnostic; no exact one-to-one label is used."
+      notes = "Cancer-type same-lineage evaluation; no exact one-to-one label is used."
     )
   }
   rbindlist(rows)
@@ -213,7 +213,7 @@ register_manifest <- function(rows, name, direction, paths, file_types, claim, n
   rbind(
     rows,
     data.table(
-      diagnostic_name = name,
+      evaluation_name = name,
       direction = direction,
       file_path = paths,
       file_type = file_types,
@@ -336,7 +336,7 @@ setcolorder(crosscheck, c(
   "direction", "reported_top1", "confusion_matrix_diagonal_accuracy",
   "matches_reported_top1", "reported_top10", "reported_mrr", "notes"
 ))
-crosscheck_path <- file.path(outdir, "ranking_diagnostic_metric_crosscheck.tsv")
+crosscheck_path <- file.path(outdir, "ranking_metric_crosscheck.tsv")
 fwrite(crosscheck, crosscheck_path, sep = "\t")
 
 manifest <- data.table()
@@ -347,7 +347,7 @@ manifest <- register_manifest(
   c(tumour_ecdf_path, tumour_ecdf_pdf, tumour_ecdf_png, tumour_first_path),
   c("table", "figure_pdf", "figure_png", "table"),
   "Rank position of first same-lineage cell-line candidate for each tumour sample.",
-  "Cancer-type same-lineage diagnostic based on current tumour-to-cell-line scores."
+  "Cancer-type same-lineage evaluation based on current tumour-to-cell-line scores."
 )
 manifest <- register_manifest(
   manifest,
@@ -356,7 +356,7 @@ manifest <- register_manifest(
   c(cellline_ecdf_path, cellline_ecdf_pdf, cellline_ecdf_png, cellline_first_path),
   c("table", "figure_pdf", "figure_png", "table"),
   "Rank position of first same-lineage tumour candidate for each cell-line group.",
-  "Cancer-type same-lineage diagnostic based on current cell-line-to-tumour scores."
+  "Cancer-type same-lineage evaluation based on current cell-line-to-tumour scores."
 )
 manifest <- register_manifest(
   manifest,
@@ -385,7 +385,7 @@ manifest <- register_manifest(
   "Checks top-1 cancer-type agreement against reported ranking metrics.",
   "Uses current workflow metric tables as reported-value source."
 )
-manifest_path <- file.path(outdir, "ranking_diagnostics_manifest.tsv")
+manifest_path <- file.path(outdir, "ranking_evaluation_manifest.tsv")
 fwrite(manifest, manifest_path, sep = "\t")
 
-cat("Wrote bidirectional ranking diagnostics to ", outdir, "\n", sep = "")
+cat("Wrote bidirectional ranking evaluations to ", outdir, "\n", sep = "")

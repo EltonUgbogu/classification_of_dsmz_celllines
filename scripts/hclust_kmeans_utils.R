@@ -1,11 +1,10 @@
 #!/usr/bin/env Rscript
 # =============================================================================
-# agnostic_clustering_utils.R
+# hclust_kmeans_utils.R
 #
 # This module provides the shared statistical infrastructure underpinning the
-# 12-way HC/k-means clustering branch ("agnostic" in file and function names is
-# the retained internal compatibility identifier for this branch). The 12
-# configurations arise from the full factorial combination of three design axes:
+# 12-way HC/k-means clustering stage. The 12 configurations arise from the
+# full factorial combination of three design axes:
 #
 #   • Feature space  : PCA-reduced scores  ×  raw expression values
 #   • Algorithm      : Hierarchical clustering (HC)  ×  k-means
@@ -14,7 +13,7 @@
 # Each configuration exposes the same statistical pipeline — data ingestion,
 # variance filtering, optional dimensionality reduction, distance computation,
 # iterative partitioning, and silhouette-based model selection — through a
-# single entry-point function, run_agnostic_clustering(), parameterised by
+# single entry-point function, run_hclust_kmeans(), parameterised by
 # a 'kind' string that encodes the desired combination.
 #
 # Statistical rationale:
@@ -35,7 +34,7 @@ suppressPackageStartupMessages({
   library(Matrix)    # Supports sparse matrix representations of expression data.
 })
 
-# Lightweight logging helper; prefixes all diagnostic messages with [INFO].
+# Lightweight logging helper; prefixes all log messages with [INFO].
 info <- function(...) cat("[INFO] ", sprintf(...), "\n", sep = "")
 
 
@@ -317,6 +316,31 @@ compute_pca_scores <- function(X, n_pcs = 20, scale_features = FALSE) {
 #      partition, reflecting the k at which clusters are simultaneously most
 #      cohesive internally and most separated from their neighbours.
 # -----------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# correlation_chord_dist: Euclidean-compatible correlation dissimilarity
+# -------------------------------------------------------------------
+# Ward.D2 minimises variance in a Euclidean space and therefore requires a
+# Euclidean-compatible dissimilarity. The chord distance
+#
+#     d(x, y) = sqrt(2 * (1 - r(x, y)))
+#
+# is the exact Euclidean distance between the centred, unit-norm forms of x
+# and y, since ||u_x - u_y||^2 = 2 * (1 - r). It is consequently the
+# correlation dissimilarity used for Ward.D2 hierarchical clustering here.
+# The raw 1 - r dissimilarity is not a Euclidean metric and is not used with
+# Ward. This matches the correlation-geometry transform (centre + unit norm +
+# Euclidean distance) applied by the ConsensusClusterPlus branch, so both
+# clustering branches operate on the same correlation geometry.
+#
+# Non-finite correlations (zero-variance profiles) are treated as r = 0.
+#
+# X: samples x features matrix. Returns a 'dist' object over the samples.
+correlation_chord_dist <- function(X) {
+  cm <- cor(t(X), method = "pearson", use = "pairwise.complete.obs")
+  cm[!is.finite(cm)] <- 0
+  as.dist(sqrt(pmax(2 * (1 - cm), 0)))
+}
+
 hc_optimal <- function(X,
                        max_k       = 8,
                        dist_method = "euclidean",
@@ -324,17 +348,8 @@ hc_optimal <- function(X,
   set.seed(seed)
 
   if (dist_method == "correlation") {
-    # Pairwise sample correlations: t(X) gives samples as variables, so
-    # cor(t(X)) computes sample-by-sample correlations as intended.
-    # Ward.D2 requires a Euclidean-compatible dissimilarity, so the chord
-    # distance sqrt(2 * (1 - r)) — the exact Euclidean distance between
-    # centred, unit-norm sample vectors — is used instead of the raw
-    # (non-Euclidean) 1 - r dissimilarity. This matches the
-    # correlation-geometry transform of the ConsensusClusterPlus branch.
     info("Distance: chord sqrt(2 * (1 - Pearson r)) for Ward.D2 compatibility")
-    cm <- cor(t(X), method = "pearson", use = "pairwise.complete.obs")
-    cm[!is.finite(cm)] <- 0
-    d  <- as.dist(sqrt(pmax(2 * (1 - cm), 0)))
+    d <- correlation_chord_dist(X)
   } else {
     info("Distance: %s", dist_method)
     d <- dist(X, method = dist_method)
@@ -453,7 +468,7 @@ kmeans_optimal <- function(X,
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# run_agnostic_clustering()
+# run_hclust_kmeans()
 #
 # This is the single entry-point function called by all 12 wrapper scripts.
 # It orchestrates the complete statistical pipeline: data loading, QC,
@@ -478,7 +493,7 @@ kmeans_optimal <- function(X,
 # visualisation (UMAP overlays, silhouette plots) and integration with
 # tumour–cell line similarity scoring.
 # -----------------------------------------------------------------------------
-run_agnostic_clustering <- function(kind,
+run_hclust_kmeans <- function(kind,
                                     cell_rds         = NULL,
                                     tumour_rds       = NULL,
                                     outdir,

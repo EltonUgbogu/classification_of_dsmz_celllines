@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Cross-direction cell-line graph community stability diagnostic.
+"""Cross-direction cell-line graph community stability assessment.
 
 This script intentionally treats Leiden/Louvain assignments as auxiliary
-diagnostics on per-direction cell-line similarity graphs. It does not infer
+assessments on per-direction cell-line similarity graphs. It does not infer
 tumour communities.
 """
 
@@ -450,7 +450,7 @@ def write_validation_report(
     lines = []
     lines.append("Community stability validation report")
     lines.append(f"cohort\t{cohort}")
-    lines.append(f"scope\tcell-line graph stability diagnostic")
+    lines.append(f"scope\tcell-line graph stability assessment")
     lines.append(f"directions_discovered\t{len(directions)}")
     lines.append(f"directions_loaded\t{len(per_dir)}")
     lines.append(f"missing_assignment_files\t{len(missing)}")

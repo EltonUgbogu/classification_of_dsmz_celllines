@@ -183,7 +183,7 @@ batch_corrected_counts <- batch_adjust(merged$Xc_raw, merged$batch)
 saveRDS(batch_corrected_counts, outputs[["batch_corrected_counts_rds"]])
 
 # VST is fitted jointly before and jointly after batch correction so the
-# diagnostic matrices share one sample order and one fitted transformation.
+# check matrices share one sample order and one fitted transformation.
 joint_vst_pre <- vst_normalize(merged$Xc_raw, coldata)
 joint_vst_post <- vst_normalize(batch_corrected_counts, coldata)
 
@@ -279,7 +279,7 @@ plot_embedding_figure(
 plot_mean_sd(tumour_vst_post, "NBL tumours: post-correction", outputs[["tumour_qc_pdf"]])
 plot_mean_sd(dsmz_vst_post, "DSMZ NBL cell lines: post-correction", outputs[["dsmz_qc_pdf"]])
 
-# Additional dispersion diagnostics.
+# Additional dispersion checks.
 plot_dispersion(
   merged$tumour_counts,
   coldata[colnames(merged$tumour_counts), , drop = FALSE],

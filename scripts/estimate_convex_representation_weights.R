@@ -63,7 +63,7 @@ as_numeric_safe <- function(values) {
 }
 
 arguments <- parse_arguments()
-diagnostics_path <- require_argument(arguments, "diagnostics")
+representation_metrics_path <- require_argument(arguments, "representation_metrics")
 output_path <- require_argument(arguments, "output")
 
 stability_reward <- numeric_argument(arguments, "stability-reward", 0.40)
@@ -72,7 +72,7 @@ redundancy_penalty <- numeric_argument(arguments, "redundancy-penalty", 0.15)
 batch_penalty <- numeric_argument(arguments, "batch-penalty", 0.05)
 instability_penalty <- numeric_argument(arguments, "instability-penalty", 0.05)
 
-diagnostics <- read_tsv(diagnostics_path)
+representation_metrics <- read_tsv(representation_metrics_path)
 required_columns <- c(
   "representation_id",
   "neighbourhood_stability_score",
@@ -81,22 +81,22 @@ required_columns <- c(
   "batch_association_score",
   "instability_score"
 )
-missing_columns <- setdiff(required_columns, names(diagnostics))
+missing_columns <- setdiff(required_columns, names(representation_metrics))
 if (length(missing_columns)) {
-  stop("Diagnostics file is missing required columns: ", paste(missing_columns, collapse = ", "))
+  stop("Representation metrics file is missing required columns: ", paste(missing_columns, collapse = ", "))
 }
 
 objective_raw <- (
-  stability_reward * as_numeric_safe(diagnostics$neighbourhood_stability_score) +
-    agreement_reward * as_numeric_safe(diagnostics$cancer_type_agreement_score) -
-    redundancy_penalty * as_numeric_safe(diagnostics$representation_redundancy_index) -
-    batch_penalty * as_numeric_safe(diagnostics$batch_association_score) -
-    instability_penalty * as_numeric_safe(diagnostics$instability_score)
+  stability_reward * as_numeric_safe(representation_metrics$neighbourhood_stability_score) +
+    agreement_reward * as_numeric_safe(representation_metrics$cancer_type_agreement_score) -
+    redundancy_penalty * as_numeric_safe(representation_metrics$representation_redundancy_index) -
+    batch_penalty * as_numeric_safe(representation_metrics$batch_association_score) -
+    instability_penalty * as_numeric_safe(representation_metrics$instability_score)
 )
 
 objective_shifted <- pmax(objective_raw, 0)
 if (sum(objective_shifted) <= 0) {
-  representation_weight <- rep(1 / nrow(diagnostics), nrow(diagnostics))
+  representation_weight <- rep(1 / nrow(representation_metrics), nrow(representation_metrics))
   optimisation_status <- "uniform_fallback_all_objectives_nonpositive"
 } else {
   representation_weight <- objective_shifted / sum(objective_shifted)
@@ -104,15 +104,15 @@ if (sum(objective_shifted) <= 0) {
 }
 
 weights <- data.frame(
-  representation_id = diagnostics$representation_id,
+  representation_id = representation_metrics$representation_id,
   representation_weight = representation_weight,
   objective_raw = objective_raw,
   objective_nonnegative = objective_shifted,
-  neighbourhood_stability_score = as_numeric_safe(diagnostics$neighbourhood_stability_score),
-  cancer_type_agreement_score = as_numeric_safe(diagnostics$cancer_type_agreement_score),
-  representation_redundancy_index = as_numeric_safe(diagnostics$representation_redundancy_index),
-  batch_association_score = as_numeric_safe(diagnostics$batch_association_score),
-  instability_score = as_numeric_safe(diagnostics$instability_score),
+  neighbourhood_stability_score = as_numeric_safe(representation_metrics$neighbourhood_stability_score),
+  cancer_type_agreement_score = as_numeric_safe(representation_metrics$cancer_type_agreement_score),
+  representation_redundancy_index = as_numeric_safe(representation_metrics$representation_redundancy_index),
+  batch_association_score = as_numeric_safe(representation_metrics$batch_association_score),
+  instability_score = as_numeric_safe(representation_metrics$instability_score),
   stability_reward = stability_reward,
   cancer_type_agreement_reward = agreement_reward,
   redundancy_penalty = redundancy_penalty,

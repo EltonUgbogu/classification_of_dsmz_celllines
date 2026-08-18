@@ -3,7 +3,7 @@
 # =============================================================================
 # inspect_pan_cancer_graph.R
 # =============================================================================
-# Diagnostics for the pan-cancer graph layer.
+# Inspection of the pan-cancer graph layer.
 #
 # Outputs (in graph/inspection/):
 #   - INSPECTION_SUMMARY.md

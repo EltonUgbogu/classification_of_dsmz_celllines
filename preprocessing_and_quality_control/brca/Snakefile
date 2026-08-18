@@ -64,7 +64,7 @@ PURITY_SCRIPT = repo_path(
 SHARED_FIGURE_MODULE = repo_path(
     "preprocessing_and_quality_control/scripts/R/batch_effect_and_embedding_figures.R"
 )
-# Cohort-agnostic batch-effect quantification driver, shared with NBL and RBL.
+# Cohort-independent batch-effect quantification driver, shared with NBL and RBL.
 BATCH_EFFECT_SCRIPT = repo_path(
     "preprocessing_and_quality_control/scripts/R/batch_effect_quantification.R"
 )
@@ -90,7 +90,7 @@ PURITY_OUTPUTS = {
     "retained_samples": str(PURITY_DIR / "retained_samples.tsv"),
     "excluded_samples": str(PURITY_DIR / "excluded_samples.tsv"),
     "retained_raw_tumour_counts": str(PURITY_DIR / "retained_raw_tumour_counts.rds"),
-    "purity_diagnostics": str(PURITY_DIR / "purity_diagnostics.pdf"),
+    "purity_distribution_and_scores": str(PURITY_DIR / "purity_distribution_and_scores.pdf"),
     "sample_retention": str(PURITY_DIR / "sample_retention_by_cohort.pdf"),
     "provenance": str(PURITY_DIR / "purity_provenance.tsv"),
     "validation_report": str(PURITY_DIR / "purity_stage_validation.tsv"),
@@ -209,7 +209,7 @@ rule brca_tumour_purity_analysis:
         retained_samples=PURITY_OUTPUTS["retained_samples"],
         excluded_samples=PURITY_OUTPUTS["excluded_samples"],
         retained_raw_tumour_counts=PURITY_OUTPUTS["retained_raw_tumour_counts"],
-        purity_diagnostics=PURITY_OUTPUTS["purity_diagnostics"],
+        purity_distribution_and_scores=PURITY_OUTPUTS["purity_distribution_and_scores"],
         sample_retention=PURITY_OUTPUTS["sample_retention"],
         provenance=PURITY_OUTPUTS["provenance"],
         validation_report=PURITY_OUTPUTS["validation_report"],
@@ -383,7 +383,7 @@ rule validate_brca_purity_filtered_joint_outputs:
         tumour_vst_post_bc=BATCH_OUTPUTS["tumour_vst_post_bc_rds"],
         dsmz_vst_post_bc=BATCH_OUTPUTS["dsmz_vst_post_bc_rds"],
         coldata=BATCH_OUTPUTS["coldata_tsv"],
-        figure_purity=PURITY_OUTPUTS["purity_diagnostics"],
+        figure_purity=PURITY_OUTPUTS["purity_distribution_and_scores"],
         figure_retention=PURITY_OUTPUTS["sample_retention"],
         figure_pca_pre=BATCH_OUTPUTS["pca_pre_pdf"],
         figure_pca_post=BATCH_OUTPUTS["pca_post_pdf"],

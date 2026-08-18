@@ -211,7 +211,7 @@ report_lines <- c(
   "",
   "Use: probability-dependence graph, weighted patient-referenced support, boundary edge, resolved edge, uncertain dependence, bridge-like anchor.",
   "",
-  "Avoid: causal graph, true biological network, validated interaction network, diagnostic network.",
+  "Avoid: causal graph, true biological network, validated interaction network, check network.",
   "",
   "## Scientific status",
   "",

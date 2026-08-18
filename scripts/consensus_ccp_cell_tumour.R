@@ -257,6 +257,11 @@ option_list <- list(
   # 'km': k-means clustering (partitional, Euclidean distance only)
   # 'hc': Hierarchical clustering (agglomerative, supports multiple distances)
   make_option("--alg", type = "character", default = NULL),
+
+  # --seed: Workflow-provided random seed for ConsensusClusterPlus resampling.
+  make_option("--seed", type = "integer", default = 42),
+  make_option("--n_pcs", type = "integer", default = NULL,
+              help = "Principal components retained in PCA mode"),
   
   # --outdir: Directory for output files (created if it does not exist).
   make_option("--outdir", type = "character", default = NULL),
@@ -358,7 +363,7 @@ if (file.exists(lib_config_path)) {
         paths = c(defaults$paths %||% list(), profcfg$paths %||% list()),
         methods = defaults$methods %||% list(),
         analysis = c(defaults$analysis %||% list(), profcfg$analysis %||% list()),
-        agnostic_clustering = defaults$agnostic_clustering %||% list(),
+        hclust_kmeans = defaults$hclust_kmeans %||% list(),
         clustering = defaults$clustering %||% list(),
         feature_selection = c(defaults$feature_selection %||% list(), profcfg$feature_selection %||% list()),
         marker_postprocessing = defaults$marker_postprocessing %||% list(),
@@ -479,20 +484,30 @@ if (is.null(k_grid) || length(k_grid) < 2) {
 # The unlist() function handles any nested list structure from YAML parsing.
 k_grid <- sort(as.integer(unlist(k_grid)))
 
-# Set the random seed for reproducibility.
-# This seed controls bootstrap sample selection in ConsensusClusterPlus,
-# ensuring identical results across pipeline re-runs.
-seed <- 42
-if (!is.null(cfg$agnostic_clustering$seed)) {
-  seed <- as.integer(cfg$agnostic_clustering$seed)
+# The workflow passes this explicitly so the stochastic contract is visible in
+# the DAG and recorded with the clustering result.
+seed <- as.integer(opt$seed)
+if (is.na(seed) || seed < 0L) {
+  stop_with("--seed must be a non-negative integer")
 }
 
 # Set the number of principal components for PCA mode.
 # This parameter controls the dimensionality of the reduced feature space.
 # Typical values range from 10 to 50, with 20 being a common default.
-n_pcs <- 20
-if (!is.null(cfg$agnostic_clustering$n_pcs)) {
-  n_pcs <- as.integer(cfg$agnostic_clustering$n_pcs)
+# Principal components retained in PCA mode. The value is configuration-owned
+# under hclust_kmeans and passed in by the
+# workflow; the configuration is read only as a fallback for direct invocation.
+n_pcs <- opt$n_pcs
+if (is.null(n_pcs)) {
+  n_pcs <- cfg$hclust_kmeans$n_pcs
+}
+if (is.null(n_pcs)) {
+  stop_with(paste("No n_pcs available: pass --n_pcs, or declare",
+                  "hclust_kmeans.n_pcs in the configuration."))
+}
+n_pcs <- as.integer(n_pcs)
+if (is.na(n_pcs) || n_pcs < 1L) {
+  stop_with("n_pcs must be a positive integer")
 }
 
 # ------------------------------------------------------------------------------
@@ -1108,7 +1123,7 @@ info("Final k_grid: %s (maxK=%d)", paste(k_grid_effective, collapse = ","), maxK
 # ------------------------------------------------------------------------------
 # SECTION 12: CONSENSUS CLUSTERING EXECUTION
 # ------------------------------------------------------------------------------
-# ConsensusClusterPlus outputs multiple diagnostic files to the working
+# ConsensusClusterPlus outputs multiple report files to the working
 # directory. A dedicated subdirectory is created to isolate these outputs.
 
 ccp_wd <- file.path(opt$outdir, "ccp")
@@ -1133,7 +1148,7 @@ ccp_args <- list(
   finalLinkage = finalLinkage,     # Linkage for final assignment
   seed         = seed,             # Random seed for reproducibility
   title        = paste0("CCP_", opt$direction, "_", opt$kind),
-  plot         = "png",            # Output format for diagnostic plots
+  plot         = "png",            # Output format for its report plots
   writeTable   = FALSE,            # Downstream uses the explicit CSV/RDS below
   verbose      = FALSE
 )
@@ -1258,6 +1273,7 @@ saveRDS(
     ccp_distance   = ccp_distance,
     innerLinkage   = innerLinkage,
     finalLinkage   = finalLinkage,
+    seed           = seed,
     k_grid         = k_grid_effective,
     auc_values     = setNames(auc_values, k_grid_effective),
     delta_auc      = delta_auc,

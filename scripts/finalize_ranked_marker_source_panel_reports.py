@@ -196,7 +196,7 @@ write(
 
 The embedding package contains UMAP outputs generated from the current
 graph-informed DESeq2 marker-derived pan-cancer feature panel. The embedding is
-a diagnostic visualisation and is not used to define formal molecular subtypes.
+an exploratory visualisation and is not used to define formal molecular subtypes.
 """,
 )
 

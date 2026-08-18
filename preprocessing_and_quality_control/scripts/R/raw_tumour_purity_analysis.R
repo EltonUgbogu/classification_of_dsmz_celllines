@@ -514,7 +514,7 @@ retained_percent <- 100 * retained_total / length(retained_flag)
 
 ## Composition: the purity distribution carries the decision, so it spans the
 ## top row; the three score relationships sit beneath it, with a shared legend.
-figure_open(snakemake@output[["purity_diagnostics"]], width = 12, height = 8.6)
+figure_open(snakemake@output[["purity_distribution_and_scores"]], width = 12, height = 8.6)
 graphics::layout(
   matrix(c(1, 1, 1, 2, 3, 4, 5, 5, 5), nrow = 3L, byrow = TRUE),
   heights = c(1.05, 1, 0.14)

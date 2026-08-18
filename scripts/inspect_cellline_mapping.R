@@ -6,7 +6,7 @@
 #
 # DESCRIPTION
 # -----------
-# This script performs comprehensive diagnostic analysis of cell-line-to-tumour
+# This script performs comprehensive inspection of cell-line-to-tumour
 # mapping results, serving as the reciprocal analysis to inspect_tumour_mapping.R.
 # While the tumour-centric script asks "which cell line best represents this
 # tumour?", this script asks "which tumours does this cell line most closely
@@ -42,7 +42,7 @@
 #   - Top-k consistency: composition of top-10 tumours for each cell line
 #
 #
-# DIAGNOSTIC ANALYSES PERFORMED
+# INSPECTION ANALYSES PERFORMED
 # -----------------------------
 # Incorrect Mapping Analysis:
 # Identifies cell lines whose best-matching tumours belong to a different
@@ -116,7 +116,7 @@
 #       Per-lineage summary of best-match score distributions.
 #
 #   INSPECTION_SUMMARY.md
-#       Human-readable report summarising all diagnostic findings.
+#       Human-readable report summarising all inspection findings.
 #
 #
 # USAGE EXAMPLE
@@ -150,7 +150,7 @@
 #               column assignment, and by= for grouped aggregations.
 #
 #   ggplot2:    The grammar of graphics implementation in R. Loaded for
-#               potential diagnostic visualisations, though the current
+#               potential inspection visualisations, though the current
 #               implementation focuses on tabular outputs.
 #
 #   optparse:   Provides GNU-style command-line argument parsing with
@@ -247,7 +247,7 @@ cat("========================================\n\n")
 # =============================================================================
 # STEP 1: LOAD INPUT DATA
 # =============================================================================
-# This step loads the pre-computed mapping results required for diagnostic
+# This step loads the pre-computed mapping results required for inspection
 # analysis. The data.table fread() function provides fast reading of
 # tab-separated files with automatic type inference and memory-efficient
 # storage.
@@ -408,7 +408,7 @@ if (!"cl_lineage" %in% names(rankings)) {
 #    poorly differentiated cancers or those arising at anatomical boundaries
 #    between tissue types.
 #
-# Diagnostic Value:
+# Interpretation:
 # The analysis examines whether correct-lineage tumours appear in the top-k
 # rankings. If correct-lineage tumours are present but not ranked first,
 # the mapping error may be marginal. If correct-lineage tumours are entirely
@@ -423,7 +423,7 @@ cat("\n[2] Analysing incorrect mappings...\n")
 incorrect <- summary[is_correct == FALSE]
 cat("  Incorrect mappings: ", nrow(incorrect), "\n", sep = "")
 
-# Extract key diagnostic fields for each incorrect mapping
+# Extract key inspection fields for each incorrect mapping
 # This creates a focused data.table with columns most relevant for
 # understanding why each mapping failed
 incorrect_analysis <- incorrect[, .(
@@ -581,7 +581,7 @@ cat("\n[4] Identifying low confidence cases...\n")
 low_conf <- summary[confidence_delta < opt$`low-conf-thr`]
 cat("  Low confidence cases: ", nrow(low_conf), "\n", sep = "")
 
-# Write low-confidence cases with selected diagnostic columns
+# Write low-confidence cases with selected inspection columns
 low_conf_file <- file.path(opt$`output-dir`, "low_confidence_cases.tsv")
 fwrite(low_conf[, .(cell_line, cell_lineage, best_tumour_lineage,
                     is_correct, confidence_delta, confidence_frac_same_lineage)],
@@ -605,7 +605,7 @@ cat("  Saved to:", low_conf_file, "\n")
 #   - Molecular subtypes within a lineage
 #   - Shared biological programmes (e.g., immune-infiltrated, proliferative)
 #
-# Diagnostic Questions Addressed:
+# Questions Addressed:
 #
 #   Component Usage: Which tumour components receive the most cell line
 #   mappings? Components with many mappings contain tumours that closely
@@ -803,7 +803,7 @@ cat("  Saved to:", score_file, "\n")
 # STEP 8: GENERATE SUMMARY REPORT
 # =============================================================================
 # This step produces a human-readable Markdown report that consolidates
-# all diagnostic findings for rapid assessment of cell line mapping quality.
+# all inspection findings for rapid assessment of cell line mapping quality.
 # The report serves as the primary entry point for quality control review.
 #
 # Report Sections:

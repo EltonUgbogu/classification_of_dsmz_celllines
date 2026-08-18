@@ -353,7 +353,7 @@ agg <- scores_long[, .(score = mean(score)),
 agg[, rank_all := frank(-score, ties.method = "average"),
     by = cell_line_group]
 
-# Tie diagnostics per cell line group
+# Tie counts per cell line group
 tie_summary <- agg[, .(
   n_tied_groups = sum(duplicated(score) | duplicated(score, fromLast = TRUE)) /
                     pmax(1, sum(duplicated(score) | duplicated(score, fromLast = TRUE)))
@@ -934,7 +934,7 @@ save_figure(
   dpi = cellline_to_tumour_component_plot_config$png_dpi
 )
 
-# Optional confidence-margin and top-10 score diagnostics remain available in
+# Optional confidence-margin and top-10 score distributions remain available in
 # cellline_centred_rank_summary.tsv; no retained ranking-plot output is written.
 
 # =============================================================================

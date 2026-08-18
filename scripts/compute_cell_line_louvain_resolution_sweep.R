@@ -23,7 +23,7 @@ option_list <- list(
   make_option("--summary-out", type="character", default=NULL,
               help="[REQUIRED] Resolution-level summary TSV"),
   make_option("--plot-out", type="character", default=NULL,
-              help="[REQUIRED] Diagnostic PDF")
+              help="[REQUIRED] Resolution-sweep PDF")
 )
 opt <- parse_args(OptionParser(option_list=option_list))
 
@@ -364,4 +364,4 @@ plot_summary(summaries, opt[["plot-out"]])
 
 cat("[OK] Louvain sweep assignments written to:", opt[["assignments-out"]], "\n")
 cat("[OK] Louvain sweep summary written to:", opt[["summary-out"]], "\n")
-cat("[OK] Louvain sweep diagnostic plot written to:", opt[["plot-out"]], "\n")
+cat("[OK] Louvain sweep plot written to:", opt[["plot-out"]], "\n")

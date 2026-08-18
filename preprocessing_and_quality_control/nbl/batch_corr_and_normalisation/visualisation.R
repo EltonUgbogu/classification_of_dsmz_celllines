@@ -229,7 +229,7 @@ plot_mean_sd <- function(V_mat, title, out_pdf) {
   invisible(out_pdf)
 }
 
-qc_vst_diagnostics <- function(counts, coldata, title, outdir, full_disp = TRUE) {
+qc_vst_checks <- function(counts, coldata, title, outdir, full_disp = TRUE) {
   dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
   V <- vst_normalize(counts, coldata)
   plot_mean_sd(V, title, file.path(outdir, paste0(title, "_Mean_vs_SD.pdf")))

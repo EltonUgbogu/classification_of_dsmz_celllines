@@ -24,8 +24,13 @@ option_list <- list(
               help = "Path to config.yaml [default: %default]"),
   make_option("--profile", type = "character", default = NULL,
               help = "Config profile name (default: SNAKEMAKE_PROFILE or 'default')"),
-  make_option("--threshold", type = "double", default = 0.7,
-              help = "Strong-consensus threshold [default: %default]")
+  make_option("--threshold", type = "double", default = NULL,
+              help = paste("p-consensus fraction threshold; supplied by the",
+                           "workflow from patient_referenced_graph.p_consensus_threshold")),
+  make_option("--directions", type = "character", default = NULL,
+              help = paste("Comma-separated feature-distance representations to",
+                           "summarise; supplied by the workflow from the active",
+                           "profile's configured representation set"))
 )
 opt <- parse_args(OptionParser(option_list = option_list))
 
@@ -62,63 +67,56 @@ abs_from_root <- function(p) {
 
 unsup_root <- abs_from_root(cfg$paths$unsup_root)
 base_dir   <- file.path(unsup_root, "tumour_neighbourhoods")
-thr        <- opt$threshold
-
-# Directions present in this project — used only when neither config nor the
-# filesystem can provide a direction list.  These match the 9-method × 2-distance
-# grid that all active profiles declare.  HVG uses top-3000 genes (LOESS
-# mean-variance trend correction); MX and kTotal use top-500.
-default_dirs <- c(
-  "Variance_euc", "Variance_corr",
-  "MAD_euc",      "MAD_corr",
-  "MeanAbsDev_euc", "MeanAbsDev_corr",
-  "Entropy_euc",  "Entropy_corr",
-  "PCA_euc",      "PCA_corr",
-  "Spearman_euc", "Spearman_corr",
-  "MX_euc",       "MX_corr",
-  "kTotal_euc",   "kTotal_corr",
-  "HVG_euc",      "HVG_corr"
-)
-
-directions <- cfg$tumour_neighbourhoods$directions
-if (is.null(directions) || length(directions) == 0) {
-  # Auto-discover available directions from filesystem
-  if (dir.exists(base_dir)) {
-    available_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = FALSE)
-    available_dirs <- available_dirs[available_dirs != "final_consensus_all"]
-    # Check which ones have final_consensus RDS files
-    cons_files <- file.path(base_dir, available_dirs, "final_consensus", 
-                           paste0("Final_consensus_tumour_neighbourhoods_", available_dirs, ".rds"))
-    existing <- file.exists(cons_files)
-    directions <- available_dirs[existing]
-    if (length(directions) > 0) {
-      cat("[INFO] Auto-discovered", length(directions), "directions from filesystem\n")
-    } else {
-      directions <- default_dirs
-    }
-  } else {
-    directions <- default_dirs
-  }
+# The p-consensus fraction threshold is configuration-owned and supplied by the
+# workflow; there is no built-in default here, so a summary can never be
+# produced against a different threshold from the one the graph stage applies.
+thr <- opt$threshold
+if (is.null(thr) || !is.finite(thr) || thr <= 0 || thr > 1) {
+  stop(
+    "A p-consensus fraction threshold in (0, 1] must be supplied via --threshold; ",
+    "the workflow passes patient_referenced_graph.p_consensus_threshold."
+  )
 }
-directions <- as.character(directions)
 
-# Append aggregation-only representations that already have final-consensus
-# artefacts. These directions are intentionally separate from the generic
-# feature-selection and tumour-neighbourhood direction grid.
+# The feature-distance representations summarised here are declared by
+# configuration and enumerated by the workflow, which passes them in --directions.
+# This script does not infer the representation universe: neither from the
+# filesystem, which would let a stale or partially written output directory
+# redefine the analysis, nor from a built-in list, which would be a second
+# source of truth able to drift from config.
+directions <- as.character(
+  Filter(nzchar, trimws(strsplit(opt$directions %||% "", ",")[[1]]))
+)
+if (length(directions) == 0) {
+  stop(
+    "No feature-distance representations supplied. Pass --directions as a ",
+    "comma-separated list; the workflow derives it from ",
+    "tumour_neighbourhoods.directions in the active profile."
+  )
+}
+if (anyDuplicated(directions) > 0) {
+  stop(
+    "Duplicate representation(s) in --directions: ",
+    paste(unique(directions[duplicated(directions)]), collapse = ", ")
+  )
+}
+
+# Aggregation-only representations (those with final-consensus artefacts but no
+# generic tumour-neighbourhood rule, such as the BRCA PAM50 pair) are already
+# folded into the enumerated set the workflow passes, so they are not appended
+# again here. The configured list is read only to confirm that the supplied
+# representations cover it, which keeps the discrepancy visible rather than
+# letting a summary silently omit a declared representation.
 additional_summary_directions <- as.character(
   cfg$tumour_neighbourhoods$additional_summary_directions %||% character()
 )
-if (any(!nzchar(str_trim(additional_summary_directions)))) {
-  stop("tumour_neighbourhoods.additional_summary_directions contains an empty value.")
-}
-duplicate_directions <- intersect(directions, additional_summary_directions)
-if (length(duplicate_directions) > 0) {
+missing_additional <- setdiff(additional_summary_directions, directions)
+if (length(missing_additional) > 0) {
   stop(
-    "Duplicate p-consensus summary direction(s): ",
-    paste(duplicate_directions, collapse = ", ")
+    "Configured tumour_neighbourhoods.additional_summary_directions absent from ",
+    "the supplied --directions: ", paste(missing_additional, collapse = ", ")
   )
 }
-directions <- c(directions, additional_summary_directions)
 
 # Filter out PAM50 directions if use_pam50 is false (e.g., for RBL/NBL profiles).
 # A profile opts in by declaring a PAM50 aggregation direction or use_pam50=true.
@@ -224,20 +222,18 @@ cell_dir_summary <- dat %>%
   ) %>%
   arrange(direction, desc(max_p), desc(frac_ge_thr))
 
-# ---- Standardise column names (backwards compatible) ----
-if (!("frac_ge_thr" %in% names(cell_dir_summary)) && ("frac_ge_0_7" %in% names(cell_dir_summary))) {
-  cell_dir_summary <- dplyr::rename(cell_dir_summary, frac_ge_thr = frac_ge_0_7)
-}
-
-if (!("frac_eq_1" %in% names(cell_dir_summary)) && ("frac_eq_1.0" %in% names(cell_dir_summary))) {
-  cell_dir_summary <- dplyr::rename(cell_dir_summary, frac_eq_1 = frac_eq_1.0)
-}
+# cell_dir_summary is computed above against the configured threshold supplied
+# in --threshold, so frac_ge_thr and frac_eq_1 always exist under those names.
+# The former renames from threshold-encoding column names were unreachable and
+# have been removed: accepting a column name that encodes a threshold value
+# would let a stale artefact re-enter the summary under a name contradicting the
+# configured threshold.
 
 cat("[DEBUG] cell_dir_summary columns:\n")
 print(names(cell_dir_summary))
 
 # ==============================================================================
-# PCA-based composite performance score (direction-agnostic)
+# PCA-based composite performance score (direction-independent)
 # ==============================================================================
 # Metrics to use (keep generic — no gene-set assumptions)
 metric_cols <- c("frac_ge_thr", "median_p", "max_p", "frac_eq_1")
@@ -280,7 +276,7 @@ weights_tbl <- tibble(
   weight = as.numeric(weights)
 )
 
-# ---- PCA diagnostics ----
+# ---- PCA composite score ----
 eig <- (pca$sdev)^2
 var_expl <- eig / sum(eig)
 
@@ -443,7 +439,7 @@ write_tsv(top_by_fraction, file.path(out_dir, "p_consensus_best_cell_lines_top_f
 # Always write top_by_score (even if empty) for Snakemake compatibility
 write_tsv(top_by_score, file.path(out_dir, "p_consensus_best_cell_lines_top_score.tsv"))
 
-# ---- Write PCA diagnostic plots ----
+# ---- Write PCA composite plots ----
 ggsave(file.path(out_dir, "Fig_p_consensus_composite_PCA_scree.pdf"),
        p_scree, width = 7.5, height = 4.5)
 

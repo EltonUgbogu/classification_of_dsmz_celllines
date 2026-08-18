@@ -9,7 +9,7 @@ configured number of eligible clustering formulations |A_r|
     Correlation directions: recurrence / 4 == p_consensus
 
 Eligible formulations are the JOINT cell-line + tumour outputs of the
-HC/k-means clustering branch (AGN_*) and of ConsensusClusterPlus (CCP_*).
+HC/k-means clustering formulations (HCLUST_*, KMEANS_*) and of ConsensusClusterPlus (CCP_*).
 
 Config-level tests run anywhere. Output-level tests reconstruct p_consensus
 from the per-method Top_m_long_<method_id>.csv tables and compare against the
@@ -50,20 +50,20 @@ DIRECTIONS = [
 
 EXPECTED_METHODS = {
     "corr": [
-        "AGN_HC_expr_cell_tumour",
-        "AGN_HC_pca_cell_tumour",
-        "CCP_HC_expr_cell_tumour",
-        "CCP_HC_pca_cell_tumour",
+        "HCLUST_expr_cell_tumour",
+        "HCLUST_pca_cell_tumour",
+        "CCP_HCLUST_expr_cell_tumour",
+        "CCP_HCLUST_pca_cell_tumour",
     ],
     "euc": [
-        "AGN_HC_expr_cell_tumour",
-        "AGN_HC_pca_cell_tumour",
-        "AGN_KM_expr_cell_tumour",
-        "AGN_KM_pca_cell_tumour",
-        "CCP_HC_expr_cell_tumour",
-        "CCP_HC_pca_cell_tumour",
-        "CCP_KM_expr_cell_tumour",
-        "CCP_KM_pca_cell_tumour",
+        "HCLUST_expr_cell_tumour",
+        "HCLUST_pca_cell_tumour",
+        "KMEANS_expr_cell_tumour",
+        "KMEANS_pca_cell_tumour",
+        "CCP_HCLUST_expr_cell_tumour",
+        "CCP_HCLUST_pca_cell_tumour",
+        "CCP_KMEANS_expr_cell_tumour",
+        "CCP_KMEANS_pca_cell_tumour",
     ],
 }
 
@@ -115,9 +115,9 @@ def test_configured_methods_are_joint_only_and_unique():
             assert method_id.endswith("_cell_tumour"), (
                 f"{method_id}: only JOINT cell-line + tumour formulations are eligible"
             )
-            assert method_id.startswith(("AGN_", "CCP_")), (
-                f"{method_id}: formulations must come from the HC/k-means (AGN_*) "
-                "or ConsensusClusterPlus (CCP_*) branch"
+            assert method_id.startswith(("HCLUST_", "KMEANS_", "CCP_")), (
+                f"{method_id}: formulations must come from the HC/k-means "
+                "(HCLUST_*, KMEANS_*) or ConsensusClusterPlus (CCP_*) formulations"
             )
 
 
@@ -216,15 +216,21 @@ def _reconstruct_and_compare(direction):
             f"{count}/{n_methods_total} = {count / n_methods_total}"
         )
 
-    # Both branches must actually contribute somewhere in this direction.
-    for branch in ("AGN_", "CCP_"):
-        branch_methods = [m for m in declared_set if m.startswith(branch)]
-        branch_pairs = set()
-        for method_id in branch_methods:
-            branch_pairs |= _read_in_top_pairs(
+    # Both clustering families must actually contribute in this representation.
+    # ConsensusClusterPlus formulations carry the CCP_ prefix; the HC/k-means
+    # formulations are the remaining HCLUST_/KMEANS_ identifiers.
+    families = {
+        "HC/k-means": [m for m in declared_set if not m.startswith("CCP_")],
+        "ConsensusClusterPlus": [m for m in declared_set if m.startswith("CCP_")],
+    }
+    for family, family_methods in families.items():
+        assert family_methods, f"{direction}: no {family} formulations declared"
+        family_pairs = set()
+        for method_id in family_methods:
+            family_pairs |= _read_in_top_pairs(
                 nh_dir / method_id / f"Top_m_long_{method_id}.csv"
             )
-        assert branch_pairs, f"{direction}: no neighbourhood members from branch {branch}*"
+        assert family_pairs, f"{direction}: no neighbourhood members from {family}"
 
     print(
         f"OK {PROFILE}/{direction}: {len(recurrence)} pairs reconstructed, "

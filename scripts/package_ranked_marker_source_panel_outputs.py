@@ -139,7 +139,7 @@ write_metrics(DSMZ / 'ranked_marker_source_panel_dsmz_graph_metrics.tsv', {
 t2c = PAN / 'tumour_mapping/tumour_to_cellline_similarity'
 c2t = PAN / 'tumour_mapping/cellline_to_tumour_similarity'
 bootstrap = PAN / 'tumour_mapping/cellline_similarity_precision_bootstrap'
-diagnostics = PAN / 'ranking/diagnostics'
+evaluation_dir = PAN / 'ranking/evaluation'
 ecdf = PAN / 'figures/ecdf_plots'
 ranking_copies = {
     t2c / 'tumour_to_cellline_group_rankings.tsv': 'ranked_marker_source_panel_patient_to_cellline_rankings.tsv',
@@ -149,7 +149,7 @@ ranking_copies = {
     c2t / 'cellline_to_tumour_rankings.tsv': 'ranked_marker_source_panel_cellline_centred_tumour_retrieval.tsv',
     c2t / 'cellline_mapping_summary.tsv': 'ranked_marker_source_panel_top_ranked_cancer_type_per_cellline_group.tsv',
     bootstrap / 'cellline_top1_accuracy.tsv': 'ranked_marker_source_panel_retrieval_accuracy.tsv',
-    diagnostics / 'cell_line_to_tumour_first_match_ranks.tsv': 'ranked_marker_source_panel_same_cancer_type_rank_percentiles.tsv',
+    evaluation_dir / 'cell_line_to_tumour_first_match_ranks.tsv': 'ranked_marker_source_panel_same_cancer_type_rank_percentiles.tsv',
     c2t / 'cellline_mapping_summary.tsv': 'ranked_marker_source_panel_confidence_margins.tsv',
     bootstrap / 'reciprocal_per_cell_line.tsv': 'ranked_marker_source_panel_reciprocal_neighbour_agreement.tsv',
     bootstrap / 'reciprocal_mapping_summary.tsv': 'ranked_marker_source_panel_reciprocal_neighbour_pairs.tsv',
@@ -163,7 +163,7 @@ for source, name in [
     (ecdf / 'Fig_tumour_to_cellline_top10_fraction.pdf', 'ranked_marker_source_panel_patient_to_cellline_top10_frequency.pdf'),
     (bootstrap / 'Fig_cellline_to_tumour_precision_at_k.pdf', 'ranked_marker_source_panel_cellline_retrieval_precision.pdf'),
     (bootstrap / 'Fig_cellline_to_tumour_same_lineage_rank_percentile.pdf', 'ranked_marker_source_panel_same_cancer_type_rank_percentile.pdf'),
-    (diagnostics / 'Fig_tumour_to_cellline_mrr_at10_distribution.pdf', 'ranked_marker_source_panel_patient_mrr_at10.pdf'),
+    (evaluation_dir / 'Fig_tumour_to_cellline_mrr_at10_distribution.pdf', 'ranked_marker_source_panel_patient_mrr_at10.pdf'),
 ]:
     copy_file(source, RANK / name)
 accuracy = read_tsv(bootstrap / 'cellline_top1_accuracy.tsv')

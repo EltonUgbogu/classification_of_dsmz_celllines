@@ -559,9 +559,9 @@ run_rbl_tidyestimate_purity <- function(
     message("[SUCCESS] Bar plot saved: ", bar_pdf)
 
     # ----------------------------------------------------------
-    # 10b. Purity diagnostics (Stromal/Immune + histogram)
+    # 10b. Purity checks (Stromal/Immune + histogram)
     # ----------------------------------------------------------
-    message("[INFO] Generating purity diagnostics plots...")
+    message("[INFO] Generating purity checks plots...")
 
     plot_data <- scores %>%
       as.data.frame() %>%
@@ -665,9 +665,9 @@ run_rbl_tidyestimate_purity <- function(
       font.label = list(size = 14, face = "bold")
     )
 
-    diag_pdf <- file.path(output_dir, "rbl_purity_diagnostics.pdf")
+    diag_pdf <- file.path(output_dir, "rbl_purity_distribution_and_scores.pdf")
     ggsave(diag_pdf, combined, width = 14, height = 10, dpi = 300, device = cairo_pdf)
-    message("[SUCCESS] Diagnostics saved: ", diag_pdf)
+    message("[SUCCESS] Checks saved: ", diag_pdf)
 
     message(sprintf("[INFO] Pipeline end time: %s", Sys.time()))
     message("[SUCCESS] RBL tidyestimate purity pipeline finished.")

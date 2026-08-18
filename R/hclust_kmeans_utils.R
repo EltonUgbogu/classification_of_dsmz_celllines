@@ -1,9 +1,8 @@
 #!/usr/bin/env Rscript
-# agnostic_clustering_utils.R
+# hclust_kmeans_utils.R
 # Shared helpers for the 12-way HC/k-means clustering branch
 # (PCA-reduced/expression space × HC/k-means × cell/tumour/joint).
-# "agnostic" in file and function names is the retained internal
-# compatibility identifier for this HC/k-means clustering branch.
+# Applied to each feature-distance representation.
 
 suppressPackageStartupMessages({
   library(cluster)
@@ -150,6 +149,31 @@ compute_pca_scores <- function(X, n_pcs = 20, scale_features = FALSE) {
 }
 
 # -------------------------------------------------------------------
+# correlation_chord_dist: Euclidean-compatible correlation dissimilarity
+# -------------------------------------------------------------------
+# Ward.D2 minimises variance in a Euclidean space and therefore requires a
+# Euclidean-compatible dissimilarity. The chord distance
+#
+#     d(x, y) = sqrt(2 * (1 - r(x, y)))
+#
+# is the exact Euclidean distance between the centred, unit-norm forms of x
+# and y, since ||u_x - u_y||^2 = 2 * (1 - r). It is consequently the
+# correlation dissimilarity used for Ward.D2 hierarchical clustering here.
+# The raw 1 - r dissimilarity is not a Euclidean metric and is not used with
+# Ward. This matches the correlation-geometry transform (centre + unit norm +
+# Euclidean distance) applied by the ConsensusClusterPlus branch, so both
+# clustering branches operate on the same correlation geometry.
+#
+# Non-finite correlations (zero-variance profiles) are treated as r = 0.
+#
+# X: samples x features matrix. Returns a 'dist' object over the samples.
+correlation_chord_dist <- function(X) {
+  cm <- cor(t(X), method = "pearson", use = "pairwise.complete.obs")
+  cm[!is.finite(cm)] <- 0
+  as.dist(sqrt(pmax(2 * (1 - cm), 0)))
+}
+
+# -------------------------------------------------------------------
 # Hierarchical clustering with silhouette-based K selection
 # -------------------------------------------------------------------
 hc_optimal <- function(X,
@@ -159,16 +183,8 @@ hc_optimal <- function(X,
   set.seed(seed)
 
   if (dist_method == "correlation") {
-    # Ward.D2 requires a Euclidean-compatible dissimilarity. The chord
-    # distance sqrt(2 * (1 - r)) is the exact Euclidean distance between
-    # centred, unit-norm sample vectors, so Ward.D2 on it is well defined.
-    # This matches the correlation-geometry transform (centre + unit norm +
-    # Euclidean) used by the ConsensusClusterPlus branch; the raw 1 - r
-    # dissimilarity is not a Euclidean metric and is not used with Ward.
     info("Distance: chord sqrt(2 * (1 - Pearson r)) for Ward.D2 compatibility")
-    cm <- cor(t(X), method = "pearson", use = "pairwise.complete.obs")
-    cm[!is.finite(cm)] <- 0
-    d <- as.dist(sqrt(pmax(2 * (1 - cm), 0)))
+    d <- correlation_chord_dist(X)
   } else {
     info("Distance: %s", dist_method)
     d <- dist(X, method = dist_method)
@@ -247,7 +263,7 @@ kmeans_optimal <- function(X,
 # -------------------------------------------------------------------
 # Main driver used by all 12 wrappers
 # -------------------------------------------------------------------
-run_agnostic_clustering <- function(kind,
+run_hclust_kmeans <- function(kind,
                                     cell_rds         = NULL,
                                     tumour_rds       = NULL,
                                     outdir,

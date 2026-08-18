@@ -45,7 +45,7 @@ suppressPackageStartupMessages({
 #
 # Validation:
 #   --validate-only performs input parsing, column checks, direction parsing,
-#   winner matching, and plot-dimension diagnostics without writing outputs.
+#   winner matching, and plot-dimension checks without writing outputs.
 # ==============================================================================
 
 
@@ -64,13 +64,29 @@ option_list <- list(
               help = "Output PNG path (ignored with --validate-only)"),
   make_option("--disease-label", type = "character",
               help = "Full disease label for visible plot text"),
-  make_option("--threshold", type = "double", default = 0.7,
-              help = "p_consensus threshold used for the plotted fraction [default 0.7]"),
+  # Configuration-owned: the workflow passes
+  # patient_referenced_graph.p_consensus_threshold. No default is declared here,
+  # so a figure can never be drawn against a threshold this script chose.
+  make_option("--threshold", type = "double", default = NULL,
+              help = paste("p_consensus threshold used for the plotted fraction;",
+                           "supplied by the workflow from",
+                           "patient_referenced_graph.p_consensus_threshold")),
   make_option("--validate-only", action = "store_true", default = FALSE,
-              help = "Validate inputs and print diagnostics without writing outputs")
+              help = "Validate inputs and print checks without writing outputs")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
+
+# The p-consensus fraction threshold is configuration-owned and supplied by the
+# workflow; there is no built-in default here, so a figure can never be produced
+# against a different threshold from the one the graph stage applies.
+if (is.null(opt$threshold) || !is.finite(opt$threshold) ||
+    opt$threshold <= 0 || opt$threshold > 1) {
+  stop(
+    "A p-consensus fraction threshold in (0, 1] must be supplied via --threshold; ",
+    "the workflow passes patient_referenced_graph.p_consensus_threshold."
+  )
+}
 
 
 # ------------------------------------------------------------------------------
@@ -268,7 +284,7 @@ if (nrow(plot_tbl) == 0) {
 
 
 # ------------------------------------------------------------------------------
-# Soft diagnostics
+# Soft checks
 # ------------------------------------------------------------------------------
 
 # Missing winner rows or reduced direction counts are reported as warnings because
@@ -392,7 +408,7 @@ x_lab <- sprintf(
 
 
 # ------------------------------------------------------------------------------
-# Validate-only diagnostic output
+# Validate-only check output
 # ------------------------------------------------------------------------------
 
 if (isTRUE(opt$`validate-only`)) {

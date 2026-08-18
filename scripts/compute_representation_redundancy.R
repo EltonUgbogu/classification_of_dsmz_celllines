@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
-# The script computes pilot diagnostics for representation weighting.
-# It reads protected Version 1 outputs and writes Version 2 diagnostics only.
+# The script computes pilot metrics for representation weighting.
+# It reads protected Version 1 outputs and writes Version 2 metrics only.
 
 parse_arguments <- function() {
   argument_values <- commandArgs(trailingOnly = TRUE)
@@ -147,7 +147,7 @@ metadata_source_count <- if ("source_profile" %in% names(v1_node_metadata)) {
 }
 batch_association_score <- if (is.na(metadata_source_count) || metadata_source_count <= 1) 0 else 0.10
 
-diagnostics <- data.frame(
+redundancy_metrics <- data.frame(
   representation_id = c(
     "cell_line_graph_weight",
     "tumour_to_cellline_similarity",
@@ -184,7 +184,7 @@ diagnostics <- data.frame(
     1 - rank_margin_score,
     1 - normalise_unit(mean_community_purity)
   ),
-  diagnostic_source = c(
+  evidence_source = c(
     basename(v1_edges_path),
     basename(v1_tumour_rankings_path),
     basename(v1_cellline_rankings_path),
@@ -201,5 +201,5 @@ diagnostics <- data.frame(
   stringsAsFactors = FALSE
 )
 
-write_tsv(diagnostics, output_path)
+write_tsv(redundancy_metrics, output_path)
 

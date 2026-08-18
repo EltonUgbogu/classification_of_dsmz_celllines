@@ -31,7 +31,7 @@ if (opt$view == "tumor") opt$view <- "tumour"
 if (!(opt$kind %in% c("hc","kmeans"))) stop("[FATAL] --kind must be hc or kmeans")
 if (!(opt$view %in% c("cell","tumour","cell_tumour"))) stop("[FATAL] --view must be cell|tumour|cell_tumour")
 
-cat("[INFO] pan_agnostic_clustering\n")
+cat("[INFO] pan_hclust_kmeans\n")
 cat("[INFO] expr_rds:", opt$expr_rds, "\n")
 cat("[INFO] meta_tsv:", opt$meta_tsv, "\n")
 cat("[INFO] direction:", opt$direction, " kind:", opt$kind, " view:", opt$view, "\n")
@@ -54,10 +54,10 @@ if (is.na(script_path)) {
   stop("[FATAL] Cannot determine script path via --file=. Are you running with Rscript?")
 }
 
-# script is scripts/pan_agnostic_clustering.R relative to the repository root
+# script is scripts/pan_hclust_kmeans.R relative to the repository root
 base_dir <- normalizePath(file.path(dirname(script_path), ".."))
 
-UTILS <- file.path(base_dir, "R", "agnostic_clustering_utils.R")
+UTILS <- file.path(base_dir, "R", "hclust_kmeans_utils.R")
 if (!file.exists(UTILS)) stop("[FATAL] Missing utils file: ", UTILS)
 source(UTILS)
 cat("[INFO] base_dir:", base_dir, "\n")
@@ -188,7 +188,7 @@ dist_method <- if (grepl("_cosine$", dir_lower) || grepl("cosine$", dir_lower)) 
 cat("[INFO] dist_method:", dist_method, " (note: *_cosine -> correlation, not true cosine)\n")
 
 # -----------------------------
-# Build utils "kind" string expected by run_agnostic_clustering
+# Build utils "kind" string expected by run_hclust_kmeans
 # -----------------------------
 # raw methods: hc_cell, kmeans_tumour, kmeans_cell_tumour, etc.
 kind_full <- paste0(opt$kind, "_", opt$view)   # e.g. kmeans_cell_tumour
@@ -209,7 +209,7 @@ saveRDS(tumour_gx, tumour_rds)
 outdir <- dirname(opt$out_rds)
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
-run_agnostic_clustering(
+run_hclust_kmeans(
   kind            = kind_full,
   cell_rds        = cell_rds,
   tumour_rds      = tumour_rds,

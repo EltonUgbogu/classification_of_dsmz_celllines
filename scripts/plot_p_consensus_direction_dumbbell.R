@@ -16,11 +16,27 @@ option_list <- list(
   make_option("--rbl", type = "character", help = "RBL p_consensus_direction_summary.tsv"),
   make_option("--out_prefix", type = "character", help = "Output prefix for PDF, PNG, and SVG"),
   make_option("--caption", type = "character", help = "Caption text output path"),
-  make_option("--threshold", type = "double", default = 0.7,
-              help = "Strong-consensus p_consensus threshold [default: %default]")
+  # Configuration-owned: the workflow passes
+  # patient_referenced_graph.p_consensus_threshold. No default is declared here,
+  # so a figure can never be drawn against a threshold this script chose.
+  make_option("--threshold", type = "double", default = NULL,
+              help = paste("Strong-consensus p_consensus threshold; supplied by",
+                           "the workflow from",
+                           "patient_referenced_graph.p_consensus_threshold"))
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
+
+# The p-consensus fraction threshold is configuration-owned and supplied by the
+# workflow; there is no built-in default here, so a figure can never be produced
+# against a different threshold from the one the graph stage applies.
+if (is.null(opt$threshold) || !is.finite(opt$threshold) ||
+    opt$threshold <= 0 || opt$threshold > 1) {
+  stop(
+    "A p-consensus fraction threshold in (0, 1] must be supplied via --threshold; ",
+    "the workflow passes patient_referenced_graph.p_consensus_threshold."
+  )
+}
 required_args <- c("brca", "nbl", "rbl", "out_prefix", "caption")
 missing_args <- required_args[vapply(required_args, function(x) is.null(opt[[x]]) || !nzchar(opt[[x]]), logical(1))]
 if (length(missing_args) > 0) {

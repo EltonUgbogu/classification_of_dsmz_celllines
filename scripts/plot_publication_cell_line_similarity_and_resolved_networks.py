@@ -57,7 +57,7 @@ Supporting TSVs:
     plot_publication_cell_line_similarity_and_resolved_networks.log
 
 Complete-cohort mode (default) requires all three cohorts. --allow-missing-cohorts is
-for diagnostic runs only.
+for inspection runs only.
 """
 
 from __future__ import annotations
@@ -1627,7 +1627,7 @@ def parse_args():
                 --rbl-tn-dir  PATH --rbl-resolved  PATH \\
                 --rbl-anchors PATH --outdir PATH
 
-            Diagnostic — skip absent cohorts:
+            Inspection — skip absent cohorts:
               python %(prog)s ... --allow-missing-cohorts ...
 
             The winning direction per cohort is detected from
@@ -1711,7 +1711,7 @@ def main():
             sys.exit(
                 "[ERROR] Complete-cohort mode requires both --<cohort>-tn-dir and "
                 f"--<cohort>-resolved for: {', '.join(missing)}.\n"
-                "  Pass --allow-missing-cohorts only for diagnostic runs."
+                "  Pass --allow-missing-cohorts only for inspection runs."
             )
         nonexistent = []
         for c, (tn, res, anc, _direction, _fb) in cohort_args.items():

@@ -11,7 +11,7 @@
 # similar tumour samples (non-DSMZ cohort) based on expression distance, one
 # neighbourhood per eligible clustering formulation. Eligible formulations are
 # the configured JOINT cell-line + tumour outputs of the HC/k-means clustering
-# branch (AGN_*) and of ConsensusClusterPlus (CCP_*); cell-only and tumour-only
+# formulations (HCLUST_*, KMEANS_*) and of ConsensusClusterPlus (CCP_*); cell-only and tumour-only
 # clustering outputs never contribute.
 #
 # USAGE:
@@ -570,7 +570,7 @@ parse_dsmz_id <- function(x) {
   }
   
   ng   <- hit[2]
-  cell <- hit[3]  # Cell line (disease-agnostic: RBL_15, CAL_120, etc.)
+  cell <- hit[3]  # Cell line (disease-independent: RBL_15, CAL_120, etc.)
   lib  <- hit[4]
   lane <- hit[5]
   rep  <- hit[6]
@@ -682,7 +682,7 @@ cat("[INFO] Detected ", n_dsmz, " DSMZ samples in expr_mat via mapping\n", sep =
 
 # Assign dataset labels using vectorised conditional assignment.
 # The ifelse() function evaluates element-wise, returning "DSMZ" for TRUE
-# positions and "TUMOUR" for FALSE positions (cohort-agnostic).
+# positions and "TUMOUR" for FALSE positions (cohort-independent).
 dataset_vec <- ifelse(dsmz_mask, "DSMZ", "TUMOUR")
 names(dataset_vec) <- current_ids
 
@@ -840,17 +840,15 @@ print(head(data.frame(
 # ------------------------------------------------------------------------------
 # SECTION 16: CONFIGURED CLUSTERING METHOD RESOLUTION
 # ------------------------------------------------------------------------------
-# The contributing clustering formulations are configuration-driven. The
-# catalogue in get_nh_methods() maps each known method identifier (JOINT
-# HC/k-means clustering: AGN_*; JOINT ConsensusClusterPlus: CCP_*) to its
-# cluster RDS path. The exact set that must contribute to this direction is
-# declared in patient_referenced_graph.clustering_methods_by_distance, keyed
-# by the direction's distance component. Neither the method set nor the
-# p_consensus denominator is ever inferred from files present on disk:
-# declared identifiers unknown to the catalogue and declared methods whose
-# cluster RDS is missing both raise explicit errors.
-
-catalogue <- get_nh_methods(unsup_root = unsup_root, direction = direction)
+# The contributing clustering formulations are configuration-driven. The exact
+# set for this feature-distance representation is declared in
+# patient_referenced_graph.clustering_methods_by_distance, keyed by the
+# representation's distance component; get_nh_methods() then resolves each
+# configured identifier (JOINT HC/k-means clustering: HCLUST_*/KMEANS_*; JOINT
+# ConsensusClusterPlus: CCP_*) to the cluster RDS its formulation writes.
+# Neither the formulation set nor the p-consensus denominator is ever inferred
+# from files present on disk: an identifier that is not a JOINT formulation and
+# a declared formulation whose cluster RDS is missing both raise explicit errors.
 
 distance_key <- sub("^.*_(euc|corr)$", "\\1", direction)
 declared_methods_by_distance <- cfg$patient_referenced_graph$clustering_methods_by_distance
@@ -867,17 +865,15 @@ if (anyDuplicated(declared_methods) > 0L) {
        paste(unique(declared_methods[duplicated(declared_methods)]), collapse = ", "))
 }
 
-unknown_declared <- setdiff(declared_methods, catalogue$method_id)
-if (length(unknown_declared) > 0L) {
-  stop("Declared clustering method(s) not present in the eligible JOINT method ",
-       "catalogue for direction=", direction, ": ",
-       paste(unknown_declared, collapse = ", "),
-       "\nEligible catalogue identifiers: ",
-       paste(catalogue$method_id, collapse = ", "))
-}
-
-methods <- catalogue %>%
-  dplyr::filter(method_id %in% declared_methods)
+# The configured identifiers drive path resolution. get_nh_methods() maps each
+# one to the file its clustering formulation writes and rejects any identifier
+# that is not a JOINT cell-line + tumour formulation, so an unusable identifier
+# fails here with an explicit message rather than being quietly dropped.
+methods <- get_nh_methods(
+  unsup_root = unsup_root,
+  direction  = direction,
+  method_ids = declared_methods
+)
 
 cluster_family_raw <- opt$`cluster-family`
 if (is.null(cluster_family_raw) || !nzchar(cluster_family_raw)) {
@@ -888,16 +884,20 @@ if (!cluster_family %in% c("hc", "km")) {
   stop("--cluster-family must be 'hc' or 'km' (got: '", cluster_family_raw, "').",
        " The value 'all' is no longer accepted.")
 }
+# Formulation identifiers are [CCP_]<ALGORITHM>_<SPACE>_cell_tumour, so the
+# requested family selects on the algorithm token with the optional
+# ConsensusClusterPlus prefix.
+family_algorithm <- if (identical(cluster_family, "hc")) "HCLUST" else "KMEANS"
 methods <- methods %>%
-  dplyr::filter(grepl(paste0("^(AGN|CCP)_", toupper(cluster_family), "_"), method_id))
+  dplyr::filter(grepl(paste0("^(CCP_)?", family_algorithm, "_"), method_id))
 cat(sprintf("[INFO] Declared methods for distance '%s': %d; --cluster-family='%s': %d method(s) in this pass\n",
             distance_key, length(declared_methods), cluster_family, nrow(methods)))
 if (nrow(methods) == 0) {
   stop("No declared methods matched --cluster-family='", cluster_family,
        "' for direction=", direction,
        ".\nDeclared methods: ", paste(declared_methods, collapse = ", "),
-       "\nExpected patterns: AGN_", toupper(cluster_family), "_* and CCP_",
-       toupper(cluster_family), "_*")
+       "\nExpected patterns: ", family_algorithm, "_* and CCP_",
+       family_algorithm, "_*")
 }
 
 cat("\n[INFO] Methods to process:\n")
@@ -912,7 +912,7 @@ if (nrow(missing_files) > 0) {
        direction, ":\n",
        paste(sprintf("  %s -> %s", missing_files$method_id, missing_files$path),
              collapse = "\n"),
-       "\nRun the upstream clustering rules (agnostic_cluster_* / consensus_cluster_ccp) first.")
+       "\nRun the upstream clustering rules (hclust_kmeans_* / consensus_cluster_ccp) first.")
 }
 methods_exist <- methods
 
@@ -1037,7 +1037,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   matched_dsmz <- sum(dsmz_mask[current_ids %in% matched_ids])
   cat("[INFO] Matched DSMZ samples: ", matched_dsmz, " / ", sum(dsmz_mask), "\n", sep = "")
 
-  # Log DSMZ sample names for verification (cohort-agnostic: use dataset_vec, not pattern matching).
+  # Log DSMZ sample names for verification (cohort-independent: use dataset_vec, not pattern matching).
   # Note: cluster_vec names are collapsed IDs, so we need to check against current_ids dataset_vec
   matched_ids_in_clusters <- intersect(names(cluster_vec), current_ids)
   dsmz_names_in_clusters <- matched_ids_in_clusters[dataset_vec[matched_ids_in_clusters] == "DSMZ"]
@@ -1071,7 +1071,7 @@ run_single_neighbourhood <- function(path, method_id, outdir) {
   missing_in_expr <- setdiff(names(cluster_vec), current_ids)
   if (length(missing_in_expr) > 0) {
     # Identify potential DSMZ samples by checking if they match canonical cell line names
-    # (cohort-agnostic: uses mapping-based detection, not pattern matching)
+    # (cohort-independent: uses mapping-based detection, not pattern matching)
     missing_norm <- normalize_id(missing_in_expr)
     potential_dsmz <- missing_in_expr[missing_norm %in% normalize_id(cell_line_names_raw)]
     cat("[WARNING] ", length(missing_in_expr),

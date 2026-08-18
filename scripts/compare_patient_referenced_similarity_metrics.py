@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import math
+import sys
 from pathlib import Path
 import pandas as pd
 
@@ -69,7 +70,12 @@ def pearson_from_dicts(a, b):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--metric_root", required=True)
-    ap.add_argument("--metrics", default="pearson,jaccard")
+    # Which similarity metrics are active is a configuration declaration; the
+    # workflow passes patient_referenced_graph.similarity_metrics. This script
+    # implements the Pearson-versus-Jaccard contrast specifically, so it
+    # validates the configured set against what it can express rather than
+    # assuming a default.
+    ap.add_argument("--metrics", required=True)
     ap.add_argument("--directions", required=True)
     ap.add_argument("--resolved_pearson", required=True)
     ap.add_argument("--resolved_jaccard", required=True)
@@ -87,6 +93,15 @@ def main():
 
     root = Path(args.metric_root)
     metrics = [m.strip() for m in args.metrics.split(",") if m.strip()]
+    implemented_metrics = ["pearson", "jaccard"]
+    if sorted(metrics) != sorted(implemented_metrics):
+        sys.exit(
+            "[ERROR] --metrics must be exactly "
+            f"{','.join(implemented_metrics)} for this pairwise comparison; got "
+            f"{','.join(metrics) or '<empty>'}. Configuration owns which metrics "
+            "are active; this stage expresses the Pearson-versus-Jaccard "
+            "contrast only."
+        )
     directions = [d.strip() for d in args.directions.split(",") if d.strip()]
 
     provenance_rows = []

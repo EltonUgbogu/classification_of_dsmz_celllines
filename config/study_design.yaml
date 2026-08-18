@@ -42,7 +42,11 @@ candidate_inference:
   consensus_metric:
     name: "p_consensus"
     definition: "proportion of configured analytical runs supporting a tumour--cell-line neighbourhood"
-    strong_support_threshold: 0.7
+    # The strong-support threshold is owned by config/config.yaml
+    # (defaults.patient_referenced_graph.p_consensus_threshold) and is
+    # transmitted to materialize_study_design.R by the workflow. It is
+    # deliberately not restated here: a second declaration could drift from the
+    # threshold the graph and reporting stages actually apply.
   final_ranking:
     summary_table: "tumour_neighbourhoods/final_consensus_all/p_consensus_best_cell_lines_ranked.tsv"
     ranking_fields:

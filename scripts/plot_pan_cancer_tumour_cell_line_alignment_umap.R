@@ -623,7 +623,7 @@ pan_cancer_alignment_plot <- function(alignment, palette, subtitle_text,
   gg
 }
 
-source_diagnostic_plot <- function(df, colour_col, colour_title, subtitle_text,
+source_coloured_umap_plot <- function(df, colour_col, colour_title, subtitle_text,
                                    caption_text = NULL, legend_rows = 2) {
   ggplot(
     df,
@@ -865,7 +865,7 @@ meta <- meta %>%
     source_sample_label = paste(dataset_source, sample_type_label, sep = " | ")
   )
 
-# Diagnostic output: verify metadata structure.
+# Sanity output: verify metadata structure.
 cat("\n[CHECK] Raw meta counts (before filtering to X):\n")
 print(table(meta$cancer_type, meta$sample_type))
 cat("[CHECK] Raw source counts (before filtering to X):\n")
@@ -898,12 +898,12 @@ if (!all(meta$sample_id == rownames(X))) {
 }
 stopifnot(all(meta$sample_id == rownames(X)))
 
-# Diagnostic output: verify alignment.
+# Sanity output: verify alignment.
 cat("\n[CHECK] After filtering meta to X rownames:\n")
 print(table(meta$cancer_type, meta$sample_type))
 cat("[CHECK] n samples in X:", nrow(X), "\n")
 
-# Additional diagnostics for cell line coverage.
+# Additional checks for cell line coverage.
 cat("\n[CHECK] Cell lines per cancer_type:\n")
 print(meta %>% dplyr::filter(sample_type == "cell_line") %>% 
         dplyr::count(cancer_type, sort=TRUE))
@@ -1177,7 +1177,7 @@ for (dm in dist_metrics) {
   save_plot(p, plot_base, page = opt$page)
 
   source_plot_base <- file.path(outdir, paste0("Fig_", out_stem, "_", feature_label, "_SOURCE_", metric_label))
-  p_source <- source_diagnostic_plot(
+  p_source <- source_coloured_umap_plot(
     df = coords,
     colour_col = "dataset_source",
     colour_title = "Dataset source",
@@ -1188,7 +1188,7 @@ for (dm in dist_metrics) {
 
   source_cancer_plot_base <- file.path(outdir, paste0("Fig_", out_stem, "_", feature_label, "_SOURCE_CANCER_", metric_label))
   source_cancer_page <- if (dplyr::n_distinct(coords$source_cancer_label) > opt$source_cancer_slide_threshold) "slide" else opt$page
-  p_source_cancer <- source_diagnostic_plot(
+  p_source_cancer <- source_coloured_umap_plot(
     df = coords,
     colour_col = "source_cancer_label",
     colour_title = "Dataset source | lineage",
@@ -1204,6 +1204,7 @@ for (dm in dist_metrics) {
     feature_set            = feature_label,
     feature_mode           = feature_mode,
     dist_metric            = dm,
+    seed                   = opt$seed,
     n_genes                = ncol(X_sub),
     n_samples              = nrow(X_sub),
     n_tumours              = sum(meta$sample_type == "tumour"),

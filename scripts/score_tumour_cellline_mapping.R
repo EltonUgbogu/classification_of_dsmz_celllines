@@ -2006,7 +2006,7 @@ for (doc in doc_files) {
   }
 }
 
-# Move inspection folder if present (diagnostics for tumour→cell-line mapping)
+# Move inspection folder if present (inspection outputs for tumour→cell-line mapping)
 insp_src <- file.path(opt$`output-dir`, "inspection")
 insp_dest <- file.path(t2c_dir, "inspection")
 if (dir.exists(insp_src)) {

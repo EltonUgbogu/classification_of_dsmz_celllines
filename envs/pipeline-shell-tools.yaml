@@ -1,0 +1,7 @@
+name: pipeline-shell-tools
+channels:
+  - conda-forge
+dependencies:
+  - coreutils=9.5
+  - gawk=5.3
+  - grep=3.11

@@ -2,7 +2,7 @@
 
 # pca_hc_cell.R
 # PCA + hierarchical clustering on CELL-only VST matrix
-# Wrapper around run_agnostic_clustering(kind = "pca_hc_cell")
+# Wrapper around run_hclust_kmeans(kind = "pca_hc_cell")
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -25,7 +25,7 @@ option_list <- list(
     "--base_dir",
     type = "character",
     default = "R",
-    help = "Directory containing agnostic_clustering_utils.R [default: %default].",
+    help = "Directory containing hclust_kmeans_utils.R [default: %default].",
     metavar = "dir"
   ),
   make_option(
@@ -87,18 +87,18 @@ if (is.null(opt$cluster_rds)) {
 }
 
 # ─────────────────────────────────────────────────────────────
-# Load shared agnostic clustering utilities
+# Load shared HC/k-means clustering utilities
 # ─────────────────────────────────────────────────────────────
-utils_path <- file.path(opt$base_dir, "agnostic_clustering_utils.R")
+utils_path <- file.path(opt$base_dir, "hclust_kmeans_utils.R")
 if (!file.exists(utils_path)) {
-  stop("Cannot find agnostic_clustering_utils.R at: ", utils_path)
+  stop("Cannot find hclust_kmeans_utils.R at: ", utils_path)
 }
 source(utils_path)
 
 # ─────────────────────────────────────────────────────────────
-# Run agnostic clustering: pca_hc_cell
+# Run HC/k-means clustering: pca_hc_cell
 # ─────────────────────────────────────────────────────────────
-run_agnostic_clustering(
+run_hclust_kmeans(
   kind              = "pca_hc_cell",
   cell_rds          = opt$cell_rds,
   tumour_rds        = NULL,
